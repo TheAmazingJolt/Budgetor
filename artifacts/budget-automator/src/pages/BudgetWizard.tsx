@@ -50,6 +50,7 @@ export function BudgetWizard() {
     bills,
     newWeekStartDate,
     newWeekEndDate,
+    weekCount,
     openingBalance,
     paycheckAmount,
     zeroOpeningBalance,
@@ -60,7 +61,9 @@ export function BudgetWizard() {
     addBill,
     updateBill,
     removeBill,
-    setNewWeekDates,
+    setStartDate,
+    setEndDate,
+    setWeekCount,
     setOpeningBalance,
     setPaycheckAmount,
     setZeroOpeningBalance,
@@ -112,16 +115,8 @@ export function BudgetWizard() {
 
   // ── Step 3: Generate & Download ─────────────────────────────────────────
   const handleGenerate = () => {
-    // Always require a parsed workbook (upload is always needed)
     if (!parsedWorkbook) return;
 
-    // Calculate number of full (or partial) 7-day weeks from the date range
-    const start = parseISO(newWeekStartDate);
-    const end = parseISO(newWeekEndDate);
-    const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-    const numberOfWeeks = Math.max(1, Math.ceil(diffDays / 7));
-
-    // When "Set Remaining Acct to $0" is checked, pass 0 as opening balance
     const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
 
     generateMutation.mutate(
@@ -131,7 +126,7 @@ export function BudgetWizard() {
           endDate: newWeekEndDate,
           openingBalance: effectiveOpeningBalance,
           paycheckAmount,
-          numberOfWeeks,
+          numberOfWeeks: weekCount,
           bills,
         },
       },
@@ -328,23 +323,37 @@ export function BudgetWizard() {
                 <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <Settings2 className="w-4 h-4" /> Week Start Date
+                      <Settings2 className="w-4 h-4" /> Start Date
                     </Label>
                     <Input
                       type="date"
                       value={newWeekStartDate}
-                      onChange={(e) => setNewWeekDates(e.target.value, newWeekEndDate)}
+                      onChange={(e) => setStartDate(e.target.value)}
                       className="h-11 rounded-xl"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <Settings2 className="w-4 h-4" /> Week End Date
+                      <Settings2 className="w-4 h-4" /> Number of Weeks
+                    </Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={52}
+                      value={weekCount}
+                      onChange={(e) => setWeekCount(parseInt(e.target.value) || 1)}
+                      className="h-11 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                      <Settings2 className="w-4 h-4" /> End Date
+                      <span className="text-xs font-normal text-muted-foreground/70 ml-1">(auto-calculated, editable)</span>
                     </Label>
                     <Input
                       type="date"
                       value={newWeekEndDate}
-                      onChange={(e) => setNewWeekDates(newWeekStartDate, e.target.value)}
+                      onChange={(e) => setEndDate(e.target.value)}
                       className="h-11 rounded-xl"
                     />
                   </div>

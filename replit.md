@@ -18,16 +18,25 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Budget Automator App
 
-A 3-step wizard that appends new weekly budget columns to an existing `.xlsx` spreadsheet:
+A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet:
 1. **Upload** — drop the existing budget file; reads bills and existing week history
-2. **Configure** — set week dates, opening balance (auto-filled from last week's remaining), paycheck amount, and edit bills
-3. **Download** — generates balanced weekly bill distribution, appends a new column to the workbook, and downloads the updated file
+2. **Configure** — set start date, number of weeks (end date auto-calculates), opening balance, paycheck; choose output mode (append vs new file); toggle "Set Remaining Acct to $0"
+3. **Download** — generates balanced weekly bill distribution with proper formatting and downloads
+
+Features:
+- **Week count selector**: pick how many weeks to generate; end date auto-fills (start + weeks × 7 - 1 days)
+- **Monthly bill reset**: rent/utilities/car split evenly across weeks within each calendar month and reset at the new month
+- **SUM formula**: the Remaining row uses `=SUM()` of cells above (not a hardcoded number)
+- **Cell styles**: Partial Rent = orange (FF9900), Partial Utilities = purple (9900FF), Partial Car = green (00FF00) — uses `xlsx-js-style`
+- **Output modes**: "Append to my spreadsheet" or "New file — budget only"
+- **Zero opening balance**: checkbox omits the Remaining Acct row entirely
 
 Key files:
 - `artifacts/budget-automator/src/lib/xlsx-parser.ts` — reads workbook: extracts bills and existing budget weeks
-- `artifacts/budget-automator/src/lib/xlsx-writer.ts` — appends new budget week column to workbook
+- `artifacts/budget-automator/src/lib/xlsx-writer.ts` — writes budget columns with styles + SUM formulas (uses `xlsx-js-style`)
 - `artifacts/budget-automator/src/pages/BudgetWizard.tsx` — main 3-step wizard UI
-- `artifacts/api-server/src/lib/budget.ts` — bill distribution logic (balances rent/utilities/car evenly)
+- `artifacts/budget-automator/src/store/use-budget-store.ts` — zustand store with auto end-date calculation
+- `artifacts/api-server/src/lib/budget.ts` — bill distribution logic with per-month rent/utilities/car reset
 - `artifacts/api-server/src/routes/budget.ts` — POST /api/budget/generate endpoint
 
 ## Structure

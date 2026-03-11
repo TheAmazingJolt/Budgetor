@@ -1,36 +1,43 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import type { WeeklyBudget } from '@workspace/api-client-react';
 
-// Category → fill color mapping (matches original spreadsheet)
-const CATEGORY_COLORS: Record<string, string> = {
-  'Partial Rent':      'FF9900', // orange
-  'Partial Utilities': '9900FF', // purple
-  'Partial Car':       '00FF00', // green
+const CATEGORY_STYLES: Record<string, any> = {
+  'Partial Rent': {
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF9900' }, bgColor: { rgb: 'FF9900' } },
+  },
+  'Partial Utilities': {
+    fill: { patternType: 'solid', fgColor: { rgb: '9900FF' }, bgColor: { rgb: '9900FF' } },
+  },
+  'Partial Car': {
+    fill: { patternType: 'solid', fgColor: { rgb: '00FF00' }, bgColor: { rgb: '00FF00' } },
+  },
 };
 
-function makeCell(value: string | number, fillColor?: string): XLSX.CellObject {
-  const cell: XLSX.CellObject = {
+function makeCell(value: string | number, billName?: string): any {
+  const cell: any = {
     v: value,
     t: typeof value === 'number' ? 'n' : 's',
   };
 
-  if (fillColor) {
-    (cell as any).s = {
-      patternType: 'solid',
-      fgColor: { rgb: fillColor },
-      bgColor: { rgb: fillColor },
-    };
-  } else {
-    (cell as any).s = { patternType: 'none' };
+  const catStyle = billName ? CATEGORY_STYLES[billName] : null;
+  if (catStyle) {
+    cell.s = { ...catStyle };
   }
 
   return cell;
 }
 
-/**
- * Writes budget week cell data into a sheet starting at `startCol`.
- * Works for both existing worksheets and fresh empty ones.
- */
+function makeSumFormula(colLetter: string, firstRow1: number, lastRow1: number): any {
+  return {
+    t: 'n',
+    f: `SUM(${colLetter}${firstRow1}:${colLetter}${lastRow1})`,
+  };
+}
+
+function colLetter(colIndex: number): string {
+  return XLSX.utils.encode_col(colIndex);
+}
+
 function writeWeeksToSheet(
   sheet: XLSX.WorkSheet,
   weekBudgets: WeeklyBudget[],
@@ -41,43 +48,49 @@ function writeWeeksToSheet(
 
   for (let wIdx = 0; wIdx < weekBudgets.length; wIdx++) {
     const week = weekBudgets[wIdx];
-    const col = startCol + wIdx * 2;
+    const labelCol = startCol + wIdx * 2;
+    const valCol = labelCol + 1;
+    const valLetter = colLetter(valCol);
 
-    const set = (rowIdx: number, colIdx: number, cell: XLSX.CellObject) => {
+    const set = (rowIdx: number, colIdx: number, cell: any) => {
       const addr = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
       sheet[addr] = cell;
     };
 
     let nextRow = 0;
 
-    // Row 0: header label (spans two cols logically)
-    set(nextRow, col,     makeCell(week.weekLabel));
-    set(nextRow, col + 1, makeCell(''));
+    // Row 0: header label
+    set(nextRow, labelCol, makeCell(week.weekLabel));
+    set(nextRow, valCol,   makeCell(''));
     nextRow++;
 
-    // Row 1: Remaining Acct / opening balance (optional)
+    // Track where the SUM range begins (first value row)
+    const sumStartRow = nextRow;
+
+    // Remaining Acct (optional)
     if (includeRemainingAcct) {
-      set(nextRow, col,     makeCell('Remaining Acct'));
-      set(nextRow, col + 1, makeCell(week.openingBalance));
+      set(nextRow, labelCol, makeCell('Remaining Acct'));
+      set(nextRow, valCol,   makeCell(week.openingBalance));
       nextRow++;
     }
 
     // Paycheck
-    set(nextRow, col,     makeCell('Paycheck'));
-    set(nextRow, col + 1, makeCell(week.paycheck));
+    set(nextRow, labelCol, makeCell('Paycheck'));
+    set(nextRow, valCol,   makeCell(week.paycheck));
     nextRow++;
 
     // Bill line items
     for (const bill of week.bills) {
-      const color = CATEGORY_COLORS[bill.name];
-      set(nextRow, col,     makeCell(bill.name,   color));
-      set(nextRow, col + 1, makeCell(bill.amount, color));
+      set(nextRow, labelCol, makeCell(bill.name, bill.name));
+      set(nextRow, valCol,   makeCell(bill.amount, bill.name));
       nextRow++;
     }
 
-    // Remaining (closing balance)
-    set(nextRow, col,     makeCell('Remaining'));
-    set(nextRow, col + 1, makeCell(week.closingBalance));
+    // Remaining row → =SUM() formula
+    // sumStartRow..nextRow-1 are the value rows (0-indexed)
+    // Excel is 1-indexed, so add 1
+    set(nextRow, labelCol, makeCell('Remaining'));
+    set(nextRow, valCol,   makeSumFormula(valLetter, sumStartRow + 1, nextRow));
   }
 
   // Update sheet range
@@ -89,7 +102,6 @@ function writeWeeksToSheet(
   const newMaxCol = startCol + totalNewCols - 1;
   if (newMaxCol > existingRange.e.c) existingRange.e.c = newMaxCol;
 
-  // Estimate max rows written (header + remainingAcct + paycheck + max bills + remaining)
   const maxRows = Math.max(
     ...weekBudgets.map(w => (includeRemainingAcct ? 3 : 2) + w.bills.length + 1)
   );
@@ -97,16 +109,12 @@ function writeWeeksToSheet(
 
   sheet['!ref'] = XLSX.utils.encode_range(existingRange);
 
-  // Ensure column widths
   if (!sheet['!cols']) sheet['!cols'] = [];
   while (sheet['!cols'].length <= startCol + totalNewCols) {
     sheet['!cols'].push({ wch: 18 });
   }
 }
 
-/**
- * Appends budget weeks to an existing workbook.
- */
 export function appendBudgetWeeks(
   workbook: XLSX.WorkBook,
   weekBudgets: WeeklyBudget[],
@@ -117,7 +125,6 @@ export function appendBudgetWeeks(
     ? 'Budget'
     : workbook.SheetNames[0];
 
-  // Clone existing sheet to avoid mutating the original
   const existingSheet = workbook.Sheets[sheetName];
   const clonedSheet: XLSX.WorkSheet = { ...existingSheet };
 
@@ -134,9 +141,6 @@ export function appendBudgetWeeks(
   });
 }
 
-/**
- * Creates a brand-new blank spreadsheet containing only the budget weeks.
- */
 export function createBlankBudget(
   weekBudgets: WeeklyBudget[],
   includeRemainingAcct = true,

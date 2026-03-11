@@ -2,26 +2,31 @@ import { create } from 'zustand';
 import type { Bill, BudgetResponse } from '@workspace/api-client-react';
 import type { ParsedWorkbook } from '@/lib/xlsx-parser';
 
+function toISO(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function addDaysISO(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return toISO(d);
+}
+
 interface BudgetState {
-  // Uploaded file state
   uploadedFile: File | null;
   parsedWorkbook: ParsedWorkbook | null;
+  blankMode: boolean;
 
-  // Mode
-  blankMode: boolean;           // true = generate to a brand-new spreadsheet
-
-  // New week settings
   bills: Bill[];
   newWeekStartDate: string;
   newWeekEndDate: string;
+  weekCount: number;
   openingBalance: number;
   paycheckAmount: number;
-  zeroOpeningBalance: boolean;  // true = force Remaining Acct to $0
+  zeroOpeningBalance: boolean;
 
-  // Generated output
   generatedWeek: BudgetResponse | null;
 
-  // Actions
   setUploadedFile: (file: File | null) => void;
   setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
   setBlankMode: (val: boolean) => void;
@@ -29,6 +34,9 @@ interface BudgetState {
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
   removeBill: (index: number) => void;
+  setStartDate: (start: string) => void;
+  setEndDate: (end: string) => void;
+  setWeekCount: (count: number) => void;
   setNewWeekDates: (start: string, end: string) => void;
   setOpeningBalance: (val: number) => void;
   setPaycheckAmount: (val: number) => void;
@@ -42,13 +50,7 @@ const getThisFriday = () => {
   const day = d.getDay();
   const diff = day <= 3 ? (3 - day) : (10 - day);
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
-};
-
-const getNextThursday = (fridayStr: string) => {
-  const d = new Date(fridayStr);
-  d.setDate(d.getDate() + 6);
-  return d.toISOString().split('T')[0];
+  return toISO(d);
 };
 
 const friday = getThisFriday();
@@ -59,7 +61,8 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   blankMode: false,
   bills: [],
   newWeekStartDate: friday,
-  newWeekEndDate: getNextThursday(friday),
+  newWeekEndDate: addDaysISO(friday, 6),
+  weekCount: 1,
   openingBalance: 0,
   paycheckAmount: 0,
   zeroOpeningBalance: false,
@@ -83,6 +86,28 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
     }),
   removeBill: (index) =>
     set((state) => ({ bills: state.bills.filter((_, i) => i !== index) })),
+
+  setStartDate: (start) =>
+    set((state) => ({
+      newWeekStartDate: start,
+      newWeekEndDate: addDaysISO(start, state.weekCount * 7 - 1),
+    })),
+
+  setEndDate: (end) =>
+    set((state) => {
+      const startMs = new Date(state.newWeekStartDate + 'T12:00:00').getTime();
+      const endMs = new Date(end + 'T12:00:00').getTime();
+      const diffDays = Math.round((endMs - startMs) / 86400000) + 1;
+      const wc = Math.max(1, Math.ceil(diffDays / 7));
+      return { newWeekEndDate: end, weekCount: wc };
+    }),
+
+  setWeekCount: (count) =>
+    set((state) => ({
+      weekCount: Math.max(1, count),
+      newWeekEndDate: addDaysISO(state.newWeekStartDate, Math.max(1, count) * 7 - 1),
+    })),
+
   setNewWeekDates: (start, end) =>
     set({ newWeekStartDate: start, newWeekEndDate: end }),
   setOpeningBalance: (val) => set({ openingBalance: val }),
@@ -99,5 +124,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       openingBalance: 0,
       paycheckAmount: 0,
       zeroOpeningBalance: false,
+      weekCount: 1,
     }),
 }));

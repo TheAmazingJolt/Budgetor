@@ -16,25 +16,18 @@ function formatLabel(start: Date, end: Date): string {
   return `Budget from ${fmt(start)} to ${fmt(end)}`;
 }
 
-function monthsSpanned(startDate: Date, endDate: Date): number {
-  const months =
-    (endDate.getFullYear() - startDate.getFullYear()) * 12 +
-    (endDate.getMonth() - startDate.getMonth()) +
-    1;
-  return Math.max(months, 1);
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}`;
 }
 
 export function generateWeeklyBudgets(
   startDate: Date,
-  endDate: Date,         // actual last day of the final week
+  endDate: Date,
   openingBalance: number,
   paycheckAmount: number,
   numberOfWeeks: number,
   bills: Bill[]
 ): WeeklyBudget[] {
-  const months = monthsSpanned(startDate, endDate);
-
-  // Separate bill categories
   const rentBills = bills.filter((b) => b.category === "rent");
   const utilitiesBills = bills.filter((b) => b.category === "utilities");
   const carBills = bills.filter((b) => b.category === "car");
@@ -49,15 +42,33 @@ export function generateWeeklyBudgets(
   const weeks: Array<{
     start: Date;
     end: Date;
+    month: string;
     bills: WeeklyBill[];
     paycheck: number;
   }> = [];
 
   for (let i = 0; i < numberOfWeeks; i++) {
     const start = addDays(startDate, i * 7);
-    // Last week ends on the user-supplied endDate; others end after 6 days
     const end = i === numberOfWeeks - 1 ? endDate : addDays(start, 6);
-    weeks.push({ start, end, bills: [], paycheck: paycheckAmount });
+    weeks.push({
+      start,
+      end,
+      month: monthKey(start),
+      bills: [],
+      paycheck: paycheckAmount,
+    });
+  }
+
+  // ── Determine months spanned and how many weeks per month ───────────────
+  const monthsInRange = new Set(weeks.map(w => w.month));
+  const startMonth = startDate.getMonth();
+  const startYear = startDate.getFullYear();
+  const totalMonths = monthsInRange.size;
+
+  // Count weeks per calendar month (determined by start date of each week)
+  const weeksPerMonth: Record<string, number> = {};
+  for (const w of weeks) {
+    weeksPerMonth[w.month] = (weeksPerMonth[w.month] || 0) + 1;
   }
 
   // ── Allocate fixed bills to the week containing their due date ──────────
@@ -65,11 +76,7 @@ export function generateWeeklyBudgets(
     const day = bill.dayOfMonth;
     if (day == null) continue;
 
-    const startMonth = startDate.getMonth();
-    const startYear = startDate.getFullYear();
-
-    // Try every month in range + one more for safety
-    for (let m = 0; m < months + 1; m++) {
+    for (let m = 0; m < totalMonths + 1; m++) {
       const year = startYear + Math.floor((startMonth + m) / 12);
       const month = (startMonth + m) % 12;
       const maxDay = new Date(year, month + 1, 0).getDate();
@@ -93,42 +100,40 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Distribute balanced bills (rent / utilities / car) evenly ──────────
-  // Each category is spread proportionally: (total × months) / numberOfWeeks
-  const rentPerWeek   = numberOfWeeks > 0 ? (rentTotal      * months) / numberOfWeeks : 0;
-  const utilPerWeek   = numberOfWeeks > 0 ? (utilitiesTotal * months) / numberOfWeeks : 0;
-  const carPerWeek    = numberOfWeeks > 0 ? (carTotal       * months) / numberOfWeeks : 0;
+  // ── Distribute balanced bills per calendar month ────────────────────────
+  // Each month gets the FULL monthly total, divided evenly across its weeks.
+  for (let i = 0; i < weeks.length; i++) {
+    const wpm = weeksPerMonth[weeks[i].month] || 1;
 
-  for (let i = 0; i < numberOfWeeks; i++) {
-    if (rentPerWeek > 0)
-      weeks[i].bills.unshift({ name: "Partial Rent",      amount: -Math.round(rentPerWeek  * 100) / 100 });
-    if (utilPerWeek > 0)
-      weeks[i].bills.splice(rentPerWeek > 0 ? 1 : 0, 0,
-        { name: "Partial Utilities", amount: -Math.round(utilPerWeek  * 100) / 100 });
-    if (carPerWeek > 0)
-      weeks[i].bills.splice((rentPerWeek > 0 ? 1 : 0) + (utilPerWeek > 0 ? 1 : 0), 0,
-        { name: "Partial Car",       amount: -Math.round(carPerWeek   * 100) / 100 });
+    const insertItems: WeeklyBill[] = [];
+    if (rentTotal > 0)
+      insertItems.push({ name: "Partial Rent", amount: -Math.round((rentTotal / wpm) * 100) / 100 });
+    if (utilitiesTotal > 0)
+      insertItems.push({ name: "Partial Utilities", amount: -Math.round((utilitiesTotal / wpm) * 100) / 100 });
+    if (carTotal > 0)
+      insertItems.push({ name: "Partial Car", amount: -Math.round((carTotal / wpm) * 100) / 100 });
+
+    weeks[i].bills.unshift(...insertItems);
   }
 
-  // ── Build WeeklyBudget objects with running balance ─────────────────────
+  // ── Build WeeklyBudget objects ─────────────────────────────────────────
+  // Each week is independent: closingBalance = openingBalance + paycheck + bills
+  // (the spreadsheet will use =SUM() so we don't carry forward a running balance)
   const result: WeeklyBudget[] = [];
-  let runningBalance = openingBalance;
 
   for (let i = 0; i < weeks.length; i++) {
     const { start, end, bills: weekBills, paycheck } = weeks[i];
-    const openBalance = runningBalance;
-    const totalBills  = weekBills.reduce((s, b) => s + b.amount, 0);
-    const closingBalance = openBalance + paycheck + totalBills;
-    runningBalance = closingBalance;
+    const totalBills = weekBills.reduce((s, b) => s + b.amount, 0);
+    const closingBalance = openingBalance + paycheck + totalBills;
 
     result.push({
-      weekLabel:      formatLabel(start, end),
-      startDate:      formatDate(start),
-      endDate:        formatDate(end),
-      openingBalance: Math.round(openBalance    * 100) / 100,
+      weekLabel: formatLabel(start, end),
+      startDate: formatDate(start),
+      endDate: formatDate(end),
+      openingBalance: Math.round(openingBalance * 100) / 100,
       paycheck,
-      bills:          weekBills,
-      totalBills:     Math.round(totalBills     * 100) / 100,
+      bills: weekBills,
+      totalBills: Math.round(totalBills * 100) / 100,
       closingBalance: Math.round(closingBalance * 100) / 100,
     });
   }
