@@ -48,6 +48,7 @@ export function BudgetWizard() {
     uploadedFile,
     parsedWorkbook,
     blankMode,
+    includeBillsSummary,
     bills,
     newWeekStartDate,
     newWeekEndDate,
@@ -58,6 +59,7 @@ export function BudgetWizard() {
     setUploadedFile,
     setParsedWorkbook,
     setBlankMode,
+    setIncludeBillsSummary,
     setBills,
     addBill,
     updateBill,
@@ -136,17 +138,17 @@ export function BudgetWizard() {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
 
+          const billsForSheet = includeBillsSummary ? bills : undefined;
           let blob: Blob;
           if (blankMode) {
-            // Create a brand-new spreadsheet with just the budget columns
-            blob = createBlankBudget(data.weeks, !zeroOpeningBalance);
+            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, billsForSheet);
           } else {
-            // Append weeks to the uploaded workbook
             blob = appendBudgetWeeks(
               parsedWorkbook!.workbook,
               data.weeks,
               parsedWorkbook!.nextWeekStartCol,
-              !zeroOpeningBalance
+              !zeroOpeningBalance,
+              billsForSheet
             );
           }
           setGeneratedBlob(blob);
@@ -446,6 +448,22 @@ export function BudgetWizard() {
                     </div>
                   </button>
                 </div>
+
+                {/* Include bills in spreadsheet */}
+                <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 transition-all select-none">
+                  <Checkbox
+                    checked={includeBillsSummary}
+                    onCheckedChange={(v) => setIncludeBillsSummary(!!v)}
+                    id="include-bills"
+                    className="mt-0.5 rounded"
+                  />
+                  <div>
+                    <p className="font-semibold text-sm text-foreground">Include bills list in spreadsheet</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Adds a color-coded bills summary (columns A–B) to the output file, matching the original format. Budget weeks shift right.
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Quick generate button (top) */}
@@ -501,8 +519,8 @@ export function BudgetWizard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.03 }}
                       >
-                        <Card className="group relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary transition-colors" />
+                        <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 hover:bg-primary transition-colors" />
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start mb-2">
                               <div className="space-y-1">
@@ -520,7 +538,7 @@ export function BudgetWizard() {
                               <span className="text-xs text-muted-foreground">
                                 {bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Weekly"}
                               </span>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex gap-1">
                                 <Button
                                   variant="ghost"
                                   size="icon"

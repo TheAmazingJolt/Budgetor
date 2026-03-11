@@ -16,6 +16,7 @@ interface BudgetState {
   uploadedFile: File | null;
   parsedWorkbook: ParsedWorkbook | null;
   blankMode: boolean;
+  includeBillsSummary: boolean;
 
   bills: Bill[];
   newWeekStartDate: string;
@@ -30,6 +31,7 @@ interface BudgetState {
   setUploadedFile: (file: File | null) => void;
   setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
   setBlankMode: (val: boolean) => void;
+  setIncludeBillsSummary: (val: boolean) => void;
   setBills: (bills: Bill[]) => void;
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
@@ -59,6 +61,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   uploadedFile: null,
   parsedWorkbook: null,
   blankMode: false,
+  includeBillsSummary: false,
   bills: [],
   newWeekStartDate: friday,
   newWeekEndDate: addDaysISO(friday, 6),
@@ -76,6 +79,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       openingBalance: wb?.lastRemaining ?? state.openingBalance,
     })),
   setBlankMode: (val) => set({ blankMode: val }),
+  setIncludeBillsSummary: (val) => set({ includeBillsSummary: val }),
   setBills: (bills) => set({ bills }),
   addBill: (bill) => set((state) => ({ bills: [...state.bills, bill] })),
   updateBill: (index, bill) =>
