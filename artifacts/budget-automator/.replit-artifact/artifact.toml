@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Budget Automator"
+version = "1.0.0"
+id = "artifacts/budget-automator"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 18602
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/budget-automator run dev"
+
+[services.env]
+PORT = "18602"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/budget-automator", "run", "build"]
+publicDir = "artifacts/budget-automator/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

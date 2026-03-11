@@ -6,4 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./bill";
+export * from "./billCategory";
+export * from "./budgetRequest";
+export * from "./budgetResponse";
+export * from "./errorResponse";
 export * from "./healthStatus";
+export * from "./weeklyBill";
+export * from "./weeklyBudget";

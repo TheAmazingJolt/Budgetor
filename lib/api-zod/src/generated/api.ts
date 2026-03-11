@@ -14,3 +14,57 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Takes bill configuration and generates weekly budgets with balanced large-bill distribution
+ * @summary Generate weekly budgets
+ */
+export const GenerateBudgetBody = zod.object({
+  startDate: zod.string().describe("ISO date string for first week start"),
+  openingBalance: zod.number().describe("Starting account balance"),
+  paycheckAmount: zod.number().describe("Weekly paycheck amount"),
+  numberOfWeeks: zod.number().describe("Number of weeks to generate"),
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .enum(["rent", "utilities", "car", "fixed", "weekly"])
+        .describe("Category for large-bill balancing"),
+    }),
+  ),
+});
+
+export const GenerateBudgetResponse = zod.object({
+  weeks: zod.array(
+    zod.object({
+      weekLabel: zod
+        .string()
+        .describe(
+          'Human-readable label like \"Budget from 3\/5\/26 to 3\/11\/26\"',
+        ),
+      startDate: zod.string().describe("ISO date string for week start"),
+      endDate: zod.string().describe("ISO date string for week end"),
+      openingBalance: zod
+        .number()
+        .describe("Amount remaining from previous week"),
+      paycheck: zod.number().describe("Paycheck received this week"),
+      bills: zod.array(
+        zod.object({
+          name: zod.string(),
+          amount: zod.number(),
+        }),
+      ),
+      totalBills: zod
+        .number()
+        .describe("Sum of all bill line items for this week"),
+      closingBalance: zod.number().describe("Amount remaining after all bills"),
+    }),
+  ),
+  totalMonthlyBills: zod.number(),
+  averageWeeklyBills: zod.number(),
+});

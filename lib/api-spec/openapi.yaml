@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: budget
+    description: Budget operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /budget/generate:
+    post:
+      operationId: generateBudget
+      tags: [budget]
+      summary: Generate weekly budgets
+      description: Takes bill configuration and generates weekly budgets with balanced large-bill distribution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetRequest"
+      responses:
+        "200":
+          description: Generated weekly budgets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +63,121 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Bill:
+      type: object
+      properties:
+        name:
+          type: string
+        amount:
+          type: number
+          description: Monthly amount (negative = expense)
+        dayOfMonth:
+          type: ["integer", "null"]
+          description: Day of month bill is due (null for weekly bills)
+        category:
+          type: string
+          enum: [rent, utilities, car, fixed, weekly]
+          description: Category for large-bill balancing
+      required:
+        - name
+        - amount
+        - category
+
+    WeeklyBill:
+      type: object
+      properties:
+        name:
+          type: string
+        amount:
+          type: number
+      required:
+        - name
+        - amount
+
+    WeeklyBudget:
+      type: object
+      properties:
+        weekLabel:
+          type: string
+          description: Human-readable label like "Budget from 3/5/26 to 3/11/26"
+        startDate:
+          type: string
+          description: ISO date string for week start
+        endDate:
+          type: string
+          description: ISO date string for week end
+        openingBalance:
+          type: number
+          description: Amount remaining from previous week
+        paycheck:
+          type: number
+          description: Paycheck received this week
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklyBill"
+        totalBills:
+          type: number
+          description: Sum of all bill line items for this week
+        closingBalance:
+          type: number
+          description: Amount remaining after all bills
+      required:
+        - weekLabel
+        - startDate
+        - endDate
+        - openingBalance
+        - paycheck
+        - bills
+        - totalBills
+        - closingBalance
+
+    BudgetRequest:
+      type: object
+      properties:
+        startDate:
+          type: string
+          description: ISO date string for first week start
+        openingBalance:
+          type: number
+          description: Starting account balance
+        paycheckAmount:
+          type: number
+          description: Weekly paycheck amount
+        numberOfWeeks:
+          type: integer
+          description: Number of weeks to generate
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
+      required:
+        - startDate
+        - openingBalance
+        - paycheckAmount
+        - numberOfWeeks
+        - bills
+
+    BudgetResponse:
+      type: object
+      properties:
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklyBudget"
+        totalMonthlyBills:
+          type: number
+        averageWeeklyBills:
+          type: number
+      required:
+        - weeks
+        - totalMonthlyBills
+        - averageWeeklyBills

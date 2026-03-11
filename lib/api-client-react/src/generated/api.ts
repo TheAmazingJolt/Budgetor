@@ -5,18 +5,26 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  BudgetRequest,
+  BudgetResponse,
+  ErrorResponse,
+  HealthStatus,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +107,90 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Takes bill configuration and generates weekly budgets with balanced large-bill distribution
+ * @summary Generate weekly budgets
+ */
+export const getGenerateBudgetUrl = () => {
+  return `/api/budget/generate`;
+};
+
+export const generateBudget = async (
+  budgetRequest: BudgetRequest,
+  options?: RequestInit,
+): Promise<BudgetResponse> => {
+  return customFetch<BudgetResponse>(getGenerateBudgetUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(budgetRequest),
+  });
+};
+
+export const getGenerateBudgetMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateBudget>>,
+    TError,
+    { data: BodyType<BudgetRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateBudget>>,
+  TError,
+  { data: BodyType<BudgetRequest> },
+  TContext
+> => {
+  const mutationKey = ["generateBudget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateBudget>>,
+    { data: BodyType<BudgetRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateBudget(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateBudgetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateBudget>>
+>;
+export type GenerateBudgetMutationBody = BodyType<BudgetRequest>;
+export type GenerateBudgetMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Generate weekly budgets
+ */
+export const useGenerateBudget = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateBudget>>,
+    TError,
+    { data: BodyType<BudgetRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateBudget>>,
+  TError,
+  { data: BodyType<BudgetRequest> },
+  TContext
+> => {
+  return useMutation(getGenerateBudgetMutationOptions(options));
+};

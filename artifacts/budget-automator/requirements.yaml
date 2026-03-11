@@ -1,0 +1,17 @@
+packages:
+  "xlsx": "Parsing uploaded budget spreadsheets"
+  "zustand": "Global state management for budget settings and bills across tabs"
+  "framer-motion": "Smooth animations for tabs and lists"
+  "date-fns": "Formatting and manipulating dates"
+  "@hookform/resolvers": "Form validation with Zod"
+  "react-hook-form": "Form state management"
+  "react-dropzone": "Drag and drop file upload for Excel files"
+
+images:
+  - path: "artifacts/budget-automator/public/images/hero-bg.png"
+    description: "Subtle, minimalist abstract background with soft glowing geometric shapes in pale emerald green and clean white, professional and modern"
+    aspect_ratio: "16:9"
+
+notes:
+  - "Assuming standard Zod schemas match the API types."
+  - "XLSX parsing logic strictly follows the row indices described in the implementation notes."

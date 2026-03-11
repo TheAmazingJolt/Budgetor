@@ -8,3 +8,74 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+/**
+ * Category for large-bill balancing
+ */
+export type BillCategory = (typeof BillCategory)[keyof typeof BillCategory];
+
+export const BillCategory = {
+  rent: "rent",
+  utilities: "utilities",
+  car: "car",
+  fixed: "fixed",
+  weekly: "weekly",
+} as const;
+
+export interface Bill {
+  name: string;
+  /** Monthly amount (negative = expense) */
+  amount: number;
+  /**
+   * Day of month bill is due (null for weekly bills)
+   * @nullable
+   */
+  dayOfMonth?: number | null;
+  /** Category for large-bill balancing */
+  category: BillCategory;
+}
+
+export interface WeeklyBill {
+  name: string;
+  amount: number;
+}
+
+export interface WeeklyBudget {
+  /** Human-readable label like "Budget from 3/5/26 to 3/11/26" */
+  weekLabel: string;
+  /** ISO date string for week start */
+  startDate: string;
+  /** ISO date string for week end */
+  endDate: string;
+  /** Amount remaining from previous week */
+  openingBalance: number;
+  /** Paycheck received this week */
+  paycheck: number;
+  bills: WeeklyBill[];
+  /** Sum of all bill line items for this week */
+  totalBills: number;
+  /** Amount remaining after all bills */
+  closingBalance: number;
+}
+
+export interface BudgetRequest {
+  /** ISO date string for first week start */
+  startDate: string;
+  /** Starting account balance */
+  openingBalance: number;
+  /** Weekly paycheck amount */
+  paycheckAmount: number;
+  /** Number of weeks to generate */
+  numberOfWeeks: number;
+  bills: Bill[];
+}
+
+export interface BudgetResponse {
+  weeks: WeeklyBudget[];
+  totalMonthlyBills: number;
+  averageWeeklyBills: number;
+}
