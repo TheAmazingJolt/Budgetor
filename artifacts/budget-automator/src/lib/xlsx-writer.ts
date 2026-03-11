@@ -585,6 +585,8 @@ export function createBlankBudget(
   /** Fallback generated bills list used only when no rawBillsSection is available */
   fallbackBills?: Bill[],
   style?: SheetStyle | null,
+  /** Raw bytes of the uploaded workbook — used to carry over any extra sheets */
+  rawBytes?: Uint8Array | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
@@ -617,6 +619,17 @@ export function createBlankBudget(
   applySheetView(ws, budgetStartCol, lastWeekCol);
 
   XLSX.utils.book_append_sheet(wb, ws, 'Budget');
+
+  // Carry over any extra tabs from the original workbook.
+  // The Budget sheet is skipped (we just generated a fresh one).
+  if (rawBytes) {
+    const originalWb = XLSX.read(rawBytes, { type: 'array', cellStyles: true });
+    for (const sheetName of originalWb.SheetNames) {
+      if (sheetName === 'Budget') continue;
+      if (wb.SheetNames.includes(sheetName)) continue;
+      XLSX.utils.book_append_sheet(wb, originalWb.Sheets[sheetName], sheetName);
+    }
+  }
 
   const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {

@@ -147,7 +147,7 @@ export function BudgetWizard() {
               ? (parsedWorkbook?.rawBillsSection ?? null)
               : null;
             const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
-            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle);
+            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes);
           } else {
             // Append mode: re-read the original bytes inside the writer so all
             // existing cell styles (fills, fonts, borders) survive unchanged.
