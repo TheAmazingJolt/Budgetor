@@ -1,6 +1,13 @@
 import XLSX from 'xlsx-js-style';
 import type { WeeklyBudget } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
+import type { SheetStyle } from './xlsx-parser';
+
+const DEFAULT_STYLE: SheetStyle = {
+  fontSize: 11,
+  labelColWidth: 20,
+  valueColWidth: 12,
+};
 
 // ── Cell style constants ────────────────────────────────────────────────────
 
@@ -132,7 +139,9 @@ function writeWeeksToSheet(
   weekBudgets: WeeklyBudget[],
   startCol: number,
   includeRemainingAcct: boolean,
+  style: SheetStyle = DEFAULT_STYLE,
 ) {
+  const { fontSize, labelColWidth, valueColWidth } = style;
   const totalNewCols = weekBudgets.length * 2;
 
   // Uniform height: every week column must be the same number of rows.
@@ -151,7 +160,7 @@ function writeWeeksToSheet(
 
     // Row 0: header label (merged + centered)
     const headerStyle = {
-      font: { bold: true, sz: 11 },
+      font: { bold: true, sz: fontSize },
       alignment: { horizontal: 'center' },
       fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' }, bgColor: { rgb: 'D9E1F2' } },
     };
@@ -163,23 +172,29 @@ function writeWeeksToSheet(
     // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
+    // Body cell base style (font size only; no fill unless it's a colored row)
+    const bodyFont = { sz: fontSize };
+
     // Remaining Acct (optional)
     if (includeRemainingAcct) {
-      set(sheet, nextRow, labelCol, makeCell('Remaining Acct'));
-      set(sheet, nextRow, valCol,   makeCell(week.openingBalance));
+      set(sheet, nextRow, labelCol, makeCell('Remaining Acct', { font: bodyFont }));
+      set(sheet, nextRow, valCol,   makeCell(week.openingBalance, { font: bodyFont }));
       nextRow++;
     }
 
     // Paycheck
-    set(sheet, nextRow, labelCol, makeCell('Paycheck'));
-    set(sheet, nextRow, valCol,   makeCell(week.paycheck));
+    set(sheet, nextRow, labelCol, makeCell('Paycheck', { font: bodyFont }));
+    set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont }));
     nextRow++;
 
     // Bill line items
     for (const bill of week.bills) {
-      const catStyle = BUDGET_ROW_STYLES[bill.name] ?? null;
-      set(sheet, nextRow, labelCol, makeCell(bill.name,   catStyle));
-      set(sheet, nextRow, valCol,   makeCell(bill.amount, catStyle));
+      const baseStyle = BUDGET_ROW_STYLES[bill.name] ?? null;
+      const cellStyle = baseStyle
+        ? { ...baseStyle, font: { ...baseStyle.font, sz: fontSize } }
+        : { font: bodyFont };
+      set(sheet, nextRow, labelCol, makeCell(bill.name,   cellStyle));
+      set(sheet, nextRow, valCol,   makeCell(bill.amount, cellStyle));
       nextRow++;
     }
 
@@ -192,7 +207,7 @@ function writeWeeksToSheet(
 
     // Remaining row → =SUM() formula spanning ALL value rows above
     const remainingStyle = {
-      font: { bold: true },
+      font: { bold: true, sz: fontSize },
       border: { top: { style: 'thin', color: { rgb: '000000' } } },
     };
     set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
@@ -214,10 +229,14 @@ function writeWeeksToSheet(
 
   sheet['!ref'] = XLSX.utils.encode_range(existingRange);
 
+  // Apply label/value column widths for every new budget week pair
   if (!sheet['!cols']) sheet['!cols'] = [];
-  const totalCols = startCol + totalNewCols;
-  while (sheet['!cols'].length <= totalCols) {
-    sheet['!cols'].push({ wch: 20 });
+  for (let wIdx = 0; wIdx < weekBudgets.length; wIdx++) {
+    const lc = startCol + wIdx * 2;
+    const vc = lc + 1;
+    while (sheet['!cols']!.length <= vc) sheet['!cols']!.push({});
+    sheet['!cols']![lc] = { wch: labelColWidth };
+    sheet['!cols']![vc] = { wch: valueColWidth };
   }
 }
 
@@ -229,6 +248,7 @@ export function appendBudgetWeeks(
   firstStartCol: number,
   includeRemainingAcct = true,
   bills?: Bill[],
+  style?: SheetStyle | null,
 ): Blob {
   const sheetName = workbook.SheetNames.includes('Budget')
     ? 'Budget'
@@ -250,7 +270,7 @@ export function appendBudgetWeeks(
     if (budgetStartCol < 2) budgetStartCol = 2;
   }
 
-  writeWeeksToSheet(clonedSheet, weekBudgets, budgetStartCol, includeRemainingAcct);
+  writeWeeksToSheet(clonedSheet, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
   // Ensure !ref covers the bills section too
   if (bills && bills.length > 0) {
@@ -279,6 +299,7 @@ export function createBlankBudget(
   weekBudgets: WeeklyBudget[],
   includeRemainingAcct = true,
   bills?: Bill[],
+  style?: SheetStyle | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
@@ -300,7 +321,7 @@ export function createBlankBudget(
     ws['!ref'] = `A1:B${billsRows}`;
   }
 
-  writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct);
+  writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
   XLSX.utils.book_append_sheet(wb, ws, 'Budget');
 

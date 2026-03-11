@@ -10,12 +10,23 @@ export interface ParsedWeek {
   remaining: number;
 }
 
+export interface SheetStyle {
+  /** Font size in points (default 11) */
+  fontSize: number;
+  /** Label-column character width (default 20) */
+  labelColWidth: number;
+  /** Value-column character width (default 12) */
+  valueColWidth: number;
+}
+
 export interface ParsedWorkbook {
   workbook: XLSX.WorkBook;
   bills: Bill[];
   existingWeeks: ParsedWeek[];
   nextWeekStartCol: number;
   lastRemaining: number;
+  /** Visual style sampled from the first existing budget week */
+  sheetStyle: SheetStyle;
 }
 
 export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook> {
@@ -158,7 +169,33 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
             ? existingWeeks[existingWeeks.length - 1].remaining
             : 0;
 
-        resolve({ workbook, bills, existingWeeks, nextWeekStartCol, lastRemaining });
+        // ── Sample visual style from the first budget week ─────────────────
+        const sampleCol = existingWeeks.length > 0
+          ? existingWeeks[0].startCol
+          : FIRST_BUDGET_COL;
+
+        // Font size: the workbook-level Styles.Fonts table is the reliable source.
+        // Count occurrences of each sz value; the most frequent is the body font.
+        const wbFonts: any[] = (workbook as any).Styles?.Fonts ?? [];
+        const sizeCounts: Record<number, number> = {};
+        for (const f of wbFonts) {
+          if (f?.sz) sizeCounts[f.sz] = (sizeCounts[f.sz] ?? 0) + 1;
+        }
+        const sorted = Object.entries(sizeCounts).sort(([, a], [, b]) => b - a);
+        const fontSize = sorted.length > 0 ? Number(sorted[0][0]) : 11;
+
+        // Column widths from !cols
+        const sheetCols     = (worksheet['!cols'] ?? []) as any[];
+        const labelColWidth = sheetCols[sampleCol]?.wch
+          ?? sheetCols[sampleCol]?.width
+          ?? 20;
+        const valueColWidth = sheetCols[sampleCol + 1]?.wch
+          ?? sheetCols[sampleCol + 1]?.width
+          ?? 12;
+
+        const sheetStyle: SheetStyle = { fontSize, labelColWidth, valueColWidth };
+
+        resolve({ workbook, bills, existingWeeks, nextWeekStartCol, lastRemaining, sheetStyle });
       } catch (err) {
         console.error('XLSX parsing failed', err);
         reject(

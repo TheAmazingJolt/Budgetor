@@ -49,6 +49,7 @@ export function BudgetWizard() {
     parsedWorkbook,
     blankMode,
     includeBillsSummary,
+    sheetStyle,
     bills,
     newWeekStartDate,
     newWeekEndDate,
@@ -141,14 +142,15 @@ export function BudgetWizard() {
           const billsForSheet = includeBillsSummary ? bills : undefined;
           let blob: Blob;
           if (blankMode) {
-            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, billsForSheet);
+            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, billsForSheet, sheetStyle);
           } else {
             blob = appendBudgetWeeks(
               parsedWorkbook!.workbook,
               data.weeks,
               parsedWorkbook!.nextWeekStartCol,
               !zeroOpeningBalance,
-              billsForSheet
+              billsForSheet,
+              sheetStyle,
             );
           }
           setGeneratedBlob(blob);

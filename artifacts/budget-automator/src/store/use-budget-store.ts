@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Bill, BudgetResponse } from '@workspace/api-client-react';
-import type { ParsedWorkbook } from '@/lib/xlsx-parser';
+import type { ParsedWorkbook, SheetStyle } from '@/lib/xlsx-parser';
 
 function toISO(d: Date): string {
   return d.toISOString().split('T')[0];
@@ -17,6 +17,8 @@ interface BudgetState {
   parsedWorkbook: ParsedWorkbook | null;
   blankMode: boolean;
   includeBillsSummary: boolean;
+  /** Style sampled from the uploaded spreadsheet, if any */
+  sheetStyle: SheetStyle | null;
 
   bills: Bill[];
   newWeekStartDate: string;
@@ -62,6 +64,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   parsedWorkbook: null,
   blankMode: false,
   includeBillsSummary: false,
+  sheetStyle: null,
   bills: [],
   newWeekStartDate: friday,
   newWeekEndDate: addDaysISO(friday, 6),
@@ -77,6 +80,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       parsedWorkbook: wb,
       bills: wb?.bills ?? state.bills,
       openingBalance: wb?.lastRemaining ?? state.openingBalance,
+      sheetStyle: wb?.sheetStyle ?? state.sheetStyle,
     })),
   setBlankMode: (val) => set({ blankMode: val }),
   setIncludeBillsSummary: (val) => set({ includeBillsSummary: val }),
@@ -123,6 +127,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       uploadedFile: null,
       parsedWorkbook: null,
       blankMode: false,
+      sheetStyle: null,
       bills: [],
       generatedWeek: null,
       openingBalance: 0,
