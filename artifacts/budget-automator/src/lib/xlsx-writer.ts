@@ -1,7 +1,7 @@
 import XLSX from 'xlsx-js-style';
 import type { WeeklyBudget } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
-import type { SheetStyle } from './xlsx-parser';
+import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 11,
@@ -240,6 +240,42 @@ function writeWeeksToSheet(
   }
 }
 
+// ── Verbatim bills section copy ───────────────────────────────────────────────
+
+function writeBillsVerbatim(
+  sheet: XLSX.WorkSheet,
+  raw: RawBillsSection,
+): void {
+  // Copy every A/B cell exactly as it appeared in the original
+  for (const [addr, cell] of Object.entries(raw.cells)) {
+    sheet[addr] = cell;
+  }
+
+  // Restore any merges that were in cols A–B
+  if (!sheet['!merges']) sheet['!merges'] = [];
+  for (const m of raw.merges) {
+    const already = sheet['!merges'].some(
+      (e: any) => e.s.r === m.s.r && e.s.c === m.s.c && e.e.r === m.e.r && e.e.c === m.e.c
+    );
+    if (!already) sheet['!merges'].push(m);
+  }
+
+  // Apply original column widths for A and B
+  if (!sheet['!cols']) sheet['!cols'] = [];
+  while ((sheet['!cols'] as any[]).length < 2) (sheet['!cols'] as any[]).push({});
+  (sheet['!cols'] as any[])[0] = { wch: raw.colWidths[0] };
+  (sheet['!cols'] as any[])[1] = { wch: raw.colWidths[1] };
+
+  // Extend !ref to cover the bills rows
+  const existingRef = sheet['!ref'];
+  const range = existingRef
+    ? XLSX.utils.decode_range(existingRef)
+    : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  if (raw.rowCount - 1 > range.e.r) range.e.r = raw.rowCount - 1;
+  if (range.s.c > 0) range.s.c = 0;
+  sheet['!ref'] = XLSX.utils.encode_range(range);
+}
+
 // ── Public exports ───────────────────────────────────────────────────────────
 
 export function appendBudgetWeeks(
@@ -247,7 +283,6 @@ export function appendBudgetWeeks(
   weekBudgets: WeeklyBudget[],
   firstStartCol: number,
   includeRemainingAcct = true,
-  bills?: Bill[],
   style?: SheetStyle | null,
 ): Blob {
   const sheetName = workbook.SheetNames.includes('Budget')
@@ -259,30 +294,13 @@ export function appendBudgetWeeks(
   if (existingSheet['!merges']) {
     clonedSheet['!merges'] = [...existingSheet['!merges']];
   }
-
-  // If we have bills to write and the spreadsheet starts at col 0, we can
-  // write the bills section to col 0–1. Otherwise write it at firstStartCol.
-  let budgetStartCol = firstStartCol;
-  if (bills && bills.length > 0) {
-    // Write bills in first 2 cols only when existing sheet has no data there
-    writeBillsSection(clonedSheet, bills, 0);
-    // Push budget weeks right of bills section
-    if (budgetStartCol < 2) budgetStartCol = 2;
+  if (existingSheet['!cols']) {
+    clonedSheet['!cols'] = [...existingSheet['!cols']];
   }
 
-  writeWeeksToSheet(clonedSheet, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
-
-  // Ensure !ref covers the bills section too
-  if (bills && bills.length > 0) {
-    const ref = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
-    if (ref.s.c > 0) ref.s.c = 0;
-    clonedSheet['!ref'] = XLSX.utils.encode_range(ref);
-    // Width for the bills cols
-    if (!clonedSheet['!cols']) clonedSheet['!cols'] = [];
-    while (clonedSheet['!cols'].length < 2) clonedSheet['!cols'].push({ wch: 22 });
-    clonedSheet['!cols'][0] = { wch: 22 };
-    clonedSheet['!cols'][1] = { wch: 12 };
-  }
+  // The original bills section (cols A–B) is already in the cloned sheet —
+  // we never overwrite it. Just append the new week columns at firstStartCol.
+  writeWeeksToSheet(clonedSheet, weekBudgets, firstStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
   const clonedWb: XLSX.WorkBook = {
     ...workbook,
@@ -298,26 +316,32 @@ export function appendBudgetWeeks(
 export function createBlankBudget(
   weekBudgets: WeeklyBudget[],
   includeRemainingAcct = true,
-  bills?: Bill[],
+  /** Pass the raw snapshot from parsedWorkbook to copy the original verbatim */
+  rawBillsSection?: RawBillsSection | null,
+  /** Fallback generated bills list used only when no rawBillsSection is available */
+  fallbackBills?: Bill[],
   style?: SheetStyle | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
   ws['!ref'] = 'A1:A1';
 
-  // Bills section in cols A–B (0–1), then budget weeks from col C (2) onward
   let budgetStartCol = 0;
-  if (bills && bills.length > 0) {
-    writeBillsSection(ws, bills, 0);
+
+  if (rawBillsSection) {
+    // Preferred path: copy the original bills section cells verbatim
+    writeBillsVerbatim(ws, rawBillsSection);
+    budgetStartCol = 2;
+  } else if (fallbackBills && fallbackBills.length > 0) {
+    // Fallback: generate a styled bills section when no original is available
+    writeBillsSection(ws, fallbackBills, 0);
     budgetStartCol = 2;
 
-    // Width for the bills cols
     if (!ws['!cols']) ws['!cols'] = [];
-    ws['!cols'][0] = { wch: 22 };
-    ws['!cols'][1] = { wch: 12 };
+    (ws['!cols'] as any[])[0] = { wch: 22 };
+    (ws['!cols'] as any[])[1] = { wch: 12 };
 
-    // Extend ref to cover bills section
-    const billsRows = 2 + bills.length + 5; // rough upper bound
+    const billsRows = 2 + fallbackBills.length + 5;
     ws['!ref'] = `A1:B${billsRows}`;
   }
 

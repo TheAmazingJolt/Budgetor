@@ -139,17 +139,22 @@ export function BudgetWizard() {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
 
-          const billsForSheet = includeBillsSummary ? bills : undefined;
           let blob: Blob;
           if (blankMode) {
-            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, billsForSheet, sheetStyle);
+            // Blank mode: copy the original bills section verbatim if available,
+            // otherwise fall back to a generated bills list.
+            const rawBills = includeBillsSummary
+              ? (parsedWorkbook?.rawBillsSection ?? null)
+              : null;
+            const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
+            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle);
           } else {
+            // Append mode: original bills section is already in the cloned sheet.
             blob = appendBudgetWeeks(
               parsedWorkbook!.workbook,
               data.weeks,
               parsedWorkbook!.nextWeekStartCol,
               !zeroOpeningBalance,
-              billsForSheet,
               sheetStyle,
             );
           }
