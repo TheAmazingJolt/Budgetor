@@ -130,10 +130,19 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
         }
 
         // ── Parse existing weekly budget columns ────────────────────────────
-        // Row 0 has headers in pairs starting at column index 5 (E).
+        // Auto-detect where the first budget week header appears.
         // Each budget week occupies 2 columns: label col and value col.
-        const FIRST_BUDGET_COL = 5;
         const headerRow = rows[0] ?? [];
+        let FIRST_BUDGET_COL = -1;
+        for (let c = 0; c < headerRow.length; c++) {
+          if (String(headerRow[c] ?? '').trim().toLowerCase().startsWith('budget')) {
+            FIRST_BUDGET_COL = c;
+            break;
+          }
+        }
+        // If no existing budget found, default to 2 (at minimum bills take cols A-B)
+        if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
+
         const existingWeeks: ParsedWeek[] = [];
 
         let col = FIRST_BUDGET_COL;

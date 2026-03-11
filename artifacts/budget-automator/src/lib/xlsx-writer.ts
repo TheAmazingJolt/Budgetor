@@ -4,7 +4,7 @@ import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 
 const DEFAULT_STYLE: SheetStyle = {
-  fontSize: 11,
+  fontSize: 10,
   labelColWidth: 20,
   valueColWidth: 12,
 };
@@ -71,7 +71,7 @@ function writeBillsSection(
 ): number {
   // Header: "Bills" merged across 2 cols, centered, bold
   const headerStyle = {
-    font: { bold: true, sz: 12 },
+    font: { bold: true, sz: 10, name: 'Arial' },
     alignment: { horizontal: 'center', vertical: 'center' },
     fill: { patternType: 'solid', fgColor: { rgb: '4472C4' }, bgColor: { rgb: '4472C4' } },
     border: {
@@ -85,7 +85,7 @@ function writeBillsSection(
 
   // "Amount" sub-header
   const subHeaderStyle = {
-    font: { bold: true, sz: 10 },
+    font: { bold: true, sz: 10, name: 'Arial' },
     alignment: { horizontal: 'center' },
     fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' }, bgColor: { rgb: 'D9E1F2' } },
     border: { bottom: { style: 'thin', color: { rgb: 'AAAAAA' } } },
@@ -103,7 +103,7 @@ function writeBillsSection(
     // Category label row
     const catStyle = {
       ...BILLS_SECTION_STYLES[cat],
-      font: { bold: true, sz: 10 },
+      font: { bold: true, sz: 10, name: 'Arial' },
       alignment: { horizontal: 'center' },
     };
     const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
@@ -116,10 +116,12 @@ function writeBillsSection(
     for (const bill of catBills) {
       const billStyle = {
         ...BILLS_SECTION_STYLES[cat],
+        font: { sz: 10, name: 'Arial' },
         alignment: { horizontal: 'left' },
       };
       const amtStyle = {
         ...BILLS_SECTION_STYLES[cat],
+        font: { sz: 10, name: 'Arial' },
         alignment: { horizontal: 'right' },
         numFmt: '#,##0.00',
       };
@@ -141,7 +143,7 @@ function writeWeeksToSheet(
   includeRemainingAcct: boolean,
   style: SheetStyle = DEFAULT_STYLE,
 ) {
-  const { fontSize, labelColWidth, valueColWidth } = style;
+  const { labelColWidth, valueColWidth } = style;
   const totalNewCols = weekBudgets.length * 2;
 
   // Uniform height: every week column must be the same number of rows.
@@ -160,7 +162,7 @@ function writeWeeksToSheet(
 
     // Row 0: header label (merged + centered)
     const headerStyle = {
-      font: { bold: true, sz: fontSize },
+      font: { bold: true, sz: 10, name: 'Arial' },
       alignment: { horizontal: 'center' },
       fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' }, bgColor: { rgb: 'D9E1F2' } },
     };
@@ -172,8 +174,8 @@ function writeWeeksToSheet(
     // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
-    // Body cell base style (font size only; no fill unless it's a colored row)
-    const bodyFont = { sz: fontSize };
+    // Body cell base style — Arial 10pt
+    const bodyFont = { sz: 10, name: 'Arial' };
 
     // Remaining Acct (optional)
     if (includeRemainingAcct) {
@@ -191,7 +193,7 @@ function writeWeeksToSheet(
     for (const bill of week.bills) {
       const baseStyle = BUDGET_ROW_STYLES[bill.name] ?? null;
       const cellStyle = baseStyle
-        ? { ...baseStyle, font: { ...baseStyle.font, sz: fontSize } }
+        ? { ...baseStyle, font: { sz: 10, name: 'Arial' } }
         : { font: bodyFont };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   cellStyle));
       set(sheet, nextRow, valCol,   makeCell(bill.amount, cellStyle));
@@ -207,7 +209,7 @@ function writeWeeksToSheet(
 
     // Remaining row → =SUM() formula spanning ALL value rows above
     const remainingStyle = {
-      font: { bold: true, sz: fontSize },
+      font: { bold: true, sz: 10, name: 'Arial' },
       border: { top: { style: 'thin', color: { rgb: '000000' } } },
     };
     set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
@@ -279,15 +281,11 @@ function buildFillColorStyleMap(wb: XLSX.WorkBook): Map<string, any> {
       normalized.fill = { patternType: 'none' };
     }
 
-    // Font (only attach when something useful is present)
-    if (font.sz || font.bold || font.color || font.italic) {
-      normalized.font = {};
-      if (font.sz)      normalized.font.sz      = font.sz;
-      if (font.bold)    normalized.font.bold    = true;
-      if (font.italic)  normalized.font.italic  = true;
-      if (font.color)   normalized.font.color   = font.color;
-      if (font.name)    normalized.font.name    = font.name;
-    }
+    // Font — always Arial 10pt; preserve bold/italic/color from original
+    normalized.font = { sz: 10, name: 'Arial' };
+    if (font.bold)   normalized.font.bold   = true;
+    if (font.italic) normalized.font.italic = true;
+    if (font.color)  normalized.font.color  = font.color;
 
     // Alignment
     if (xf.alignment) normalized.alignment = xf.alignment;
@@ -333,13 +331,27 @@ function normalizeSheetCellStyles(
 
 // ── Verbatim bills section copy ───────────────────────────────────────────────
 
+function normalizeFlatStyle(s: any): any {
+  if (!s || s.fill !== undefined) return s;
+  // Convert old flat format { patternType, fgColor } → { fill: { ... }, font: { Arial 10pt } }
+  const normalized: any = {
+    fill: { patternType: s.patternType ?? 'none' },
+    font: { sz: 10, name: 'Arial' },
+  };
+  if (s.fgColor) normalized.fill.fgColor = s.fgColor;
+  if (s.bgColor) normalized.fill.bgColor = s.bgColor;
+  return normalized;
+}
+
 function writeBillsVerbatim(
   sheet: XLSX.WorkSheet,
   raw: RawBillsSection,
 ): void {
-  // Copy every bills-section cell exactly as it appeared in the original
+  // Copy every bills-section cell — normalizing any old-format cell styles so
+  // xlsx-js-style can encode them correctly on write.
   for (const [addr, cell] of Object.entries(raw.cells)) {
-    sheet[addr] = cell;
+    const normalized = cell?.s ? { ...cell, s: normalizeFlatStyle(cell.s) } : cell;
+    sheet[addr] = normalized;
   }
 
   // Restore any merges that were in the bills columns
@@ -435,7 +447,8 @@ export function createBlankBudget(
   if (rawBillsSection) {
     // Preferred path: copy the original bills section cells verbatim
     writeBillsVerbatim(ws, rawBillsSection);
-    budgetStartCol = 2;
+    // Budget must start AFTER all bills columns (colCount is the exact width)
+    budgetStartCol = rawBillsSection.colCount;
   } else if (fallbackBills && fallbackBills.length > 0) {
     // Fallback: generate a styled bills section when no original is available
     writeBillsSection(ws, fallbackBills, 0);
