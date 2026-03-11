@@ -16,6 +16,20 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+## Budget Automator App
+
+A 3-step wizard that appends new weekly budget columns to an existing `.xlsx` spreadsheet:
+1. **Upload** — drop the existing budget file; reads bills and existing week history
+2. **Configure** — set week dates, opening balance (auto-filled from last week's remaining), paycheck amount, and edit bills
+3. **Download** — generates balanced weekly bill distribution, appends a new column to the workbook, and downloads the updated file
+
+Key files:
+- `artifacts/budget-automator/src/lib/xlsx-parser.ts` — reads workbook: extracts bills and existing budget weeks
+- `artifacts/budget-automator/src/lib/xlsx-writer.ts` — appends new budget week column to workbook
+- `artifacts/budget-automator/src/pages/BudgetWizard.tsx` — main 3-step wizard UI
+- `artifacts/api-server/src/lib/budget.ts` — bill distribution logic (balances rent/utilities/car evenly)
+- `artifacts/api-server/src/routes/budget.ts` — POST /api/budget/generate endpoint
+
 ## Structure
 
 ```text

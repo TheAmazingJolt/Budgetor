@@ -1,58 +1,91 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { Bill, BudgetResponse } from '@workspace/api-client-react';
+import type { ParsedWorkbook } from '@/lib/xlsx-parser';
 
 interface BudgetState {
+  // Uploaded file state
+  uploadedFile: File | null;
+  parsedWorkbook: ParsedWorkbook | null;
+
+  // New week settings
   bills: Bill[];
-  startDate: string;
+  newWeekStartDate: string;
+  newWeekEndDate: string;
   openingBalance: number;
   paycheckAmount: number;
-  numberOfWeeks: number;
-  generatedBudget: BudgetResponse | null;
-  
+
+  // Generated output
+  generatedWeek: BudgetResponse | null;
+
+  // Actions
+  setUploadedFile: (file: File | null) => void;
+  setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
   setBills: (bills: Bill[]) => void;
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
   removeBill: (index: number) => void;
-  
-  setSettings: (settings: Partial<Omit<BudgetState, 'bills' | 'generatedBudget' | 'setBills' | 'addBill' | 'updateBill' | 'removeBill' | 'setSettings' | 'setGeneratedBudget'>>) => void;
-  setGeneratedBudget: (budget: BudgetResponse | null) => void;
+  setNewWeekDates: (start: string, end: string) => void;
+  setOpeningBalance: (val: number) => void;
+  setPaycheckAmount: (val: number) => void;
+  setGeneratedWeek: (budget: BudgetResponse | null) => void;
+  reset: () => void;
 }
 
-const getNextFriday = () => {
+const getThisFriday = () => {
   const d = new Date();
   const day = d.getDay();
-  const diff = (day <= 5) ? (5 - day) : (12 - day);
+  const diff = day <= 3 ? (3 - day) : (10 - day);
   d.setDate(d.getDate() + diff);
   return d.toISOString().split('T')[0];
 };
 
-export const useBudgetStore = create<BudgetState>()(
-  persist(
-    (set) => ({
-      bills: [],
-      startDate: getNextFriday(),
-      openingBalance: 1000,
-      paycheckAmount: 800,
-      numberOfWeeks: 8,
-      generatedBudget: null,
+const getNextThursday = (fridayStr: string) => {
+  const d = new Date(fridayStr);
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().split('T')[0];
+};
 
-      setBills: (bills) => set({ bills }),
-      addBill: (bill) => set((state) => ({ bills: [...state.bills, bill] })),
-      updateBill: (index, bill) => set((state) => {
-        const newBills = [...state.bills];
-        newBills[index] = bill;
-        return { bills: newBills };
-      }),
-      removeBill: (index) => set((state) => ({
-        bills: state.bills.filter((_, i) => i !== index)
-      })),
+const friday = getThisFriday();
 
-      setSettings: (settings) => set((state) => ({ ...state, ...settings })),
-      setGeneratedBudget: (generatedBudget) => set({ generatedBudget })
+export const useBudgetStore = create<BudgetState>()((set) => ({
+  uploadedFile: null,
+  parsedWorkbook: null,
+  bills: [],
+  newWeekStartDate: friday,
+  newWeekEndDate: getNextThursday(friday),
+  openingBalance: 0,
+  paycheckAmount: 0,
+  generatedWeek: null,
+
+  setUploadedFile: (file) => set({ uploadedFile: file }),
+  setParsedWorkbook: (wb) =>
+    set((state) => ({
+      parsedWorkbook: wb,
+      bills: wb?.bills ?? state.bills,
+      openingBalance: wb?.lastRemaining ?? state.openingBalance,
+    })),
+  setBills: (bills) => set({ bills }),
+  addBill: (bill) => set((state) => ({ bills: [...state.bills, bill] })),
+  updateBill: (index, bill) =>
+    set((state) => {
+      const newBills = [...state.bills];
+      newBills[index] = bill;
+      return { bills: newBills };
     }),
-    {
-      name: 'budget-automator-storage',
-    }
-  )
-);
+  removeBill: (index) =>
+    set((state) => ({ bills: state.bills.filter((_, i) => i !== index) })),
+  setNewWeekDates: (start, end) =>
+    set({ newWeekStartDate: start, newWeekEndDate: end }),
+  setOpeningBalance: (val) => set({ openingBalance: val }),
+  setPaycheckAmount: (val) => set({ paycheckAmount: val }),
+  setGeneratedWeek: (generatedWeek) => set({ generatedWeek }),
+  reset: () =>
+    set({
+      uploadedFile: null,
+      parsedWorkbook: null,
+      bills: [],
+      generatedWeek: null,
+      openingBalance: 0,
+      paycheckAmount: 0,
+    }),
+}));
