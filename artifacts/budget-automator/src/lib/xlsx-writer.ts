@@ -240,38 +240,131 @@ function writeWeeksToSheet(
   }
 }
 
+// ── Original style normalization ─────────────────────────────────────────────
+// xlsx reads cell.s in a flat format { patternType, fgColor } but xlsx-js-style
+// expects { fill: { patternType, fgColor }, font: {...}, alignment: {...} }.
+// We reconstruct the full style from the workbook's Styles tables so colors,
+// fonts, and alignment all survive the write.
+
+function buildFillColorStyleMap(wb: XLSX.WorkBook): Map<string, any> {
+  const styles = (wb as any).Styles;
+  if (!styles) return new Map();
+
+  const fills: any[]   = styles.Fills   ?? [];
+  const fonts: any[]   = styles.Fonts   ?? [];
+  const cellXf: any[]  = styles.CellXf  ?? [];
+
+  const fillColorToStyle = new Map<string, any>();
+
+  for (const xf of cellXf) {
+    const fillId  = parseInt(xf.fillId  ?? xf.fillid  ?? 0);
+    const fontId  = parseInt(xf.fontId  ?? xf.fontid  ?? 0);
+
+    const fill = fills[fillId] ?? {};
+    const font = fonts[fontId] ?? {};
+
+    // Key = fgColor rgb for solid fills, else the patternType string
+    const key: string = fill.fgColor?.rgb ?? fill.patternType ?? 'none';
+
+    if (fillColorToStyle.has(key)) continue; // keep first match per fill color
+
+    const normalized: any = {};
+
+    // Fill
+    if (fill.patternType && fill.patternType !== 'none') {
+      normalized.fill = { patternType: fill.patternType };
+      if (fill.fgColor) normalized.fill.fgColor = fill.fgColor;
+      if (fill.bgColor) normalized.fill.bgColor = fill.bgColor;
+    } else {
+      normalized.fill = { patternType: 'none' };
+    }
+
+    // Font (only attach when something useful is present)
+    if (font.sz || font.bold || font.color || font.italic) {
+      normalized.font = {};
+      if (font.sz)      normalized.font.sz      = font.sz;
+      if (font.bold)    normalized.font.bold    = true;
+      if (font.italic)  normalized.font.italic  = true;
+      if (font.color)   normalized.font.color   = font.color;
+      if (font.name)    normalized.font.name    = font.name;
+    }
+
+    // Alignment
+    if (xf.alignment) normalized.alignment = xf.alignment;
+
+    fillColorToStyle.set(key, normalized);
+  }
+
+  return fillColorToStyle;
+}
+
+function normalizeSheetCellStyles(
+  sheet: XLSX.WorkSheet,
+  fillColorToStyle: Map<string, any>,
+): void {
+  for (const addr of Object.keys(sheet)) {
+    if (addr.startsWith('!')) continue;
+    const cell = (sheet as any)[addr];
+    if (!cell?.s) continue;
+
+    const s = cell.s;
+    // Already in new format (has .fill property)
+    if (s.fill !== undefined) continue;
+
+    // Old flat format: { patternType, fgColor }
+    if (s.patternType !== undefined) {
+      const key: string = s.fgColor?.rgb ?? s.patternType ?? 'none';
+      const looked = fillColorToStyle.get(key);
+      if (looked) {
+        cell.s = { ...looked };
+      } else {
+        // Fallback: just wrap the fill
+        cell.s = {
+          fill: {
+            patternType: s.patternType,
+            ...(s.fgColor ? { fgColor: s.fgColor } : {}),
+            ...(s.bgColor ? { bgColor: s.bgColor } : {}),
+          },
+        };
+      }
+    }
+  }
+}
+
 // ── Verbatim bills section copy ───────────────────────────────────────────────
 
 function writeBillsVerbatim(
   sheet: XLSX.WorkSheet,
   raw: RawBillsSection,
 ): void {
-  // Copy every A/B cell exactly as it appeared in the original
+  // Copy every bills-section cell exactly as it appeared in the original
   for (const [addr, cell] of Object.entries(raw.cells)) {
     sheet[addr] = cell;
   }
 
-  // Restore any merges that were in cols A–B
+  // Restore any merges that were in the bills columns
   if (!sheet['!merges']) sheet['!merges'] = [];
   for (const m of raw.merges) {
-    const already = sheet['!merges'].some(
+    const already = (sheet['!merges'] as any[]).some(
       (e: any) => e.s.r === m.s.r && e.s.c === m.s.c && e.e.r === m.e.r && e.e.c === m.e.c
     );
-    if (!already) sheet['!merges'].push(m);
+    if (!already) (sheet['!merges'] as any[]).push(m);
   }
 
-  // Apply original column widths for A and B
+  // Apply original column widths for all bills columns
   if (!sheet['!cols']) sheet['!cols'] = [];
-  while ((sheet['!cols'] as any[]).length < 2) (sheet['!cols'] as any[]).push({});
-  (sheet['!cols'] as any[])[0] = { wch: raw.colWidths[0] };
-  (sheet['!cols'] as any[])[1] = { wch: raw.colWidths[1] };
+  while ((sheet['!cols'] as any[]).length < raw.colCount) (sheet['!cols'] as any[]).push({});
+  for (let c = 0; c < raw.colCount; c++) {
+    (sheet['!cols'] as any[])[c] = { wch: raw.colWidths[c] };
+  }
 
-  // Extend !ref to cover the bills rows
+  // Extend !ref to cover all bills rows and columns
   const existingRef = sheet['!ref'];
   const range = existingRef
     ? XLSX.utils.decode_range(existingRef)
     : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
   if (raw.rowCount - 1 > range.e.r) range.e.r = raw.rowCount - 1;
+  if (raw.colCount - 1 > range.e.c) range.e.c = raw.colCount - 1;
   if (range.s.c > 0) range.s.c = 0;
   sheet['!ref'] = XLSX.utils.encode_range(range);
 }
@@ -279,12 +372,18 @@ function writeBillsVerbatim(
 // ── Public exports ───────────────────────────────────────────────────────────
 
 export function appendBudgetWeeks(
-  workbook: XLSX.WorkBook,
+  /** Raw bytes of the original .xlsx file — re-read with xlsx-js-style for full style fidelity */
+  rawBytes: Uint8Array,
   weekBudgets: WeeklyBudget[],
   firstStartCol: number,
   includeRemainingAcct = true,
   style?: SheetStyle | null,
 ): Blob {
+  // Re-read the original using xlsx-js-style so every cell's style object is in
+  // the format that xlsx-js-style expects when writing — standard xlsx only
+  // preserves partial fill info, causing all other styles to silently disappear.
+  const workbook = XLSX.read(rawBytes, { type: 'array', cellStyles: true });
+
   const sheetName = workbook.SheetNames.includes('Budget')
     ? 'Budget'
     : workbook.SheetNames[0];
@@ -298,8 +397,13 @@ export function appendBudgetWeeks(
     clonedSheet['!cols'] = [...existingSheet['!cols']];
   }
 
-  // The original bills section (cols A–B) is already in the cloned sheet —
-  // we never overwrite it. Just append the new week columns at firstStartCol.
+  // Normalize existing cell styles from the flat read format to the format
+  // xlsx-js-style expects when writing, so fills/fonts/alignment are preserved.
+  const fillStyleMap = buildFillColorStyleMap(workbook);
+  normalizeSheetCellStyles(clonedSheet, fillStyleMap);
+
+  // The original bills section and existing budget columns are already in the
+  // cloned sheet — never overwrite them. Just append new week columns.
   writeWeeksToSheet(clonedSheet, weekBudgets, firstStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
   const clonedWb: XLSX.WorkBook = {

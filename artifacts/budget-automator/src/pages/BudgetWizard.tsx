@@ -149,9 +149,10 @@ export function BudgetWizard() {
             const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
             blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle);
           } else {
-            // Append mode: original bills section is already in the cloned sheet.
+            // Append mode: re-read the original bytes inside the writer so all
+            // existing cell styles (fills, fonts, borders) survive unchanged.
             blob = appendBudgetWeeks(
-              parsedWorkbook!.workbook,
+              parsedWorkbook!.rawBytes,
               data.weeks,
               parsedWorkbook!.nextWeekStartCol,
               !zeroOpeningBalance,

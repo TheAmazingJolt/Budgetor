@@ -19,14 +19,16 @@ export interface SheetStyle {
   valueColWidth: number;
 }
 
-/** Raw snapshot of the original bills section (cols A–B) for verbatim copying */
+/** Raw snapshot of the original bills section (all columns left of the first budget week) */
 export interface RawBillsSection {
   /** Cell address → cell object (includes .s style if present) */
   cells: Record<string, any>;
-  /** Merge ranges that fall entirely within cols A–B */
+  /** Merge ranges that fall entirely within the bills columns */
   merges: any[];
-  /** Character widths for col A and col B */
-  colWidths: [number, number];
+  /** Character widths for each column (index = column index) */
+  colWidths: number[];
+  /** Number of columns in the bills section */
+  colCount: number;
   /** Number of rows that contain bills data */
   rowCount: number;
 }
@@ -39,8 +41,10 @@ export interface ParsedWorkbook {
   lastRemaining: number;
   /** Visual style sampled from the first existing budget week */
   sheetStyle: SheetStyle;
-  /** Verbatim snapshot of cols A–B for blank-mode reproduction */
+  /** Verbatim snapshot of bills columns for blank-mode reproduction */
   rawBillsSection: RawBillsSection | null;
+  /** Raw file bytes — used by the writer to re-read with full style fidelity */
+  rawBytes: Uint8Array;
 }
 
 export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook> {
@@ -209,7 +213,9 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
 
         const sheetStyle: SheetStyle = { fontSize, labelColWidth, valueColWidth };
 
-        // ── Snapshot original cols A–B for verbatim copying in blank mode ──
+        // ── Snapshot original bills section (all cols left of budget weeks) ─
+        // Bills section spans col 0 up to (FIRST_BUDGET_COL - 1)
+        const billsColCount = FIRST_BUDGET_COL; // cols 0..FIRST_BUDGET_COL-1
         let rawBillsSection: RawBillsSection | null = null;
         const fullRange = worksheet['!ref']
           ? XLSX.utils.decode_range(worksheet['!ref'])
@@ -220,30 +226,41 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
           let lastBillsRow = 0;
 
           for (let r = fullRange.s.r; r <= fullRange.e.r; r++) {
-            const aAddr = XLSX.utils.encode_cell({ r, c: 0 });
-            const bAddr = XLSX.utils.encode_cell({ r, c: 1 });
-            const aCell = worksheet[aAddr];
-            const bCell = worksheet[bAddr];
-            if (aCell) { cells[aAddr] = aCell; lastBillsRow = r; }
-            if (bCell) { cells[bAddr] = bCell; lastBillsRow = r; }
+            for (let c = 0; c < billsColCount; c++) {
+              const addr = XLSX.utils.encode_cell({ r, c });
+              const cell = worksheet[addr];
+              if (cell) { cells[addr] = cell; lastBillsRow = r; }
+            }
           }
 
           const merges = (worksheet['!merges'] ?? []).filter(
-            (m: any) => m.s.c <= 1 && m.e.c <= 1
+            (m: any) => m.s.c < billsColCount && m.e.c < billsColCount
           );
 
-          const colA_w = sheetCols[0]?.wch ?? sheetCols[0]?.width ?? 22;
-          const colB_w = sheetCols[1]?.wch ?? sheetCols[1]?.width ?? 12;
+          const colWidths: number[] = [];
+          for (let c = 0; c < billsColCount; c++) {
+            colWidths.push(sheetCols[c]?.wch ?? sheetCols[c]?.width ?? 12);
+          }
 
           rawBillsSection = {
             cells,
             merges,
-            colWidths: [colA_w, colB_w],
+            colWidths,
+            colCount: billsColCount,
             rowCount: lastBillsRow + 1,
           };
         }
 
-        resolve({ workbook, bills, existingWeeks, nextWeekStartCol, lastRemaining, sheetStyle, rawBillsSection });
+        resolve({
+          workbook,
+          bills,
+          existingWeeks,
+          nextWeekStartCol,
+          lastRemaining,
+          sheetStyle,
+          rawBillsSection,
+          rawBytes: data,
+        });
       } catch (err) {
         console.error('XLSX parsing failed', err);
         reject(
