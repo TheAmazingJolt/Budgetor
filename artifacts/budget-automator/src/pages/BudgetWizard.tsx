@@ -60,6 +60,7 @@ export function BudgetWizard() {
     setOpeningBalance,
     setPaycheckAmount,
     setGeneratedWeek,
+    generatedWeek,
     reset,
   } = useBudgetStore();
 
