@@ -5,8 +5,8 @@ import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
-  labelColWidth: 20,
-  valueColWidth: 12,
+  labelColWidth: 25,
+  valueColWidth: 14,
 };
 
 // ── Cell style constants ────────────────────────────────────────────────────
@@ -131,6 +131,9 @@ function writeBillsSection(
     }
   }
 
+  // Expand the bills label column if any name is wider than the default.
+  autoFitColumns(sheet, startCol, startCol + 1);
+
   return row; // next available row
 }
 
@@ -231,7 +234,7 @@ function writeWeeksToSheet(
 
   sheet['!ref'] = XLSX.utils.encode_range(existingRange);
 
-  // Apply label/value column widths for every new budget week pair
+  // Set minimum column widths then auto-expand to fit actual content.
   if (!sheet['!cols']) sheet['!cols'] = [];
   for (let wIdx = 0; wIdx < weekBudgets.length; wIdx++) {
     const lc = startCol + wIdx * 2;
@@ -240,6 +243,9 @@ function writeWeeksToSheet(
     sheet['!cols']![lc] = { wch: labelColWidth };
     sheet['!cols']![vc] = { wch: valueColWidth };
   }
+
+  // Expand any column whose content is wider than the minimum.
+  autoFitColumns(sheet, startCol, startCol + totalNewCols - 1);
 }
 
 // ── Original style normalization ─────────────────────────────────────────────
@@ -340,6 +346,7 @@ function normalizeFlatStyle(s: any): any {
   };
   if (s.fgColor) normalized.fill.fgColor = s.fgColor;
   if (s.bgColor) normalized.fill.bgColor = s.bgColor;
+  if (s.alignment) normalized.alignment = s.alignment;
   return normalized;
 }
 
@@ -363,11 +370,27 @@ function writeBillsVerbatim(
     if (!already) (sheet['!merges'] as any[]).push(m);
   }
 
-  // Apply original column widths for all bills columns
+  // Apply original column widths for all bills columns.
+  // Enforce minimum widths for Day/EndDate/Balance columns so values don't clip.
   if (!sheet['!cols']) sheet['!cols'] = [];
   while ((sheet['!cols'] as any[]).length < raw.colCount) (sheet['!cols'] as any[]).push({});
+  const MIN_WIDTHS: Record<number, number> = { 2: 10, 3: 14, 4: 14 };
   for (let c = 0; c < raw.colCount; c++) {
-    (sheet['!cols'] as any[])[c] = { wch: raw.colWidths[c] };
+    const min = MIN_WIDTHS[c] ?? 0;
+    (sheet['!cols'] as any[])[c] = { wch: Math.max(raw.colWidths[c] ?? 0, min) };
+  }
+
+  // Force center alignment on header-row cells for the extra data columns
+  // (Day of Pay, End Date, Balance = cols 2 onward).
+  for (let c = 2; c < raw.colCount; c++) {
+    const addr = XLSX.utils.encode_cell({ r: 0, c });
+    const cell = sheet[addr];
+    if (cell) {
+      sheet[addr] = {
+        ...cell,
+        s: { ...(cell.s ?? {}), alignment: { horizontal: 'center', vertical: 'center' } },
+      };
+    }
   }
 
   // Extend !ref to cover all bills rows and columns
@@ -379,6 +402,116 @@ function writeBillsVerbatim(
   if (raw.colCount - 1 > range.e.c) range.e.c = raw.colCount - 1;
   if (range.s.c > 0) range.s.c = 0;
   sheet['!ref'] = XLSX.utils.encode_range(range);
+
+  // Expand any column that has content wider than the explicit minimum.
+  autoFitColumns(sheet, 0, raw.colCount - 1);
+}
+
+// ── Auto-fit column widths ────────────────────────────────────────────────────
+
+/**
+ * Scans every cell in columns [startCol, endCol] and widens each column so its
+ * widest text value is never clipped.  Cells that are the non-origin tile of a
+ * horizontal merge are skipped (their content already spans multiple columns).
+ * Formula cells default to a 12-character numeric placeholder since their
+ * evaluated result is unknown at write time.
+ */
+function autoFitColumns(
+  sheet: XLSX.WorkSheet,
+  startCol: number,
+  endCol: number,
+): void {
+  if (!sheet['!cols']) sheet['!cols'] = [];
+
+  const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref'])
+                              : { s: { r: 0, c: startCol }, e: { r: 0, c: endCol } };
+
+  // Build a set of cells that are NOT the top-left origin of their merge and
+  // cells that are the top-left of a merge spanning more than one column
+  // (the header title spans label+value → we skip it to avoid over-widening).
+  const skipAddr = new Set<string>();
+  for (const m of ((sheet as any)['!merges'] ?? []) as Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>) {
+    for (let r = m.s.r; r <= m.e.r; r++) {
+      for (let c = m.s.c; c <= m.e.c; c++) {
+        // Skip non-origin tiles
+        if (r !== m.s.r || c !== m.s.c) {
+          skipAddr.add(XLSX.utils.encode_cell({ r, c }));
+        }
+      }
+    }
+    // Skip origin of a horizontal merge (content spans ≥2 cols — not usable
+    // for single-column width calculation)
+    if (m.e.c > m.s.c) {
+      skipAddr.add(XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c }));
+    }
+  }
+
+  for (let c = startCol; c <= endCol; c++) {
+    let maxLen = 0;
+
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (skipAddr.has(addr)) continue;
+
+      const cell = (sheet as any)[addr] as (XLSX.CellObject & { s?: any }) | undefined;
+      if (!cell) continue;
+
+      let len: number;
+      if (cell.v !== undefined && cell.v !== null) {
+        len = String(cell.v).length;
+      } else if (cell.f) {
+        len = 12; // numeric result placeholder
+      } else {
+        continue;
+      }
+
+      // Bold text renders ~10 % wider — add a small buffer.
+      if (cell.s?.font?.bold) len = Math.ceil(len * 1.1);
+
+      if (len > maxLen) maxLen = len;
+    }
+
+    if (maxLen === 0) continue; // no content — leave whatever was set
+
+    // 2-character padding on each measured value; cap at 60 to stay readable.
+    const needed = Math.min(maxLen + 2, 60);
+
+    while (sheet['!cols']!.length <= c) (sheet['!cols'] as any[]).push({});
+    const current = ((sheet['!cols'] as any[])[c]?.wch as number | undefined) ?? 0;
+    if (needed > current) {
+      (sheet['!cols'] as any[])[c] = { wch: needed };
+    }
+  }
+}
+
+// ── Sheet view: freeze bills pane + jump to last budget week ─────────────────
+
+/**
+ * Freezes the leftmost `freezeCols` columns so the bills section stays visible
+ * while scrolling, and positions the initial view at the last budget week so
+ * the user lands there the moment they open the file.
+ */
+function applySheetView(
+  sheet: XLSX.WorkSheet,
+  freezeCols: number,
+  lastWeekStartCol: number,
+): void {
+  // !freeze = the first cell in the scrollable (non-frozen) pane.
+  // Setting it to the first unfrozen column keeps the bills section fixed.
+  const freezeCell = XLSX.utils.encode_cell({ r: 0, c: freezeCols });
+  (sheet as any)['!freeze'] = freezeCell;
+
+  // Also write the full sheetViews block so Excel opens with the view
+  // already scrolled to the last budget week.
+  const lastWeekCell = XLSX.utils.encode_cell({ r: 0, c: lastWeekStartCol });
+  (sheet as any)['!sheetViews'] = [{
+    state:       'frozen',
+    xSplit:      freezeCols,
+    ySplit:      0,
+    topLeftCell: lastWeekCell,
+    activeCell:  lastWeekCell,
+    selection:   [{ pane: 'topRight', activeCell: lastWeekCell, sqref: lastWeekCell }],
+  }];
 }
 
 // ── Public exports ───────────────────────────────────────────────────────────
@@ -417,6 +550,21 @@ export function appendBudgetWeeks(
   // The original bills section and existing budget columns are already in the
   // cloned sheet — never overwrite them. Just append new week columns.
   writeWeeksToSheet(clonedSheet, weekBudgets, firstStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
+
+  // Auto-detect where the bills section ends (= where the first budget week was)
+  // so we know how many columns to freeze.
+  const headerRowData: any[][] = XLSX.utils.sheet_to_json(clonedSheet, { header: 1, defval: '' });
+  const hdr = (headerRowData[0] ?? []) as any[];
+  let billsFreezeCount = firstStartCol; // sensible default
+  for (let c = 0; c < hdr.length; c++) {
+    if (String(hdr[c] ?? '').trim().toLowerCase().startsWith('budget')) {
+      billsFreezeCount = c;
+      break;
+    }
+  }
+
+  const lastNewWeekStartCol = firstStartCol + (weekBudgets.length - 1) * 2;
+  applySheetView(clonedSheet, billsFreezeCount, lastNewWeekStartCol);
 
   const clonedWb: XLSX.WorkBook = {
     ...workbook,
@@ -463,6 +611,10 @@ export function createBlankBudget(
   }
 
   writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
+
+  // Freeze the bills pane and jump view to the last budget week.
+  const lastWeekCol = budgetStartCol + (weekBudgets.length - 1) * 2;
+  applySheetView(ws, budgetStartCol, lastWeekCol);
 
   XLSX.utils.book_append_sheet(wb, ws, 'Budget');
 
