@@ -15,6 +15,7 @@ import {
   Plus,
   Edit2,
   Eye,
+  FastForward,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -36,6 +37,18 @@ import { Currency } from "@/components/Currency";
 import type { Bill } from "@workspace/api-client-react";
 
 const STEPS = ["Upload", "Configure", "Download"];
+
+/**
+ * Parses a week label like "Budget from 3/1/26 to 3/7/26" and returns the ISO
+ * date string for the day *after* the end date — i.e. the suggested next start.
+ */
+function nextStartAfterLabel(label: string): string | null {
+  const m = label.match(/to\s+(\d{1,2})\/(\d{1,2})\/(\d{2})\s*$/i);
+  if (!m) return null;
+  const d = new Date(2000 + parseInt(m[3]), parseInt(m[1]) - 1, parseInt(m[2]));
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
+}
 
 export function BudgetWizard() {
   const [step, setStep] = useState(0);
@@ -78,6 +91,11 @@ export function BudgetWizard() {
 
   const { toast } = useToast();
   const generateMutation = useGenerateBudget();
+
+  // ISO start date suggested by the last existing week (day after its end date)
+  const suggestedNextStart = parsedWorkbook?.existingWeeks.length
+    ? nextStartAfterLabel(parsedWorkbook.existingWeeks.at(-1)?.label ?? '')
+    : null;
 
   // ── Step 1: Upload ──────────────────────────────────────────────────────
   const onDrop = useCallback(
@@ -340,9 +358,23 @@ export function BudgetWizard() {
               <Card className="border-border/40">
                 <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <Settings2 className="w-4 h-4" /> Start Date
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                        <Settings2 className="w-4 h-4" /> Start Date
+                      </Label>
+                      {suggestedNextStart && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => setStartDate(suggestedNextStart)}
+                        >
+                          <FastForward className="w-3 h-3" />
+                          Jump to next week
+                        </Button>
+                      )}
+                    </div>
                     <Input
                       type="date"
                       value={newWeekStartDate}
