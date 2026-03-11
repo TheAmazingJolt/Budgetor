@@ -169,7 +169,7 @@ export function BudgetWizard() {
     if (!generatedBlob) return;
     let filename: string;
     if (blankMode) {
-      const fmt = (d: string) => d.replace(/-/g, ".");
+      const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
       filename = `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
     } else {
       const today = new Date().toISOString().split("T")[0].replace(/-/g, ".");
