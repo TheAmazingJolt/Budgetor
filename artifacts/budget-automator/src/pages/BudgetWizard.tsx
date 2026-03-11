@@ -19,7 +19,7 @@ import { format, parseISO } from "date-fns";
 
 import { useBudgetStore } from "@/store/use-budget-store";
 import { parseBudgetSpreadsheet } from "@/lib/xlsx-parser";
-import { appendBudgetWeeks, downloadBlob } from "@/lib/xlsx-writer";
+import { appendBudgetWeeks, createBlankBudget, downloadBlob } from "@/lib/xlsx-writer";
 import { useGenerateBudget } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BillForm } from "@/components/BillForm";
 import { Currency } from "@/components/Currency";
@@ -45,13 +46,16 @@ export function BudgetWizard() {
   const {
     uploadedFile,
     parsedWorkbook,
+    blankMode,
     bills,
     newWeekStartDate,
     newWeekEndDate,
     openingBalance,
     paycheckAmount,
+    zeroOpeningBalance,
     setUploadedFile,
     setParsedWorkbook,
+    setBlankMode,
     setBills,
     addBill,
     updateBill,
@@ -59,6 +63,7 @@ export function BudgetWizard() {
     setNewWeekDates,
     setOpeningBalance,
     setPaycheckAmount,
+    setZeroOpeningBalance,
     setGeneratedWeek,
     generatedWeek,
     reset,
@@ -107,7 +112,8 @@ export function BudgetWizard() {
 
   // ── Step 3: Generate & Download ─────────────────────────────────────────
   const handleGenerate = () => {
-    if (!parsedWorkbook) return;
+    // Blank mode needs no parsed workbook; existing mode requires one
+    if (!blankMode && !parsedWorkbook) return;
 
     // Calculate number of full (or partial) 7-day weeks from the date range
     const start = parseISO(newWeekStartDate);
@@ -115,12 +121,15 @@ export function BudgetWizard() {
     const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
     const numberOfWeeks = Math.max(1, Math.ceil(diffDays / 7));
 
+    // When "Set Remaining Acct to $0" is checked, pass 0 as opening balance
+    const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
+
     generateMutation.mutate(
       {
         data: {
           startDate: newWeekStartDate,
           endDate: newWeekEndDate,
-          openingBalance,
+          openingBalance: effectiveOpeningBalance,
           paycheckAmount,
           numberOfWeeks,
           bills,
@@ -131,12 +140,19 @@ export function BudgetWizard() {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
 
-          // Append ALL generated weeks into the workbook
-          const blob = appendBudgetWeeks(
-            parsedWorkbook.workbook,
-            data.weeks,
-            parsedWorkbook.nextWeekStartCol
-          );
+          let blob: Blob;
+          if (blankMode) {
+            // Create a brand-new spreadsheet with just the budget columns
+            blob = createBlankBudget(data.weeks, !zeroOpeningBalance);
+          } else {
+            // Append weeks to the uploaded workbook
+            blob = appendBudgetWeeks(
+              parsedWorkbook!.workbook,
+              data.weeks,
+              parsedWorkbook!.nextWeekStartCol,
+              !zeroOpeningBalance
+            );
+          }
           setGeneratedBlob(blob);
           setStep(2);
         },
@@ -152,8 +168,8 @@ export function BudgetWizard() {
   };
 
   const handleDownload = () => {
-    if (!generatedBlob || !uploadedFile) return;
-    const base = uploadedFile.name.replace(/\.[^.]+$/, "");
+    if (!generatedBlob) return;
+    const base = uploadedFile ? uploadedFile.name.replace(/\.[^.]+$/, "") : "budget";
     downloadBlob(generatedBlob, `${base}_updated.xlsx`);
   };
 
@@ -227,6 +243,7 @@ export function BudgetWizard() {
                 </p>
               </div>
 
+              {/* Upload zone */}
               <div
                 {...getRootProps()}
                 className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${
@@ -254,6 +271,7 @@ export function BudgetWizard() {
                   </div>
                 </div>
               </div>
+
             </motion.div>
           )}
 
@@ -331,17 +349,29 @@ export function BudgetWizard() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-muted-foreground">
-                      Opening Balance (Remaining Acct)
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-muted-foreground">
+                        Opening Balance (Remaining Acct)
+                      </Label>
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <Checkbox
+                          checked={zeroOpeningBalance}
+                          onCheckedChange={(v) => setZeroOpeningBalance(!!v)}
+                          id="zero-balance"
+                          className="rounded"
+                        />
+                        <span className="text-xs text-muted-foreground font-medium">Set to $0</span>
+                      </label>
+                    </div>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${zeroOpeningBalance ? "text-muted-foreground/40" : "text-muted-foreground"}`}>$</span>
                       <Input
                         type="number"
                         step="0.01"
-                        value={openingBalance}
+                        value={zeroOpeningBalance ? 0 : openingBalance}
                         onChange={(e) => setOpeningBalance(parseFloat(e.target.value) || 0)}
-                        className="pl-7 h-11 rounded-xl"
+                        disabled={zeroOpeningBalance}
+                        className="pl-7 h-11 rounded-xl disabled:opacity-40"
                       />
                     </div>
                   </div>

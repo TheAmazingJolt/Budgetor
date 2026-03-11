@@ -7,12 +7,16 @@ interface BudgetState {
   uploadedFile: File | null;
   parsedWorkbook: ParsedWorkbook | null;
 
+  // Mode
+  blankMode: boolean;           // true = generate to a brand-new spreadsheet
+
   // New week settings
   bills: Bill[];
   newWeekStartDate: string;
   newWeekEndDate: string;
   openingBalance: number;
   paycheckAmount: number;
+  zeroOpeningBalance: boolean;  // true = force Remaining Acct to $0
 
   // Generated output
   generatedWeek: BudgetResponse | null;
@@ -20,6 +24,7 @@ interface BudgetState {
   // Actions
   setUploadedFile: (file: File | null) => void;
   setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
+  setBlankMode: (val: boolean) => void;
   setBills: (bills: Bill[]) => void;
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
@@ -27,6 +32,7 @@ interface BudgetState {
   setNewWeekDates: (start: string, end: string) => void;
   setOpeningBalance: (val: number) => void;
   setPaycheckAmount: (val: number) => void;
+  setZeroOpeningBalance: (val: boolean) => void;
   setGeneratedWeek: (budget: BudgetResponse | null) => void;
   reset: () => void;
 }
@@ -50,11 +56,13 @@ const friday = getThisFriday();
 export const useBudgetStore = create<BudgetState>()((set) => ({
   uploadedFile: null,
   parsedWorkbook: null,
+  blankMode: false,
   bills: [],
   newWeekStartDate: friday,
   newWeekEndDate: getNextThursday(friday),
   openingBalance: 0,
   paycheckAmount: 0,
+  zeroOpeningBalance: false,
   generatedWeek: null,
 
   setUploadedFile: (file) => set({ uploadedFile: file }),
@@ -64,6 +72,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       bills: wb?.bills ?? state.bills,
       openingBalance: wb?.lastRemaining ?? state.openingBalance,
     })),
+  setBlankMode: (val) => set({ blankMode: val }),
   setBills: (bills) => set({ bills }),
   addBill: (bill) => set((state) => ({ bills: [...state.bills, bill] })),
   updateBill: (index, bill) =>
@@ -78,14 +87,17 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
     set({ newWeekStartDate: start, newWeekEndDate: end }),
   setOpeningBalance: (val) => set({ openingBalance: val }),
   setPaycheckAmount: (val) => set({ paycheckAmount: val }),
+  setZeroOpeningBalance: (val) => set({ zeroOpeningBalance: val }),
   setGeneratedWeek: (generatedWeek) => set({ generatedWeek }),
   reset: () =>
     set({
       uploadedFile: null,
       parsedWorkbook: null,
+      blankMode: false,
       bills: [],
       generatedWeek: null,
       openingBalance: 0,
       paycheckAmount: 0,
+      zeroOpeningBalance: false,
     }),
 }));
