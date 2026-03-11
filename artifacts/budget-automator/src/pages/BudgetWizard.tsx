@@ -14,6 +14,7 @@ import {
   Trash2,
   Plus,
   Edit2,
+  Eye,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -447,13 +448,35 @@ export function BudgetWizard() {
                 </div>
               </div>
 
+              {/* Quick generate button (top) */}
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Ready to generate?</p>
+                    <p className="text-xs text-muted-foreground">Bills are pre-loaded below. Hit generate if you don't need to edit them.</p>
+                  </div>
+                  <Button
+                    size="default"
+                    onClick={handleGenerate}
+                    disabled={generateMutation.isPending || bills.length === 0}
+                    className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
+                  >
+                    {generateMutation.isPending ? (
+                      <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+                    ) : (
+                      <>Generate Budget <ChevronRight className="w-4 h-4 ml-1" /></>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
               {/* Bills list */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl font-semibold text-foreground">Bills</h3>
                     <p className="text-sm text-muted-foreground">
-                      Rent, utilities, and car payments are split evenly across weeks.
+                      Rent, utilities, and car payments are balanced so every week ends with the same amount.
                     </p>
                   </div>
                   <Button
@@ -586,7 +609,7 @@ export function BudgetWizard() {
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Opening</p>
-                      <p className="text-xl font-bold text-emerald-900">${openingBalance.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-emerald-900">${(zeroOpeningBalance ? 0 : openingBalance).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Paycheck</p>
@@ -601,6 +624,81 @@ export function BudgetWizard() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Spreadsheet preview */}
+              {generatedWeek && generatedWeek.weeks.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold text-foreground">Budget Preview</h3>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-border/40">
+                          {generatedWeek.weeks.map((week, wi) => (
+                            <th key={wi} colSpan={2} className="px-4 py-3 text-left font-bold text-foreground border-r border-border/30 last:border-r-0 whitespace-nowrap">
+                              {week.weekLabel}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const weeks = generatedWeek.weeks;
+                          const maxRows = Math.max(...weeks.map(w => {
+                            let count = 0;
+                            if (!zeroOpeningBalance) count++;
+                            count++;
+                            count += w.bills.length;
+                            count++;
+                            return count;
+                          }));
+
+                          const rows: React.ReactNode[] = [];
+                          for (let r = 0; r < maxRows; r++) {
+                            rows.push(
+                              <tr key={r} className={r % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                {weeks.map((week, wi) => {
+                                  let rowItems: { label: string; value: number; style?: string }[] = [];
+                                  if (!zeroOpeningBalance) {
+                                    rowItems.push({ label: "Remaining Acct", value: week.openingBalance });
+                                  }
+                                  rowItems.push({ label: "Paycheck", value: week.paycheck });
+                                  for (const bill of week.bills) {
+                                    const billStyle =
+                                      bill.name === "Partial Rent" ? "bg-orange-100 text-orange-900" :
+                                      bill.name === "Partial Utilities" ? "bg-purple-100 text-purple-900" :
+                                      bill.name === "Partial Car" ? "bg-green-100 text-green-900" : "";
+                                    rowItems.push({ label: bill.name, value: bill.amount, style: billStyle });
+                                  }
+                                  rowItems.push({ label: "Remaining", value: week.closingBalance, style: "font-bold border-t-2 border-foreground/20" });
+
+                                  const item = rowItems[r];
+                                  if (!item) {
+                                    return (
+                                      <td key={`${wi}-l`} colSpan={2} className="border-r border-border/30 last:border-r-0" />
+                                    );
+                                  }
+                                  return [
+                                    <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}`}>
+                                      {item.label}
+                                    </td>,
+                                    <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}`}>
+                                      ${item.value.toFixed(2)}
+                                    </td>,
+                                  ];
+                                })}
+                              </tr>
+                            );
+                          }
+                          return rows;
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Download button */}
               <div className="flex flex-col sm:flex-row gap-4">

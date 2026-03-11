@@ -37,15 +37,19 @@ export function generateWeeklyBudgets(
   const rentTotal = rentBills.reduce((s, b) => s + Math.abs(b.amount), 0);
   const utilitiesTotal = utilitiesBills.reduce((s, b) => s + Math.abs(b.amount), 0);
   const carTotal = carBills.reduce((s, b) => s + Math.abs(b.amount), 0);
+  const largeTotal = rentTotal + utilitiesTotal + carTotal;
 
   // ── Build week date windows ─────────────────────────────────────────────
-  const weeks: Array<{
+  interface WeekData {
     start: Date;
     end: Date;
     month: string;
-    bills: WeeklyBill[];
+    fixedWeeklyBills: WeeklyBill[];
+    largeBills: WeeklyBill[];
     paycheck: number;
-  }> = [];
+  }
+
+  const weeks: WeekData[] = [];
 
   for (let i = 0; i < numberOfWeeks; i++) {
     const start = addDays(startDate, i * 7);
@@ -54,18 +58,18 @@ export function generateWeeklyBudgets(
       start,
       end,
       month: monthKey(start),
-      bills: [],
+      fixedWeeklyBills: [],
+      largeBills: [],
       paycheck: paycheckAmount,
     });
   }
 
-  // ── Determine months spanned and how many weeks per month ───────────────
-  const monthsInRange = new Set(weeks.map(w => w.month));
+  // ── Count weeks per month and months spanned ────────────────────────────
+  const monthsInRange = new Set(weeks.map((w) => w.month));
   const startMonth = startDate.getMonth();
   const startYear = startDate.getFullYear();
   const totalMonths = monthsInRange.size;
 
-  // Count weeks per calendar month (determined by start date of each week)
   const weeksPerMonth: Record<string, number> = {};
   for (const w of weeks) {
     weeksPerMonth[w.month] = (weeksPerMonth[w.month] || 0) + 1;
@@ -86,7 +90,7 @@ export function generateWeeklyBudgets(
       for (let i = 0; i < weeks.length; i++) {
         const { start, end } = weeks[i];
         if (dueDate >= start && dueDate <= end) {
-          weeks[i].bills.push({ name: bill.name, amount: bill.amount });
+          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount });
           break;
         }
       }
@@ -96,34 +100,87 @@ export function generateWeeklyBudgets(
   // ── Add weekly bills to every week ──────────────────────────────────────
   for (const bill of weeklyBills) {
     for (let i = 0; i < weeks.length; i++) {
-      weeks[i].bills.push({ name: bill.name, amount: bill.amount });
+      weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount });
     }
   }
 
-  // ── Distribute balanced bills per calendar month ────────────────────────
-  // Each month gets the FULL monthly total, divided evenly across its weeks.
-  for (let i = 0; i < weeks.length; i++) {
-    const wpm = weeksPerMonth[weeks[i].month] || 1;
+  // ── Balance large bills so every week in a month has the same remaining ─
+  // For each month group, we adjust rent/utilities/car so that
+  // closing = opening + paycheck + fixed_weekly + large is equal across weeks.
+  //
+  // Per month with N weeks:
+  //   F_i = sum of fixed+weekly bills for week i (negative)
+  //   total_large_neg = -(rentTotal + utilitiesTotal + carTotal) for this month
+  //   target K = opening + paycheck + (total_large_neg + sum(F_i)) / N
+  //   large_i = K - opening - paycheck - F_i
+  //   Split large_i proportionally into rent/utilities/car
 
-    const insertItems: WeeklyBill[] = [];
-    if (rentTotal > 0)
-      insertItems.push({ name: "Partial Rent", amount: -Math.round((rentTotal / wpm) * 100) / 100 });
-    if (utilitiesTotal > 0)
-      insertItems.push({ name: "Partial Utilities", amount: -Math.round((utilitiesTotal / wpm) * 100) / 100 });
-    if (carTotal > 0)
-      insertItems.push({ name: "Partial Car", amount: -Math.round((carTotal / wpm) * 100) / 100 });
+  for (const mk of monthsInRange) {
+    const monthWeekIndices = weeks
+      .map((w, i) => (w.month === mk ? i : -1))
+      .filter((i) => i >= 0);
+    const N = monthWeekIndices.length;
 
-    weeks[i].bills.unshift(...insertItems);
+    const totalLargeNeg = -largeTotal; // negative amount for this month
+
+    // F_i for each week in this month
+    const F = monthWeekIndices.map((idx) =>
+      weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0)
+    );
+    const sumF = F.reduce((s, v) => s + v, 0);
+
+    // Target closing balance (same for every week)
+    const K = openingBalance + paycheckAmount + (totalLargeNeg + sumF) / N;
+
+    for (let j = 0; j < monthWeekIndices.length; j++) {
+      const idx = monthWeekIndices[j];
+      // Total large bill allocation for this week
+      const largeAmount = K - openingBalance - paycheckAmount - F[j];
+
+      const items: WeeklyBill[] = [];
+      if (largeTotal > 0) {
+        const parts: { name: string; ratio: number }[] = [];
+        if (rentTotal > 0) parts.push({ name: "Partial Rent", ratio: rentTotal / largeTotal });
+        if (utilitiesTotal > 0) parts.push({ name: "Partial Utilities", ratio: utilitiesTotal / largeTotal });
+        if (carTotal > 0) parts.push({ name: "Partial Car", ratio: carTotal / largeTotal });
+
+        let allocated = 0;
+        for (let p = 0; p < parts.length; p++) {
+          if (p === parts.length - 1) {
+            items.push({ name: parts[p].name, amount: Math.round((largeAmount - allocated) * 100) / 100 });
+          } else {
+            const val = Math.round(largeAmount * parts[p].ratio * 100) / 100;
+            items.push({ name: parts[p].name, amount: val });
+            allocated += val;
+          }
+        }
+      }
+      weeks[idx].largeBills = items;
+    }
+
+    // Month-level reconciliation: ensure all weeks have exactly the same closing
+    const closings = monthWeekIndices.map((idx) => {
+      const fw = weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0);
+      const lg = weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0);
+      return Math.round((openingBalance + paycheckAmount + fw + lg) * 100) / 100;
+    });
+    const targetClosing = closings[0];
+    for (let j = 1; j < monthWeekIndices.length; j++) {
+      const diff = Math.round((closings[j] - targetClosing) * 100) / 100;
+      if (diff !== 0 && weeks[monthWeekIndices[j]].largeBills.length > 0) {
+        const last = weeks[monthWeekIndices[j]].largeBills;
+        last[last.length - 1].amount = Math.round((last[last.length - 1].amount - diff) * 100) / 100;
+      }
+    }
   }
 
   // ── Build WeeklyBudget objects ─────────────────────────────────────────
-  // Each week is independent: closingBalance = openingBalance + paycheck + bills
-  // (the spreadsheet will use =SUM() so we don't carry forward a running balance)
   const result: WeeklyBudget[] = [];
 
   for (let i = 0; i < weeks.length; i++) {
-    const { start, end, bills: weekBills, paycheck } = weeks[i];
-    const totalBills = weekBills.reduce((s, b) => s + b.amount, 0);
+    const { start, end, largeBills, fixedWeeklyBills, paycheck } = weeks[i];
+    const allBills = [...largeBills, ...fixedWeeklyBills];
+    const totalBills = allBills.reduce((s, b) => s + b.amount, 0);
     const closingBalance = openingBalance + paycheck + totalBills;
 
     result.push({
@@ -132,7 +189,7 @@ export function generateWeeklyBudgets(
       endDate: formatDate(end),
       openingBalance: Math.round(openingBalance * 100) / 100,
       paycheck,
-      bills: weekBills,
+      bills: allBills,
       totalBills: Math.round(totalBills * 100) / 100,
       closingBalance: Math.round(closingBalance * 100) / 100,
     });

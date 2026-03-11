@@ -25,8 +25,11 @@ A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet:
 
 Features:
 - **Week count selector**: pick how many weeks to generate; end date auto-fills (start + weeks × 7 - 1 days)
-- **Monthly bill reset**: rent/utilities/car split evenly across weeks within each calendar month and reset at the new month
+- **Monthly bill reset**: rent/utilities/car split across weeks within each calendar month and reset at the new month
+- **Weekly balancing**: within each month, partial rent/utilities/car amounts are adjusted so every week ends with the exact same remaining balance; uses proportional allocation with month-level rounding reconciliation
 - **SUM formula**: the Remaining row uses `=SUM()` of cells above (not a hardcoded number)
+- **In-app preview**: download step shows a spreadsheet-like table with colored rows before downloading
+- **Quick generate button**: shown at top of configure step so user doesn't have to scroll past bills
 - **Cell styles**: Partial Rent = orange (FF9900), Partial Utilities = purple (9900FF), Partial Car = green (00FF00) — uses `xlsx-js-style`
 - **Output modes**: "Append to my spreadsheet" or "New file — budget only"
 - **Zero opening balance**: checkbox omits the Remaining Acct row entirely
