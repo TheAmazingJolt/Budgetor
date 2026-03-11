@@ -112,8 +112,8 @@ export function BudgetWizard() {
 
   // ── Step 3: Generate & Download ─────────────────────────────────────────
   const handleGenerate = () => {
-    // Blank mode needs no parsed workbook; existing mode requires one
-    if (!blankMode && !parsedWorkbook) return;
+    // Always require a parsed workbook (upload is always needed)
+    if (!parsedWorkbook) return;
 
     // Calculate number of full (or partial) 7-day weeks from the date range
     const start = parseISO(newWeekStartDate);
@@ -392,6 +392,51 @@ export function BudgetWizard() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Output mode */}
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-foreground">Output format</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setBlankMode(false)}
+                    className={`text-left rounded-2xl border-2 p-4 transition-all ${
+                      !blankMode
+                        ? "border-primary bg-primary/5"
+                        : "border-border/50 bg-white/60 hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${!blankMode ? "border-primary" : "border-border"}`}>
+                        {!blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Append to my spreadsheet</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">New budget columns are added to your uploaded file.</p>
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBlankMode(true)}
+                    className={`text-left rounded-2xl border-2 p-4 transition-all ${
+                      blankMode
+                        ? "border-primary bg-primary/5"
+                        : "border-border/50 bg-white/60 hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${blankMode ? "border-primary" : "border-border"}`}>
+                        {blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">New file — budget only</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Download a fresh spreadsheet with only the new budget columns.</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
 
               {/* Bills list */}
               <div className="space-y-4">
