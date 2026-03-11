@@ -167,8 +167,15 @@ export function BudgetWizard() {
 
   const handleDownload = () => {
     if (!generatedBlob) return;
-    const base = uploadedFile ? uploadedFile.name.replace(/\.[^.]+$/, "") : "budget";
-    downloadBlob(generatedBlob, `${base}_updated.xlsx`);
+    let filename: string;
+    if (blankMode) {
+      const fmt = (d: string) => d.replace(/-/g, ".");
+      filename = `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
+    } else {
+      const today = new Date().toISOString().split("T")[0].replace(/-/g, ".");
+      filename = `Budget_Updated_${today}.xlsx`;
+    }
+    downloadBlob(generatedBlob, filename);
   };
 
   const getCategoryColor = (cat: string) => {

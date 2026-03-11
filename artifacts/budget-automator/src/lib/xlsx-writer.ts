@@ -135,6 +135,12 @@ function writeWeeksToSheet(
 ) {
   const totalNewCols = weekBudgets.length * 2;
 
+  // Uniform height: every week column must be the same number of rows.
+  // Height = 1 header + [1 Remaining Acct] + 1 Paycheck + maxBills + 1 Remaining
+  const maxBills = Math.max(...weekBudgets.map(w => w.bills.length));
+  const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+  const remainingRowIdx = totalRows - 1; // 0-indexed row for "Remaining"
+
   for (let wIdx = 0; wIdx < weekBudgets.length; wIdx++) {
     const week = weekBudgets[wIdx];
     const labelCol = startCol + wIdx * 2;
@@ -154,7 +160,7 @@ function writeWeeksToSheet(
     addMerge(sheet, nextRow, labelCol, nextRow, valCol);
     nextRow++;
 
-    // Track where the SUM range begins
+    // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
     // Remaining Acct (optional)
@@ -177,16 +183,26 @@ function writeWeeksToSheet(
       nextRow++;
     }
 
-    // Remaining row → =SUM() formula
+    // Padding rows so every week reaches the same height before Remaining
+    while (nextRow < remainingRowIdx) {
+      set(sheet, nextRow, labelCol, makeCell(''));
+      set(sheet, nextRow, valCol,   makeCell(''));
+      nextRow++;
+    }
+
+    // Remaining row → =SUM() formula spanning ALL value rows above
     const remainingStyle = {
       font: { bold: true },
       border: { top: { style: 'thin', color: { rgb: '000000' } } },
     };
-    set(sheet, nextRow, labelCol, makeCell('Remaining', remainingStyle));
-    set(sheet, nextRow, valCol,   { ...makeSumFormula(valLetter, sumStartRow + 1, nextRow), s: remainingStyle });
+    set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
+    set(sheet, remainingRowIdx, valCol,   {
+      ...makeSumFormula(valLetter, sumStartRow + 1, remainingRowIdx),
+      s: remainingStyle,
+    });
   }
 
-  // Update sheet range
+  // Update sheet range to cover all written cells
   const existingRef = sheet['!ref'];
   const existingRange = existingRef
     ? XLSX.utils.decode_range(existingRef)
@@ -194,16 +210,11 @@ function writeWeeksToSheet(
 
   const newMaxCol = startCol + totalNewCols - 1;
   if (newMaxCol > existingRange.e.c) existingRange.e.c = newMaxCol;
-
-  const maxRows = Math.max(
-    ...weekBudgets.map(w => (includeRemainingAcct ? 3 : 2) + w.bills.length + 1)
-  );
-  if (maxRows - 1 > existingRange.e.r) existingRange.e.r = maxRows - 1;
+  if (remainingRowIdx > existingRange.e.r) existingRange.e.r = remainingRowIdx;
 
   sheet['!ref'] = XLSX.utils.encode_range(existingRange);
 
   if (!sheet['!cols']) sheet['!cols'] = [];
-  // Ensure all columns have a width set
   const totalCols = startCol + totalNewCols;
   while (sheet['!cols'].length <= totalCols) {
     sheet['!cols'].push({ wch: 20 });
