@@ -65,11 +65,13 @@ export interface WeeklyBudget {
 export interface BudgetRequest {
   /** ISO date string for first week start */
   startDate: string;
+  /** ISO date string for the last day of the final week */
+  endDate: string;
   /** Starting account balance */
   openingBalance: number;
   /** Weekly paycheck amount */
   paycheckAmount: number;
-  /** Number of weeks to generate */
+  /** Number of weeks to generate (calculated from date range) */
   numberOfWeeks: number;
   bills: Bill[];
 }

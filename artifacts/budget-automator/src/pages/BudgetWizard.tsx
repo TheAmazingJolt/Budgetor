@@ -19,7 +19,7 @@ import { format, parseISO } from "date-fns";
 
 import { useBudgetStore } from "@/store/use-budget-store";
 import { parseBudgetSpreadsheet } from "@/lib/xlsx-parser";
-import { appendBudgetWeek, downloadBlob } from "@/lib/xlsx-writer";
+import { appendBudgetWeeks, downloadBlob } from "@/lib/xlsx-writer";
 import { useGenerateBudget } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -108,32 +108,32 @@ export function BudgetWizard() {
   const handleGenerate = () => {
     if (!parsedWorkbook) return;
 
-    const fmt = (ds: string) => {
-      const d = parseISO(ds);
-      return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
-    };
-    const weekLabel = `Budget from ${fmt(newWeekStartDate)} to ${fmt(newWeekEndDate)}`;
+    // Calculate number of full (or partial) 7-day weeks from the date range
+    const start = parseISO(newWeekStartDate);
+    const end = parseISO(newWeekEndDate);
+    const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    const numberOfWeeks = Math.max(1, Math.ceil(diffDays / 7));
 
     generateMutation.mutate(
       {
         data: {
           startDate: newWeekStartDate,
+          endDate: newWeekEndDate,
           openingBalance,
           paycheckAmount,
-          numberOfWeeks: 1,
+          numberOfWeeks,
           bills,
         },
       },
       {
         onSuccess: (data) => {
-          if (!data.weeks?.[0]) return;
-          const week = { ...data.weeks[0], weekLabel };
+          if (!data.weeks?.length) return;
           setGeneratedWeek(data);
 
-          // Write the new column into the workbook
-          const blob = appendBudgetWeek(
+          // Append ALL generated weeks into the workbook
+          const blob = appendBudgetWeeks(
             parsedWorkbook.workbook,
-            week,
+            data.weeks,
             parsedWorkbook.nextWeekStartCol
           );
           setGeneratedBlob(blob);
@@ -484,8 +484,10 @@ export function BudgetWizard() {
               <div>
                 <h2 className="text-3xl font-bold text-foreground mb-2">Your budget is ready</h2>
                 <p className="text-muted-foreground">
-                  The new week has been appended to your spreadsheet. Download the updated file
-                  below.
+                  {generatedWeek && generatedWeek.weeks.length > 1
+                    ? `${generatedWeek.weeks.length} budget weeks have been appended to your spreadsheet.`
+                    : "The new week has been appended to your spreadsheet."}{" "}
+                  Download the updated file below.
                 </p>
               </div>
 

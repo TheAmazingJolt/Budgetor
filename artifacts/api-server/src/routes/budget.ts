@@ -11,16 +11,19 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const { startDate, openingBalance, paycheckAmount, numberOfWeeks, bills } = parsed.data;
+  const { startDate, endDate, openingBalance, paycheckAmount, numberOfWeeks, bills } = parsed.data;
 
   const startDateObj = new Date(startDate);
-  if (isNaN(startDateObj.getTime())) {
-    res.status(400).json({ error: "Invalid startDate" });
+  const endDateObj = new Date(endDate);
+
+  if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+    res.status(400).json({ error: "Invalid startDate or endDate" });
     return;
   }
 
   const weeks = generateWeeklyBudgets(
     startDateObj,
+    endDateObj,
     openingBalance,
     paycheckAmount,
     numberOfWeeks,

@@ -21,9 +21,14 @@ export const HealthCheckResponse = zod.object({
  */
 export const GenerateBudgetBody = zod.object({
   startDate: zod.string().describe("ISO date string for first week start"),
+  endDate: zod
+    .string()
+    .describe("ISO date string for the last day of the final week"),
   openingBalance: zod.number().describe("Starting account balance"),
   paycheckAmount: zod.number().describe("Weekly paycheck amount"),
-  numberOfWeeks: zod.number().describe("Number of weeks to generate"),
+  numberOfWeeks: zod
+    .number()
+    .describe("Number of weeks to generate (calculated from date range)"),
   bills: zod.array(
     zod.object({
       name: zod.string(),
