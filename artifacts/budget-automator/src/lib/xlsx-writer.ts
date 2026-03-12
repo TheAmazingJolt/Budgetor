@@ -381,16 +381,18 @@ function writeBillsVerbatim(
     (sheet['!cols'] as any[])[c] = { wch: Math.max(raw.colWidths[c] ?? 0, min) };
   }
 
-  // Force center alignment on header-row cells for the extra data columns
-  // (Day of Pay, End Date, Balance = cols 2 onward).
-  for (let c = 2; c < raw.colCount; c++) {
-    const addr = XLSX.utils.encode_cell({ r: 0, c });
-    const cell = sheet[addr];
-    if (cell) {
-      sheet[addr] = {
-        ...cell,
-        s: { ...(cell.s ?? {}), alignment: { horizontal: 'center', vertical: 'center' } },
-      };
+  // Force center alignment on every cell in cols 2+ (Day of Pay, End Date,
+  // Balance) — both the header row and all data rows.
+  for (let r = 0; r < raw.rowCount; r++) {
+    for (let c = 2; c < raw.colCount; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = sheet[addr];
+      if (cell) {
+        sheet[addr] = {
+          ...cell,
+          s: { ...(cell.s ?? {}), alignment: { horizontal: 'center', vertical: 'center' } },
+        };
+      }
     }
   }
 
@@ -458,7 +460,12 @@ function autoFitColumns(
       if (!cell) continue;
 
       let len: number;
-      if (cell.v !== undefined && cell.v !== null) {
+      if ((cell as any).w) {
+        // cell.w is the pre-formatted display string set by xlsx on read
+        // (e.g. "4/7/2028" for a date serial, "$2,608.44" for a currency).
+        // It reflects the actual visible width far better than String(cell.v).
+        len = String((cell as any).w).length;
+      } else if (cell.v !== undefined && cell.v !== null) {
         len = String(cell.v).length;
       } else if (cell.f) {
         len = 8; // numeric result placeholder — dollar amounts fit in ~8 chars
@@ -547,6 +554,29 @@ export function appendBudgetWeeks(
   // xlsx-js-style expects when writing, so fills/fonts/alignment are preserved.
   const fillStyleMap = buildFillColorStyleMap(workbook);
   normalizeSheetCellStyles(clonedSheet, fillStyleMap);
+
+  // Widen bills columns so long bill names and formatted dates/amounts
+  // are never clipped, even when the original file had narrow columns.
+  autoFitColumns(clonedSheet, 0, firstStartCol - 1);
+
+  // Center every cell in the Day-of-Pay, End Date, and Balance columns
+  // (cols 2 onward, same as writeBillsVerbatim does in blank mode).
+  {
+    const billsRef = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']) : null;
+    const maxR = billsRef?.e.r ?? 0;
+    for (let r = 0; r <= maxR; r++) {
+      for (let c = 2; c < firstStartCol; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = (clonedSheet as any)[addr];
+        if (cell) {
+          (clonedSheet as any)[addr] = {
+            ...cell,
+            s: { ...(cell.s ?? {}), alignment: { horizontal: 'center', vertical: 'center' } },
+          };
+        }
+      }
+    }
+  }
 
   // The original bills section and existing budget columns are already in the
   // cloned sheet — never overwrite them. Just append new week columns.
