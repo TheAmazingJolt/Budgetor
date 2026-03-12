@@ -5,8 +5,8 @@ import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
-  labelColWidth: 25,
-  valueColWidth: 14,
+  labelColWidth: 1,
+  valueColWidth: 1,
 };
 
 // ── Cell style constants ────────────────────────────────────────────────────
@@ -234,17 +234,18 @@ function writeWeeksToSheet(
 
   sheet['!ref'] = XLSX.utils.encode_range(existingRange);
 
-  // Set minimum column widths then auto-expand to fit actual content.
+  // Seed each new column pair with a 1-char minimum so auto-fit
+  // purely determines the final width from cell content alone.
   if (!sheet['!cols']) sheet['!cols'] = [];
   for (let wIdx = 0; wIdx < weekBudgets.length; wIdx++) {
     const lc = startCol + wIdx * 2;
     const vc = lc + 1;
     while (sheet['!cols']!.length <= vc) sheet['!cols']!.push({});
-    sheet['!cols']![lc] = { wch: labelColWidth };
-    sheet['!cols']![vc] = { wch: valueColWidth };
+    sheet['!cols']![lc] = { wch: 1 };
+    sheet['!cols']![vc] = { wch: 1 };
   }
 
-  // Expand any column whose content is wider than the minimum.
+  // Expand every column to fit its widest cell content.
   autoFitColumns(sheet, startCol, startCol + totalNewCols - 1);
 }
 
@@ -460,7 +461,7 @@ function autoFitColumns(
       if (cell.v !== undefined && cell.v !== null) {
         len = String(cell.v).length;
       } else if (cell.f) {
-        len = 12; // numeric result placeholder
+        len = 8; // numeric result placeholder — dollar amounts fit in ~8 chars
       } else {
         continue;
       }
