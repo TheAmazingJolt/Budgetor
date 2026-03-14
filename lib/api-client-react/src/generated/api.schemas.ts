@@ -192,6 +192,17 @@ export interface SheetWriteResponse {
   sheetTitle?: string;
 }
 
+export interface SheetCreateAndWriteRequest {
+  title: string;
+  weeks: WeeklyBudget[];
+  includeRemainingAcct?: boolean;
+}
+
+export interface SheetCreateAndWriteResponse {
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+}
+
 export interface MicrosoftAuthStatus {
   configured: boolean;
   authenticated: boolean;

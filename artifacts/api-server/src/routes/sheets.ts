@@ -367,6 +367,311 @@ const CATEGORY_COLORS: Record<string, { red: number; green: number; blue: number
   "Partial Car": { red: 0.0, green: 1.0, blue: 0.0 },
 };
 
+function buildBudgetWriteData(
+  weeks: WriteRequest["weeks"],
+  startCol: number,
+  includeRemainingAcct: boolean,
+  sheetId: number,
+) {
+  const maxBills = Math.max(...weeks.map((w) => w.bills.length));
+  const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+  const remainingRowIdx = totalRows - 1;
+
+  const requests: sheets_v4.Schema$Request[] = [];
+  const valueRows: any[][] = [];
+
+  for (let r = 0; r < totalRows; r++) {
+    valueRows.push([]);
+  }
+
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    const week = weeks[wIdx];
+    const labelCol = startCol + wIdx * 2;
+    const valCol = labelCol + 1;
+
+    let nextRow = 0;
+
+    valueRows[nextRow][labelCol] = week.weekLabel;
+    valueRows[nextRow][valCol] = "";
+
+    requests.push({
+      mergeCells: {
+        range: {
+          sheetId,
+          startRowIndex: nextRow,
+          endRowIndex: nextRow + 1,
+          startColumnIndex: labelCol,
+          endColumnIndex: valCol + 1,
+        },
+        mergeType: "MERGE_ALL",
+      },
+    });
+
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: nextRow,
+          endRowIndex: nextRow + 1,
+          startColumnIndex: labelCol,
+          endColumnIndex: valCol + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            horizontalAlignment: "CENTER",
+            backgroundColor: { red: 0.85, green: 0.88, blue: 0.95 },
+            textFormat: {
+              bold: true,
+              fontSize: 10,
+              fontFamily: "Arial",
+            },
+          },
+        },
+        fields: "userEnteredFormat(horizontalAlignment,backgroundColor,textFormat)",
+      },
+    });
+    nextRow++;
+
+    const sumStartRow = nextRow;
+
+    if (includeRemainingAcct) {
+      valueRows[nextRow][labelCol] = "Remaining Acct";
+      valueRows[nextRow][valCol] = week.openingBalance;
+      nextRow++;
+    }
+
+    valueRows[nextRow][labelCol] = "Paycheck";
+    valueRows[nextRow][valCol] = week.paycheck;
+    nextRow++;
+
+    for (const bill of week.bills) {
+      valueRows[nextRow][labelCol] = bill.name;
+      valueRows[nextRow][valCol] = bill.amount;
+
+      const bgColor = CATEGORY_COLORS[bill.name];
+      if (bgColor) {
+        requests.push({
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: nextRow,
+              endRowIndex: nextRow + 1,
+              startColumnIndex: labelCol,
+              endColumnIndex: valCol + 1,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: bgColor,
+                textFormat: {
+                  fontSize: 10,
+                  fontFamily: "Arial",
+                },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        });
+      }
+      nextRow++;
+    }
+
+    while (nextRow < remainingRowIdx) {
+      valueRows[nextRow][labelCol] = "";
+      valueRows[nextRow][valCol] = "";
+      nextRow++;
+    }
+
+    const valColLetter = columnToLetter(valCol);
+    valueRows[remainingRowIdx][labelCol] = "Remaining";
+    valueRows[remainingRowIdx][valCol] = `=SUM(${valColLetter}${sumStartRow + 1}:${valColLetter}${remainingRowIdx})`;
+
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: remainingRowIdx,
+          endRowIndex: remainingRowIdx + 1,
+          startColumnIndex: labelCol,
+          endColumnIndex: valCol + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            textFormat: {
+              bold: true,
+              fontSize: 10,
+              fontFamily: "Arial",
+            },
+            borders: {
+              top: {
+                style: "SOLID",
+                color: { red: 0, green: 0, blue: 0 },
+              },
+            },
+          },
+        },
+        fields: "userEnteredFormat(textFormat,borders)",
+      },
+    });
+  }
+
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: 1,
+        endRowIndex: remainingRowIdx,
+        startColumnIndex: startCol,
+        endColumnIndex: startCol + weeks.length * 2,
+      },
+      cell: {
+        userEnteredFormat: {
+          textFormat: {
+            fontSize: 10,
+            fontFamily: "Arial",
+          },
+        },
+      },
+      fields: "userEnteredFormat(textFormat)",
+    },
+  });
+
+  const totalCols = startCol + weeks.length * 2;
+
+  const widthRequests: sheets_v4.Schema$Request[] = [];
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    const lCol = startCol + wIdx * 2;
+    const vCol = lCol + 1;
+
+    widthRequests.push({
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "COLUMNS",
+          startIndex: lCol,
+          endIndex: lCol + 1,
+        },
+        properties: { pixelSize: 160 },
+        fields: "pixelSize",
+      },
+    });
+    widthRequests.push({
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "COLUMNS",
+          startIndex: vCol,
+          endIndex: vCol + 1,
+        },
+        properties: { pixelSize: 100 },
+        fields: "pixelSize",
+      },
+    });
+  }
+
+  const paddedRows = valueRows.map((row) => {
+    const padded: any[] = [];
+    for (let c = startCol; c < totalCols; c++) {
+      padded.push(row[c] ?? "");
+    }
+    return padded;
+  });
+
+  return { requests, widthRequests, paddedRows, totalRows, totalCols };
+}
+
+async function writeBudgetToSheet(
+  sheetsApi: sheets_v4.Sheets,
+  spreadsheetId: string,
+  sheetTitleStr: string,
+  sheetId: number,
+  weeks: WriteRequest["weeks"],
+  startCol: number,
+  includeRemainingAcct: boolean,
+) {
+  const { requests, widthRequests, paddedRows, totalRows, totalCols } =
+    buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId);
+
+  const rangeStart = `${columnToLetter(startCol)}1`;
+  const rangeEnd = `${columnToLetter(totalCols - 1)}${totalRows}`;
+  const escapedTitle = sheetTitleStr.replace(/'/g, "''");
+  const range = `'${escapedTitle}'!${rangeStart}:${rangeEnd}`;
+
+  await sheetsApi.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: paddedRows },
+  });
+
+  if (requests.length > 0) {
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests },
+    });
+  }
+
+  if (widthRequests.length > 0) {
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: widthRequests },
+    });
+  }
+}
+
+interface CreateAndWriteRequest {
+  title: string;
+  weeks: WriteRequest["weeks"];
+  includeRemainingAcct?: boolean;
+}
+
+router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
+  const auth = getAuthedClient(req);
+  if (!auth) {
+    res.status(401).json({ error: "Not authenticated with Google" });
+    return;
+  }
+
+  const body = req.body as CreateAndWriteRequest;
+  const { title, weeks, includeRemainingAcct } = body;
+
+  if (!title || typeof title !== "string") {
+    res.status(400).json({ error: "Missing or invalid 'title' field" });
+    return;
+  }
+
+  if (!weeks?.length) {
+    res.status(400).json({ error: "No weeks to write" });
+    return;
+  }
+
+  try {
+    const sheetsApi = google.sheets({ version: "v4", auth });
+
+    const createResponse = await sheetsApi.spreadsheets.create({
+      requestBody: {
+        properties: { title },
+        sheets: [{ properties: { title: "Budget", sheetId: 0 } }],
+      },
+    });
+
+    const spreadsheetId = createResponse.data.spreadsheetId!;
+    const spreadsheetUrl = createResponse.data.spreadsheetUrl!;
+
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false);
+
+    res.json({ spreadsheetId, spreadsheetUrl });
+  } catch (err: any) {
+    if (err.code === 401) {
+      req.session.googleTokens = undefined;
+      res.status(401).json({ error: "Google session expired. Please reconnect." });
+      return;
+    }
+    res.status(500).json({
+      error: "Failed to create spreadsheet: " + (err.message ?? String(err)),
+    });
+  }
+});
+
 router.post("/sheets/:id/write", async (req, res): Promise<void> => {
   const auth = getAuthedClient(req);
   if (!auth) {
@@ -391,235 +696,9 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
       meta.data.sheets?.find((s) => s.properties?.title === (sheetTitle ?? "Budget")) ??
       meta.data.sheets?.[0];
     const sheetId = sheet?.properties?.sheetId ?? 0;
-
-    const maxBills = Math.max(...weeks.map((w) => w.bills.length));
-    const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
-    const remainingRowIdx = totalRows - 1;
-
-    const requests: sheets_v4.Schema$Request[] = [];
-    const valueRows: any[][] = [];
-
-    for (let r = 0; r < totalRows; r++) {
-      valueRows.push([]);
-    }
-
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const week = weeks[wIdx];
-      const labelCol = startCol + wIdx * 2;
-      const valCol = labelCol + 1;
-
-      let nextRow = 0;
-
-      valueRows[nextRow][labelCol] = week.weekLabel;
-      valueRows[nextRow][valCol] = "";
-
-      requests.push({
-        mergeCells: {
-          range: {
-            sheetId,
-            startRowIndex: nextRow,
-            endRowIndex: nextRow + 1,
-            startColumnIndex: labelCol,
-            endColumnIndex: valCol + 1,
-          },
-          mergeType: "MERGE_ALL",
-        },
-      });
-
-      requests.push({
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex: nextRow,
-            endRowIndex: nextRow + 1,
-            startColumnIndex: labelCol,
-            endColumnIndex: valCol + 1,
-          },
-          cell: {
-            userEnteredFormat: {
-              horizontalAlignment: "CENTER",
-              backgroundColor: { red: 0.85, green: 0.88, blue: 0.95 },
-              textFormat: {
-                bold: true,
-                fontSize: 10,
-                fontFamily: "Arial",
-              },
-            },
-          },
-          fields: "userEnteredFormat(horizontalAlignment,backgroundColor,textFormat)",
-        },
-      });
-      nextRow++;
-
-      const sumStartRow = nextRow;
-
-      if (includeRemainingAcct) {
-        valueRows[nextRow][labelCol] = "Remaining Acct";
-        valueRows[nextRow][valCol] = week.openingBalance;
-        nextRow++;
-      }
-
-      valueRows[nextRow][labelCol] = "Paycheck";
-      valueRows[nextRow][valCol] = week.paycheck;
-      nextRow++;
-
-      for (const bill of week.bills) {
-        valueRows[nextRow][labelCol] = bill.name;
-        valueRows[nextRow][valCol] = bill.amount;
-
-        const bgColor = CATEGORY_COLORS[bill.name];
-        if (bgColor) {
-          requests.push({
-            repeatCell: {
-              range: {
-                sheetId,
-                startRowIndex: nextRow,
-                endRowIndex: nextRow + 1,
-                startColumnIndex: labelCol,
-                endColumnIndex: valCol + 1,
-              },
-              cell: {
-                userEnteredFormat: {
-                  backgroundColor: bgColor,
-                  textFormat: {
-                    fontSize: 10,
-                    fontFamily: "Arial",
-                  },
-                },
-              },
-              fields: "userEnteredFormat(backgroundColor,textFormat)",
-            },
-          });
-        }
-        nextRow++;
-      }
-
-      while (nextRow < remainingRowIdx) {
-        valueRows[nextRow][labelCol] = "";
-        valueRows[nextRow][valCol] = "";
-        nextRow++;
-      }
-
-      const valColLetter = columnToLetter(valCol);
-      valueRows[remainingRowIdx][labelCol] = "Remaining";
-      valueRows[remainingRowIdx][valCol] = `=SUM(${valColLetter}${sumStartRow + 1}:${valColLetter}${remainingRowIdx})`;
-
-      requests.push({
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex: remainingRowIdx,
-            endRowIndex: remainingRowIdx + 1,
-            startColumnIndex: labelCol,
-            endColumnIndex: valCol + 1,
-          },
-          cell: {
-            userEnteredFormat: {
-              textFormat: {
-                bold: true,
-                fontSize: 10,
-                fontFamily: "Arial",
-              },
-              borders: {
-                top: {
-                  style: "SOLID",
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-              },
-            },
-          },
-          fields: "userEnteredFormat(textFormat,borders)",
-        },
-      });
-    }
-
-    requests.push({
-      repeatCell: {
-        range: {
-          sheetId,
-          startRowIndex: 1,
-          endRowIndex: remainingRowIdx,
-          startColumnIndex: startCol,
-          endColumnIndex: startCol + weeks.length * 2,
-        },
-        cell: {
-          userEnteredFormat: {
-            textFormat: {
-              fontSize: 10,
-              fontFamily: "Arial",
-            },
-          },
-        },
-        fields: "userEnteredFormat(textFormat)",
-      },
-    });
-
-    const totalCols = startCol + weeks.length * 2;
-    const rangeStart = `${columnToLetter(startCol)}1`;
-    const rangeEnd = `${columnToLetter(totalCols - 1)}${totalRows}`;
     const sheetTitleStr = sheetTitle ?? "Budget";
-    const escapedTitle = sheetTitleStr.replace(/'/g, "''");
-    const range = `'${escapedTitle}'!${rangeStart}:${rangeEnd}`;
 
-    const paddedRows = valueRows.map((row) => {
-      const padded: any[] = [];
-      for (let c = startCol; c < totalCols; c++) {
-        padded.push(row[c] ?? "");
-      }
-      return padded;
-    });
-
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId,
-      range,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: paddedRows },
-    });
-
-    if (requests.length > 0) {
-      await sheetsApi.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests },
-      });
-    }
-
-    const widthRequests: sheets_v4.Schema$Request[] = [];
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const labelCol = startCol + wIdx * 2;
-      const valCol = labelCol + 1;
-
-      widthRequests.push({
-        updateDimensionProperties: {
-          range: {
-            sheetId,
-            dimension: "COLUMNS",
-            startIndex: labelCol,
-            endIndex: labelCol + 1,
-          },
-          properties: { pixelSize: 160 },
-          fields: "pixelSize",
-        },
-      });
-      widthRequests.push({
-        updateDimensionProperties: {
-          range: {
-            sheetId,
-            dimension: "COLUMNS",
-            startIndex: valCol,
-            endIndex: valCol + 1,
-          },
-          properties: { pixelSize: 100 },
-          fields: "pixelSize",
-        },
-      });
-    }
-
-    if (widthRequests.length > 0) {
-      await sheetsApi.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests: widthRequests },
-      });
-    }
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false);
 
     res.json({
       ok: true,

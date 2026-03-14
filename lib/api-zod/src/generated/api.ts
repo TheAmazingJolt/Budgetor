@@ -393,6 +393,44 @@ export const SheetWriteResponse = zod.object({
 });
 
 /**
+ * @summary Create a new Google Sheet and write budget data
+ */
+export const SheetCreateAndWriteBody = zod.object({
+  title: zod.string(),
+  weeks: zod.array(
+    zod.object({
+      weekLabel: zod
+        .string()
+        .describe(
+          'Human-readable label like \"Budget from 3\/5\/26 to 3\/11\/26\"',
+        ),
+      startDate: zod.string().describe("ISO date string for week start"),
+      endDate: zod.string().describe("ISO date string for week end"),
+      openingBalance: zod
+        .number()
+        .describe("Amount remaining from previous week"),
+      paycheck: zod.number().describe("Paycheck received this week"),
+      bills: zod.array(
+        zod.object({
+          name: zod.string(),
+          amount: zod.number(),
+        }),
+      ),
+      totalBills: zod
+        .number()
+        .describe("Sum of all bill line items for this week"),
+      closingBalance: zod.number().describe("Amount remaining after all bills"),
+    }),
+  ),
+  includeRemainingAcct: zod.boolean().optional(),
+});
+
+export const SheetCreateAndWriteResponse = zod.object({
+  spreadsheetId: zod.string(),
+  spreadsheetUrl: zod.string(),
+});
+
+/**
  * @summary Get Microsoft OAuth status
  */
 export const MicrosoftAuthStatusResponse = zod.object({

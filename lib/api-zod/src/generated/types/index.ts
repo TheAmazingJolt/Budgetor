@@ -46,6 +46,8 @@ export * from "./savedBudgetResponse";
 export * from "./savedBudgetSettings";
 export * from "./savedBudgetUpdateRequest";
 export * from "./savedBudgetUpdateRequestSettings";
+export * from "./sheetCreateAndWriteRequest";
+export * from "./sheetCreateAndWriteResponse";
 export * from "./sheetFile";
 export * from "./sheetListResponse";
 export * from "./sheetReadByUrlRequest";

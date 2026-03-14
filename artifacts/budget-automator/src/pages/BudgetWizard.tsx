@@ -61,6 +61,7 @@ import {
   getAuthMeQueryKey,
   getSavedBudgetListQueryKey,
   getMicrosoftAuthStatusQueryKey,
+  useSheetCreateAndWrite,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -183,9 +184,14 @@ export function BudgetWizard() {
   const queryClient = useQueryClient();
   const generateMutation = useGenerateBudget();
   const sheetWriteMutation = useSheetWrite();
+  const sheetCreateAndWriteMutation = useSheetCreateAndWrite();
   const sheetReadByUrlMutation = useSheetReadByUrl();
   const excelWriteMutation = useExcelWrite();
   const excelReadByUrlMutation = useExcelReadByUrl();
+
+  const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
+  const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
+  const [newSheetUrl, setNewSheetUrl] = useState<string | null>(null);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } as any });
@@ -824,6 +830,9 @@ export function BudgetWizard() {
           setGeneratedWeek(data);
           setCloudSaveSuccess(false);
 
+          setNewSheetSaveSuccess(false);
+          setNewSheetUrl(null);
+
           if (inputMode === "google" || inputMode === "excel") {
             setGeneratedBlob(null);
           } else {
@@ -886,6 +895,41 @@ export function BudgetWizard() {
       });
     } finally {
       setIsWritingToSheet(false);
+    }
+  };
+
+  const handleSaveToNewGoogleSheet = async () => {
+    if (!generatedWeek) return;
+    setIsSavingToNewSheet(true);
+    setNewSheetSaveSuccess(false);
+    setNewSheetUrl(null);
+
+    try {
+      const startLabel = format(parseISO(newWeekStartDate), "MMM d");
+      const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
+      const title = `Budget ${startLabel} – ${endLabel}`;
+
+      const result = await sheetCreateAndWriteMutation.mutateAsync({
+        data: {
+          title,
+          weeks: generatedWeek.weeks,
+          includeRemainingAcct: !zeroOpeningBalance,
+        },
+      });
+      setNewSheetSaveSuccess(true);
+      setNewSheetUrl(result.spreadsheetUrl);
+      toast({
+        title: "Saved to Google Sheets",
+        description: `Created "${title}" in your Google Drive.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to save to Google Sheets",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingToNewSheet(false);
     }
   };
 
@@ -1944,13 +1988,46 @@ export function BudgetWizard() {
                   </Button>
                 )}
 
+                {inputMode !== "google" && googleAuthenticated && (
+                  <div className="flex flex-col gap-2 flex-1">
+                    <Button
+                      size="lg"
+                      onClick={handleSaveToNewGoogleSheet}
+                      disabled={isSavingToNewSheet || newSheetSaveSuccess}
+                      className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                        newSheetSaveSuccess
+                          ? "bg-emerald-600"
+                          : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
+                      }`}
+                    >
+                      {isSavingToNewSheet ? (
+                        <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to Google Sheets…</>
+                      ) : newSheetSaveSuccess ? (
+                        <><Check className="w-5 h-5 mr-2" /> Saved to Google Sheets</>
+                      ) : (
+                        <><Sheet className="w-5 h-5 mr-2" /> Save to Google Sheets</>
+                      )}
+                    </Button>
+                    {newSheetSaveSuccess && newSheetUrl && (
+                      <a
+                        href={newSheetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700 underline text-center"
+                      >
+                        Open in Google Sheets →
+                      </a>
+                    )}
+                  </div>
+                )}
+
                 {(inputMode !== "google" && inputMode !== "excel" || generatedBlob) && (
                   <Button
                     size="lg"
                     onClick={handleDownload}
                     disabled={!generatedBlob && inputMode !== "google" && inputMode !== "excel"}
                     className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
-                      inputMode === "google" || inputMode === "excel" || inputMode === "cloud" ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
+                      inputMode === "google" || inputMode === "excel" || inputMode === "cloud" || googleAuthenticated ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
                     }`}
                   >
                     <Download className="w-5 h-5 mr-2" />

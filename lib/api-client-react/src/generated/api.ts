@@ -47,6 +47,8 @@ import type {
   SavedBudgetListResponse,
   SavedBudgetResponse,
   SavedBudgetUpdateRequest,
+  SheetCreateAndWriteRequest,
+  SheetCreateAndWriteResponse,
   SheetListResponse,
   SheetReadByUrlRequest,
   SheetReadResponse,
@@ -1629,6 +1631,93 @@ export const useSheetWrite = <
   TContext
 > => {
   return useMutation(getSheetWriteMutationOptions(options));
+};
+
+/**
+ * @summary Create a new Google Sheet and write budget data
+ */
+export const getSheetCreateAndWriteUrl = () => {
+  return `/api/sheets/create-and-write`;
+};
+
+export const sheetCreateAndWrite = async (
+  sheetCreateAndWriteRequest: SheetCreateAndWriteRequest,
+  options?: RequestInit,
+): Promise<SheetCreateAndWriteResponse> => {
+  return customFetch<SheetCreateAndWriteResponse>(getSheetCreateAndWriteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sheetCreateAndWriteRequest),
+  });
+};
+
+export const getSheetCreateAndWriteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sheetCreateAndWrite>>,
+    TError,
+    { data: BodyType<SheetCreateAndWriteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sheetCreateAndWrite>>,
+  TError,
+  { data: BodyType<SheetCreateAndWriteRequest> },
+  TContext
+> => {
+  const mutationKey = ["sheetCreateAndWrite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sheetCreateAndWrite>>,
+    { data: BodyType<SheetCreateAndWriteRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sheetCreateAndWrite(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SheetCreateAndWriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sheetCreateAndWrite>>
+>;
+export type SheetCreateAndWriteMutationBody =
+  BodyType<SheetCreateAndWriteRequest>;
+export type SheetCreateAndWriteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new Google Sheet and write budget data
+ */
+export const useSheetCreateAndWrite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sheetCreateAndWrite>>,
+    TError,
+    { data: BodyType<SheetCreateAndWriteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sheetCreateAndWrite>>,
+  TError,
+  { data: BodyType<SheetCreateAndWriteRequest> },
+  TContext
+> => {
+  return useMutation(getSheetCreateAndWriteMutationOptions(options));
 };
 
 /**
