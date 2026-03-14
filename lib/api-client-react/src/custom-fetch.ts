@@ -9,13 +9,16 @@ export type BodyType<T> = T;
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
-const API_BASE_URL: string =
-  typeof import.meta !== "undefined" &&
-  typeof (import.meta as Record<string, unknown>).env !== "undefined"
-    ? ((import.meta as Record<string, unknown>).env as Record<string, unknown>)[
-        "VITE_API_BASE_URL"
-      ] as string ?? ""
-    : "";
+const API_BASE_URL: string = (() => {
+  const raw =
+    typeof import.meta !== "undefined" &&
+    typeof (import.meta as Record<string, unknown>).env !== "undefined"
+      ? (((import.meta as Record<string, unknown>).env as Record<string, unknown>)[
+          "VITE_API_BASE_URL"
+        ] as string) ?? ""
+      : "";
+  return raw.replace(/\/+$/, "");
+})();
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
