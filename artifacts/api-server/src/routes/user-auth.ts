@@ -27,6 +27,12 @@ declare global {
   }
 }
 
+function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.save((err) => (err ? reject(err) : resolve()));
+  });
+}
+
 function serializeUser(user: User) {
   return {
     id: user.id,
@@ -304,6 +310,7 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
     });
 
     req.session.userId = userId;
+    await saveSession(req);
     res.redirect(redirectUrl);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -424,6 +431,7 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     });
 
     req.session.userId = userId;
+    await saveSession(req);
     res.redirect(redirectUrl);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
