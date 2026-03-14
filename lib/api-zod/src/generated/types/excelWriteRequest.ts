@@ -5,13 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { Bill } from "./bill";
 import type { WeeklyBudget } from "./weeklyBudget";
 
-export interface SheetWriteRequest {
+export interface ExcelWriteRequest {
   weeks: WeeklyBudget[];
-  billsSummary?: Bill[];
-  sheetTitle?: string;
   startCol: number;
-  includeRemainingAcct?: boolean;
+  includeRemainingAcct: boolean;
+  sheetTitle?: string;
 }

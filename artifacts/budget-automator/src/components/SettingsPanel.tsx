@@ -5,7 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Settings2, Wallet, CalendarDays, Hash } from "lucide-react";
 
 export function SettingsPanel() {
-  const { openingBalance, paycheckAmount, startDate, numberOfWeeks, setSettings } = useBudgetStore();
+  const {
+    openingBalance,
+    paycheckAmount,
+    newWeekStartDate,
+    weekCount,
+    setOpeningBalance,
+    setPaycheckAmount,
+    setStartDate,
+    setWeekCount,
+  } = useBudgetStore();
 
   return (
     <Card className="glass-panel overflow-hidden border-border/40">
@@ -32,7 +41,7 @@ export function SettingsPanel() {
             <Input 
               type="number" 
               value={openingBalance}
-              onChange={(e) => setSettings({ openingBalance: parseFloat(e.target.value) || 0 })}
+              onChange={(e) => setOpeningBalance(parseFloat(e.target.value) || 0)}
               className="pl-8 rounded-xl h-12 text-lg bg-white/50 focus:bg-white focus:ring-4 focus:ring-primary/10 transition-all border-border/60"
             />
           </div>
@@ -48,7 +57,7 @@ export function SettingsPanel() {
             <Input 
               type="number" 
               value={paycheckAmount}
-              onChange={(e) => setSettings({ paycheckAmount: parseFloat(e.target.value) || 0 })}
+              onChange={(e) => setPaycheckAmount(parseFloat(e.target.value) || 0)}
               className="pl-8 rounded-xl h-12 text-lg bg-white/50 focus:bg-white focus:ring-4 focus:ring-primary/10 transition-all border-border/60"
             />
           </div>
@@ -61,8 +70,8 @@ export function SettingsPanel() {
           </Label>
           <Input 
             type="date" 
-            value={startDate}
-            onChange={(e) => setSettings({ startDate: e.target.value })}
+            value={newWeekStartDate}
+            onChange={(e) => setStartDate(e.target.value)}
             className="rounded-xl h-12 text-lg bg-white/50 focus:bg-white focus:ring-4 focus:ring-primary/10 transition-all border-border/60"
           />
         </div>
@@ -76,8 +85,8 @@ export function SettingsPanel() {
             type="number" 
             min="1"
             max="52"
-            value={numberOfWeeks}
-            onChange={(e) => setSettings({ numberOfWeeks: parseInt(e.target.value) || 8 })}
+            value={weekCount}
+            onChange={(e) => setWeekCount(parseInt(e.target.value) || 8)}
             className="rounded-xl h-12 text-lg bg-white/50 focus:bg-white focus:ring-4 focus:ring-primary/10 transition-all border-border/60"
           />
         </div>

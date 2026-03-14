@@ -281,12 +281,20 @@ export const SheetReadResponse = zod.object({
         .describe("Category for large-bill balancing"),
     }),
   ),
-  openingBalance: zod.number().optional(),
-  paycheckAmount: zod.number().optional(),
-  weekCount: zod.number().optional(),
-  startDate: zod.string().nullish(),
-  endDate: zod.string().nullish(),
-  sheetTitle: zod.string().optional(),
+  existingWeeks: zod.array(
+    zod.object({
+      label: zod.string(),
+      startCol: zod.number(),
+      openingBalance: zod.number(),
+      paycheck: zod.number(),
+      items: zod.array(zod.object({}).passthrough()),
+      remaining: zod.number(),
+    }),
+  ),
+  nextWeekStartCol: zod.number(),
+  lastRemaining: zod.number(),
+  sheetTitle: zod.string(),
+  spreadsheetId: zod.string().optional(),
 });
 
 /**
@@ -310,12 +318,20 @@ export const SheetReadByUrlResponse = zod.object({
         .describe("Category for large-bill balancing"),
     }),
   ),
-  openingBalance: zod.number().optional(),
-  paycheckAmount: zod.number().optional(),
-  weekCount: zod.number().optional(),
-  startDate: zod.string().nullish(),
-  endDate: zod.string().nullish(),
-  sheetTitle: zod.string().optional(),
+  existingWeeks: zod.array(
+    zod.object({
+      label: zod.string(),
+      startCol: zod.number(),
+      openingBalance: zod.number(),
+      paycheck: zod.number(),
+      items: zod.array(zod.object({}).passthrough()),
+      remaining: zod.number(),
+    }),
+  ),
+  nextWeekStartCol: zod.number(),
+  lastRemaining: zod.number(),
+  sheetTitle: zod.string(),
+  spreadsheetId: zod.string().optional(),
 });
 
 /**
@@ -367,9 +383,167 @@ export const SheetWriteBody = zod.object({
     )
     .optional(),
   sheetTitle: zod.string().optional(),
+  startCol: zod.number(),
+  includeRemainingAcct: zod.boolean().optional(),
 });
 
 export const SheetWriteResponse = zod.object({
   success: zod.boolean(),
   sheetTitle: zod.string().optional(),
+});
+
+/**
+ * @summary Get Microsoft OAuth status
+ */
+export const MicrosoftAuthStatusResponse = zod.object({
+  configured: zod.boolean(),
+  authenticated: zod.boolean(),
+});
+
+/**
+ * @summary Get Microsoft OAuth URL
+ */
+export const GetMicrosoftAuthUrlQueryParams = zod.object({
+  redirect: zod.coerce.string().optional(),
+});
+
+export const GetMicrosoftAuthUrlResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Disconnect Microsoft OAuth
+ */
+export const MicrosoftDisconnectResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary List Excel files in OneDrive
+ */
+export const ExcelListResponse = zod.object({
+  files: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      modifiedTime: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Read an Excel file from OneDrive
+ */
+export const ExcelReadParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ExcelReadResponse = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .enum(["rent", "utilities", "car", "fixed", "weekly"])
+        .describe("Category for large-bill balancing"),
+    }),
+  ),
+  existingWeeks: zod.array(
+    zod.object({
+      label: zod.string(),
+      startCol: zod.number(),
+      openingBalance: zod.number(),
+      paycheck: zod.number(),
+      items: zod.array(zod.object({}).passthrough()),
+      remaining: zod.number(),
+    }),
+  ),
+  nextWeekStartCol: zod.number(),
+  lastRemaining: zod.number(),
+  sheetTitle: zod.string(),
+  fileId: zod.string().optional(),
+});
+
+/**
+ * @summary Read an Excel file by OneDrive share URL
+ */
+export const ExcelReadByUrlBody = zod.object({
+  url: zod.string(),
+});
+
+export const ExcelReadByUrlResponse = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .enum(["rent", "utilities", "car", "fixed", "weekly"])
+        .describe("Category for large-bill balancing"),
+    }),
+  ),
+  existingWeeks: zod.array(
+    zod.object({
+      label: zod.string(),
+      startCol: zod.number(),
+      openingBalance: zod.number(),
+      paycheck: zod.number(),
+      items: zod.array(zod.object({}).passthrough()),
+      remaining: zod.number(),
+    }),
+  ),
+  nextWeekStartCol: zod.number(),
+  lastRemaining: zod.number(),
+  sheetTitle: zod.string(),
+  fileId: zod.string().optional(),
+});
+
+/**
+ * @summary Write budget weeks to an Excel file
+ */
+export const ExcelWriteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ExcelWriteBody = zod.object({
+  weeks: zod.array(
+    zod.object({
+      weekLabel: zod
+        .string()
+        .describe(
+          'Human-readable label like \"Budget from 3\/5\/26 to 3\/11\/26\"',
+        ),
+      startDate: zod.string().describe("ISO date string for week start"),
+      endDate: zod.string().describe("ISO date string for week end"),
+      openingBalance: zod
+        .number()
+        .describe("Amount remaining from previous week"),
+      paycheck: zod.number().describe("Paycheck received this week"),
+      bills: zod.array(
+        zod.object({
+          name: zod.string(),
+          amount: zod.number(),
+        }),
+      ),
+      totalBills: zod
+        .number()
+        .describe("Sum of all bill line items for this week"),
+      closingBalance: zod.number().describe("Amount remaining after all bills"),
+    }),
+  ),
+  startCol: zod.number(),
+  includeRemainingAcct: zod.boolean(),
+  sheetTitle: zod.string().optional(),
+});
+
+export const ExcelWriteResponse = zod.object({
+  ok: zod.boolean(),
+  message: zod.string().optional(),
 });

@@ -18,14 +18,15 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Budget Automator App
 
-A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet or Google Sheets:
-1. **Upload** — drop the existing budget file, start from scratch, or connect to Google Sheets
+A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet, Google Sheets, or Microsoft Excel Online:
+1. **Upload** — drop the existing budget file, start from scratch, connect to Google Sheets, or connect to Microsoft Excel (OneDrive)
 2. **Configure** — set start date, number of weeks (end date auto-calculates), opening balance, paycheck; choose output mode (append vs new file); toggle "Set Remaining Acct to $0"
-3. **Download** — generates balanced weekly bill distribution with proper formatting and downloads (or writes directly to Google Sheets)
+3. **Download** — generates balanced weekly bill distribution with proper formatting and downloads (or writes directly to Google Sheets / Excel Online)
 
 Features:
-- **Three input modes**: Upload .xlsx file, Start from scratch (manual bill entry), or Google Sheets (direct read/write)
+- **Four input modes**: Upload .xlsx file, Start from scratch (manual bill entry), Google Sheets (direct read/write), or Microsoft Excel Online / OneDrive (direct read/write)
 - **Google Sheets integration**: OAuth2 flow for reading budget data from and writing formatted budget columns to Google Sheets (requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI env vars for Railway)
+- **Microsoft Excel Online integration**: OAuth2 via Azure AD v2.0 for reading/writing OneDrive Excel workbooks (requires MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI env vars). Uses Microsoft Graph REST API (no SDK). Tokens stored in session as `microsoftTokens`. Scopes: openid, offline_access, Files.ReadWrite, User.Read
 - **Start from scratch**: Create a budget without uploading any file; enter bills manually
 - **User accounts**: Sign in with Google, Apple, or continue as guest. Guest accounts auto-created when saving; can upgrade to Google/Apple keeping saved budgets
 - **Saved budgets**: CRUD for saving/loading budget configurations (bills + settings) per user account
@@ -48,6 +49,8 @@ Key files:
 - `artifacts/api-server/src/routes/budget.ts` — POST /api/budget/generate endpoint
 - `artifacts/api-server/src/routes/google-auth.ts` — Google OAuth2 endpoints (auth, callback, status, disconnect)
 - `artifacts/api-server/src/routes/sheets.ts` — Google Sheets API endpoints (list, read, write with formatting)
+- `artifacts/api-server/src/routes/microsoft-auth.ts` — Microsoft OAuth2 via Azure AD v2.0 (status, connect, callback, disconnect; token refresh helper)
+- `artifacts/api-server/src/routes/excel.ts` — Microsoft Graph API endpoints for OneDrive Excel (list, read, read-by-URL, write)
 - `artifacts/api-server/src/routes/user-auth.ts` — User account auth (guest, Google, Apple login; attachUser middleware; /auth/me, /auth/guest, /auth/login/google, /auth/login/apple, /auth/logout)
 - `artifacts/api-server/src/routes/saved-budgets.ts` — Saved budgets CRUD (GET/POST/PUT/DELETE /api/budgets)
 

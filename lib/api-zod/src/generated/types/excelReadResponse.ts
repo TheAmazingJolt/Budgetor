@@ -8,11 +8,11 @@
 import type { Bill } from "./bill";
 import type { ExistingWeek } from "./existingWeek";
 
-export interface SheetReadResponse {
+export interface ExcelReadResponse {
   bills: Bill[];
   existingWeeks: ExistingWeek[];
   nextWeekStartCol: number;
   lastRemaining: number;
   sheetTitle: string;
-  spreadsheetId?: string;
+  fileId?: string;
 }

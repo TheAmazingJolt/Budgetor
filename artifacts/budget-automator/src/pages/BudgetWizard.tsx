@@ -40,6 +40,13 @@ import {
   useSheetReadByUrl,
   getGoogleAuthUrl,
   googleDisconnect,
+  useMicrosoftAuthStatus,
+  useExcelList,
+  useExcelRead,
+  useExcelWrite,
+  useExcelReadByUrl,
+  getMicrosoftAuthUrl,
+  microsoftDisconnect,
   useAuthMe,
   useAuthProviders,
   useAuthGuestLogin,
@@ -52,6 +59,7 @@ import {
   authLoginApple,
   getAuthMeQueryKey,
   getSavedBudgetListQueryKey,
+  getMicrosoftAuthStatusQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -74,7 +82,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Bill, SavedBudget } from "@workspace/api-client-react";
 
-type InputMode = "upload" | "scratch" | "google";
+type InputMode = "upload" | "scratch" | "google" | "excel";
 
 interface SavedBudgetSettings {
   openingBalance?: number;
@@ -114,6 +122,15 @@ export function BudgetWizard() {
   const [sheetWriteSuccess, setSheetWriteSuccess] = useState(false);
   const [pastedUrl, setPastedUrl] = useState("");
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+
+  const [selectedExcelFileId, setSelectedExcelFileId] = useState<string | null>(null);
+  const [selectedExcelFileName, setSelectedExcelFileName] = useState<string | null>(null);
+  const [excelSheetTitle, setExcelSheetTitle] = useState<string>("Budget");
+  const [excelNextCol, setExcelNextCol] = useState(2);
+  const [isWritingToExcel, setIsWritingToExcel] = useState(false);
+  const [excelWriteSuccess, setExcelWriteSuccess] = useState(false);
+  const [pastedExcelUrl, setPastedExcelUrl] = useState("");
+  const [isLoadingExcelUrl, setIsLoadingExcelUrl] = useState(false);
 
   const {
     uploadedFile,
@@ -158,13 +175,17 @@ export function BudgetWizard() {
   const generateMutation = useGenerateBudget();
   const sheetWriteMutation = useSheetWrite();
   const sheetReadByUrlMutation = useSheetReadByUrl();
+  const excelWriteMutation = useExcelWrite();
+  const excelReadByUrlMutation = useExcelReadByUrl();
 
-  const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } as any });
   const currentUser = authQuery.data?.user ?? null;
   const isSignedIn = !!currentUser;
   const isGuest = currentUser?.provider === "guest";
 
-  const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } as any });
   const googleLoginAvailable = providersQuery.data?.google ?? false;
   const appleLoginAvailable = providersQuery.data?.apple ?? false;
 
@@ -175,11 +196,13 @@ export function BudgetWizard() {
   const deleteBudgetMutation = useSavedBudgetDelete();
 
   const savedBudgetsQuery = useSavedBudgetList({
-    query: { enabled: isSignedIn, retry: false, staleTime: 15000 },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { enabled: isSignedIn, retry: false, staleTime: 15000 } as any,
   });
 
   const googleAuth = useGoogleAuthStatus({
-    query: { retry: false, staleTime: 30000 },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { retry: false, staleTime: 30000 } as any,
   });
   const googleConfigured = googleAuth.data?.configured ?? false;
   const googleAuthenticated = googleAuth.data?.authenticated ?? false;
@@ -188,14 +211,39 @@ export function BudgetWizard() {
     query: {
       enabled: googleConfigured && googleAuthenticated,
       retry: false,
-    },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
   });
 
   const sheetReadQuery = useSheetRead(selectedSheetId ?? "", {
     query: {
       enabled: !!selectedSheetId && googleAuthenticated,
       retry: false,
-    },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+  });
+
+  const microsoftAuth = useMicrosoftAuthStatus({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { retry: false, staleTime: 30000 } as any,
+  });
+  const microsoftConfigured = microsoftAuth.data?.configured ?? false;
+  const microsoftAuthenticated = microsoftAuth.data?.authenticated ?? false;
+
+  const excelListQuery = useExcelList({
+    query: {
+      enabled: microsoftConfigured && microsoftAuthenticated,
+      retry: false,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+  });
+
+  const excelReadQuery = useExcelRead(selectedExcelFileId ?? "", {
+    query: {
+      enabled: !!selectedExcelFileId && microsoftAuthenticated,
+      retry: false,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
   });
 
   useEffect(() => {
@@ -219,6 +267,28 @@ export function BudgetWizard() {
       setStep(1);
     }
   }, [sheetReadQuery.data, selectedSheetId]);
+
+  useEffect(() => {
+    if (excelReadQuery.data && selectedExcelFileId) {
+      const data = excelReadQuery.data;
+      setBills(data.bills);
+      setOpeningBalance(data.lastRemaining);
+      setExcelSheetTitle(data.sheetTitle);
+      setExcelNextCol(data.nextWeekStartCol);
+
+      const lastWeek = data.existingWeeks.at(-1) as any;
+      if (lastWeek) {
+        const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
+        if (nextStart) setStartDate(nextStart);
+      }
+
+      toast({
+        title: "Excel file loaded",
+        description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
+      });
+      setStep(1);
+    }
+  }, [excelReadQuery.data, selectedExcelFileId]);
 
   const suggestedNextStart = parsedWorkbook?.existingWeeks.length
     ? nextStartAfterLabel(parsedWorkbook.existingWeeks.at(-1)?.label ?? '')
@@ -273,7 +343,7 @@ export function BudgetWizard() {
   const handleConnectGoogle = async () => {
     try {
       const currentUrl = window.location.href;
-      const result = await getGoogleAuthUrl(currentUrl);
+      const result = await getGoogleAuthUrl({ redirect: currentUrl });
       window.location.href = result.url;
     } catch (err) {
       toast({
@@ -292,6 +362,115 @@ export function BudgetWizard() {
       setSelectedSheetName(null);
       toast({ title: "Disconnected from Google" });
     } catch {}
+  };
+
+  const handleConnectMicrosoft = async () => {
+    try {
+      const currentUrl = window.location.href;
+      const result = await getMicrosoftAuthUrl({ redirect: currentUrl });
+      window.location.href = result.url;
+    } catch (err) {
+      toast({
+        title: "Failed to start Microsoft auth",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDisconnectMicrosoft = async () => {
+    try {
+      await microsoftDisconnect();
+      queryClient.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
+      setSelectedExcelFileId(null);
+      setSelectedExcelFileName(null);
+      toast({ title: "Disconnected from Microsoft" });
+    } catch {}
+  };
+
+  const handleSelectExcelFile = (id: string, name: string) => {
+    setSelectedExcelFileId(id);
+    setSelectedExcelFileName(name);
+    setInputMode("excel");
+  };
+
+  const handlePasteExcelUrl = () => {
+    if (!pastedExcelUrl.trim()) return;
+    setIsLoadingExcelUrl(true);
+
+    excelReadByUrlMutation.mutate(
+      { data: { url: pastedExcelUrl.trim() } },
+      {
+        onSuccess: (data) => {
+          setBills(data.bills);
+          setOpeningBalance(data.lastRemaining);
+          setExcelSheetTitle(data.sheetTitle);
+          setExcelNextCol(data.nextWeekStartCol);
+          setSelectedExcelFileId(data.fileId ?? null);
+          setSelectedExcelFileName(data.sheetTitle);
+
+          const canWriteBack = microsoftAuthenticated && !!data.fileId;
+          setInputMode(canWriteBack ? "excel" : "scratch");
+          if (!canWriteBack) {
+            setBlankMode(true);
+            setIncludeBillsSummary(true);
+          }
+
+          const lastWeek = data.existingWeeks.at(-1) as any;
+          if (lastWeek) {
+            const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
+            if (nextStart) setStartDate(nextStart);
+          }
+
+          toast({
+            title: "Excel file loaded from URL",
+            description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Connect Microsoft to write back." : ""}`,
+          });
+          setStep(1);
+          setIsLoadingExcelUrl(false);
+        },
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : "Could not read that file. Make sure the link is correct and you are signed in with Microsoft.";
+          toast({
+            title: "Failed to load Excel file",
+            description: message,
+            variant: "destructive",
+          });
+          setIsLoadingExcelUrl(false);
+        },
+      }
+    );
+  };
+
+  const handleWriteToExcel = async () => {
+    if (!generatedWeek || !selectedExcelFileId) return;
+    setIsWritingToExcel(true);
+    setExcelWriteSuccess(false);
+
+    try {
+      await excelWriteMutation.mutateAsync({
+        id: selectedExcelFileId,
+        data: {
+          weeks: generatedWeek.weeks,
+          startCol: excelNextCol,
+          includeRemainingAcct: !zeroOpeningBalance,
+          sheetTitle: excelSheetTitle,
+        },
+      });
+      setExcelWriteSuccess(true);
+      toast({
+        title: "Written to Excel Online",
+        description: `${generatedWeek.weeks.length} budget weeks written to "${selectedExcelFileName}".`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to write to Excel",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsWritingToExcel(false);
+    }
   };
 
   const handleAccountGoogleLogin = async () => {
@@ -464,7 +643,7 @@ export function BudgetWizard() {
           setOpeningBalance(data.lastRemaining);
           setGoogleSheetTitle(data.sheetTitle);
           setGoogleNextCol(data.nextWeekStartCol);
-          setSelectedSheetId(data.spreadsheetId);
+          setSelectedSheetId(data.spreadsheetId ?? null);
           setSelectedSheetName(data.sheetTitle);
 
           const canWriteBack = googleAuthenticated;
@@ -521,7 +700,7 @@ export function BudgetWizard() {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
 
-          if (inputMode === "google") {
+          if (inputMode === "google" || inputMode === "excel") {
             setGeneratedBlob(null);
           } else {
             let blob: Blob;
@@ -868,7 +1047,7 @@ export function BudgetWizard() {
                                   type="button"
                                   onClick={() => {
                                     setInputMode("google");
-                                    handleSelectSheet(s.id, s.name);
+                                    handleSelectSheet(s.id!, s.name ?? "");
                                   }}
                                   disabled={sheetReadQuery.isLoading}
                                   className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
@@ -911,6 +1090,129 @@ export function BudgetWizard() {
                     )}
                   </div>
                 )}
+
+                {microsoftConfigured && (
+                  <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-blue-50/30 p-5 transition-all">
+                    {microsoftAuthenticated ? (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 p-2 rounded-xl bg-blue-100">
+                            <FileSpreadsheet className="w-5 h-5 text-blue-700" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-sm text-foreground">Excel Online</p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs text-muted-foreground"
+                                onClick={handleDisconnectMicrosoft}
+                              >
+                                <LogOut className="w-3 h-3 mr-1" /> Disconnect
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">Select an Excel file from OneDrive to read and write directly.</p>
+                          </div>
+                        </div>
+
+                        {excelListQuery.isLoading && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" /> Loading your Excel files…
+                          </div>
+                        )}
+
+                        {excelListQuery.isError && (
+                          <p className="text-sm text-destructive">Failed to load files. Try disconnecting and reconnecting.</p>
+                        )}
+
+                        {excelListQuery.data && (
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {excelListQuery.data.files.length === 0 ? (
+                              <p className="text-sm text-muted-foreground py-2">No .xlsx files found in OneDrive.</p>
+                            ) : (
+                              excelListQuery.data.files.map((f) => (
+                                <button
+                                  key={f.id}
+                                  type="button"
+                                  onClick={() => handleSelectExcelFile(f.id, f.name)}
+                                  disabled={excelReadQuery.isLoading}
+                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
+                                    selectedExcelFileId === f.id && excelReadQuery.isLoading
+                                      ? "bg-primary/10"
+                                      : ""
+                                  }`}
+                                >
+                                  <span className="font-medium text-foreground">{f.name}</span>
+                                  {f.modifiedTime && (
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      {new Date(f.modifiedTime).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                  {selectedExcelFileId === f.id && excelReadQuery.isLoading && (
+                                    <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleConnectMicrosoft}
+                        className="w-full text-left group"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 p-2 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-colors">
+                            <FileSpreadsheet className="w-5 h-5 text-blue-700" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm text-foreground">Connect Excel Online</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Sign in with Microsoft to read and write budget data directly in your OneDrive Excel files.</p>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-blue-50/30 p-5 transition-all">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-blue-100">
+                      <Link className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">Paste OneDrive URL</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Paste a share link to an Excel Online file (requires Microsoft sign-in).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="url"
+                      placeholder="https://1drv.ms/x/... or OneDrive share link"
+                      value={pastedExcelUrl}
+                      onChange={(e) => setPastedExcelUrl(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handlePasteExcelUrl(); }}
+                      className="flex-1 text-sm"
+                      disabled={isLoadingExcelUrl}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handlePasteExcelUrl}
+                      disabled={!pastedExcelUrl.trim() || isLoadingExcelUrl}
+                      className="shrink-0"
+                    >
+                      {isLoadingExcelUrl ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Load"
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 && (
@@ -1015,6 +1317,8 @@ export function BudgetWizard() {
                       ? "Set up your dates, opening balance, and add your bills manually."
                       : inputMode === "google"
                       ? `Editing "${selectedSheetName}". Your bills are pre-loaded — edit as needed.`
+                      : inputMode === "excel"
+                      ? `Editing "${selectedExcelFileName}". Your bills are pre-loaded — edit as needed.`
                       : "Set the week's dates, opening balance, and paycheck. Your bills are pre-loaded from the spreadsheet — edit as needed."}
                   </p>
                 </div>
@@ -1022,7 +1326,7 @@ export function BudgetWizard() {
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setInputMode("upload"); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setInputMode("upload"); setStep(0); }}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -1061,6 +1365,25 @@ export function BudgetWizard() {
                       Ending balance:{" "}
                       <span className="font-semibold">
                         ${sheetReadQuery.data.existingWeeks.at(-1)?.remaining.toFixed(2)}
+                      </span>
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {inputMode === "excel" && excelReadQuery.data && excelReadQuery.data.existingWeeks.length > 0 && (
+                <Card className="bg-emerald-50/60 border-emerald-200/60">
+                  <CardContent className="p-5">
+                    <p className="text-sm font-semibold text-emerald-800 mb-1">
+                      Last budget week (from Excel Online)
+                    </p>
+                    <p className="text-lg font-bold text-emerald-900">
+                      {(excelReadQuery.data.existingWeeks.at(-1) as any)?.label}
+                    </p>
+                    <p className="text-sm text-emerald-700 mt-1">
+                      Ending balance:{" "}
+                      <span className="font-semibold">
+                        ${((excelReadQuery.data.existingWeeks.at(-1) as any)?.remaining ?? 0).toFixed(2)}
                       </span>
                     </p>
                   </CardContent>
@@ -1385,6 +1708,8 @@ export function BudgetWizard() {
                     : "The new week has been generated."}{" "}
                   {inputMode === "google"
                     ? "Write them to your Google Sheet or download as a file."
+                    : inputMode === "excel"
+                    ? "Write them to your Excel Online file or download as a file."
                     : "Download the updated file below."}
                 </p>
               </div>
@@ -1510,13 +1835,34 @@ export function BudgetWizard() {
                   </Button>
                 )}
 
-                {(inputMode !== "google" || generatedBlob) && (
+                {inputMode === "excel" && selectedExcelFileId && (
+                  <Button
+                    size="lg"
+                    onClick={handleWriteToExcel}
+                    disabled={isWritingToExcel || excelWriteSuccess}
+                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                      excelWriteSuccess
+                        ? "bg-emerald-600"
+                        : "bg-gradient-to-r from-blue-700 to-blue-600 shadow-blue-600/25 hover:shadow-blue-600/30"
+                    }`}
+                  >
+                    {isWritingToExcel ? (
+                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Excel Online…</>
+                    ) : excelWriteSuccess ? (
+                      <><Check className="w-5 h-5 mr-2" /> Written to Excel Online</>
+                    ) : (
+                      <><CloudUpload className="w-5 h-5 mr-2" /> Write to Excel Online</>
+                    )}
+                  </Button>
+                )}
+
+                {(inputMode !== "google" && inputMode !== "excel" || generatedBlob) && (
                   <Button
                     size="lg"
                     onClick={handleDownload}
-                    disabled={!generatedBlob && inputMode !== "google"}
+                    disabled={!generatedBlob && inputMode !== "google" && inputMode !== "excel"}
                     className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
-                      inputMode === "google" ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
+                      inputMode === "google" || inputMode === "excel" ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
                     }`}
                   >
                     <Download className="w-5 h-5 mr-2" />

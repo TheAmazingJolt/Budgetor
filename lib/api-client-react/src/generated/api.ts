@@ -28,11 +28,20 @@ import type {
   BudgetRequest,
   BudgetResponse,
   ErrorResponse,
+  ExcelListResponse,
+  ExcelReadByUrlRequest,
+  ExcelReadResponse,
+  ExcelWriteRequest,
+  ExcelWriteResponse,
   GetGoogleAuthUrl200,
   GetGoogleAuthUrlParams,
+  GetMicrosoftAuthUrl200,
+  GetMicrosoftAuthUrlParams,
   GoogleAuthStatus,
   GoogleDisconnect200,
   HealthStatus,
+  MicrosoftAuthStatus,
+  MicrosoftDisconnect200,
   SavedBudgetCreateRequest,
   SavedBudgetDelete200,
   SavedBudgetListResponse,
@@ -1620,4 +1629,588 @@ export const useSheetWrite = <
   TContext
 > => {
   return useMutation(getSheetWriteMutationOptions(options));
+};
+
+/**
+ * @summary Get Microsoft OAuth status
+ */
+export const getMicrosoftAuthStatusUrl = () => {
+  return `/api/auth/microsoft/status`;
+};
+
+export const microsoftAuthStatus = async (
+  options?: RequestInit,
+): Promise<MicrosoftAuthStatus> => {
+  return customFetch<MicrosoftAuthStatus>(getMicrosoftAuthStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getMicrosoftAuthStatusQueryKey = () => {
+  return [`/api/auth/microsoft/status`] as const;
+};
+
+export const getMicrosoftAuthStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof microsoftAuthStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof microsoftAuthStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getMicrosoftAuthStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof microsoftAuthStatus>>
+  > = ({ signal }) => microsoftAuthStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof microsoftAuthStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type MicrosoftAuthStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof microsoftAuthStatus>>
+>;
+export type MicrosoftAuthStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Microsoft OAuth status
+ */
+
+export function useMicrosoftAuthStatus<
+  TData = Awaited<ReturnType<typeof microsoftAuthStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof microsoftAuthStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getMicrosoftAuthStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get Microsoft OAuth URL
+ */
+export const getGetMicrosoftAuthUrlUrl = (
+  params?: GetMicrosoftAuthUrlParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/auth/microsoft?${stringifiedParams}`
+    : `/api/auth/microsoft`;
+};
+
+export const getMicrosoftAuthUrl = async (
+  params?: GetMicrosoftAuthUrlParams,
+  options?: RequestInit,
+): Promise<GetMicrosoftAuthUrl200> => {
+  return customFetch<GetMicrosoftAuthUrl200>(
+    getGetMicrosoftAuthUrlUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMicrosoftAuthUrlQueryKey = (
+  params?: GetMicrosoftAuthUrlParams,
+) => {
+  return [`/api/auth/microsoft`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMicrosoftAuthUrlQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMicrosoftAuthUrl>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMicrosoftAuthUrlParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMicrosoftAuthUrl>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMicrosoftAuthUrlQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMicrosoftAuthUrl>>
+  > = ({ signal }) =>
+    getMicrosoftAuthUrl(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMicrosoftAuthUrl>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMicrosoftAuthUrlQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMicrosoftAuthUrl>>
+>;
+export type GetMicrosoftAuthUrlQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Microsoft OAuth URL
+ */
+
+export function useGetMicrosoftAuthUrl<
+  TData = Awaited<ReturnType<typeof getMicrosoftAuthUrl>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMicrosoftAuthUrlParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMicrosoftAuthUrl>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMicrosoftAuthUrlQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Disconnect Microsoft OAuth
+ */
+export const getMicrosoftDisconnectUrl = () => {
+  return `/api/auth/microsoft/disconnect`;
+};
+
+export const microsoftDisconnect = async (
+  options?: RequestInit,
+): Promise<MicrosoftDisconnect200> => {
+  return customFetch<MicrosoftDisconnect200>(getMicrosoftDisconnectUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getMicrosoftDisconnectMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof microsoftDisconnect>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof microsoftDisconnect>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["microsoftDisconnect"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof microsoftDisconnect>>,
+    void
+  > = () => {
+    return microsoftDisconnect(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MicrosoftDisconnectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof microsoftDisconnect>>
+>;
+
+export type MicrosoftDisconnectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Disconnect Microsoft OAuth
+ */
+export const useMicrosoftDisconnect = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof microsoftDisconnect>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof microsoftDisconnect>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getMicrosoftDisconnectMutationOptions(options));
+};
+
+/**
+ * @summary List Excel files in OneDrive
+ */
+export const getExcelListUrl = () => {
+  return `/api/excel/list`;
+};
+
+export const excelList = async (
+  options?: RequestInit,
+): Promise<ExcelListResponse> => {
+  return customFetch<ExcelListResponse>(getExcelListUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExcelListQueryKey = () => {
+  return [`/api/excel/list`] as const;
+};
+
+export const getExcelListQueryOptions = <
+  TData = Awaited<ReturnType<typeof excelList>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof excelList>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExcelListQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof excelList>>> = ({
+    signal,
+  }) => excelList({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof excelList>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExcelListQueryResult = NonNullable<
+  Awaited<ReturnType<typeof excelList>>
+>;
+export type ExcelListQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List Excel files in OneDrive
+ */
+
+export function useExcelList<
+  TData = Awaited<ReturnType<typeof excelList>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof excelList>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExcelListQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read an Excel file from OneDrive
+ */
+export const getExcelReadUrl = (id: string) => {
+  return `/api/excel/${id}/read`;
+};
+
+export const excelRead = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ExcelReadResponse> => {
+  return customFetch<ExcelReadResponse>(getExcelReadUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExcelReadQueryKey = (id: string) => {
+  return [`/api/excel/${id}/read`] as const;
+};
+
+export const getExcelReadQueryOptions = <
+  TData = Awaited<ReturnType<typeof excelRead>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof excelRead>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExcelReadQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof excelRead>>> = ({
+    signal,
+  }) => excelRead(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof excelRead>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type ExcelReadQueryResult = NonNullable<
+  Awaited<ReturnType<typeof excelRead>>
+>;
+export type ExcelReadQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Read an Excel file from OneDrive
+ */
+
+export function useExcelRead<
+  TData = Awaited<ReturnType<typeof excelRead>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof excelRead>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExcelReadQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read an Excel file by OneDrive share URL
+ */
+export const getExcelReadByUrlUrl = () => {
+  return `/api/excel/read-url`;
+};
+
+export const excelReadByUrl = async (
+  excelReadByUrlRequest: ExcelReadByUrlRequest,
+  options?: RequestInit,
+): Promise<ExcelReadResponse> => {
+  return customFetch<ExcelReadResponse>(getExcelReadByUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(excelReadByUrlRequest),
+  });
+};
+
+export const getExcelReadByUrlMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelReadByUrl>>,
+    TError,
+    { data: BodyType<ExcelReadByUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof excelReadByUrl>>,
+  TError,
+  { data: BodyType<ExcelReadByUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["excelReadByUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof excelReadByUrl>>,
+    { data: BodyType<ExcelReadByUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return excelReadByUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExcelReadByUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof excelReadByUrl>>
+>;
+export type ExcelReadByUrlMutationBody = BodyType<ExcelReadByUrlRequest>;
+export type ExcelReadByUrlMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Read an Excel file by OneDrive share URL
+ */
+export const useExcelReadByUrl = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelReadByUrl>>,
+    TError,
+    { data: BodyType<ExcelReadByUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof excelReadByUrl>>,
+  TError,
+  { data: BodyType<ExcelReadByUrlRequest> },
+  TContext
+> => {
+  return useMutation(getExcelReadByUrlMutationOptions(options));
+};
+
+/**
+ * @summary Write budget weeks to an Excel file
+ */
+export const getExcelWriteUrl = (id: string) => {
+  return `/api/excel/${id}/write`;
+};
+
+export const excelWrite = async (
+  id: string,
+  excelWriteRequest: ExcelWriteRequest,
+  options?: RequestInit,
+): Promise<ExcelWriteResponse> => {
+  return customFetch<ExcelWriteResponse>(getExcelWriteUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(excelWriteRequest),
+  });
+};
+
+export const getExcelWriteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelWrite>>,
+    TError,
+    { id: string; data: BodyType<ExcelWriteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof excelWrite>>,
+  TError,
+  { id: string; data: BodyType<ExcelWriteRequest> },
+  TContext
+> => {
+  const mutationKey = ["excelWrite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof excelWrite>>,
+    { id: string; data: BodyType<ExcelWriteRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return excelWrite(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExcelWriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof excelWrite>>
+>;
+export type ExcelWriteMutationBody = BodyType<ExcelWriteRequest>;
+export type ExcelWriteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Write budget weeks to an Excel file
+ */
+export const useExcelWrite = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelWrite>>,
+    TError,
+    { id: string; data: BodyType<ExcelWriteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof excelWrite>>,
+  TError,
+  { id: string; data: BodyType<ExcelWriteRequest> },
+  TContext
+> => {
+  return useMutation(getExcelWriteMutationOptions(options));
 };

@@ -155,14 +155,24 @@ export interface SheetListResponse {
   sheets: SheetFile[];
 }
 
+export type ExistingWeekItemsItem = { [key: string]: unknown };
+
+export interface ExistingWeek {
+  label: string;
+  startCol: number;
+  openingBalance: number;
+  paycheck: number;
+  items: ExistingWeekItemsItem[];
+  remaining: number;
+}
+
 export interface SheetReadResponse {
   bills: Bill[];
-  openingBalance?: number;
-  paycheckAmount?: number;
-  weekCount?: number;
-  startDate?: string | null;
-  endDate?: string | null;
-  sheetTitle?: string;
+  existingWeeks: ExistingWeek[];
+  nextWeekStartCol: number;
+  lastRemaining: number;
+  sheetTitle: string;
+  spreadsheetId?: string;
 }
 
 export interface SheetReadByUrlRequest {
@@ -173,11 +183,53 @@ export interface SheetWriteRequest {
   weeks: WeeklyBudget[];
   billsSummary?: Bill[];
   sheetTitle?: string;
+  startCol: number;
+  includeRemainingAcct?: boolean;
 }
 
 export interface SheetWriteResponse {
   success: boolean;
   sheetTitle?: string;
+}
+
+export interface MicrosoftAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+}
+
+export interface ExcelFile {
+  id: string;
+  name: string;
+  modifiedTime?: string;
+}
+
+export interface ExcelListResponse {
+  files: ExcelFile[];
+}
+
+export interface ExcelReadResponse {
+  bills: Bill[];
+  existingWeeks: ExistingWeek[];
+  nextWeekStartCol: number;
+  lastRemaining: number;
+  sheetTitle: string;
+  fileId?: string;
+}
+
+export interface ExcelReadByUrlRequest {
+  url: string;
+}
+
+export interface ExcelWriteRequest {
+  weeks: WeeklyBudget[];
+  startCol: number;
+  includeRemainingAcct: boolean;
+  sheetTitle?: string;
+}
+
+export interface ExcelWriteResponse {
+  ok: boolean;
+  message?: string;
 }
 
 export type AuthLogout200 = {
@@ -213,5 +265,17 @@ export type GetGoogleAuthUrl200 = {
 };
 
 export type GoogleDisconnect200 = {
+  ok: boolean;
+};
+
+export type GetMicrosoftAuthUrlParams = {
+  redirect?: string;
+};
+
+export type GetMicrosoftAuthUrl200 = {
+  url: string;
+};
+
+export type MicrosoftDisconnect200 = {
   ok: boolean;
 };
