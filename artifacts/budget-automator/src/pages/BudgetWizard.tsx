@@ -215,6 +215,7 @@ export function BudgetWizard() {
         }
         if (data.user) {
           queryClient.setQueryData(getAuthMeQueryKey(), { user: data.user });
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
         }
       })
       .catch(() => {

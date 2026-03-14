@@ -1,5 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import { google } from "googleapis";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 function saveSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -95,8 +97,19 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/auth/google/disconnect", (req, res) => {
+router.post("/auth/google/disconnect", async (req, res): Promise<void> => {
   (req as any).session.googleTokens = undefined;
+
+  const user = (req as any).user;
+  if (user?.id) {
+    await db.update(usersTable).set({
+      googleAccessToken: null,
+      googleRefreshToken: null,
+      googleTokenExpiry: null,
+      updatedAt: new Date(),
+    }).where(eq(usersTable.id, user.id));
+  }
+
   res.json({ ok: true });
 });
 
