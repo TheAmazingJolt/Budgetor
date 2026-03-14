@@ -83,7 +83,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Bill, SavedBudget } from "@workspace/api-client-react";
 
-type InputMode = "upload" | "scratch" | "google" | "excel";
+type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
 
 interface SavedBudgetSettings {
   openingBalance?: number;
@@ -95,6 +95,7 @@ interface SavedBudgetSettings {
   includeBillsSummary?: boolean;
   blankMode?: boolean;
   inputMode?: InputMode;
+  existingWeeks?: any[];
 }
 
 const STEPS = ["Upload", "Configure", "Download"];
@@ -166,6 +167,12 @@ export function BudgetWizard() {
     reset,
   } = useBudgetStore();
 
+  const [activeCloudBudgetId, setActiveCloudBudgetId] = useState<string | null>(null);
+  const [activeCloudBudgetName, setActiveCloudBudgetName] = useState<string | null>(null);
+  const [cloudExistingWeeks, setCloudExistingWeeks] = useState<any[]>([]);
+  const [isSavingToCloud, setIsSavingToCloud] = useState(false);
+  const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
+
   const [saveBudgetName, setSaveBudgetName] = useState("");
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
@@ -225,6 +232,7 @@ export function BudgetWizard() {
   const logoutMutation = useAuthLogout();
   const saveBudgetMutation = useSavedBudgetCreate();
   const renameBudgetMutation = useSavedBudgetUpdate();
+  const cloudSaveMutation = useSavedBudgetUpdate();
   const deleteBudgetMutation = useSavedBudgetDelete();
 
   const savedBudgetsQuery = useSavedBudgetList({
@@ -573,6 +581,13 @@ export function BudgetWizard() {
       }
     };
 
+    const getExistingWeeks = (): any[] => {
+      if (inputMode === "google") return sheetReadQuery.data?.existingWeeks ?? [];
+      if (inputMode === "excel") return excelReadQuery.data?.existingWeeks ?? [];
+      if (inputMode === "cloud") return cloudExistingWeeks;
+      return [];
+    };
+
     ensureSignedIn(() => {
       saveBudgetMutation.mutate(
         {
@@ -589,6 +604,7 @@ export function BudgetWizard() {
               includeBillsSummary,
               blankMode,
               inputMode,
+              existingWeeks: getExistingWeeks(),
             },
           },
         },
@@ -625,8 +641,20 @@ export function BudgetWizard() {
     if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
-    if (s?.inputMode) setInputMode(s.inputMode);
-    else setInputMode("scratch");
+    setInputMode("cloud");
+    setActiveCloudBudgetId(budget.id);
+    setActiveCloudBudgetName(budget.name);
+    const restoredWeeks = Array.isArray(s?.existingWeeks) ? s.existingWeeks : [];
+    setCloudExistingWeeks(restoredWeeks);
+    setCloudSaveSuccess(false);
+    if (restoredWeeks.length > 0) {
+      const lastWeek = restoredWeeks.at(-1);
+      if (lastWeek?.remaining !== undefined) {
+        setOpeningBalance(lastWeek.remaining);
+      }
+      const nextStart = lastWeek?.label ? nextStartAfterLabel(lastWeek.label) : null;
+      if (nextStart) setStartDate(nextStart);
+    }
     setStep(1);
     toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${b.length} bills.` });
   };
@@ -658,6 +686,63 @@ export function BudgetWizard() {
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Unknown error";
           toast({ title: "Failed to rename", description: message, variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleSaveToCloud = async () => {
+    if (!activeCloudBudgetId || !generatedWeek) return;
+    setIsSavingToCloud(true);
+    setCloudSaveSuccess(false);
+
+    const newWeeks = generatedWeek.weeks.map((w) => ({
+      label: w.weekLabel,
+      remaining: w.closingBalance,
+    }));
+    const existingLabels = new Set(cloudExistingWeeks.map((w: any) => w.label));
+    const deduped = newWeeks.filter((w) => !existingLabels.has(w.label));
+    const updatedExistingWeeks = [...cloudExistingWeeks, ...deduped];
+
+    cloudSaveMutation.mutate(
+      {
+        id: activeCloudBudgetId,
+        data: {
+          bills,
+          settings: {
+            openingBalance,
+            paycheckAmount,
+            weekCount,
+            newWeekStartDate,
+            newWeekEndDate,
+            zeroOpeningBalance,
+            includeBillsSummary,
+            blankMode,
+            inputMode: "cloud",
+            existingWeeks: updatedExistingWeeks,
+          },
+        },
+      },
+      {
+        onSuccess: () => {
+          setCloudExistingWeeks(updatedExistingWeeks);
+          setCloudSaveSuccess(true);
+          queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+          toast({
+            title: "Saved to Cloud",
+            description: `"${activeCloudBudgetName}" updated with ${deduped.length} new week(s).`,
+          });
+        },
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          toast({
+            title: "Failed to save to cloud",
+            description: message,
+            variant: "destructive",
+          });
+        },
+        onSettled: () => {
+          setIsSavingToCloud(false);
         },
       }
     );
@@ -736,12 +821,13 @@ export function BudgetWizard() {
         onSuccess: (data) => {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
+          setCloudSaveSuccess(false);
 
           if (inputMode === "google" || inputMode === "excel") {
             setGeneratedBlob(null);
           } else {
             let blob: Blob;
-            if (blankMode || inputMode === "scratch") {
+            if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
               const rawBills = includeBillsSummary
                 ? (parsedWorkbook?.rawBillsSection ?? null)
                 : null;
@@ -805,7 +891,7 @@ export function BudgetWizard() {
   const handleDownload = () => {
     if (!generatedBlob) return;
     let filename: string;
-    if (blankMode || inputMode === "scratch") {
+    if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
       const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
       filename = `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
     } else {
@@ -1189,6 +1275,10 @@ export function BudgetWizard() {
                               <p className="font-semibold text-sm text-foreground">{budget.name}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
+                                {(() => {
+                                  const ewCount = ((budget.settings as any)?.existingWeeks?.length ?? 0);
+                                  return ewCount > 0 ? ` \u00b7 ${ewCount} saved weeks` : "";
+                                })()}
                                 {" \u00b7 "}
                                 Saved {new Date(budget.updatedAt).toLocaleDateString()}
                               </p>
@@ -1271,6 +1361,8 @@ export function BudgetWizard() {
                       ? `Editing "${selectedSheetName}". Your bills are pre-loaded — edit as needed.`
                       : inputMode === "excel"
                       ? `Editing "${selectedExcelFileName}". Your bills are pre-loaded — edit as needed.`
+                      : inputMode === "cloud"
+                      ? `Editing "${activeCloudBudgetName}". Your bills are pre-loaded — edit as needed.`
                       : "Set the week's dates, opening balance, and paycheck. Your bills are pre-loaded from the spreadsheet — edit as needed."}
                   </p>
                 </div>
@@ -1278,7 +1370,7 @@ export function BudgetWizard() {
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setInputMode("upload"); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setInputMode("upload"); setStep(0); }}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -1337,6 +1429,26 @@ export function BudgetWizard() {
                       <span className="font-semibold">
                         ${((excelReadQuery.data.existingWeeks.at(-1) as any)?.remaining ?? 0).toFixed(2)}
                       </span>
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {inputMode === "cloud" && cloudExistingWeeks.length > 0 && (
+                <Card className="bg-emerald-50/60 border-emerald-200/60">
+                  <CardContent className="p-5">
+                    <p className="text-sm font-semibold text-emerald-800 mb-1">
+                      Last budget week (from Cloud)
+                    </p>
+                    <p className="text-lg font-bold text-emerald-900">
+                      {cloudExistingWeeks.at(-1)?.label}
+                    </p>
+                    <p className="text-sm text-emerald-700 mt-1">
+                      Ending balance:{" "}
+                      <span className="font-semibold">
+                        ${(cloudExistingWeeks.at(-1)?.remaining ?? 0).toFixed(2)}
+                      </span>
+                      {" "}— pre-filled as your opening balance below.
                     </p>
                   </CardContent>
                 </Card>
@@ -1662,6 +1774,8 @@ export function BudgetWizard() {
                     ? "Write them to your Google Sheet or download as a file."
                     : inputMode === "excel"
                     ? "Write them to your Excel Online file or download as a file."
+                    : inputMode === "cloud"
+                    ? "Save them back to your cloud budget or download as a file."
                     : "Download the updated file below."}
                 </p>
               </div>
@@ -1808,13 +1922,34 @@ export function BudgetWizard() {
                   </Button>
                 )}
 
+                {inputMode === "cloud" && activeCloudBudgetId && (
+                  <Button
+                    size="lg"
+                    onClick={handleSaveToCloud}
+                    disabled={isSavingToCloud || cloudSaveSuccess}
+                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                      cloudSaveSuccess
+                        ? "bg-emerald-600"
+                        : "bg-gradient-to-r from-primary to-emerald-600 shadow-primary/25 hover:shadow-primary/30"
+                    }`}
+                  >
+                    {isSavingToCloud ? (
+                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to Cloud…</>
+                    ) : cloudSaveSuccess ? (
+                      <><Check className="w-5 h-5 mr-2" /> Saved to Cloud</>
+                    ) : (
+                      <><CloudUpload className="w-5 h-5 mr-2" /> Save to Cloud</>
+                    )}
+                  </Button>
+                )}
+
                 {(inputMode !== "google" && inputMode !== "excel" || generatedBlob) && (
                   <Button
                     size="lg"
                     onClick={handleDownload}
                     disabled={!generatedBlob && inputMode !== "google" && inputMode !== "excel"}
                     className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
-                      inputMode === "google" || inputMode === "excel" ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
+                      inputMode === "google" || inputMode === "excel" || inputMode === "cloud" ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
                     }`}
                   >
                     <Download className="w-5 h-5 mr-2" />
