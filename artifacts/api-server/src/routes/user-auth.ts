@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import crypto from "crypto";
 import { db } from "@workspace/db";
 import { usersTable, type User } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -10,6 +11,7 @@ const router: IRouter = Router();
 declare module "express-session" {
   interface SessionData {
     userId?: string;
+    oauthState?: string;
     googleTokens?: {
       access_token?: string | null;
       refresh_token?: string | null;
@@ -184,17 +186,34 @@ async function upsertOrUpgradeUser(
   return newUser.id;
 }
 
-function parseRedirectState(stateParam: string | undefined): string {
-  if (!stateParam) return "/";
+function generateOAuthState(req: Request, redirect?: string): string {
+  const nonce = crypto.randomBytes(32).toString("hex");
+  req.session.oauthState = nonce;
+  const payload: Record<string, string> = { nonce };
+  if (redirect) payload.redirect = redirect;
+  return Buffer.from(JSON.stringify(payload)).toString("base64");
+}
+
+function verifyAndConsumeOAuthState(req: Request, stateParam: string | undefined): { valid: boolean; redirect: string } {
+  const storedNonce = req.session.oauthState;
+  if (!stateParam || !storedNonce) {
+    return { valid: false, redirect: "/" };
+  }
+
+  req.session.oauthState = undefined;
+
   try {
     const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8")) as Record<string, unknown>;
-    if (typeof parsed.redirect === "string" && isAllowedRedirect(parsed.redirect)) {
-      return parsed.redirect;
+    if (typeof parsed.nonce !== "string" || parsed.nonce !== storedNonce) {
+      return { valid: false, redirect: "/" };
     }
+    const redirect = typeof parsed.redirect === "string" && isAllowedRedirect(parsed.redirect)
+      ? parsed.redirect
+      : "/";
+    return { valid: true, redirect };
   } catch {
-    // invalid state
+    return { valid: false, redirect: "/" };
   }
-  return "/";
 }
 
 router.get("/auth/login/google", (req: Request, res: Response) => {
@@ -205,7 +224,7 @@ router.get("/auth/login/google", (req: Request, res: Response) => {
   }
 
   const frontendUrl = req.query["redirect"] as string | undefined;
-  const state = frontendUrl ? Buffer.from(JSON.stringify({ redirect: frontendUrl, type: "login" })).toString("base64") : "";
+  const state = generateOAuthState(req, frontendUrl);
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -224,6 +243,13 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
   const oauth2Client = getAccountOAuth2Client();
   if (!oauth2Client) {
     res.status(500).json({ error: "Google account login not configured" });
+    return;
+  }
+
+  const stateParam = req.query["state"] as string | undefined;
+  const { valid, redirect: redirectUrl } = verifyAndConsumeOAuthState(req, stateParam);
+  if (!valid) {
+    res.status(403).json({ error: "Invalid or expired OAuth state. Please try logging in again." });
     return;
   }
 
@@ -252,7 +278,6 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
     });
 
     req.session.userId = userId;
-    const redirectUrl = parseRedirectState(req.query["state"] as string | undefined);
     res.redirect(redirectUrl);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -300,9 +325,7 @@ router.get("/auth/login/apple", (req: Request, res: Response) => {
   const redirectUri = process.env["APPLE_REDIRECT_URI"]!;
 
   const frontendRedirect = req.query["redirect"] as string | undefined;
-  const state = frontendRedirect
-    ? Buffer.from(JSON.stringify({ redirect: frontendRedirect, type: "login" })).toString("base64")
-    : "";
+  const state = generateOAuthState(req, frontendRedirect);
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -319,6 +342,12 @@ router.get("/auth/login/apple", (req: Request, res: Response) => {
 router.post("/auth/login/apple/callback", async (req: Request, res: Response): Promise<void> => {
   const { id_token, code, state } = req.body as { id_token?: string; code?: string; state?: string };
   const clientId = process.env["APPLE_CLIENT_ID"];
+
+  const { valid, redirect: redirectUrl } = verifyAndConsumeOAuthState(req, state);
+  if (!valid) {
+    res.status(403).json({ error: "Invalid or expired OAuth state. Please try logging in again." });
+    return;
+  }
 
   if (!id_token) {
     res.status(400).json({ error: "Missing id_token from Apple" });
@@ -369,7 +398,6 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     });
 
     req.session.userId = userId;
-    const redirectUrl = parseRedirectState(state);
     res.redirect(redirectUrl);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
