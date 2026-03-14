@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import router from "./routes";
 
 const app: Express = express();
@@ -21,7 +22,18 @@ if (!sessionSecret && process.env["NODE_ENV"] === "production") {
   throw new Error("SESSION_SECRET must be set in production.");
 }
 
+const PgSession = connectPgSimple(session);
+
+const sessionStore = process.env["DATABASE_URL"]
+  ? new PgSession({
+      conString: process.env["DATABASE_URL"],
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    })
+  : undefined;
+
 app.use(session({
+  store: sessionStore,
   secret: sessionSecret || "budget-automator-dev-secret",
   resave: false,
   saveUninitialized: false,
