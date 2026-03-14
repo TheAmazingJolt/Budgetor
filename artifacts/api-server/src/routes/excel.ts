@@ -1,4 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
+import XLSX from "xlsx";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { refreshMicrosoftToken } from "./microsoft-auth.js";
 
 const router: IRouter = Router();
@@ -54,12 +57,21 @@ async function graphPatch(accessToken: string, path: string, body: unknown): Pro
 }
 
 async function getAccessToken(req: Request): Promise<string | null> {
-  return refreshMicrosoftToken((req as any).session);
+  return refreshMicrosoftToken(req as any);
 }
 
 function handleGraphError(err: any, req: Request, res: any, action: string) {
   if (err.status === 401) {
     (req as any).session.microsoftTokens = undefined;
+    const user = (req as any).user;
+    if (user?.id) {
+      db.update(usersTable).set({
+        microsoftAccessToken: null,
+        microsoftRefreshToken: null,
+        microsoftTokenExpiry: null,
+        updatedAt: new Date(),
+      }).where(eq(usersTable.id, user.id)).catch(() => {});
+    }
     res.status(401).json({ error: "Microsoft session expired. Please reconnect." });
     return;
   }
@@ -328,6 +340,135 @@ interface ExcelWriteRequest {
   includeRemainingAcct: boolean;
   sheetTitle?: string;
 }
+
+interface ExcelCreateAndWriteRequest {
+  title: string;
+  weeks: ExcelWriteRequest["weeks"];
+  includeRemainingAcct?: boolean;
+}
+
+router.post("/excel/create-and-write", async (req, res): Promise<void> => {
+  const token = await getAccessToken(req);
+  if (!token) {
+    res.status(401).json({ error: "Not authenticated with Microsoft" });
+    return;
+  }
+
+  const body = req.body as ExcelCreateAndWriteRequest;
+  const { title, weeks, includeRemainingAcct } = body;
+
+  if (!title || typeof title !== "string") {
+    res.status(400).json({ error: "Missing or invalid 'title' field" });
+    return;
+  }
+
+  if (!weeks?.length) {
+    res.status(400).json({ error: "No weeks to write" });
+    return;
+  }
+
+  try {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([[""]]);
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    const xlsxBuf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+
+    const fileName = `${title}.xlsx`;
+    const createRes = await fetch(`${GRAPH}/me/drive/root:/${fileName}:/content?@microsoft.graph.conflictBehavior=rename`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      body: xlsxBuf,
+    });
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      throw Object.assign(new Error(`Failed to create file: ${errText}`), { status: createRes.status });
+    }
+    const fileData = await createRes.json() as any;
+    const fileId = fileData.id as string;
+    const webUrl = (fileData.webUrl as string) ?? "";
+
+    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
+    const sheets: any[] = sheetsData.value ?? [];
+    const targetSheet = sheets[0];
+    if (!targetSheet) {
+      res.status(500).json({ error: "Workbook has no worksheets" });
+      return;
+    }
+
+    const sheetName = encodeURIComponent(targetSheet.name);
+    const startCol = 0;
+    const maxBills = Math.max(...weeks.map((w) => w.bills.length));
+    const useRemainingAcct = includeRemainingAcct ?? false;
+    const totalRows = 1 + (useRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+    const totalCols = startCol + weeks.length * 2;
+
+    const grid: (string | number)[][] = Array.from({ length: totalRows }, () =>
+      Array(totalCols).fill("")
+    );
+
+    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+      const week = weeks[wIdx];
+      const lc = startCol + wIdx * 2;
+      const vc = lc + 1;
+      let row = 0;
+
+      grid[row][lc] = week.weekLabel;
+      row++;
+
+      const sumStartRow = row;
+
+      if (useRemainingAcct) {
+        grid[row][lc] = "Remaining Acct";
+        grid[row][vc] = week.openingBalance;
+        row++;
+      }
+
+      grid[row][lc] = "Paycheck";
+      grid[row][vc] = week.paycheck;
+      row++;
+
+      for (const bill of week.bills) {
+        grid[row][lc] = bill.name;
+        grid[row][vc] = bill.amount;
+        row++;
+      }
+
+      while (row < totalRows - 1) {
+        grid[row][lc] = "";
+        grid[row][vc] = "";
+        row++;
+      }
+
+      const vcLetter = colLetter(vc);
+      grid[totalRows - 1][lc] = "Remaining";
+      grid[totalRows - 1][vc] = `=SUM(${vcLetter}${sumStartRow + 1}:${vcLetter}${totalRows - 1})`;
+    }
+
+    const startAddr = `${colLetter(startCol)}1`;
+    const endAddr = `${colLetter(totalCols - 1)}${totalRows}`;
+    const rangeAddr = `${startAddr}:${endAddr}`;
+
+    await graphPatch(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${rangeAddr}')`,
+      { values: grid }
+    );
+
+    const boldRowRange = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
+    await graphPost(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
+      { bold: true, name: "Arial", size: 10 }
+    );
+
+    res.json({ fileId, webUrl });
+  } catch (err: any) {
+    handleGraphError(err, req, res, "create Excel file");
+  }
+});
 
 router.post("/excel/:id/write", async (req, res): Promise<void> => {
   const token = await getAccessToken(req);

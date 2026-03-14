@@ -62,6 +62,7 @@ import {
   getSavedBudgetListQueryKey,
   getMicrosoftAuthStatusQueryKey,
   useSheetCreateAndWrite,
+  useExcelCreateAndWrite,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -187,11 +188,16 @@ export function BudgetWizard() {
   const sheetCreateAndWriteMutation = useSheetCreateAndWrite();
   const sheetReadByUrlMutation = useSheetReadByUrl();
   const excelWriteMutation = useExcelWrite();
+  const excelCreateAndWriteMutation = useExcelCreateAndWrite();
   const excelReadByUrlMutation = useExcelReadByUrl();
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
   const [newSheetUrl, setNewSheetUrl] = useState<string | null>(null);
+
+  const [isSavingToNewExcel, setIsSavingToNewExcel] = useState(false);
+  const [newExcelSaveSuccess, setNewExcelSaveSuccess] = useState(false);
+  const [newExcelUrl, setNewExcelUrl] = useState<string | null>(null);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } as any });
@@ -832,6 +838,8 @@ export function BudgetWizard() {
 
           setNewSheetSaveSuccess(false);
           setNewSheetUrl(null);
+          setNewExcelSaveSuccess(false);
+          setNewExcelUrl(null);
 
           if (inputMode === "google" || inputMode === "excel") {
             setGeneratedBlob(null);
@@ -930,6 +938,41 @@ export function BudgetWizard() {
       });
     } finally {
       setIsSavingToNewSheet(false);
+    }
+  };
+
+  const handleSaveToNewExcelFile = async () => {
+    if (!generatedWeek) return;
+    setIsSavingToNewExcel(true);
+    setNewExcelSaveSuccess(false);
+    setNewExcelUrl(null);
+
+    try {
+      const startLabel = format(parseISO(newWeekStartDate), "MMM d");
+      const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
+      const title = `Budget ${startLabel} – ${endLabel}`;
+
+      const result = await excelCreateAndWriteMutation.mutateAsync({
+        data: {
+          title,
+          weeks: generatedWeek.weeks,
+          includeRemainingAcct: !zeroOpeningBalance,
+        },
+      });
+      setNewExcelSaveSuccess(true);
+      setNewExcelUrl(result.webUrl);
+      toast({
+        title: "Saved to OneDrive",
+        description: `Created "${title}" in your OneDrive.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to save to OneDrive",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingToNewExcel(false);
     }
   };
 
@@ -2016,6 +2059,39 @@ export function BudgetWizard() {
                         className="text-sm text-blue-600 hover:text-blue-700 underline text-center"
                       >
                         Open in Google Sheets →
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {inputMode !== "excel" && microsoftAuthenticated && (
+                  <div className="flex flex-col gap-2 flex-1">
+                    <Button
+                      size="lg"
+                      onClick={handleSaveToNewExcelFile}
+                      disabled={isSavingToNewExcel || newExcelSaveSuccess}
+                      className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                        newExcelSaveSuccess
+                          ? "bg-emerald-600"
+                          : "bg-gradient-to-r from-teal-600 to-teal-500 shadow-teal-500/25 hover:shadow-teal-500/30"
+                      }`}
+                    >
+                      {isSavingToNewExcel ? (
+                        <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to OneDrive…</>
+                      ) : newExcelSaveSuccess ? (
+                        <><Check className="w-5 h-5 mr-2" /> Saved to OneDrive</>
+                      ) : (
+                        <><FilePlus2 className="w-5 h-5 mr-2" /> Save to new Excel file</>
+                      )}
+                    </Button>
+                    {newExcelSaveSuccess && newExcelUrl && (
+                      <a
+                        href={newExcelUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-teal-600 hover:text-teal-700 underline text-center"
+                      >
+                        Open in OneDrive →
                       </a>
                     )}
                   </div>

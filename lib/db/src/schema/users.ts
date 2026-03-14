@@ -11,6 +11,9 @@ export const usersTable = pgTable("users", {
   googleAccessToken: text("google_access_token"),
   googleRefreshToken: text("google_refresh_token"),
   googleTokenExpiry: bigint("google_token_expiry", { mode: "number" }),
+  microsoftAccessToken: text("microsoft_access_token"),
+  microsoftRefreshToken: text("microsoft_refresh_token"),
+  microsoftTokenExpiry: bigint("microsoft_token_expiry", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

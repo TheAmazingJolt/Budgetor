@@ -1,7 +1,15 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import crypto from "crypto";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    (req as any).session.save((err: any) => (err ? reject(err) : resolve()));
+  });
+}
 
 const AZURE_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 const AZURE_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
@@ -32,8 +40,9 @@ router.get("/auth/microsoft/status", (req, res) => {
     process.env["MICROSOFT_REDIRECT_URI"]
   );
 
+  const user = (req as any).user;
   const session = (req as any).session;
-  const authenticated = !!(session?.microsoftTokens?.access_token);
+  const authenticated = !!(user?.microsoftAccessToken || session?.microsoftTokens?.access_token);
 
   res.json({ configured, authenticated });
 });
@@ -101,12 +110,25 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
     }
 
     const tokens = await response.json() as any;
+    const expiresAt = Date.now() + (tokens.expires_in ?? 3600) * 1000;
     (req as any).session.microsoftTokens = {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
-      expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+      expires_at: expiresAt,
     };
     (req as any).session.microsoftOAuthNonce = undefined;
+
+    await saveSession(req);
+
+    const user = (req as any).user;
+    if (user?.id && tokens.access_token) {
+      await db.update(usersTable).set({
+        microsoftAccessToken: tokens.access_token,
+        microsoftRefreshToken: tokens.refresh_token ?? null,
+        microsoftTokenExpiry: expiresAt,
+        updatedAt: new Date(),
+      }).where(eq(usersTable.id, user.id));
+    }
 
     const state = req.query["state"] as string | undefined;
     let redirectUrl = "/";
@@ -123,12 +145,68 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/auth/microsoft/disconnect", (req, res) => {
+router.post("/auth/microsoft/disconnect", async (req, res): Promise<void> => {
   (req as any).session.microsoftTokens = undefined;
+
+  const user = (req as any).user;
+  if (user?.id) {
+    await db.update(usersTable).set({
+      microsoftAccessToken: null,
+      microsoftRefreshToken: null,
+      microsoftTokenExpiry: null,
+      updatedAt: new Date(),
+    }).where(eq(usersTable.id, user.id));
+  }
+
   res.json({ ok: true });
 });
 
-export async function refreshMicrosoftToken(session: any): Promise<string | null> {
+export async function refreshMicrosoftToken(req: any): Promise<string | null> {
+  const user = req.user;
+  if (user?.microsoftAccessToken) {
+    const expiry = user.microsoftTokenExpiry;
+    if (expiry && Date.now() < expiry - 60000) {
+      return user.microsoftAccessToken;
+    }
+
+    if (user.microsoftRefreshToken) {
+      const config = getMicrosoftConfig();
+      if (config) {
+        try {
+          const body = new URLSearchParams({
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+            refresh_token: user.microsoftRefreshToken,
+            grant_type: "refresh_token",
+            scope: SCOPES.join(" "),
+          });
+
+          const response = await fetch(AZURE_TOKEN_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: body.toString(),
+          });
+
+          if (response.ok) {
+            const newTokens = await response.json() as any;
+            const newExpiry = Date.now() + (newTokens.expires_in ?? 3600) * 1000;
+
+            await db.update(usersTable).set({
+              microsoftAccessToken: newTokens.access_token,
+              microsoftRefreshToken: newTokens.refresh_token ?? user.microsoftRefreshToken,
+              microsoftTokenExpiry: newExpiry,
+              updatedAt: new Date(),
+            }).where(eq(usersTable.id, user.id));
+
+            return newTokens.access_token;
+          }
+        } catch {
+        }
+      }
+    }
+  }
+
+  const session = req.session;
   const tokens = session?.microsoftTokens;
   if (!tokens) return null;
 
@@ -159,11 +237,23 @@ export async function refreshMicrosoftToken(session: any): Promise<string | null
     if (!response.ok) return null;
 
     const newTokens = await response.json() as any;
+    const newExpiry = Date.now() + (newTokens.expires_in ?? 3600) * 1000;
     session.microsoftTokens = {
       access_token: newTokens.access_token,
       refresh_token: newTokens.refresh_token ?? tokens.refresh_token,
-      expires_at: Date.now() + (newTokens.expires_in ?? 3600) * 1000,
+      expires_at: newExpiry,
     };
+
+    if (user?.id) {
+      db.update(usersTable).set({
+        microsoftAccessToken: newTokens.access_token,
+        microsoftRefreshToken: newTokens.refresh_token ?? tokens.refresh_token,
+        microsoftTokenExpiry: newExpiry,
+        updatedAt: new Date(),
+      }).where(eq(usersTable.id, user.id)).catch((err) => {
+        console.error("Failed to persist refreshed Microsoft tokens:", err);
+      });
+    }
 
     return newTokens.access_token;
   } catch {

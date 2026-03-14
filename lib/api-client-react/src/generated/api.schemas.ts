@@ -243,6 +243,17 @@ export interface ExcelWriteResponse {
   message?: string;
 }
 
+export interface ExcelCreateAndWriteRequest {
+  title: string;
+  weeks: WeeklyBudget[];
+  includeRemainingAcct?: boolean;
+}
+
+export interface ExcelCreateAndWriteResponse {
+  fileId: string;
+  webUrl: string;
+}
+
 export type AuthLogout200 = {
   ok: boolean;
 };

@@ -579,6 +579,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /excel/create-and-write:
+    post:
+      operationId: excelCreateAndWrite
+      tags: [excel]
+      summary: Create a new Excel workbook in OneDrive and write budget data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExcelCreateAndWriteRequest"
+      responses:
+        "200":
+          description: Created workbook info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExcelCreateAndWriteResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1080,3 +1099,29 @@ components:
           type: string
       required:
         - ok
+
+    ExcelCreateAndWriteRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklyBudget"
+        includeRemainingAcct:
+          type: boolean
+      required:
+        - title
+        - weeks
+
+    ExcelCreateAndWriteResponse:
+      type: object
+      properties:
+        fileId:
+          type: string
+        webUrl:
+          type: string
+      required:
+        - fileId
+        - webUrl

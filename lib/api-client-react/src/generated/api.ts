@@ -28,6 +28,8 @@ import type {
   BudgetRequest,
   BudgetResponse,
   ErrorResponse,
+  ExcelCreateAndWriteRequest,
+  ExcelCreateAndWriteResponse,
   ExcelListResponse,
   ExcelReadByUrlRequest,
   ExcelReadResponse,
@@ -2302,4 +2304,91 @@ export const useExcelWrite = <
   TContext
 > => {
   return useMutation(getExcelWriteMutationOptions(options));
+};
+
+/**
+ * @summary Create a new Excel workbook in OneDrive and write budget data
+ */
+export const getExcelCreateAndWriteUrl = () => {
+  return `/api/excel/create-and-write`;
+};
+
+export const excelCreateAndWrite = async (
+  excelCreateAndWriteRequest: ExcelCreateAndWriteRequest,
+  options?: RequestInit,
+): Promise<ExcelCreateAndWriteResponse> => {
+  return customFetch<ExcelCreateAndWriteResponse>(getExcelCreateAndWriteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(excelCreateAndWriteRequest),
+  });
+};
+
+export const getExcelCreateAndWriteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelCreateAndWrite>>,
+    TError,
+    { data: BodyType<ExcelCreateAndWriteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof excelCreateAndWrite>>,
+  TError,
+  { data: BodyType<ExcelCreateAndWriteRequest> },
+  TContext
+> => {
+  const mutationKey = ["excelCreateAndWrite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof excelCreateAndWrite>>,
+    { data: BodyType<ExcelCreateAndWriteRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return excelCreateAndWrite(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExcelCreateAndWriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof excelCreateAndWrite>>
+>;
+export type ExcelCreateAndWriteMutationBody =
+  BodyType<ExcelCreateAndWriteRequest>;
+export type ExcelCreateAndWriteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new Excel workbook in OneDrive and write budget data
+ */
+export const useExcelCreateAndWrite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelCreateAndWrite>>,
+    TError,
+    { data: BodyType<ExcelCreateAndWriteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof excelCreateAndWrite>>,
+  TError,
+  { data: BodyType<ExcelCreateAndWriteRequest> },
+  TContext
+> => {
+  return useMutation(getExcelCreateAndWriteMutationOptions(options));
 };

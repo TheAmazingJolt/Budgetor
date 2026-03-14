@@ -8,6 +8,13 @@
       "when": 1773500038153,
       "tag": "0000_familiar_triton",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773531236968,
+      "tag": "0001_deep_talisman",
+      "breakpoints": true
     }
   ]
 }

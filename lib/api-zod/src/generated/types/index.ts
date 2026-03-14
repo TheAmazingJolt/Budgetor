@@ -20,6 +20,8 @@ export * from "./billCategory";
 export * from "./budgetRequest";
 export * from "./budgetResponse";
 export * from "./errorResponse";
+export * from "./excelCreateAndWriteRequest";
+export * from "./excelCreateAndWriteResponse";
 export * from "./excelFile";
 export * from "./excelListResponse";
 export * from "./excelReadByUrlRequest";
