@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "MmtcgSxvH5E26Mx845biO"
+uri = "file://docs/setup-guide.md"
+type = "text"
+title = "Budget Automator — Integration Setup Guide"
