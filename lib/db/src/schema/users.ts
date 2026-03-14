@@ -1,6 +1,5 @@
 import { pgTable, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { createInsertSchema } from "drizzle-zod";
 
 export const usersTable = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -16,8 +15,6 @@ export const usersTable = pgTable("users", {
     .on(table.provider, table.providerId)
     .where(sql`provider_id IS NOT NULL`),
 ]);
-
-export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertUser = {
   name: string;

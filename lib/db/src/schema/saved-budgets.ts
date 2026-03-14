@@ -1,5 +1,4 @@
 import { pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { usersTable } from "./users";
 
 export const savedBudgetsTable = pgTable("saved_budgets", {
@@ -11,8 +10,6 @@ export const savedBudgetsTable = pgTable("saved_budgets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
-
-export const insertSavedBudgetSchema = createInsertSchema(savedBudgetsTable).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertSavedBudget = {
   userId: string;
