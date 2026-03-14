@@ -1,5 +1,11 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { google } from "googleapis";
+
+function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.save((err) => (err ? reject(err) : resolve()));
+  });
+}
 
 const router: IRouter = Router();
 
@@ -72,6 +78,8 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
   try {
     const { tokens } = await oauth2Client.getToken(code);
     (req as any).session.googleTokens = tokens;
+
+    await saveSession(req);
 
     const state = req.query["state"] as string | undefined;
     let redirectUrl = "/";
