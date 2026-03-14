@@ -184,6 +184,33 @@ export function BudgetWizard() {
   const isSignedIn = !!currentUser;
   const isGuest = currentUser?.provider === "guest";
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authCode = params.get("auth_code");
+    if (!authCode) return;
+    params.delete("auth_code");
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+    window.history.replaceState({}, "", newUrl);
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined ?? "").replace(/\/+$/, "");
+    fetch(`${apiBase}/api/auth/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code: authCode }),
+    })
+      .then((r) => r.json())
+      .then((data: { user?: unknown }) => {
+        if (data.user) {
+          queryClient.setQueryData(getAuthMeQueryKey(), { user: data.user });
+        }
+      })
+      .catch(() => {
+        authQuery.refetch();
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } as any });
   const googleLoginAvailable = providersQuery.data?.google ?? false;

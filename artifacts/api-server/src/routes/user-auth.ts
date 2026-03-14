@@ -97,6 +97,32 @@ router.get("/auth/me", (req: Request, res: Response) => {
   res.json({ user: serializeUser(req.user) });
 });
 
+router.post("/auth/exchange", async (req: Request, res: Response): Promise<void> => {
+  const code = (req.body as Record<string, unknown>)?.code as string | undefined;
+  if (!code) {
+    res.status(400).json({ error: "Missing code" });
+    return;
+  }
+  const userId = consumeAuthCode(code);
+  if (!userId) {
+    res.status(401).json({ error: "Invalid or expired auth code" });
+    return;
+  }
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user) {
+      res.status(401).json({ error: "User not found" });
+      return;
+    }
+    req.session.userId = userId;
+    await saveSession(req);
+    res.json({ user: serializeUser(user) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: "Exchange failed: " + message });
+  }
+});
+
 router.post("/auth/guest", async (req: Request, res: Response): Promise<void> => {
   try {
     const existingUserId = req.session?.userId;
@@ -198,6 +224,24 @@ async function upsertOrUpgradeUser(
     })
     .returning();
   return newUser.id;
+}
+
+const AUTH_CODES = new Map<string, { userId: string; expiresAt: number }>();
+const AUTH_CODE_TTL_MS = 2 * 60 * 1000;
+
+function generateAuthCode(userId: string): string {
+  const code = crypto.randomBytes(32).toString("hex");
+  AUTH_CODES.set(code, { userId, expiresAt: Date.now() + AUTH_CODE_TTL_MS });
+  setTimeout(() => AUTH_CODES.delete(code), AUTH_CODE_TTL_MS);
+  return code;
+}
+
+function consumeAuthCode(code: string): string | null {
+  const entry = AUTH_CODES.get(code);
+  if (!entry) return null;
+  AUTH_CODES.delete(code);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.userId;
 }
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -309,9 +353,9 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
       avatarUrl: profile.picture,
     });
 
-    req.session.userId = userId;
-    await saveSession(req);
-    res.redirect(redirectUrl);
+    const authCode = generateAuthCode(userId);
+    const sep = redirectUrl.includes("?") ? "&" : "?";
+    res.redirect(`${redirectUrl}${sep}auth_code=${authCode}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Google login failed: " + message });
@@ -430,9 +474,9 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
       name: email?.split("@")[0],
     });
 
-    req.session.userId = userId;
-    await saveSession(req);
-    res.redirect(redirectUrl);
+    const authCode = generateAuthCode(userId);
+    const sep = redirectUrl.includes("?") ? "&" : "?";
+    res.redirect(`${redirectUrl}${sep}auth_code=${authCode}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Apple login failed:", message);
