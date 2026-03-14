@@ -8,6 +8,7 @@ import {
   Download,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Check,
   RefreshCw,
   AlertCircle,
@@ -131,6 +132,7 @@ export function BudgetWizard() {
   const [excelWriteSuccess, setExcelWriteSuccess] = useState(false);
   const [pastedExcelUrl, setPastedExcelUrl] = useState("");
   const [isLoadingExcelUrl, setIsLoadingExcelUrl] = useState(false);
+  const [showUrlInputs, setShowUrlInputs] = useState(false);
 
   const {
     uploadedFile,
@@ -1000,145 +1002,82 @@ export function BudgetWizard() {
                   </div>
                 </button>
 
-                <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="mt-0.5 p-2 rounded-xl bg-sky-100">
-                      <Link className="w-5 h-5 text-sky-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-foreground">Paste Google Sheets URL</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Paste a link to a shared Google Sheet to read your budget data.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      type="url"
-                      placeholder="https://docs.google.com/spreadsheets/d/..."
-                      value={pastedUrl}
-                      onChange={(e) => setPastedUrl(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handlePasteUrl(); }}
-                      className="flex-1 text-sm"
-                      disabled={isLoadingUrl}
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handlePasteUrl}
-                      disabled={!pastedUrl.trim() || isLoadingUrl}
-                      className="shrink-0"
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInputs(!showUrlInputs)}
+                  className="sm:col-span-2 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-1 -mt-1"
+                >
+                  <Link className="w-4 h-4" />
+                  <span>Paste a spreadsheet URL</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showUrlInputs ? "rotate-180" : ""}`} />
+                </button>
+
+                <AnimatePresence>
+                  {showUrlInputs && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="sm:col-span-2 overflow-hidden"
                     >
-                      {isLoadingUrl ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Load"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {googleConfigured && (
-                  <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
-                    {googleAuthenticated ? (
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 p-2 rounded-xl bg-green-100">
-                            <Sheet className="w-5 h-5 text-green-600" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-sm text-foreground">Google Sheets</p>
-                              {currentUser?.provider === "google" ? (
-                                <span className="text-xs text-green-600 font-medium">Via Google account</span>
+                      <div className="space-y-3 rounded-2xl border-2 border-border/50 bg-white/60 p-5">
+                        <div>
+                          <p className="text-xs font-medium text-foreground mb-1.5">Google Sheets URL</p>
+                          <div className="flex gap-2">
+                            <Input
+                              type="url"
+                              placeholder="https://docs.google.com/spreadsheets/d/..."
+                              value={pastedUrl}
+                              onChange={(e) => setPastedUrl(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handlePasteUrl(); }}
+                              className="flex-1 text-sm"
+                              disabled={isLoadingUrl}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={handlePasteUrl}
+                              disabled={!pastedUrl.trim() || isLoadingUrl}
+                              className="shrink-0"
+                            >
+                              {isLoadingUrl ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 text-xs text-muted-foreground"
-                                  onClick={handleDisconnectGoogle}
-                                >
-                                  <LogOut className="w-3 h-3 mr-1" /> Disconnect
-                                </Button>
+                                "Load"
                               )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">Select a spreadsheet to read and write directly.</p>
+                            </Button>
                           </div>
-                        </div>
-
-                        {sheetListQuery.isLoading && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                            <RefreshCw className="w-4 h-4 animate-spin" /> Loading your spreadsheets…
-                          </div>
-                        )}
-
-                        {sheetListQuery.isError && (
-                          <p className="text-sm text-destructive">Failed to load spreadsheets. Try disconnecting and reconnecting.</p>
-                        )}
-
-                        {sheetListQuery.data && (
-                          <div className="max-h-48 overflow-y-auto space-y-1">
-                            {sheetListQuery.data.sheets.length === 0 ? (
-                              <p className="text-sm text-muted-foreground py-2">No spreadsheets found.</p>
-                            ) : (
-                              sheetListQuery.data.sheets.map((s) => (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setInputMode("google");
-                                    handleSelectSheet(s.id!, s.name ?? "");
-                                  }}
-                                  disabled={sheetReadQuery.isLoading}
-                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
-                                    selectedSheetId === s.id && sheetReadQuery.isLoading
-                                      ? "bg-primary/10"
-                                      : ""
-                                  }`}
-                                >
-                                  <span className="font-medium text-foreground">{s.name}</span>
-                                  {s.modifiedTime && (
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                      {new Date(s.modifiedTime).toLocaleDateString()}
-                                    </span>
-                                  )}
-                                  {selectedSheetId === s.id && sheetReadQuery.isLoading && (
-                                    <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
-                                  )}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : googleLoginAvailable ? (
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 p-2 rounded-xl bg-blue-100">
-                          <Sheet className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
-                          <p className="font-semibold text-sm text-foreground">Google Sheets</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Sign in with Google (top right) to access your sheets automatically.</p>
+                          <p className="text-xs font-medium text-foreground mb-1.5">OneDrive / Excel Online URL</p>
+                          <div className="flex gap-2">
+                            <Input
+                              type="url"
+                              placeholder="https://1drv.ms/x/... or OneDrive share link"
+                              value={pastedExcelUrl}
+                              onChange={(e) => setPastedExcelUrl(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handlePasteExcelUrl(); }}
+                              className="flex-1 text-sm"
+                              disabled={isLoadingExcelUrl}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={handlePasteExcelUrl}
+                              disabled={!pastedExcelUrl.trim() || isLoadingExcelUrl}
+                              className="shrink-0"
+                            >
+                              {isLoadingExcelUrl ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                "Load"
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleConnectGoogle}
-                        className="w-full text-left group"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 p-2 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-colors">
-                            <Sheet className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-sm text-foreground">Connect Google Sheets</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">Sign in with Google to read and write budget data directly in your spreadsheet.</p>
-                          </div>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {microsoftConfigured && (
                   <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-blue-50/30 p-5 transition-all">
@@ -1226,42 +1165,6 @@ export function BudgetWizard() {
                   </div>
                 )}
 
-                <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-blue-50/30 p-5 transition-all">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="mt-0.5 p-2 rounded-xl bg-blue-100">
-                      <Link className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-foreground">Paste OneDrive URL</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Paste a share link to an Excel Online file (requires Microsoft sign-in).
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      type="url"
-                      placeholder="https://1drv.ms/x/... or OneDrive share link"
-                      value={pastedExcelUrl}
-                      onChange={(e) => setPastedExcelUrl(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handlePasteExcelUrl(); }}
-                      className="flex-1 text-sm"
-                      disabled={isLoadingExcelUrl}
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handlePasteExcelUrl}
-                      disabled={!pastedExcelUrl.trim() || isLoadingExcelUrl}
-                      className="shrink-0"
-                    >
-                      {isLoadingExcelUrl ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Load"
-                      )}
-                    </Button>
-                  </div>
-                </div>
               </div>
 
               {savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 && (
