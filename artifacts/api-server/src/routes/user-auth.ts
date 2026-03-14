@@ -33,6 +33,28 @@ function saveSession(req: Request): Promise<void> {
   });
 }
 
+function getJwtKey(): Uint8Array {
+  const secret = process.env["SESSION_SECRET"] || "budget-automator-dev-secret";
+  return new TextEncoder().encode(secret);
+}
+
+async function signUserJwt(userId: string): Promise<string> {
+  return new SignJWT({ userId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(getJwtKey());
+}
+
+async function verifyUserJwt(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, getJwtKey());
+    return typeof payload.userId === "string" ? payload.userId : null;
+  } catch {
+    return null;
+  }
+}
+
 function serializeUser(user: User) {
   return {
     id: user.id,
@@ -67,7 +89,18 @@ function isAllowedRedirect(url: string): boolean {
 }
 
 export async function attachUser(req: Request, _res: Response, next: NextFunction) {
-  const userId = req.session?.userId;
+  let userId: string | undefined;
+
+  const authHeader = req.headers["authorization"];
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    userId = (await verifyUserJwt(token)) ?? undefined;
+  }
+
+  if (!userId) {
+    userId = req.session?.userId;
+  }
+
   if (userId) {
     try {
       const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
@@ -116,7 +149,8 @@ router.post("/auth/exchange", async (req: Request, res: Response): Promise<void>
     }
     req.session.userId = userId;
     await saveSession(req);
-    res.json({ user: serializeUser(user) });
+    const token = await signUserJwt(userId);
+    res.json({ user: serializeUser(user), token });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Exchange failed: " + message });
@@ -129,7 +163,8 @@ router.post("/auth/guest", async (req: Request, res: Response): Promise<void> =>
     if (existingUserId) {
       const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, existingUserId)).limit(1);
       if (existing) {
-        res.json({ user: serializeUser(existing) });
+        const token = await signUserJwt(existing.id);
+        res.json({ user: serializeUser(existing), token });
         return;
       }
     }
@@ -140,7 +175,9 @@ router.post("/auth/guest", async (req: Request, res: Response): Promise<void> =>
       .returning();
 
     req.session.userId = user.id;
-    res.json({ user: serializeUser(user) });
+    await saveSession(req);
+    const token = await signUserJwt(user.id);
+    res.json({ user: serializeUser(user), token });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to create guest account: " + message });

@@ -200,7 +200,10 @@ export function BudgetWizard() {
       body: JSON.stringify({ code: authCode }),
     })
       .then((r) => r.json())
-      .then((data: { user?: unknown }) => {
+      .then((data: { user?: unknown; token?: string }) => {
+        if (data.token) {
+          localStorage.setItem("auth_token", data.token);
+        }
         if (data.user) {
           queryClient.setQueryData(getAuthMeQueryKey(), { user: data.user });
         }
@@ -530,7 +533,11 @@ export function BudgetWizard() {
 
   const handleGuestLogin = () => {
     guestLoginMutation.mutate(undefined, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        const d = data as { user?: unknown; token?: string };
+        if (d.token) {
+          localStorage.setItem("auth_token", d.token);
+        }
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         toast({ title: "Signed in as guest" });
       },
@@ -540,6 +547,7 @@ export function BudgetWizard() {
   const handleSignOut = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
+        localStorage.removeItem("auth_token");
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
         toast({ title: "Signed out" });
