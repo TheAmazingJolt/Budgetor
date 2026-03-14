@@ -11,7 +11,6 @@ const router: IRouter = Router();
 declare module "express-session" {
   interface SessionData {
     userId?: string;
-    oauthState?: string;
     googleTokens?: {
       access_token?: string | null;
       refresh_token?: string | null;
@@ -195,29 +194,47 @@ async function upsertOrUpgradeUser(
   return newUser.id;
 }
 
-function generateOAuthState(req: Request, redirect?: string): string {
-  const nonce = crypto.randomBytes(32).toString("hex");
-  req.session.oauthState = nonce;
-  const payload: Record<string, string> = { nonce };
-  if (redirect) payload.redirect = redirect;
-  return Buffer.from(JSON.stringify(payload)).toString("base64");
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+function getHmacSecret(): string {
+  return process.env["SESSION_SECRET"] || "budget-automator-dev-secret";
 }
 
-function verifyAndConsumeOAuthState(req: Request, stateParam: string | undefined): { valid: boolean; redirect: string } {
-  const storedNonce = req.session.oauthState;
-  if (!stateParam || !storedNonce) {
+function signOAuthState(payload: string): string {
+  return crypto.createHmac("sha256", getHmacSecret()).update(payload).digest("hex");
+}
+
+function generateOAuthState(_req: Request, redirect?: string): string {
+  const nonce = crypto.randomBytes(32).toString("hex");
+  const ts = Date.now();
+  const data: Record<string, unknown> = { nonce, ts };
+  if (redirect) data.redirect = redirect;
+  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
+  const sig = signOAuthState(payload);
+  return `${payload}.${sig}`;
+}
+
+function verifyAndConsumeOAuthState(_req: Request, stateParam: string | undefined): { valid: boolean; redirect: string } {
+  if (!stateParam) return { valid: false, redirect: "/" };
+
+  const dotIdx = stateParam.lastIndexOf(".");
+  if (dotIdx === -1) return { valid: false, redirect: "/" };
+
+  const payload = stateParam.slice(0, dotIdx);
+  const sig = stateParam.slice(dotIdx + 1);
+  const expectedSig = signOAuthState(payload);
+
+  if (!crypto.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expectedSig, "hex"))) {
     return { valid: false, redirect: "/" };
   }
 
-  req.session.oauthState = undefined;
-
   try {
-    const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8")) as Record<string, unknown>;
-    if (typeof parsed.nonce !== "string" || parsed.nonce !== storedNonce) {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8")) as Record<string, unknown>;
+    if (typeof data.ts !== "number" || Date.now() - data.ts > OAUTH_STATE_TTL_MS) {
       return { valid: false, redirect: "/" };
     }
-    const redirect = typeof parsed.redirect === "string" && isAllowedRedirect(parsed.redirect)
-      ? parsed.redirect
+    const redirect = typeof data.redirect === "string" && isAllowedRedirect(data.redirect)
+      ? data.redirect
       : "/";
     return { valid: true, redirect };
   } catch {
