@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 COPY . .
