@@ -1110,6 +1110,16 @@ export function BudgetWizard() {
                           </div>
                         )}
                       </div>
+                    ) : googleLoginAvailable ? (
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 p-2 rounded-xl bg-blue-100">
+                          <Sheet className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">Google Sheets</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Sign in with Google (top right) to access your sheets automatically.</p>
+                        </div>
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -1588,16 +1598,16 @@ export function BudgetWizard() {
               )}
 
               <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="p-4 flex items-center justify-between gap-4">
-                  <div>
+                <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">Ready to generate?</p>
                     <p className="text-xs text-muted-foreground">
                       {inputMode === "scratch"
                         ? "Add your bills below, then hit generate."
-                        : "Bills are pre-loaded below. Hit generate if you don't need to edit them."}
+                        : "Bills loaded. Edit if needed, then generate."}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button
                       variant="outline"
                       size="default"
