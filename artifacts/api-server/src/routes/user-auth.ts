@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable, type User } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { google } from "googleapis";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, SignJWT, importPKCS8 } from "jose";
 
 const router: IRouter = Router();
 
@@ -35,6 +35,28 @@ function serializeUser(user: User) {
     provider: user.provider,
     createdAt: user.createdAt,
   };
+}
+
+function isAllowedRedirect(url: string): boolean {
+  if (url === "/" || url.startsWith("/")) {
+    return !url.startsWith("//");
+  }
+  const corsOrigins = process.env["CORS_ORIGIN"];
+  if (!corsOrigins) return false;
+  try {
+    const parsed = new URL(url);
+    const allowed = corsOrigins.split(",").map(s => s.trim());
+    return allowed.some(origin => {
+      try {
+        const o = new URL(origin);
+        return parsed.origin === o.origin;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
 }
 
 export async function attachUser(req: Request, _res: Response, next: NextFunction) {
@@ -95,7 +117,7 @@ router.post("/auth/guest", async (req: Request, res: Response): Promise<void> =>
 function getAccountOAuth2Client() {
   const clientId = process.env["GOOGLE_CLIENT_ID"];
   const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
-  const redirectUri = process.env["GOOGLE_ACCOUNT_REDIRECT_URI"] || process.env["GOOGLE_REDIRECT_URI"];
+  const redirectUri = process.env["GOOGLE_ACCOUNT_REDIRECT_URI"];
   if (!clientId || !clientSecret || !redirectUri) return null;
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
@@ -165,10 +187,12 @@ async function upsertOrUpgradeUser(
 function parseRedirectState(stateParam: string | undefined): string {
   if (!stateParam) return "/";
   try {
-    const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8"));
-    if (typeof parsed.redirect === "string") return parsed.redirect;
+    const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8")) as Record<string, unknown>;
+    if (typeof parsed.redirect === "string" && isAllowedRedirect(parsed.redirect)) {
+      return parsed.redirect;
+    }
   } catch {
-    // invalid state, use default redirect
+    // invalid state
   }
   return "/";
 }
@@ -176,7 +200,7 @@ function parseRedirectState(stateParam: string | undefined): string {
 router.get("/auth/login/google", (req: Request, res: Response) => {
   const oauth2Client = getAccountOAuth2Client();
   if (!oauth2Client) {
-    res.status(500).json({ error: "Google OAuth not configured" });
+    res.status(500).json({ error: "Google account login not configured. Set GOOGLE_ACCOUNT_REDIRECT_URI." });
     return;
   }
 
@@ -199,7 +223,7 @@ router.get("/auth/login/google", (req: Request, res: Response) => {
 router.get("/auth/login/google/callback", async (req: Request, res: Response): Promise<void> => {
   const oauth2Client = getAccountOAuth2Client();
   if (!oauth2Client) {
-    res.status(500).json({ error: "Google OAuth not configured" });
+    res.status(500).json({ error: "Google account login not configured" });
     return;
   }
 
@@ -239,17 +263,41 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
 const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
 
 function isAppleConfigured(): boolean {
-  return !!(process.env["APPLE_CLIENT_ID"] && process.env["APPLE_REDIRECT_URI"]);
+  return !!(
+    process.env["APPLE_CLIENT_ID"] &&
+    process.env["APPLE_REDIRECT_URI"] &&
+    process.env["APPLE_TEAM_ID"] &&
+    process.env["APPLE_KEY_ID"] &&
+    process.env["APPLE_PRIVATE_KEY"]
+  );
+}
+
+async function generateAppleClientSecret(): Promise<string> {
+  const teamId = process.env["APPLE_TEAM_ID"]!;
+  const keyId = process.env["APPLE_KEY_ID"]!;
+  const clientId = process.env["APPLE_CLIENT_ID"]!;
+  const privateKeyPem = process.env["APPLE_PRIVATE_KEY"]!.replace(/\\n/g, "\n");
+
+  const privateKey = await importPKCS8(privateKeyPem, "ES256");
+
+  return new SignJWT({})
+    .setProtectedHeader({ alg: "ES256", kid: keyId })
+    .setIssuedAt()
+    .setExpirationTime("180d")
+    .setIssuer(teamId)
+    .setAudience("https://appleid.apple.com")
+    .setSubject(clientId)
+    .sign(privateKey);
 }
 
 router.get("/auth/login/apple", (req: Request, res: Response) => {
-  const clientId = process.env["APPLE_CLIENT_ID"];
-  const redirectUri = process.env["APPLE_REDIRECT_URI"];
-
-  if (!clientId || !redirectUri) {
-    res.status(500).json({ error: "Apple Sign-In not configured. Set APPLE_CLIENT_ID and APPLE_REDIRECT_URI." });
+  if (!isAppleConfigured()) {
+    res.status(500).json({ error: "Apple Sign-In not configured. Set APPLE_CLIENT_ID, APPLE_REDIRECT_URI, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY." });
     return;
   }
+
+  const clientId = process.env["APPLE_CLIENT_ID"]!;
+  const redirectUri = process.env["APPLE_REDIRECT_URI"]!;
 
   const frontendRedirect = req.query["redirect"] as string | undefined;
   const state = frontendRedirect
@@ -269,7 +317,7 @@ router.get("/auth/login/apple", (req: Request, res: Response) => {
 });
 
 router.post("/auth/login/apple/callback", async (req: Request, res: Response): Promise<void> => {
-  const { id_token, state } = req.body as { id_token?: string; code?: string; state?: string };
+  const { id_token, code, state } = req.body as { id_token?: string; code?: string; state?: string };
   const clientId = process.env["APPLE_CLIENT_ID"];
 
   if (!id_token) {
@@ -277,7 +325,7 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     return;
   }
 
-  if (!clientId) {
+  if (!isAppleConfigured() || !clientId) {
     res.status(500).json({ error: "Apple Sign-In not configured" });
     return;
   }
@@ -294,6 +342,25 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     if (!appleUserId) {
       res.status(400).json({ error: "Could not extract user from Apple token" });
       return;
+    }
+
+    if (code) {
+      try {
+        const clientSecret = await generateAppleClientSecret();
+        await fetch("https://appleid.apple.com/auth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code,
+            grant_type: "authorization_code",
+            redirect_uri: process.env["APPLE_REDIRECT_URI"]!,
+          }),
+        });
+      } catch (tokenErr) {
+        console.warn("Apple token exchange failed (non-critical):", tokenErr);
+      }
     }
 
     const userId = await upsertOrUpgradeUser(req, "apple", appleUserId, {

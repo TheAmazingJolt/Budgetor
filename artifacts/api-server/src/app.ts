@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const sessionSecret = process.env["SESSION_SECRET"];
 if (!sessionSecret && process.env["NODE_ENV"] === "production") {
-  console.warn("WARNING: SESSION_SECRET not set in production. Sessions will not be secure.");
+  throw new Error("SESSION_SECRET must be set in production.");
 }
 
 app.use(session({

@@ -72,7 +72,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Bill } from "@workspace/api-client-react";
+import type { Bill, SavedBudget } from "@workspace/api-client-react";
+
+type InputMode = "upload" | "scratch" | "google";
+
+interface SavedBudgetSettings {
+  openingBalance?: number;
+  paycheckAmount?: number;
+  weekCount?: number;
+  newWeekStartDate?: string;
+  newWeekEndDate?: string;
+  zeroOpeningBalance?: boolean;
+  includeBillsSummary?: boolean;
+  blankMode?: boolean;
+  inputMode?: InputMode;
+}
 
 const STEPS = ["Upload", "Configure", "Download"];
 
@@ -83,8 +97,6 @@ function nextStartAfterLabel(label: string): string | null {
   d.setDate(d.getDate() + 1);
   return d.toISOString().split('T')[0];
 }
-
-type InputMode = "upload" | "scratch" | "google";
 
 export function BudgetWizard() {
   const [step, setStep] = useState(0);
@@ -371,10 +383,11 @@ export function BudgetWizard() {
             setIsSaveDialogOpen(false);
             setSaveBudgetName("");
           },
-          onError: (err: any) => {
+          onError: (err: unknown) => {
+            const message = err instanceof Error ? err.message : "Unknown error";
             toast({
               title: "Failed to save",
-              description: err?.data?.error ?? "Unknown error",
+              description: message,
               variant: "destructive",
             });
           },
@@ -383,10 +396,10 @@ export function BudgetWizard() {
     });
   };
 
-  const handleLoadSavedBudget = (budget: any) => {
+  const handleLoadSavedBudget = (budget: SavedBudget) => {
     reset();
     const b = budget.bills as Bill[];
-    const s = budget.settings as any;
+    const s = budget.settings as SavedBudgetSettings;
     setBills(b);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
@@ -474,10 +487,11 @@ export function BudgetWizard() {
           setStep(1);
           setIsLoadingUrl(false);
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.";
           toast({
             title: "Failed to load sheet",
-            description: err?.data?.error ?? err?.message ?? "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.",
+            description: message,
             variant: "destructive",
           });
           setIsLoadingUrl(false);
@@ -533,7 +547,7 @@ export function BudgetWizard() {
         onError: (err) => {
           toast({
             title: "Generation failed",
-            description: (err as any).data?.error ?? "An error occurred",
+            description: err instanceof Error ? err.message : "An error occurred",
             variant: "destructive",
           });
         },
@@ -920,7 +934,7 @@ export function BudgetWizard() {
                             >
                               <p className="font-semibold text-sm text-foreground">{budget.name}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                {(budget.bills as any[]).length} bills
+                                {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
                                 {" \u00b7 "}
                                 Saved {new Date(budget.updatedAt).toLocaleDateString()}
                               </p>
@@ -1347,7 +1361,7 @@ export function BudgetWizard() {
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
                     <p className="text-sm text-destructive">
-                      {(generateMutation.error as any)?.data?.error ?? "Failed to generate budget."}
+                      {generateMutation.error instanceof Error ? generateMutation.error.message : "Failed to generate budget."}
                     </p>
                   </div>
                 </Card>
