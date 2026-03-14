@@ -41,12 +41,15 @@ import {
   getGoogleAuthUrl,
   googleDisconnect,
   useAuthMe,
+  useAuthProviders,
   useAuthGuestLogin,
   useAuthLogout,
   useSavedBudgetList,
   useSavedBudgetCreate,
+  useSavedBudgetUpdate,
   useSavedBudgetDelete,
   getAuthLoginGoogleUrl,
+  getAuthLoginAppleUrl,
   getAuthMeQueryKey,
   getSavedBudgetListQueryKey,
 } from "@workspace/api-client-react";
@@ -134,6 +137,9 @@ export function BudgetWizard() {
 
   const [saveBudgetName, setSaveBudgetName] = useState("");
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [renameBudgetId, setRenameBudgetId] = useState<string | null>(null);
+  const [renameBudgetValue, setRenameBudgetValue] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -146,9 +152,14 @@ export function BudgetWizard() {
   const isSignedIn = !!currentUser;
   const isGuest = currentUser?.provider === "guest";
 
+  const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } });
+  const googleLoginAvailable = providersQuery.data?.google ?? false;
+  const appleLoginAvailable = providersQuery.data?.apple ?? false;
+
   const guestLoginMutation = useAuthGuestLogin();
   const logoutMutation = useAuthLogout();
   const saveBudgetMutation = useSavedBudgetCreate();
+  const renameBudgetMutation = useSavedBudgetUpdate();
   const deleteBudgetMutation = useSavedBudgetDelete();
 
   const savedBudgetsQuery = useSavedBudgetList({
@@ -285,6 +296,20 @@ export function BudgetWizard() {
     }
   };
 
+  const handleAccountAppleLogin = async () => {
+    try {
+      const currentUrl = window.location.href;
+      const result = await getAuthLoginAppleUrl(currentUrl);
+      window.location.href = result.url;
+    } catch (err) {
+      toast({
+        title: "Failed to start Apple login",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleGuestLogin = () => {
     guestLoginMutation.mutate(undefined, {
       onSuccess: () => {
@@ -384,6 +409,26 @@ export function BudgetWizard() {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({ title: "Budget deleted", description: `"${name}" has been removed.` });
+        },
+      }
+    );
+  };
+
+  const handleRenameSavedBudget = () => {
+    if (!renameBudgetId || !renameBudgetValue.trim()) return;
+    renameBudgetMutation.mutate(
+      { id: renameBudgetId, data: { name: renameBudgetValue.trim() } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+          toast({ title: "Budget renamed" });
+          setIsRenameDialogOpen(false);
+          setRenameBudgetId(null);
+          setRenameBudgetValue("");
+        },
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          toast({ title: "Failed to rename", description: message, variant: "destructive" });
         },
       }
     );
@@ -619,10 +664,17 @@ export function BudgetWizard() {
                   <DropdownMenuSeparator />
                   {isGuest && (
                     <>
-                      <DropdownMenuItem onClick={handleAccountGoogleLogin}>
-                        <LogIn className="w-4 h-4 mr-2" /> Sign in with Google
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
+                      {googleLoginAvailable && (
+                        <DropdownMenuItem onClick={handleAccountGoogleLogin}>
+                          <LogIn className="w-4 h-4 mr-2" /> Sign in with Google
+                        </DropdownMenuItem>
+                      )}
+                      {appleLoginAvailable && (
+                        <DropdownMenuItem onClick={handleAccountAppleLogin}>
+                          <LogIn className="w-4 h-4 mr-2" /> Sign in with Apple
+                        </DropdownMenuItem>
+                      )}
+                      {(googleLoginAvailable || appleLoginAvailable) && <DropdownMenuSeparator />}
                     </>
                   )}
                   <DropdownMenuItem onClick={handleSignOut}>
@@ -638,9 +690,16 @@ export function BudgetWizard() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={handleAccountGoogleLogin}>
-                    Sign in with Google
-                  </DropdownMenuItem>
+                  {googleLoginAvailable && (
+                    <DropdownMenuItem onClick={handleAccountGoogleLogin}>
+                      Sign in with Google
+                    </DropdownMenuItem>
+                  )}
+                  {appleLoginAvailable && (
+                    <DropdownMenuItem onClick={handleAccountAppleLogin}>
+                      Sign in with Apple
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={handleGuestLogin}>
                     Continue as guest
                   </DropdownMenuItem>
@@ -866,17 +925,32 @@ export function BudgetWizard() {
                                 Saved {new Date(budget.updatedAt).toLocaleDateString()}
                               </p>
                             </button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteSavedBudget(budget.id, budget.name);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenameBudgetId(budget.id);
+                                  setRenameBudgetValue(budget.name);
+                                  setIsRenameDialogOpen(true);
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSavedBudget(budget.id, budget.name);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -891,9 +965,16 @@ export function BudgetWizard() {
                     Sign in to save your budgets and access them from anywhere.
                   </p>
                   <div className="flex items-center justify-center gap-2">
-                    <Button size="sm" variant="outline" onClick={handleAccountGoogleLogin} className="gap-2">
-                      <LogIn className="w-4 h-4" /> Sign in with Google
-                    </Button>
+                    {googleLoginAvailable && (
+                      <Button size="sm" variant="outline" onClick={handleAccountGoogleLogin} className="gap-2">
+                        <LogIn className="w-4 h-4" /> Sign in with Google
+                      </Button>
+                    )}
+                    {appleLoginAvailable && (
+                      <Button size="sm" variant="outline" onClick={handleAccountAppleLogin} className="gap-2">
+                        <LogIn className="w-4 h-4" /> Sign in with Apple
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={handleGuestLogin} className="text-muted-foreground">
                       Continue as guest
                     </Button>
@@ -1500,6 +1581,43 @@ export function BudgetWizard() {
                   <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Saving…</>
                 ) : (
                   <><Save className="w-4 h-4 mr-1" /> Save</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl font-bold">Rename Budget</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-muted-foreground">New Name</Label>
+              <Input
+                value={renameBudgetValue}
+                onChange={(e) => setRenameBudgetValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleRenameSavedBudget(); }}
+                className="rounded-xl"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIsRenameDialogOpen(false)} className="rounded-xl">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleRenameSavedBudget}
+                disabled={!renameBudgetValue.trim() || renameBudgetMutation.isPending}
+                className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
+              >
+                {renameBudgetMutation.isPending ? (
+                  <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Renaming…</>
+                ) : (
+                  "Rename"
                 )}
               </Button>
             </div>

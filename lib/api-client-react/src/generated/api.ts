@@ -32,6 +32,7 @@ import type {
   SheetWriteResponse,
   AuthMeResponse,
   AuthLoginUrlResponse,
+  AuthProvidersResponse,
   AuthLogoutResponse,
   SavedBudgetListResponse,
   SavedBudgetResponse,
@@ -477,6 +478,44 @@ export function useAuthMe<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAuthMeQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const authProviders = async (options?: RequestInit): Promise<AuthProvidersResponse> => {
+  return customFetch<AuthProvidersResponse>(`/api/auth/providers`, {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getAuthProvidersQueryKey = () => [`/api/auth/providers`] as const;
+
+export const getAuthProvidersQueryOptions = <
+  TData = Awaited<ReturnType<typeof authProviders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof authProviders>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getAuthProvidersQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof authProviders>>> = ({ signal }) =>
+    authProviders({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof authProviders>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useAuthProviders<
+  TData = Awaited<ReturnType<typeof authProviders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof authProviders>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAuthProvidersQueryOptions(options);
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
   return { ...query, queryKey: queryOptions.queryKey };
 }

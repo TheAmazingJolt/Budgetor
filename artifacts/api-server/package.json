@@ -16,7 +16,8 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "express-session": "^1.19.0",
-    "googleapis": "^171.4.0"
+    "googleapis": "^171.4.0",
+    "jose": "^6.2.1"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

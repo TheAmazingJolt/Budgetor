@@ -1,33 +1,59 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { usersTable, type User } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { google } from "googleapis";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const router: IRouter = Router();
 
 declare module "express-session" {
   interface SessionData {
     userId?: string;
-    googleTokens?: any;
+    googleTokens?: {
+      access_token?: string | null;
+      refresh_token?: string | null;
+      expiry_date?: number | null;
+    };
   }
 }
 
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
+}
+
+function serializeUser(user: User) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    provider: user.provider,
+    createdAt: user.createdAt,
+  };
+}
+
 export async function attachUser(req: Request, _res: Response, next: NextFunction) {
-  const userId = (req as any).session?.userId;
+  const userId = req.session?.userId;
   if (userId) {
     try {
       const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
       if (user) {
-        (req as any).user = user;
+        req.user = user;
       }
-    } catch {}
+    } catch (err) {
+      console.error("attachUser: failed to fetch user", err);
+    }
   }
   next();
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!(req as any).user) {
+  if (!req.user) {
     res.status(401).json({ error: "Not signed in" });
     return;
   }
@@ -35,65 +61,34 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 router.get("/auth/me", (req: Request, res: Response) => {
-  const user = (req as any).user;
-  if (!user) {
+  if (!req.user) {
     res.json({ user: null });
     return;
   }
-  res.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      provider: user.provider,
-      createdAt: user.createdAt,
-    },
-  });
+  res.json({ user: serializeUser(req.user) });
 });
 
 router.post("/auth/guest", async (req: Request, res: Response): Promise<void> => {
   try {
-    const existingUserId = (req as any).session?.userId;
+    const existingUserId = req.session?.userId;
     if (existingUserId) {
       const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, existingUserId)).limit(1);
       if (existing) {
-        res.json({
-          user: {
-            id: existing.id,
-            email: existing.email,
-            name: existing.name,
-            avatarUrl: existing.avatarUrl,
-            provider: existing.provider,
-            createdAt: existing.createdAt,
-          },
-        });
+        res.json({ user: serializeUser(existing) });
         return;
       }
     }
 
     const [user] = await db
       .insert(usersTable)
-      .values({
-        name: "Guest",
-        provider: "guest",
-      })
+      .values({ name: "Guest", provider: "guest" })
       .returning();
 
-    (req as any).session.userId = user.id;
-
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        provider: user.provider,
-        createdAt: user.createdAt,
-      },
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: "Failed to create guest account: " + (err.message ?? String(err)) });
+    req.session.userId = user.id;
+    res.json({ user: serializeUser(user) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: "Failed to create guest account: " + message });
   }
 });
 
@@ -103,6 +98,79 @@ function getAccountOAuth2Client() {
   const redirectUri = process.env["GOOGLE_ACCOUNT_REDIRECT_URI"] || process.env["GOOGLE_REDIRECT_URI"];
   if (!clientId || !clientSecret || !redirectUri) return null;
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+}
+
+async function upsertOrUpgradeUser(
+  req: Request,
+  provider: "google" | "apple",
+  providerId: string,
+  profile: { email?: string | null; name?: string | null; avatarUrl?: string | null },
+): Promise<string> {
+  const [existingUser] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.provider, provider), eq(usersTable.providerId, providerId)))
+    .limit(1);
+
+  if (existingUser) {
+    await db
+      .update(usersTable)
+      .set({
+        name: profile.name || existingUser.name,
+        email: profile.email || existingUser.email,
+        avatarUrl: profile.avatarUrl || existingUser.avatarUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, existingUser.id));
+    return existingUser.id;
+  }
+
+  const currentUserId = req.session?.userId;
+  if (currentUserId) {
+    const [guestUser] = await db
+      .select()
+      .from(usersTable)
+      .where(and(eq(usersTable.id, currentUserId), eq(usersTable.provider, "guest")))
+      .limit(1);
+
+    if (guestUser) {
+      await db
+        .update(usersTable)
+        .set({
+          provider,
+          providerId,
+          email: profile.email || null,
+          name: profile.name || guestUser.name,
+          avatarUrl: profile.avatarUrl || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(usersTable.id, guestUser.id));
+      return guestUser.id;
+    }
+  }
+
+  const [newUser] = await db
+    .insert(usersTable)
+    .values({
+      provider,
+      providerId,
+      email: profile.email || null,
+      name: profile.name || (provider === "google" ? "Google User" : "Apple User"),
+      avatarUrl: profile.avatarUrl || null,
+    })
+    .returning();
+  return newUser.id;
+}
+
+function parseRedirectState(stateParam: string | undefined): string {
+  if (!stateParam) return "/";
+  try {
+    const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8"));
+    if (typeof parsed.redirect === "string") return parsed.redirect;
+  } catch {
+    // invalid state, use default redirect
+  }
+  return "/";
 }
 
 router.get("/auth/login/google", (req: Request, res: Response) => {
@@ -153,93 +221,28 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
       return;
     }
 
-    const [existingUser] = await db
-      .select()
-      .from(usersTable)
-      .where(and(eq(usersTable.provider, "google"), eq(usersTable.providerId, profile.id)))
-      .limit(1);
+    const userId = await upsertOrUpgradeUser(req, "google", profile.id, {
+      email: profile.email,
+      name: profile.name,
+      avatarUrl: profile.picture,
+    });
 
-    let userId: string;
-
-    if (existingUser) {
-      await db
-        .update(usersTable)
-        .set({
-          name: profile.name || existingUser.name,
-          email: profile.email || existingUser.email,
-          avatarUrl: profile.picture || existingUser.avatarUrl,
-          updatedAt: new Date(),
-        })
-        .where(eq(usersTable.id, existingUser.id));
-      userId = existingUser.id;
-    } else {
-      const currentUserId = (req as any).session?.userId;
-      if (currentUserId) {
-        const [guestUser] = await db
-          .select()
-          .from(usersTable)
-          .where(and(eq(usersTable.id, currentUserId), eq(usersTable.provider, "guest")))
-          .limit(1);
-
-        if (guestUser) {
-          await db
-            .update(usersTable)
-            .set({
-              provider: "google",
-              providerId: profile.id,
-              email: profile.email || null,
-              name: profile.name || guestUser.name,
-              avatarUrl: profile.picture || null,
-              updatedAt: new Date(),
-            })
-            .where(eq(usersTable.id, guestUser.id));
-          userId = guestUser.id;
-        } else {
-          const [newUser] = await db
-            .insert(usersTable)
-            .values({
-              provider: "google",
-              providerId: profile.id,
-              email: profile.email || null,
-              name: profile.name || "Google User",
-              avatarUrl: profile.picture || null,
-            })
-            .returning();
-          userId = newUser.id;
-        }
-      } else {
-        const [newUser] = await db
-          .insert(usersTable)
-          .values({
-            provider: "google",
-            providerId: profile.id,
-            email: profile.email || null,
-            name: profile.name || "Google User",
-            avatarUrl: profile.picture || null,
-          })
-          .returning();
-        userId = newUser.id;
-      }
-    }
-
-    (req as any).session.userId = userId;
-
-    let redirectUrl = "/";
-    const stateParam = req.query["state"] as string | undefined;
-    if (stateParam) {
-      try {
-        const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8"));
-        if (parsed.redirect) redirectUrl = parsed.redirect;
-      } catch {}
-    }
-
+    req.session.userId = userId;
+    const redirectUrl = parseRedirectState(req.query["state"] as string | undefined);
     res.redirect(redirectUrl);
-  } catch (err: any) {
-    res.status(500).json({ error: "Google login failed: " + (err.message ?? String(err)) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: "Google login failed: " + message });
   }
 });
 
-router.get("/auth/login/apple", (_req: Request, res: Response) => {
+const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
+
+function isAppleConfigured(): boolean {
+  return !!(process.env["APPLE_CLIENT_ID"] && process.env["APPLE_REDIRECT_URI"]);
+}
+
+router.get("/auth/login/apple", (req: Request, res: Response) => {
   const clientId = process.env["APPLE_CLIENT_ID"];
   const redirectUri = process.env["APPLE_REDIRECT_URI"];
 
@@ -248,7 +251,7 @@ router.get("/auth/login/apple", (_req: Request, res: Response) => {
     return;
   }
 
-  const frontendRedirect = _req.query["redirect"] as string | undefined;
+  const frontendRedirect = req.query["redirect"] as string | undefined;
   const state = frontendRedirect
     ? Buffer.from(JSON.stringify({ redirect: frontendRedirect, type: "login" })).toString("base64")
     : "";
@@ -267,107 +270,58 @@ router.get("/auth/login/apple", (_req: Request, res: Response) => {
 
 router.post("/auth/login/apple/callback", async (req: Request, res: Response): Promise<void> => {
   const { id_token, state } = req.body as { id_token?: string; code?: string; state?: string };
+  const clientId = process.env["APPLE_CLIENT_ID"];
 
   if (!id_token) {
     res.status(400).json({ error: "Missing id_token from Apple" });
     return;
   }
 
-  try {
-    const parts = id_token.split(".");
-    if (parts.length < 2) {
-      res.status(400).json({ error: "Invalid Apple id_token" });
-      return;
-    }
+  if (!clientId) {
+    res.status(500).json({ error: "Apple Sign-In not configured" });
+    return;
+  }
 
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+  try {
+    const { payload } = await jwtVerify(id_token, APPLE_JWKS, {
+      issuer: "https://appleid.apple.com",
+      audience: clientId,
+    });
+
     const appleUserId = payload.sub;
-    const email = payload.email || null;
+    const email = (payload.email as string) || null;
 
     if (!appleUserId) {
       res.status(400).json({ error: "Could not extract user from Apple token" });
       return;
     }
 
-    const [existingUser] = await db
-      .select()
-      .from(usersTable)
-      .where(and(eq(usersTable.provider, "apple"), eq(usersTable.providerId, appleUserId)))
-      .limit(1);
+    const userId = await upsertOrUpgradeUser(req, "apple", appleUserId, {
+      email,
+      name: email?.split("@")[0],
+    });
 
-    let userId: string;
-
-    if (existingUser) {
-      if (email && !existingUser.email) {
-        await db.update(usersTable).set({ email, updatedAt: new Date() }).where(eq(usersTable.id, existingUser.id));
-      }
-      userId = existingUser.id;
-    } else {
-      const currentUserId = (req as any).session?.userId;
-      if (currentUserId) {
-        const [guestUser] = await db
-          .select()
-          .from(usersTable)
-          .where(and(eq(usersTable.id, currentUserId), eq(usersTable.provider, "guest")))
-          .limit(1);
-
-        if (guestUser) {
-          await db
-            .update(usersTable)
-            .set({
-              provider: "apple",
-              providerId: appleUserId,
-              email,
-              name: email?.split("@")[0] || guestUser.name,
-              updatedAt: new Date(),
-            })
-            .where(eq(usersTable.id, guestUser.id));
-          userId = guestUser.id;
-        } else {
-          const [newUser] = await db
-            .insert(usersTable)
-            .values({
-              provider: "apple",
-              providerId: appleUserId,
-              email,
-              name: email?.split("@")[0] || "Apple User",
-            })
-            .returning();
-          userId = newUser.id;
-        }
-      } else {
-        const [newUser] = await db
-          .insert(usersTable)
-          .values({
-            provider: "apple",
-            providerId: appleUserId,
-            email,
-            name: email?.split("@")[0] || "Apple User",
-          })
-          .returning();
-        userId = newUser.id;
-      }
-    }
-
-    (req as any).session.userId = userId;
-
-    let redirectUrl = "/";
-    if (state) {
-      try {
-        const parsed = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
-        if (parsed.redirect) redirectUrl = parsed.redirect;
-      } catch {}
-    }
-
+    req.session.userId = userId;
+    const redirectUrl = parseRedirectState(state);
     res.redirect(redirectUrl);
-  } catch (err: any) {
-    res.status(500).json({ error: "Apple login failed: " + (err.message ?? String(err)) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Apple login failed:", message);
+    res.status(401).json({ error: "Apple login failed: invalid or expired token" });
   }
 });
 
+router.get("/auth/providers", (_req: Request, res: Response) => {
+  res.json({
+    google: !!getAccountOAuth2Client(),
+    apple: isAppleConfigured(),
+  });
+});
+
 router.post("/auth/logout", (req: Request, res: Response) => {
-  (req as any).session.userId = null;
+  req.session.userId = undefined;
   res.json({ ok: true });
 });
 
+export { isAppleConfigured };
 export default router;

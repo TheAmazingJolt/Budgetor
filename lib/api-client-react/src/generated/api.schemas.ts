@@ -139,6 +139,11 @@ export interface AuthLoginUrlResponse {
   url: string;
 }
 
+export interface AuthProvidersResponse {
+  google: boolean;
+  apple: boolean;
+}
+
 export interface AuthLogoutResponse {
   ok: boolean;
 }
