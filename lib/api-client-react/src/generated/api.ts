@@ -26,6 +26,8 @@ import type {
   GoogleDisconnectResult,
   SheetListResponse,
   SheetReadResponse,
+  SheetReadByUrlRequest,
+  SheetReadByUrlResponse,
   SheetWriteRequest,
   SheetWriteResponse,
 } from "./api.schemas";
@@ -380,6 +382,38 @@ export const sheetWrite = async (
     body: JSON.stringify(data),
     credentials: "include",
   });
+};
+
+export const sheetReadByUrl = async (
+  data: SheetReadByUrlRequest,
+  options?: RequestInit,
+): Promise<SheetReadByUrlResponse> => {
+  return customFetch<SheetReadByUrlResponse>(`/api/sheets/read-url`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+    credentials: "include",
+  });
+};
+
+export const useSheetReadByUrl = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sheetReadByUrl>>,
+    TError,
+    { data: SheetReadByUrlRequest },
+    TContext
+  >;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sheetReadByUrl>>,
+    { data: SheetReadByUrlRequest }
+  > = ({ data }) => sheetReadByUrl(data);
+  return useMutation({ mutationFn, ...mutationOptions });
 };
 
 export const useSheetWrite = <

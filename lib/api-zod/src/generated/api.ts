@@ -89,6 +89,14 @@ export const SheetReadResponse = zod.object({
   sheetTitle: zod.string(),
 });
 
+export const SheetReadByUrlBody = zod.object({
+  url: zod.string().describe("Google Sheets URL or spreadsheet ID"),
+});
+
+export const SheetReadByUrlResponse = SheetReadResponse.extend({
+  spreadsheetId: zod.string(),
+});
+
 export const SheetWriteRequest = zod.object({
   weeks: zod.array(zod.object({
     weekLabel: zod.string(),

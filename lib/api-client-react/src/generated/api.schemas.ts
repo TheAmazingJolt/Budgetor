@@ -102,6 +102,14 @@ export interface SheetReadResponse {
   sheetTitle: string;
 }
 
+export interface SheetReadByUrlRequest {
+  url: string;
+}
+
+export interface SheetReadByUrlResponse extends SheetReadResponse {
+  spreadsheetId: string;
+}
+
 export interface SheetWriteRequest {
   weeks: WeeklyBudget[];
   startCol: number;

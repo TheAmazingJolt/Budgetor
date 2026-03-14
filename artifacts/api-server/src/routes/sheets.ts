@@ -29,6 +29,163 @@ function getAuthedClient(req: any) {
   return oauth2Client;
 }
 
+function extractSpreadsheetId(url: string): string | null {
+  const patterns = [
+    /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/,
+    /^([a-zA-Z0-9_-]{20,})$/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
+  const budgetSheet =
+    sheetsData.find((s) => s.properties?.title === "Budget") ??
+    sheetsData[0];
+
+  if (!budgetSheet?.data?.[0]) {
+    return null;
+  }
+
+  const gridData = budgetSheet.data[0];
+  const rows = gridData.rowData ?? [];
+
+  const bills: any[] = [];
+  const existingWeeks: any[] = [];
+
+  const headerRow = rows[0]?.values ?? [];
+
+  let FIRST_BUDGET_COL = -1;
+  for (let c = 0; c < headerRow.length; c++) {
+    const val = headerRow[c]?.formattedValue ?? "";
+    if (val.trim().toLowerCase().startsWith("budget")) {
+      FIRST_BUDGET_COL = c;
+      break;
+    }
+  }
+  if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
+
+  for (let i = 1; i < rows.length; i++) {
+    const cells = rows[i]?.values ?? [];
+    const nameCell = cells[0]?.formattedValue?.trim() ?? "";
+    if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
+
+    const rawAmt = cells[1]?.effectiveValue?.numberValue;
+    if (rawAmt === undefined) continue;
+    const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+
+    const dayStr = cells[2]?.formattedValue ?? "";
+    const dayOfMonth =
+      dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+        ? parseInt(dayStr)
+        : null;
+
+    let category: string = "fixed";
+    const lower = nameCell.toLowerCase();
+    if (lower.includes("rent")) category = "rent";
+    else if (
+      lower.includes("util") ||
+      lower.includes("electric") ||
+      lower.includes("water") ||
+      lower === "utilities"
+    )
+      category = "utilities";
+    else if (lower.includes("car")) category = "car";
+
+    bills.push({ name: nameCell, amount, dayOfMonth, category });
+  }
+
+  let weeklyStart = -1;
+  for (let i = 15; i < Math.min(30, rows.length); i++) {
+    const val = rows[i]?.values?.[0]?.formattedValue ?? "";
+    if (val.toLowerCase().includes("weekly")) {
+      weeklyStart = i + 1;
+      break;
+    }
+  }
+  if (weeklyStart !== -1) {
+    for (
+      let i = weeklyStart;
+      i < Math.min(weeklyStart + 10, rows.length);
+      i++
+    ) {
+      const cells = rows[i]?.values ?? [];
+      const name = cells[0]?.formattedValue?.trim() ?? "";
+      if (!name || name.toLowerCase().includes("yearly")) break;
+      const rawAmt = cells[1]?.effectiveValue?.numberValue;
+      if (rawAmt === undefined) continue;
+      bills.push({
+        name,
+        amount: rawAmt > 0 ? -rawAmt : rawAmt,
+        dayOfMonth: null,
+        category: "weekly",
+      });
+    }
+  }
+
+  let col = FIRST_BUDGET_COL;
+  while (col < headerRow.length) {
+    const label = headerRow[col]?.formattedValue?.trim() ?? "";
+    if (!label || !label.toLowerCase().startsWith("budget")) {
+      col += 2;
+      continue;
+    }
+
+    let openingBalance = 0;
+    let paycheck = 0;
+    let remaining = 0;
+    const items: any[] = [];
+
+    for (let r = 1; r < rows.length; r++) {
+      const cells = rows[r]?.values ?? [];
+      const key = cells[col]?.formattedValue?.trim() ?? "";
+      const num = cells[col + 1]?.effectiveValue?.numberValue;
+
+      if (!key && num === undefined) continue;
+      if (key.toLowerCase().includes("remaining acct")) {
+        openingBalance = num ?? 0;
+      } else if (key.toLowerCase() === "paycheck") {
+        paycheck = num ?? 0;
+      } else if (key.toLowerCase() === "remaining") {
+        remaining = num ?? 0;
+      } else if (key && num !== undefined) {
+        items.push({ name: key, amount: num });
+      }
+    }
+
+    existingWeeks.push({
+      label,
+      startCol: col,
+      openingBalance,
+      paycheck,
+      items,
+      remaining,
+    });
+    col += 2;
+  }
+
+  const nextWeekStartCol =
+    existingWeeks.length > 0
+      ? existingWeeks[existingWeeks.length - 1].startCol + 2
+      : FIRST_BUDGET_COL;
+
+  const lastRemaining =
+    existingWeeks.length > 0
+      ? existingWeeks[existingWeeks.length - 1].remaining
+      : 0;
+
+  return {
+    bills,
+    existingWeeks,
+    nextWeekStartCol,
+    lastRemaining,
+    sheetTitle: budgetSheet.properties?.title ?? "Budget",
+  };
+}
+
 router.get("/sheets/list", async (req, res): Promise<void> => {
   const auth = getAuthedClient(req);
   if (!auth) {
@@ -73,158 +230,81 @@ router.get("/sheets/:id/read", async (req, res): Promise<void> => {
 
   try {
     const sheets = google.sheets({ version: "v4", auth });
-
     const meta = await sheets.spreadsheets.get({
       spreadsheetId,
       includeGridData: true,
     });
 
-    const budgetSheet =
-      meta.data.sheets?.find((s) => s.properties?.title === "Budget") ??
-      meta.data.sheets?.[0];
-
-    if (!budgetSheet?.data?.[0]) {
+    const result = parseSheetData(meta.data.sheets ?? []);
+    if (!result) {
       res.status(400).json({ error: "No data found in spreadsheet" });
       return;
     }
 
-    const gridData = budgetSheet.data[0];
-    const rows = gridData.rowData ?? [];
-
-    const bills: any[] = [];
-    const existingWeeks: any[] = [];
-
-    const headerRow = rows[0]?.values ?? [];
-
-    let FIRST_BUDGET_COL = -1;
-    for (let c = 0; c < headerRow.length; c++) {
-      const val = headerRow[c]?.formattedValue ?? "";
-      if (val.trim().toLowerCase().startsWith("budget")) {
-        FIRST_BUDGET_COL = c;
-        break;
-      }
-    }
-    if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
-
-    for (let i = 1; i < rows.length; i++) {
-      const cells = rows[i]?.values ?? [];
-      const nameCell = cells[0]?.formattedValue?.trim() ?? "";
-      if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
-
-      const rawAmt = cells[1]?.effectiveValue?.numberValue;
-      if (rawAmt === undefined) continue;
-      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-
-      const dayStr = cells[2]?.formattedValue ?? "";
-      const dayOfMonth =
-        dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
-          ? parseInt(dayStr)
-          : null;
-
-      let category: string = "fixed";
-      const lower = nameCell.toLowerCase();
-      if (lower.includes("rent")) category = "rent";
-      else if (
-        lower.includes("util") ||
-        lower.includes("electric") ||
-        lower.includes("water") ||
-        lower === "utilities"
-      )
-        category = "utilities";
-      else if (lower.includes("car")) category = "car";
-
-      bills.push({ name: nameCell, amount, dayOfMonth, category });
-    }
-
-    let weeklyStart = -1;
-    for (let i = 15; i < Math.min(30, rows.length); i++) {
-      const val = rows[i]?.values?.[0]?.formattedValue ?? "";
-      if (val.toLowerCase().includes("weekly")) {
-        weeklyStart = i + 1;
-        break;
-      }
-    }
-    if (weeklyStart !== -1) {
-      for (
-        let i = weeklyStart;
-        i < Math.min(weeklyStart + 10, rows.length);
-        i++
-      ) {
-        const cells = rows[i]?.values ?? [];
-        const name = cells[0]?.formattedValue?.trim() ?? "";
-        if (!name || name.toLowerCase().includes("yearly")) break;
-        const rawAmt = cells[1]?.effectiveValue?.numberValue;
-        if (rawAmt === undefined) continue;
-        bills.push({
-          name,
-          amount: rawAmt > 0 ? -rawAmt : rawAmt,
-          dayOfMonth: null,
-          category: "weekly",
-        });
-      }
-    }
-
-    let col = FIRST_BUDGET_COL;
-    while (col < headerRow.length) {
-      const label = headerRow[col]?.formattedValue?.trim() ?? "";
-      if (!label || !label.toLowerCase().startsWith("budget")) {
-        col += 2;
-        continue;
-      }
-
-      let openingBalance = 0;
-      let paycheck = 0;
-      let remaining = 0;
-      const items: any[] = [];
-
-      for (let r = 1; r < rows.length; r++) {
-        const cells = rows[r]?.values ?? [];
-        const key = cells[col]?.formattedValue?.trim() ?? "";
-        const num = cells[col + 1]?.effectiveValue?.numberValue;
-
-        if (!key && num === undefined) continue;
-        if (key.toLowerCase().includes("remaining acct")) {
-          openingBalance = num ?? 0;
-        } else if (key.toLowerCase() === "paycheck") {
-          paycheck = num ?? 0;
-        } else if (key.toLowerCase() === "remaining") {
-          remaining = num ?? 0;
-        } else if (key && num !== undefined) {
-          items.push({ name: key, amount: num });
-        }
-      }
-
-      existingWeeks.push({
-        label,
-        startCol: col,
-        openingBalance,
-        paycheck,
-        items,
-        remaining,
-      });
-      col += 2;
-    }
-
-    const nextWeekStartCol =
-      existingWeeks.length > 0
-        ? existingWeeks[existingWeeks.length - 1].startCol + 2
-        : FIRST_BUDGET_COL;
-
-    const lastRemaining =
-      existingWeeks.length > 0
-        ? existingWeeks[existingWeeks.length - 1].remaining
-        : 0;
-
-    res.json({
-      bills,
-      existingWeeks,
-      nextWeekStartCol,
-      lastRemaining,
-      sheetTitle: budgetSheet.properties?.title ?? "Budget",
-    });
+    res.json(result);
   } catch (err: any) {
     if (err.code === 401) {
       req.session.googleTokens = null;
+      res.status(401).json({ error: "Google session expired. Please reconnect." });
+      return;
+    }
+    res.status(500).json({
+      error: "Failed to read sheet: " + (err.message ?? String(err)),
+    });
+  }
+});
+
+router.post("/sheets/read-url", async (req, res): Promise<void> => {
+  const { url } = req.body as { url?: string };
+  if (!url || typeof url !== "string") {
+    res.status(400).json({ error: "Missing or invalid 'url' field" });
+    return;
+  }
+
+  const spreadsheetId = extractSpreadsheetId(url.trim());
+  if (!spreadsheetId) {
+    res.status(400).json({ error: "Could not extract a spreadsheet ID from that URL. Please paste a Google Sheets link." });
+    return;
+  }
+
+  const oauthAuth = getAuthedClient(req);
+
+  const apiKey = process.env["GOOGLE_API_KEY"];
+
+  const auth: any = oauthAuth ?? (apiKey ? apiKey : null);
+
+  if (!auth) {
+    res.status(400).json({
+      error: "The sheet must be publicly shared (\"Anyone with the link\"), or you must sign in with Google first. No API key or OAuth credentials are available.",
+    });
+    return;
+  }
+
+  try {
+    const sheets = google.sheets({ version: "v4", auth });
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId,
+      includeGridData: true,
+    });
+
+    const result = parseSheetData(meta.data.sheets ?? []);
+    if (!result) {
+      res.status(400).json({ error: "No data found in spreadsheet" });
+      return;
+    }
+
+    res.json({ ...result, spreadsheetId });
+  } catch (err: any) {
+    if (err.code === 403 || err.code === 404) {
+      res.status(403).json({
+        error: "Cannot access this spreadsheet. Make sure it is shared as \"Anyone with the link can view\", or sign in with Google to access your private sheets.",
+      });
+      return;
+    }
+    if (err.code === 401) {
+      if (req.session?.googleTokens) {
+        req.session.googleTokens = null;
+      }
       res.status(401).json({ error: "Google session expired. Please reconnect." });
       return;
     }

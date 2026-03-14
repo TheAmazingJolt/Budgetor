@@ -20,6 +20,7 @@ import {
   Sheet,
   LogOut,
   CloudUpload,
+  Link,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -32,6 +33,7 @@ import {
   useSheetList,
   useSheetRead,
   useSheetWrite,
+  useSheetReadByUrl,
   getGoogleAuthUrl,
   googleDisconnect,
 } from "@workspace/api-client-react";
@@ -75,6 +77,8 @@ export function BudgetWizard() {
   const [googleNextCol, setGoogleNextCol] = useState(2);
   const [isWritingToSheet, setIsWritingToSheet] = useState(false);
   const [sheetWriteSuccess, setSheetWriteSuccess] = useState(false);
+  const [pastedUrl, setPastedUrl] = useState("");
+  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
   const {
     uploadedFile,
@@ -112,6 +116,7 @@ export function BudgetWizard() {
   const queryClient = useQueryClient();
   const generateMutation = useGenerateBudget();
   const sheetWriteMutation = useSheetWrite();
+  const sheetReadByUrlMutation = useSheetReadByUrl();
 
   const googleAuth = useGoogleAuthStatus({
     query: { retry: false, staleTime: 30000 },
@@ -232,6 +237,53 @@ export function BudgetWizard() {
   const handleSelectSheet = (id: string, name: string) => {
     setSelectedSheetId(id);
     setSelectedSheetName(name);
+  };
+
+  const handlePasteUrl = () => {
+    if (!pastedUrl.trim()) return;
+    setIsLoadingUrl(true);
+
+    sheetReadByUrlMutation.mutate(
+      { data: { url: pastedUrl.trim() } },
+      {
+        onSuccess: (data) => {
+          setBills(data.bills);
+          setOpeningBalance(data.lastRemaining);
+          setGoogleSheetTitle(data.sheetTitle);
+          setGoogleNextCol(data.nextWeekStartCol);
+          setSelectedSheetId(data.spreadsheetId);
+          setSelectedSheetName(data.sheetTitle);
+
+          const canWriteBack = googleAuthenticated;
+          setInputMode(canWriteBack ? "google" : "scratch");
+          if (!canWriteBack) {
+            setBlankMode(true);
+            setIncludeBillsSummary(true);
+          }
+
+          const lastWeek = data.existingWeeks.at(-1);
+          if (lastWeek) {
+            const nextStart = nextStartAfterLabel(lastWeek.label);
+            if (nextStart) setStartDate(nextStart);
+          }
+
+          toast({
+            title: "Sheet loaded from URL",
+            description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Download as .xlsx (sign in with Google to write back)." : ""}`,
+          });
+          setStep(1);
+          setIsLoadingUrl(false);
+        },
+        onError: (err: any) => {
+          toast({
+            title: "Failed to load sheet",
+            description: err?.data?.error ?? err?.message ?? "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.",
+            variant: "destructive",
+          });
+          setIsLoadingUrl(false);
+        },
+      }
+    );
   };
 
   const handleGenerate = () => {
@@ -445,6 +497,43 @@ export function BudgetWizard() {
                     </div>
                   </div>
                 </button>
+
+                <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-sky-100">
+                      <Link className="w-5 h-5 text-sky-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">Paste Google Sheets URL</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Paste a link to a shared Google Sheet to read your budget data.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="url"
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      value={pastedUrl}
+                      onChange={(e) => setPastedUrl(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handlePasteUrl(); }}
+                      className="flex-1 text-sm"
+                      disabled={isLoadingUrl}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handlePasteUrl}
+                      disabled={!pastedUrl.trim() || isLoadingUrl}
+                      className="shrink-0"
+                    >
+                      {isLoadingUrl ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Load"
+                      )}
+                    </Button>
+                  </div>
+                </div>
 
                 {googleConfigured && (
                   <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
