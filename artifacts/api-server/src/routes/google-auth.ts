@@ -85,7 +85,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/google/disconnect", (req, res) => {
-  (req as any).session.googleTokens = null;
+  (req as any).session.googleTokens = undefined;
   res.json({ ok: true });
 });
 

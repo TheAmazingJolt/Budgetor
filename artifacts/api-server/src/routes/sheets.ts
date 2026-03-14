@@ -74,7 +74,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
 
     const rawAmt = cells[1]?.effectiveValue?.numberValue;
-    if (rawAmt === undefined) continue;
+    if (rawAmt == null) continue;
     const amount = rawAmt > 0 ? -rawAmt : rawAmt;
 
     const dayStr = cells[2]?.formattedValue ?? "";
@@ -116,7 +116,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       const name = cells[0]?.formattedValue?.trim() ?? "";
       if (!name || name.toLowerCase().includes("yearly")) break;
       const rawAmt = cells[1]?.effectiveValue?.numberValue;
-      if (rawAmt === undefined) continue;
+      if (rawAmt == null) continue;
       bills.push({
         name,
         amount: rawAmt > 0 ? -rawAmt : rawAmt,
@@ -211,7 +211,7 @@ router.get("/sheets/list", async (req, res): Promise<void> => {
     });
   } catch (err: any) {
     if (err.code === 401) {
-      req.session.googleTokens = null;
+      req.session.googleTokens = undefined;
       res.status(401).json({ error: "Google session expired. Please reconnect." });
       return;
     }
@@ -244,7 +244,7 @@ router.get("/sheets/:id/read", async (req, res): Promise<void> => {
     res.json(result);
   } catch (err: any) {
     if (err.code === 401) {
-      req.session.googleTokens = null;
+      req.session.googleTokens = undefined;
       res.status(401).json({ error: "Google session expired. Please reconnect." });
       return;
     }
@@ -303,7 +303,7 @@ router.post("/sheets/read-url", async (req, res): Promise<void> => {
     }
     if (err.code === 401) {
       if (req.session?.googleTokens) {
-        req.session.googleTokens = null;
+        req.session.googleTokens = undefined;
       }
       res.status(401).json({ error: "Google session expired. Please reconnect." });
       return;
@@ -596,7 +596,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     });
   } catch (err: any) {
     if (err.code === 401) {
-      req.session.googleTokens = null;
+      req.session.googleTokens = undefined;
       res.status(401).json({ error: "Google session expired. Please reconnect." });
       return;
     }

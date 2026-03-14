@@ -12,8 +12,8 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 const API_BASE_URL: string = (() => {
   const raw =
     typeof import.meta !== "undefined" &&
-    typeof (import.meta as Record<string, unknown>).env !== "undefined"
-      ? (((import.meta as Record<string, unknown>).env as Record<string, unknown>)[
+    typeof (import.meta as unknown as Record<string, unknown>).env !== "undefined"
+      ? (((import.meta as unknown as Record<string, unknown>).env as Record<string, unknown>)[
           "VITE_API_BASE_URL"
         ] as string) ?? ""
       : "";

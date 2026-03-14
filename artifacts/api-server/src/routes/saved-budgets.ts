@@ -54,9 +54,9 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
   }
 });
 
-router.put("/budgets/:id", requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const userId = req.user!.id;
-  const budgetId = req.params["id"];
+  const budgetId = req.params.id;
   const { name, bills, settings } = req.body as { name?: string; bills?: unknown[]; settings?: unknown };
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -83,9 +83,9 @@ router.put("/budgets/:id", requireAuth, async (req: Request, res: Response): Pro
   }
 });
 
-router.delete("/budgets/:id", requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.delete("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const userId = req.user!.id;
-  const budgetId = req.params["id"];
+  const budgetId = req.params.id;
 
   try {
     const [deleted] = await db
