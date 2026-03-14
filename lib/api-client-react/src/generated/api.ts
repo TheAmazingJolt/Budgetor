@@ -30,6 +30,14 @@ import type {
   SheetReadByUrlResponse,
   SheetWriteRequest,
   SheetWriteResponse,
+  AuthMeResponse,
+  AuthLoginUrlResponse,
+  AuthLogoutResponse,
+  SavedBudgetListResponse,
+  SavedBudgetResponse,
+  SavedBudgetCreateRequest,
+  SavedBudgetUpdateRequest,
+  DeleteResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -432,5 +440,240 @@ export const useSheetWrite = <
     Awaited<ReturnType<typeof sheetWrite>>,
     { id: string; data: SheetWriteRequest }
   > = ({ id, data }) => sheetWrite(id, data);
+  return useMutation({ mutationFn, ...mutationOptions });
+};
+
+export const authMe = async (options?: RequestInit): Promise<AuthMeResponse> => {
+  return customFetch<AuthMeResponse>(`/api/auth/me`, {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getAuthMeQueryKey = () => [`/api/auth/me`] as const;
+
+export const getAuthMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof authMe>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof authMe>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getAuthMeQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof authMe>>> = ({ signal }) =>
+    authMe({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof authMe>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useAuthMe<
+  TData = Awaited<ReturnType<typeof authMe>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof authMe>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAuthMeQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const authGuestLogin = async (options?: RequestInit): Promise<AuthMeResponse> => {
+  return customFetch<AuthMeResponse>(`/api/auth/guest`, {
+    ...options,
+    method: "POST",
+    credentials: "include",
+  });
+};
+
+export const useAuthGuestLogin = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authGuestLogin>>, TError, void, TContext>;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authGuestLogin>>, void> = () =>
+    authGuestLogin();
+  return useMutation({ mutationFn, ...mutationOptions });
+};
+
+export const getAuthLoginGoogleUrl = async (
+  redirect?: string,
+  options?: RequestInit,
+): Promise<AuthLoginUrlResponse> => {
+  const params = redirect ? `?redirect=${encodeURIComponent(redirect)}` : "";
+  return customFetch<AuthLoginUrlResponse>(`/api/auth/login/google${params}`, {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getAuthLoginAppleUrl = async (
+  redirect?: string,
+  options?: RequestInit,
+): Promise<AuthLoginUrlResponse> => {
+  const params = redirect ? `?redirect=${encodeURIComponent(redirect)}` : "";
+  return customFetch<AuthLoginUrlResponse>(`/api/auth/login/apple${params}`, {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const authLogout = async (options?: RequestInit): Promise<AuthLogoutResponse> => {
+  return customFetch<AuthLogoutResponse>(`/api/auth/logout`, {
+    ...options,
+    method: "POST",
+    credentials: "include",
+  });
+};
+
+export const useAuthLogout = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authLogout>>, TError, void, TContext>;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authLogout>>, void> = () =>
+    authLogout();
+  return useMutation({ mutationFn, ...mutationOptions });
+};
+
+export const savedBudgetList = async (options?: RequestInit): Promise<SavedBudgetListResponse> => {
+  return customFetch<SavedBudgetListResponse>(`/api/budgets`, {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getSavedBudgetListQueryKey = () => [`/api/budgets`] as const;
+
+export const getSavedBudgetListQueryOptions = <
+  TData = Awaited<ReturnType<typeof savedBudgetList>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof savedBudgetList>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getSavedBudgetListQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof savedBudgetList>>> = ({ signal }) =>
+    savedBudgetList({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof savedBudgetList>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useSavedBudgetList<
+  TData = Awaited<ReturnType<typeof savedBudgetList>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof savedBudgetList>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSavedBudgetListQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const savedBudgetCreate = async (
+  data: SavedBudgetCreateRequest,
+  options?: RequestInit,
+): Promise<SavedBudgetResponse> => {
+  return customFetch<SavedBudgetResponse>(`/api/budgets`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+    credentials: "include",
+  });
+};
+
+export const useSavedBudgetCreate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savedBudgetCreate>>,
+    TError,
+    { data: SavedBudgetCreateRequest },
+    TContext
+  >;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof savedBudgetCreate>>,
+    { data: SavedBudgetCreateRequest }
+  > = ({ data }) => savedBudgetCreate(data);
+  return useMutation({ mutationFn, ...mutationOptions });
+};
+
+export const savedBudgetUpdate = async (
+  id: string,
+  data: SavedBudgetUpdateRequest,
+  options?: RequestInit,
+): Promise<SavedBudgetResponse> => {
+  return customFetch<SavedBudgetResponse>(`/api/budgets/${id}`, {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+    credentials: "include",
+  });
+};
+
+export const useSavedBudgetUpdate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savedBudgetUpdate>>,
+    TError,
+    { id: string; data: SavedBudgetUpdateRequest },
+    TContext
+  >;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof savedBudgetUpdate>>,
+    { id: string; data: SavedBudgetUpdateRequest }
+  > = ({ id, data }) => savedBudgetUpdate(id, data);
+  return useMutation({ mutationFn, ...mutationOptions });
+};
+
+export const savedBudgetDelete = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DeleteResponse> => {
+  return customFetch<DeleteResponse>(`/api/budgets/${id}`, {
+    ...options,
+    method: "DELETE",
+    credentials: "include",
+  });
+};
+
+export const useSavedBudgetDelete = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savedBudgetDelete>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof savedBudgetDelete>>,
+    { id: string }
+  > = ({ id }) => savedBudgetDelete(id);
   return useMutation({ mutationFn, ...mutationOptions });
 };

@@ -122,6 +122,61 @@ export interface SheetWriteResponse {
   message: string;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  name: string;
+  avatarUrl: string | null;
+  provider: "google" | "apple" | "guest";
+  createdAt: string;
+}
+
+export interface AuthMeResponse {
+  user: AuthUser | null;
+}
+
+export interface AuthLoginUrlResponse {
+  url: string;
+}
+
+export interface AuthLogoutResponse {
+  ok: boolean;
+}
+
+export interface SavedBudget {
+  id: string;
+  userId: string;
+  name: string;
+  bills: any;
+  settings: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedBudgetListResponse {
+  budgets: SavedBudget[];
+}
+
+export interface SavedBudgetResponse {
+  budget: SavedBudget;
+}
+
+export interface SavedBudgetCreateRequest {
+  name: string;
+  bills: any[];
+  settings?: any;
+}
+
+export interface SavedBudgetUpdateRequest {
+  name?: string;
+  bills?: any[];
+  settings?: any;
+}
+
+export interface DeleteResponse {
+  ok: boolean;
+}
+
 export interface BudgetRequest {
   /** ISO date string for first week start */
   startDate: string;

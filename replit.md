@@ -27,6 +27,8 @@ Features:
 - **Three input modes**: Upload .xlsx file, Start from scratch (manual bill entry), or Google Sheets (direct read/write)
 - **Google Sheets integration**: OAuth2 flow for reading budget data from and writing formatted budget columns to Google Sheets (requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI env vars for Railway)
 - **Start from scratch**: Create a budget without uploading any file; enter bills manually
+- **User accounts**: Sign in with Google, Apple, or continue as guest. Guest accounts auto-created when saving; can upgrade to Google/Apple keeping saved budgets
+- **Saved budgets**: CRUD for saving/loading budget configurations (bills + settings) per user account
 - **Week count selector**: pick how many weeks to generate; end date auto-fills (start + weeks × 7 - 1 days)
 - **Monthly bill reset**: rent/utilities/car split across weeks within each calendar month and reset at the new month
 - **Weekly balancing**: within each month, partial rent/utilities/car amounts are adjusted so every week ends with the exact same remaining balance; uses proportional allocation with month-level rounding reconciliation
@@ -46,6 +48,8 @@ Key files:
 - `artifacts/api-server/src/routes/budget.ts` — POST /api/budget/generate endpoint
 - `artifacts/api-server/src/routes/google-auth.ts` — Google OAuth2 endpoints (auth, callback, status, disconnect)
 - `artifacts/api-server/src/routes/sheets.ts` — Google Sheets API endpoints (list, read, write with formatting)
+- `artifacts/api-server/src/routes/user-auth.ts` — User account auth (guest, Google, Apple login; attachUser middleware; /auth/me, /auth/guest, /auth/login/google, /auth/login/apple, /auth/logout)
+- `artifacts/api-server/src/routes/saved-budgets.ts` — Saved budgets CRUD (GET/POST/PUT/DELETE /api/budgets)
 
 ## Structure
 
@@ -99,7 +103,8 @@ Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client insta
 
 - `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
 - `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
+- `src/schema/users.ts` — users table (id, email, name, avatarUrl, provider [google/apple/guest], providerId)
+- `src/schema/saved-budgets.ts` — saved_budgets table (id, userId, name, bills JSON, settings JSON, timestamps)
 - `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
 - Exports: `.` (pool, db, schema), `./schema` (schema only)
 

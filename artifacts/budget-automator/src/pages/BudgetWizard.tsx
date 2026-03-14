@@ -21,6 +21,10 @@ import {
   LogOut,
   CloudUpload,
   Link,
+  User,
+  Save,
+  FolderOpen,
+  LogIn,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -36,6 +40,15 @@ import {
   useSheetReadByUrl,
   getGoogleAuthUrl,
   googleDisconnect,
+  useAuthMe,
+  useAuthGuestLogin,
+  useAuthLogout,
+  useSavedBudgetList,
+  useSavedBudgetCreate,
+  useSavedBudgetDelete,
+  getAuthLoginGoogleUrl,
+  getAuthMeQueryKey,
+  getSavedBudgetListQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,6 +62,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BillForm } from "@/components/BillForm";
 import { Currency } from "@/components/Currency";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Bill } from "@workspace/api-client-react";
 
 const STEPS = ["Upload", "Configure", "Download"];
@@ -112,11 +132,28 @@ export function BudgetWizard() {
     reset,
   } = useBudgetStore();
 
+  const [saveBudgetName, setSaveBudgetName] = useState("");
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const generateMutation = useGenerateBudget();
   const sheetWriteMutation = useSheetWrite();
   const sheetReadByUrlMutation = useSheetReadByUrl();
+
+  const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } });
+  const currentUser = authQuery.data?.user ?? null;
+  const isSignedIn = !!currentUser;
+  const isGuest = currentUser?.provider === "guest";
+
+  const guestLoginMutation = useAuthGuestLogin();
+  const logoutMutation = useAuthLogout();
+  const saveBudgetMutation = useSavedBudgetCreate();
+  const deleteBudgetMutation = useSavedBudgetDelete();
+
+  const savedBudgetsQuery = useSavedBudgetList({
+    query: { enabled: isSignedIn, retry: false, staleTime: 15000 },
+  });
 
   const googleAuth = useGoogleAuthStatus({
     query: { retry: false, staleTime: 30000 },
@@ -232,6 +269,124 @@ export function BudgetWizard() {
       setSelectedSheetName(null);
       toast({ title: "Disconnected from Google" });
     } catch {}
+  };
+
+  const handleAccountGoogleLogin = async () => {
+    try {
+      const currentUrl = window.location.href;
+      const result = await getAuthLoginGoogleUrl(currentUrl);
+      window.location.href = result.url;
+    } catch (err) {
+      toast({
+        title: "Failed to start Google login",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGuestLogin = () => {
+    guestLoginMutation.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
+        toast({ title: "Signed in as guest" });
+      },
+    });
+  };
+
+  const handleSignOut = () => {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+        toast({ title: "Signed out" });
+      },
+    });
+  };
+
+  const handleSaveBudget = () => {
+    if (!saveBudgetName.trim()) return;
+
+    const ensureSignedIn = (cb: () => void) => {
+      if (isSignedIn) {
+        cb();
+      } else {
+        guestLoginMutation.mutate(undefined, {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
+            cb();
+          },
+        });
+      }
+    };
+
+    ensureSignedIn(() => {
+      saveBudgetMutation.mutate(
+        {
+          data: {
+            name: saveBudgetName.trim(),
+            bills,
+            settings: {
+              openingBalance,
+              paycheckAmount,
+              weekCount,
+              newWeekStartDate,
+              newWeekEndDate,
+              zeroOpeningBalance,
+              includeBillsSummary,
+              blankMode,
+              inputMode,
+            },
+          },
+        },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+            toast({ title: "Budget saved", description: `"${saveBudgetName.trim()}" has been saved.` });
+            setIsSaveDialogOpen(false);
+            setSaveBudgetName("");
+          },
+          onError: (err: any) => {
+            toast({
+              title: "Failed to save",
+              description: err?.data?.error ?? "Unknown error",
+              variant: "destructive",
+            });
+          },
+        }
+      );
+    });
+  };
+
+  const handleLoadSavedBudget = (budget: any) => {
+    reset();
+    const b = budget.bills as Bill[];
+    const s = budget.settings as any;
+    setBills(b);
+    if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
+    if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
+    if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
+    if (s?.newWeekStartDate) setStartDate(s.newWeekStartDate);
+    if (s?.newWeekEndDate) setEndDate(s.newWeekEndDate);
+    if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
+    if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
+    if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
+    if (s?.inputMode) setInputMode(s.inputMode);
+    else setInputMode("scratch");
+    setStep(1);
+    toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${b.length} bills.` });
+  };
+
+  const handleDeleteSavedBudget = (id: string, name: string) => {
+    deleteBudgetMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+          toast({ title: "Budget deleted", description: `"${name}" has been removed.` });
+        },
+      }
+    );
   };
 
   const handleSelectSheet = (id: string, name: string) => {
@@ -412,26 +567,86 @@ export function BudgetWizard() {
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2">
-            {STEPS.map((label, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <div
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                    i === step
-                      ? "bg-primary text-white"
-                      : i < step
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-slate-100 text-muted-foreground"
-                  }`}
-                >
-                  {i < step ? <Check className="w-3 h-3" /> : <span>{i + 1}</span>}
-                  {label}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2">
+              {STEPS.map((label, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                      i === step
+                        ? "bg-primary text-white"
+                        : i < step
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-slate-100 text-muted-foreground"
+                    }`}
+                  >
+                    {i < step ? <Check className="w-3 h-3" /> : <span>{i + 1}</span>}
+                    {label}
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  )}
                 </div>
-                {i < STEPS.length - 1 && (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {isSignedIn ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2 rounded-xl">
+                    {currentUser?.avatarUrl ? (
+                      <img src={currentUser.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                    )}
+                    <span className="text-sm font-medium max-w-[120px] truncate">
+                      {currentUser?.name || "Guest"}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-3 py-2">
+                    <p className="text-sm font-medium">{currentUser?.name}</p>
+                    {currentUser?.email && (
+                      <p className="text-xs text-muted-foreground">{currentUser.email}</p>
+                    )}
+                    {isGuest && (
+                      <Badge variant="outline" className="mt-1 text-xs">Guest</Badge>
+                    )}
+                  </div>
+                  <DropdownMenuSeparator />
+                  {isGuest && (
+                    <>
+                      <DropdownMenuItem onClick={handleAccountGoogleLogin}>
+                        <LogIn className="w-4 h-4 mr-2" /> Sign in with Google
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOut className="w-4 h-4 mr-2" /> Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 rounded-xl">
+                    <LogIn className="w-4 h-4" /> Sign in
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={handleAccountGoogleLogin}>
+                    Sign in with Google
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGuestLogin}>
+                    Continue as guest
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </header>
@@ -624,6 +839,67 @@ export function BudgetWizard() {
                   </div>
                 )}
               </div>
+
+              {savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold text-foreground">My Saved Budgets</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {savedBudgetsQuery.data.budgets.map((budget) => (
+                      <Card
+                        key={budget.id}
+                        className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl cursor-pointer border-border/40"
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <button
+                              type="button"
+                              className="flex-1 text-left"
+                              onClick={() => handleLoadSavedBudget(budget)}
+                            >
+                              <p className="font-semibold text-sm text-foreground">{budget.name}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {(budget.bills as any[]).length} bills
+                                {" \u00b7 "}
+                                Saved {new Date(budget.updatedAt).toLocaleDateString()}
+                              </p>
+                            </button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSavedBudget(budget.id, budget.name);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!isSignedIn && (
+                <div className="rounded-2xl border-2 border-dashed border-border/50 bg-white/40 p-5 text-center">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Sign in to save your budgets and access them from anywhere.
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button size="sm" variant="outline" onClick={handleAccountGoogleLogin} className="gap-2">
+                      <LogIn className="w-4 h-4" /> Sign in with Google
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={handleGuestLogin} className="text-muted-foreground">
+                      Continue as guest
+                    </Button>
+                  </div>
+                </div>
+              )}
 
             </motion.div>
           )}
@@ -864,18 +1140,29 @@ export function BudgetWizard() {
                         : "Bills are pre-loaded below. Hit generate if you don't need to edit them."}
                     </p>
                   </div>
-                  <Button
-                    size="default"
-                    onClick={handleGenerate}
-                    disabled={!canGenerate}
-                    className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
-                  >
-                    {generateMutation.isPending ? (
-                      <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
-                    ) : (
-                      <>Generate Budget <ChevronRight className="w-4 h-4 ml-1" /></>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="default"
+                      onClick={() => setIsSaveDialogOpen(true)}
+                      disabled={bills.length === 0}
+                      className="shrink-0 rounded-xl"
+                    >
+                      <Save className="w-4 h-4 mr-1" /> Save
+                    </Button>
+                    <Button
+                      size="default"
+                      onClick={handleGenerate}
+                      disabled={!canGenerate}
+                      className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
+                    >
+                      {generateMutation.isPending ? (
+                        <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+                      ) : (
+                        <>Generate Budget <ChevronRight className="w-4 h-4 ml-1" /></>
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1175,6 +1462,48 @@ export function BudgetWizard() {
             }}
             onCancel={() => setIsBillDialogOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+        <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl font-bold">Save Budget</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-muted-foreground">Budget Name</Label>
+              <Input
+                placeholder="e.g. March 2026 Budget"
+                value={saveBudgetName}
+                onChange={(e) => setSaveBudgetName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveBudget(); }}
+                className="rounded-xl"
+                autoFocus
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {bills.length} bills will be saved along with your current settings.
+              {!isSignedIn && " A guest account will be created automatically."}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setIsSaveDialogOpen(false)} className="rounded-xl">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveBudget}
+                disabled={!saveBudgetName.trim() || saveBudgetMutation.isPending || guestLoginMutation.isPending}
+                className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
+              >
+                {saveBudgetMutation.isPending || guestLoginMutation.isPending ? (
+                  <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Saving…</>
+                ) : (
+                  <><Save className="w-4 h-4 mr-1" /> Save</>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
