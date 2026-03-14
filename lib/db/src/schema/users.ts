@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, uniqueIndex, bigint } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const usersTable = pgTable("users", {
@@ -8,6 +8,9 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"),
   provider: text("provider").notNull().$type<"google" | "apple" | "guest">(),
   providerId: text("provider_id"),
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiry: bigint("google_token_expiry", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

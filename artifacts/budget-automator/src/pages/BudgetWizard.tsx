@@ -1048,14 +1048,18 @@ export function BudgetWizard() {
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <p className="font-semibold text-sm text-foreground">Google Sheets</p>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-xs text-muted-foreground"
-                                onClick={handleDisconnectGoogle}
-                              >
-                                <LogOut className="w-3 h-3 mr-1" /> Disconnect
-                              </Button>
+                              {currentUser?.provider === "google" ? (
+                                <span className="text-xs text-green-600 font-medium">Via Google account</span>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs text-muted-foreground"
+                                  onClick={handleDisconnectGoogle}
+                                >
+                                  <LogOut className="w-3 h-3 mr-1" /> Disconnect
+                                </Button>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">Select a spreadsheet to read and write directly.</p>
                           </div>

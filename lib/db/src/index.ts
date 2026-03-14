@@ -28,6 +28,10 @@ export async function initDb(): Promise<void> {
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_token_expiry BIGINT;
+
       CREATE UNIQUE INDEX IF NOT EXISTS users_provider_provider_id_unique
         ON users (provider, provider_id)
         WHERE provider_id IS NOT NULL;

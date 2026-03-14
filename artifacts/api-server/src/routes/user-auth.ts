@@ -344,6 +344,8 @@ router.get("/auth/login/google", (req: Request, res: Response) => {
     scope: [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.readonly",
     ],
     prompt: "consent",
     state,
@@ -389,6 +391,15 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
       name: profile.name,
       avatarUrl: profile.picture,
     });
+
+    if (tokens.access_token) {
+      await db.update(usersTable).set({
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token ?? null,
+        googleTokenExpiry: tokens.expiry_date ?? null,
+        updatedAt: new Date(),
+      }).where(eq(usersTable.id, userId));
+    }
 
     const authCode = generateAuthCode(userId);
     const sep = redirectUrl.includes("?") ? "&" : "?";

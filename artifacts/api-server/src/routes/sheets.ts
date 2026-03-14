@@ -1,15 +1,46 @@
 import { Router, type IRouter } from "express";
 import { google, type sheets_v4 } from "googleapis";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 function getAuthedClient(req: any) {
+  const clientId = process.env["GOOGLE_CLIENT_ID"];
+  const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
+
+  const user = req.user;
+  if (user?.googleAccessToken) {
+    const redirectUri =
+      process.env["GOOGLE_ACCOUNT_REDIRECT_URI"] ||
+      process.env["GOOGLE_REDIRECT_URI"] ||
+      "";
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    oauth2Client.setCredentials({
+      access_token: user.googleAccessToken,
+      refresh_token: user.googleRefreshToken ?? undefined,
+      expiry_date: user.googleTokenExpiry ?? undefined,
+    });
+
+    oauth2Client.on("tokens", (newTokens) => {
+      const update: Record<string, unknown> = { updatedAt: new Date() };
+      if (newTokens.access_token) update.googleAccessToken = newTokens.access_token;
+      if (newTokens.refresh_token) update.googleRefreshToken = newTokens.refresh_token;
+      if (newTokens.expiry_date) update.googleTokenExpiry = newTokens.expiry_date;
+      db.update(usersTable).set(update as any).where(eq(usersTable.id, user.id)).catch((err) => {
+        console.error("Failed to persist refreshed Google tokens:", err);
+      });
+    });
+
+    return oauth2Client;
+  }
+
   const tokens = req.session?.googleTokens;
   if (!tokens?.access_token) return null;
 
   const oauth2Client = new google.auth.OAuth2(
-    process.env["GOOGLE_CLIENT_ID"],
-    process.env["GOOGLE_CLIENT_SECRET"],
+    clientId,
+    clientSecret,
     process.env["GOOGLE_REDIRECT_URI"],
   );
   oauth2Client.setCredentials(tokens);

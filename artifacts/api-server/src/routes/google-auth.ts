@@ -21,14 +21,17 @@ const SCOPES = [
 ];
 
 router.get("/auth/google/status", (req, res) => {
+  const clientId = process.env["GOOGLE_CLIENT_ID"];
+  const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
   const configured = !!(
-    process.env["GOOGLE_CLIENT_ID"] &&
-    process.env["GOOGLE_CLIENT_SECRET"] &&
-    process.env["GOOGLE_REDIRECT_URI"]
+    clientId &&
+    clientSecret &&
+    (process.env["GOOGLE_REDIRECT_URI"] || process.env["GOOGLE_ACCOUNT_REDIRECT_URI"])
   );
 
+  const user = (req as any).user;
   const session = (req as any).session;
-  const authenticated = !!(session?.googleTokens?.access_token);
+  const authenticated = !!(user?.googleAccessToken || session?.googleTokens?.access_token);
 
   res.json({ configured, authenticated });
 });
