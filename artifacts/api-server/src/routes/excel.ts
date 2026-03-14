@@ -4,7 +4,7 @@ import { refreshMicrosoftToken } from "./microsoft-auth.js";
 const router: IRouter = Router();
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
-async function graphGet(accessToken: string, path: string) {
+async function graphGet(accessToken: string, path: string): Promise<any> {
   const res = await fetch(`${GRAPH}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -14,10 +14,10 @@ async function graphGet(accessToken: string, path: string) {
     err.status = res.status;
     throw err;
   }
-  return res.json();
+  return res.json() as any;
 }
 
-async function graphPost(accessToken: string, path: string, body: unknown) {
+async function graphPost(accessToken: string, path: string, body: unknown): Promise<any> {
   const res = await fetch(`${GRAPH}${path}`, {
     method: "POST",
     headers: {
@@ -32,10 +32,10 @@ async function graphPost(accessToken: string, path: string, body: unknown) {
     err.status = res.status;
     throw err;
   }
-  return res.json();
+  return res.json() as any;
 }
 
-async function graphPatch(accessToken: string, path: string, body: unknown) {
+async function graphPatch(accessToken: string, path: string, body: unknown): Promise<any> {
   const res = await fetch(`${GRAPH}${path}`, {
     method: "PATCH",
     headers: {
@@ -50,7 +50,7 @@ async function graphPatch(accessToken: string, path: string, body: unknown) {
     err.status = res.status;
     throw err;
   }
-  return res.json();
+  return res.json() as any;
 }
 
 async function getAccessToken(req: Request): Promise<string | null> {

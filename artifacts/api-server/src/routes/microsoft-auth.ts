@@ -100,7 +100,7 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
       return;
     }
 
-    const tokens = await response.json();
+    const tokens = await response.json() as any;
     (req as any).session.microsoftTokens = {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -158,7 +158,7 @@ export async function refreshMicrosoftToken(session: any): Promise<string | null
 
     if (!response.ok) return null;
 
-    const newTokens = await response.json();
+    const newTokens = await response.json() as any;
     session.microsoftTokens = {
       access_token: newTokens.access_token,
       refresh_token: newTokens.refresh_token ?? tokens.refresh_token,

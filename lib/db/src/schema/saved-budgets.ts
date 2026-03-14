@@ -1,6 +1,5 @@
 import { pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 import { usersTable } from "./users";
 
 export const savedBudgetsTable = pgTable("saved_budgets", {
@@ -14,5 +13,12 @@ export const savedBudgetsTable = pgTable("saved_budgets", {
 });
 
 export const insertSavedBudgetSchema = createInsertSchema(savedBudgetsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertSavedBudget = z.infer<typeof insertSavedBudgetSchema>;
+
+export type InsertSavedBudget = {
+  userId: string;
+  name: string;
+  bills: unknown;
+  settings: unknown;
+};
+
 export type SavedBudget = typeof savedBudgetsTable.$inferSelect;
