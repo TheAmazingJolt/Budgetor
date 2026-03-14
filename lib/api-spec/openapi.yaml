@@ -12,6 +12,12 @@ tags:
     description: Health operations
   - name: budget
     description: Budget operations
+  - name: auth
+    description: Authentication operations
+  - name: savedBudgets
+    description: Saved budget operations
+  - name: sheets
+    description: Google Sheets operations
 paths:
   /healthz:
     get:
@@ -52,6 +58,351 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: authMe
+      tags: [auth]
+      summary: Get current user
+      description: Returns the currently authenticated user or null
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMeResponse"
+
+  /auth/guest:
+    post:
+      operationId: authGuestLogin
+      tags: [auth]
+      summary: Create or resume guest session
+      description: Creates a new guest user or returns existing session user
+      responses:
+        "200":
+          description: Guest user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags: [auth]
+      summary: Log out
+      description: Clears the session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+
+  /auth/providers:
+    get:
+      operationId: authProviders
+      tags: [auth]
+      summary: Get available auth providers
+      description: Returns which OAuth providers are configured
+      responses:
+        "200":
+          description: Provider availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthProviders"
+
+  /auth/login/google:
+    get:
+      operationId: authLoginGoogle
+      tags: [auth]
+      summary: Get Google login URL
+      parameters:
+        - name: redirect
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Google OAuth URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                required:
+                  - url
+
+  /auth/login/apple:
+    get:
+      operationId: authLoginApple
+      tags: [auth]
+      summary: Get Apple login URL
+      parameters:
+        - name: redirect
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Apple Sign-In URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                required:
+                  - url
+
+  /budgets:
+    get:
+      operationId: savedBudgetList
+      tags: [savedBudgets]
+      summary: List saved budgets
+      description: Returns all saved budgets for the authenticated user
+      responses:
+        "200":
+          description: List of saved budgets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedBudgetListResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: savedBudgetCreate
+      tags: [savedBudgets]
+      summary: Create a saved budget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedBudgetCreateRequest"
+      responses:
+        "200":
+          description: Created budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedBudgetResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /budgets/{id}:
+    put:
+      operationId: savedBudgetUpdate
+      tags: [savedBudgets]
+      summary: Update a saved budget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedBudgetUpdateRequest"
+      responses:
+        "200":
+          description: Updated budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedBudgetResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Budget not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: savedBudgetDelete
+      tags: [savedBudgets]
+      summary: Delete a saved budget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/google/status:
+    get:
+      operationId: googleAuthStatus
+      tags: [sheets]
+      summary: Get Google Sheets OAuth status
+      responses:
+        "200":
+          description: OAuth status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleAuthStatus"
+
+  /auth/google:
+    get:
+      operationId: getGoogleAuthUrl
+      tags: [sheets]
+      summary: Get Google Sheets OAuth URL
+      parameters:
+        - name: redirect
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Google OAuth URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                required:
+                  - url
+
+  /auth/google/disconnect:
+    post:
+      operationId: googleDisconnect
+      tags: [sheets]
+      summary: Disconnect Google Sheets OAuth
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+
+  /sheets/list:
+    get:
+      operationId: sheetList
+      tags: [sheets]
+      summary: List Google Sheets
+      responses:
+        "200":
+          description: List of sheets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SheetListResponse"
+
+  /sheets/{id}/read:
+    get:
+      operationId: sheetRead
+      tags: [sheets]
+      summary: Read a Google Sheet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sheet data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SheetReadResponse"
+
+  /sheets/read-url:
+    post:
+      operationId: sheetReadByUrl
+      tags: [sheets]
+      summary: Read a shared Google Sheet by URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SheetReadByUrlRequest"
+      responses:
+        "200":
+          description: Sheet data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SheetReadResponse"
+
+  /sheets/{id}/write:
+    post:
+      operationId: sheetWrite
+      tags: [sheets]
+      summary: Write to a Google Sheet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SheetWriteRequest"
+      responses:
+        "200":
+          description: Write result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SheetWriteResponse"
 
 components:
   schemas:
@@ -185,3 +536,218 @@ components:
         - weeks
         - totalMonthlyBills
         - averageWeeklyBills
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          nullable: true
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        provider:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - provider
+        - createdAt
+
+    AuthMeResponse:
+      type: object
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
+      required:
+        - user
+
+    AuthUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+      required:
+        - user
+
+    AuthProviders:
+      type: object
+      properties:
+        google:
+          type: boolean
+        apple:
+          type: boolean
+      required:
+        - google
+        - apple
+
+    SavedBudget:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        bills:
+          type: array
+          items: {}
+        settings:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - name
+        - bills
+        - settings
+        - createdAt
+        - updatedAt
+
+    SavedBudgetListResponse:
+      type: object
+      properties:
+        budgets:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedBudget"
+      required:
+        - budgets
+
+    SavedBudgetResponse:
+      type: object
+      properties:
+        budget:
+          $ref: "#/components/schemas/SavedBudget"
+      required:
+        - budget
+
+    SavedBudgetCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        bills:
+          type: array
+          items: {}
+        settings:
+          type: object
+      required:
+        - name
+        - bills
+        - settings
+
+    SavedBudgetUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        bills:
+          type: array
+          items: {}
+        settings:
+          type: object
+
+    GoogleAuthStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        authenticated:
+          type: boolean
+      required:
+        - configured
+        - authenticated
+
+    SheetFile:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        modifiedTime:
+          type: string
+
+    SheetListResponse:
+      type: object
+      properties:
+        sheets:
+          type: array
+          items:
+            $ref: "#/components/schemas/SheetFile"
+      required:
+        - sheets
+
+    SheetReadResponse:
+      type: object
+      properties:
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
+        openingBalance:
+          type: number
+        paycheckAmount:
+          type: number
+        weekCount:
+          type: number
+        startDate:
+          type: string
+          nullable: true
+        endDate:
+          type: string
+          nullable: true
+        sheetTitle:
+          type: string
+      required:
+        - bills
+
+    SheetReadByUrlRequest:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
+
+    SheetWriteRequest:
+      type: object
+      properties:
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklyBudget"
+        billsSummary:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
+        sheetTitle:
+          type: string
+      required:
+        - weeks
+
+    SheetWriteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sheetTitle:
+          type: string
+      required:
+        - success

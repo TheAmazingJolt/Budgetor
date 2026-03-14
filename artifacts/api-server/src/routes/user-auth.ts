@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { usersTable, type User } from "@workspace/db";
+import { usersTable, savedBudgetsTable, type User } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { google } from "googleapis";
 import { createRemoteJWKSet, jwtVerify, SignJWT, importPKCS8 } from "jose";
@@ -136,6 +136,15 @@ async function upsertOrUpgradeUser(
     .where(and(eq(usersTable.provider, provider), eq(usersTable.providerId, providerId)))
     .limit(1);
 
+  const currentUserId = req.session?.userId;
+  const currentGuestUser = currentUserId
+    ? (await db
+        .select()
+        .from(usersTable)
+        .where(and(eq(usersTable.id, currentUserId), eq(usersTable.provider, "guest")))
+        .limit(1))[0] ?? null
+    : null;
+
   if (existingUser) {
     await db
       .update(usersTable)
@@ -146,31 +155,31 @@ async function upsertOrUpgradeUser(
         updatedAt: new Date(),
       })
       .where(eq(usersTable.id, existingUser.id));
+
+    if (currentGuestUser && currentGuestUser.id !== existingUser.id) {
+      await db
+        .update(savedBudgetsTable)
+        .set({ userId: existingUser.id })
+        .where(eq(savedBudgetsTable.userId, currentGuestUser.id));
+      await db.delete(usersTable).where(eq(usersTable.id, currentGuestUser.id));
+    }
+
     return existingUser.id;
   }
 
-  const currentUserId = req.session?.userId;
-  if (currentUserId) {
-    const [guestUser] = await db
-      .select()
-      .from(usersTable)
-      .where(and(eq(usersTable.id, currentUserId), eq(usersTable.provider, "guest")))
-      .limit(1);
-
-    if (guestUser) {
-      await db
-        .update(usersTable)
-        .set({
-          provider,
-          providerId,
-          email: profile.email || null,
-          name: profile.name || guestUser.name,
-          avatarUrl: profile.avatarUrl || null,
-          updatedAt: new Date(),
-        })
-        .where(eq(usersTable.id, guestUser.id));
-      return guestUser.id;
-    }
+  if (currentGuestUser) {
+    await db
+      .update(usersTable)
+      .set({
+        provider,
+        providerId,
+        email: profile.email || null,
+        name: profile.name || currentGuestUser.name,
+        avatarUrl: profile.avatarUrl || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, currentGuestUser.id));
+    return currentGuestUser.id;
   }
 
   const [newUser] = await db

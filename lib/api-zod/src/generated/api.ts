@@ -44,80 +44,6 @@ export const GenerateBudgetBody = zod.object({
   ),
 });
 
-export const GoogleAuthStatusResponse = zod.object({
-  configured: zod.boolean(),
-  authenticated: zod.boolean(),
-});
-
-export const GoogleAuthUrlResponse = zod.object({
-  url: zod.string(),
-});
-
-export const GoogleDisconnectResponse = zod.object({
-  ok: zod.boolean(),
-});
-
-export const SheetListItem = zod.object({
-  id: zod.string(),
-  name: zod.string(),
-  modifiedTime: zod.string().optional(),
-});
-
-export const SheetListResponse = zod.object({
-  sheets: zod.array(SheetListItem),
-});
-
-export const SheetReadWeek = zod.object({
-  label: zod.string(),
-  startCol: zod.number(),
-  openingBalance: zod.number(),
-  paycheck: zod.number(),
-  items: zod.array(zod.object({ name: zod.string(), amount: zod.number() })),
-  remaining: zod.number(),
-});
-
-export const SheetReadResponse = zod.object({
-  bills: zod.array(zod.object({
-    name: zod.string(),
-    amount: zod.number(),
-    dayOfMonth: zod.number().nullish(),
-    category: zod.enum(["rent", "utilities", "car", "fixed", "weekly"]),
-  })),
-  existingWeeks: zod.array(SheetReadWeek),
-  nextWeekStartCol: zod.number(),
-  lastRemaining: zod.number(),
-  sheetTitle: zod.string(),
-});
-
-export const SheetReadByUrlBody = zod.object({
-  url: zod.string().describe("Google Sheets URL or spreadsheet ID"),
-});
-
-export const SheetReadByUrlResponse = SheetReadResponse.extend({
-  spreadsheetId: zod.string(),
-});
-
-export const SheetWriteRequest = zod.object({
-  weeks: zod.array(zod.object({
-    weekLabel: zod.string(),
-    startDate: zod.string(),
-    endDate: zod.string(),
-    openingBalance: zod.number(),
-    paycheck: zod.number(),
-    bills: zod.array(zod.object({ name: zod.string(), amount: zod.number() })),
-    totalBills: zod.number(),
-    closingBalance: zod.number(),
-  })),
-  startCol: zod.number(),
-  includeRemainingAcct: zod.boolean(),
-  sheetTitle: zod.string().optional(),
-});
-
-export const SheetWriteResponse = zod.object({
-  ok: zod.boolean(),
-  message: zod.string(),
-});
-
 export const GenerateBudgetResponse = zod.object({
   weeks: zod.array(
     zod.object({
@@ -146,4 +72,304 @@ export const GenerateBudgetResponse = zod.object({
   ),
   totalMonthlyBills: zod.number(),
   averageWeeklyBills: zod.number(),
+});
+
+/**
+ * Returns the currently authenticated user or null
+ * @summary Get current user
+ */
+export const AuthMeResponse = zod.object({
+  user: zod.union([
+    zod.object({
+      id: zod.string(),
+      email: zod.string().nullish(),
+      name: zod.string(),
+      avatarUrl: zod.string().nullish(),
+      provider: zod.string(),
+      createdAt: zod.date(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * Creates a new guest user or returns existing session user
+ * @summary Create or resume guest session
+ */
+export const AuthGuestLoginResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    email: zod.string().nullish(),
+    name: zod.string(),
+    avatarUrl: zod.string().nullish(),
+    provider: zod.string(),
+    createdAt: zod.date(),
+  }),
+});
+
+/**
+ * Clears the session
+ * @summary Log out
+ */
+export const AuthLogoutResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * Returns which OAuth providers are configured
+ * @summary Get available auth providers
+ */
+export const AuthProvidersResponse = zod.object({
+  google: zod.boolean(),
+  apple: zod.boolean(),
+});
+
+/**
+ * @summary Get Google login URL
+ */
+export const AuthLoginGoogleQueryParams = zod.object({
+  redirect: zod.coerce.string().optional(),
+});
+
+export const AuthLoginGoogleResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Get Apple login URL
+ */
+export const AuthLoginAppleQueryParams = zod.object({
+  redirect: zod.coerce.string().optional(),
+});
+
+export const AuthLoginAppleResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * Returns all saved budgets for the authenticated user
+ * @summary List saved budgets
+ */
+export const SavedBudgetListResponse = zod.object({
+  budgets: zod.array(
+    zod.object({
+      id: zod.string(),
+      userId: zod.string(),
+      name: zod.string(),
+      bills: zod.array(zod.unknown()),
+      settings: zod.object({}).passthrough(),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Create a saved budget
+ */
+export const SavedBudgetCreateBody = zod.object({
+  name: zod.string(),
+  bills: zod.array(zod.unknown()),
+  settings: zod.object({}).passthrough(),
+});
+
+export const SavedBudgetCreateResponse = zod.object({
+  budget: zod.object({
+    id: zod.string(),
+    userId: zod.string(),
+    name: zod.string(),
+    bills: zod.array(zod.unknown()),
+    settings: zod.object({}).passthrough(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  }),
+});
+
+/**
+ * @summary Update a saved budget
+ */
+export const SavedBudgetUpdateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SavedBudgetUpdateBody = zod.object({
+  name: zod.string().optional(),
+  bills: zod.array(zod.unknown()).optional(),
+  settings: zod.object({}).passthrough().optional(),
+});
+
+export const SavedBudgetUpdateResponse = zod.object({
+  budget: zod.object({
+    id: zod.string(),
+    userId: zod.string(),
+    name: zod.string(),
+    bills: zod.array(zod.unknown()),
+    settings: zod.object({}).passthrough(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  }),
+});
+
+/**
+ * @summary Delete a saved budget
+ */
+export const SavedBudgetDeleteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SavedBudgetDeleteResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Get Google Sheets OAuth status
+ */
+export const GoogleAuthStatusResponse = zod.object({
+  configured: zod.boolean(),
+  authenticated: zod.boolean(),
+});
+
+/**
+ * @summary Get Google Sheets OAuth URL
+ */
+export const GetGoogleAuthUrlQueryParams = zod.object({
+  redirect: zod.coerce.string().optional(),
+});
+
+export const GetGoogleAuthUrlResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Disconnect Google Sheets OAuth
+ */
+export const GoogleDisconnectResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary List Google Sheets
+ */
+export const SheetListResponse = zod.object({
+  sheets: zod.array(
+    zod.object({
+      id: zod.string().optional(),
+      name: zod.string().optional(),
+      modifiedTime: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Read a Google Sheet
+ */
+export const SheetReadParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SheetReadResponse = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .enum(["rent", "utilities", "car", "fixed", "weekly"])
+        .describe("Category for large-bill balancing"),
+    }),
+  ),
+  openingBalance: zod.number().optional(),
+  paycheckAmount: zod.number().optional(),
+  weekCount: zod.number().optional(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sheetTitle: zod.string().optional(),
+});
+
+/**
+ * @summary Read a shared Google Sheet by URL
+ */
+export const SheetReadByUrlBody = zod.object({
+  url: zod.string(),
+});
+
+export const SheetReadByUrlResponse = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .enum(["rent", "utilities", "car", "fixed", "weekly"])
+        .describe("Category for large-bill balancing"),
+    }),
+  ),
+  openingBalance: zod.number().optional(),
+  paycheckAmount: zod.number().optional(),
+  weekCount: zod.number().optional(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sheetTitle: zod.string().optional(),
+});
+
+/**
+ * @summary Write to a Google Sheet
+ */
+export const SheetWriteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SheetWriteBody = zod.object({
+  weeks: zod.array(
+    zod.object({
+      weekLabel: zod
+        .string()
+        .describe(
+          'Human-readable label like \"Budget from 3\/5\/26 to 3\/11\/26\"',
+        ),
+      startDate: zod.string().describe("ISO date string for week start"),
+      endDate: zod.string().describe("ISO date string for week end"),
+      openingBalance: zod
+        .number()
+        .describe("Amount remaining from previous week"),
+      paycheck: zod.number().describe("Paycheck received this week"),
+      bills: zod.array(
+        zod.object({
+          name: zod.string(),
+          amount: zod.number(),
+        }),
+      ),
+      totalBills: zod
+        .number()
+        .describe("Sum of all bill line items for this week"),
+      closingBalance: zod.number().describe("Amount remaining after all bills"),
+    }),
+  ),
+  billsSummary: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        amount: zod.number().describe("Monthly amount (negative = expense)"),
+        dayOfMonth: zod
+          .number()
+          .nullish()
+          .describe("Day of month bill is due (null for weekly bills)"),
+        category: zod
+          .enum(["rent", "utilities", "car", "fixed", "weekly"])
+          .describe("Category for large-bill balancing"),
+      }),
+    )
+    .optional(),
+  sheetTitle: zod.string().optional(),
+});
+
+export const SheetWriteResponse = zod.object({
+  success: zod.boolean(),
+  sheetTitle: zod.string().optional(),
 });

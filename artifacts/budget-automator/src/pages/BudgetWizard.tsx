@@ -48,8 +48,8 @@ import {
   useSavedBudgetCreate,
   useSavedBudgetUpdate,
   useSavedBudgetDelete,
-  getAuthLoginGoogleUrl,
-  getAuthLoginAppleUrl,
+  authLoginGoogle,
+  authLoginApple,
   getAuthMeQueryKey,
   getSavedBudgetListQueryKey,
 } from "@workspace/api-client-react";
@@ -297,7 +297,7 @@ export function BudgetWizard() {
   const handleAccountGoogleLogin = async () => {
     try {
       const currentUrl = window.location.href;
-      const result = await getAuthLoginGoogleUrl(currentUrl);
+      const result = await authLoginGoogle({ redirect: currentUrl });
       window.location.href = result.url;
     } catch (err) {
       toast({
@@ -311,7 +311,7 @@ export function BudgetWizard() {
   const handleAccountAppleLogin = async () => {
     try {
       const currentUrl = window.location.href;
-      const result = await getAuthLoginAppleUrl(currentUrl);
+      const result = await authLoginApple({ redirect: currentUrl });
       window.location.href = result.url;
     } catch (err) {
       toast({

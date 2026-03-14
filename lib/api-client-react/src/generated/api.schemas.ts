@@ -62,126 +62,6 @@ export interface WeeklyBudget {
   closingBalance: number;
 }
 
-export interface GoogleAuthStatus {
-  configured: boolean;
-  authenticated: boolean;
-}
-
-export interface GoogleAuthUrl {
-  url: string;
-}
-
-export interface GoogleDisconnectResult {
-  ok: boolean;
-}
-
-export interface SheetListItem {
-  id: string;
-  name: string;
-  modifiedTime?: string;
-}
-
-export interface SheetListResponse {
-  sheets: SheetListItem[];
-}
-
-export interface SheetReadWeek {
-  label: string;
-  startCol: number;
-  openingBalance: number;
-  paycheck: number;
-  items: { name: string; amount: number }[];
-  remaining: number;
-}
-
-export interface SheetReadResponse {
-  bills: Bill[];
-  existingWeeks: SheetReadWeek[];
-  nextWeekStartCol: number;
-  lastRemaining: number;
-  sheetTitle: string;
-}
-
-export interface SheetReadByUrlRequest {
-  url: string;
-}
-
-export interface SheetReadByUrlResponse extends SheetReadResponse {
-  spreadsheetId: string;
-}
-
-export interface SheetWriteRequest {
-  weeks: WeeklyBudget[];
-  startCol: number;
-  includeRemainingAcct: boolean;
-  sheetTitle?: string;
-}
-
-export interface SheetWriteResponse {
-  ok: boolean;
-  message: string;
-}
-
-export interface AuthUser {
-  id: string;
-  email: string | null;
-  name: string;
-  avatarUrl: string | null;
-  provider: "google" | "apple" | "guest";
-  createdAt: string;
-}
-
-export interface AuthMeResponse {
-  user: AuthUser | null;
-}
-
-export interface AuthLoginUrlResponse {
-  url: string;
-}
-
-export interface AuthProvidersResponse {
-  google: boolean;
-  apple: boolean;
-}
-
-export interface AuthLogoutResponse {
-  ok: boolean;
-}
-
-export interface SavedBudget {
-  id: string;
-  userId: string;
-  name: string;
-  bills: any;
-  settings: any;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SavedBudgetListResponse {
-  budgets: SavedBudget[];
-}
-
-export interface SavedBudgetResponse {
-  budget: SavedBudget;
-}
-
-export interface SavedBudgetCreateRequest {
-  name: string;
-  bills: any[];
-  settings?: any;
-}
-
-export interface SavedBudgetUpdateRequest {
-  name?: string;
-  bills?: any[];
-  settings?: any;
-}
-
-export interface DeleteResponse {
-  ok: boolean;
-}
-
 export interface BudgetRequest {
   /** ISO date string for first week start */
   startDate: string;
@@ -201,3 +81,137 @@ export interface BudgetResponse {
   totalMonthlyBills: number;
   averageWeeklyBills: number;
 }
+
+export interface AuthUser {
+  id: string;
+  email?: string | null;
+  name: string;
+  avatarUrl?: string | null;
+  provider: string;
+  createdAt: string;
+}
+
+export interface AuthMeResponse {
+  user: AuthUser | null;
+}
+
+export interface AuthUserResponse {
+  user: AuthUser;
+}
+
+export interface AuthProviders {
+  google: boolean;
+  apple: boolean;
+}
+
+export type SavedBudgetSettings = { [key: string]: unknown };
+
+export interface SavedBudget {
+  id: string;
+  userId: string;
+  name: string;
+  bills: unknown[];
+  settings: SavedBudgetSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedBudgetListResponse {
+  budgets: SavedBudget[];
+}
+
+export interface SavedBudgetResponse {
+  budget: SavedBudget;
+}
+
+export type SavedBudgetCreateRequestSettings = { [key: string]: unknown };
+
+export interface SavedBudgetCreateRequest {
+  name: string;
+  bills: unknown[];
+  settings: SavedBudgetCreateRequestSettings;
+}
+
+export type SavedBudgetUpdateRequestSettings = { [key: string]: unknown };
+
+export interface SavedBudgetUpdateRequest {
+  name?: string;
+  bills?: unknown[];
+  settings?: SavedBudgetUpdateRequestSettings;
+}
+
+export interface GoogleAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+}
+
+export interface SheetFile {
+  id?: string;
+  name?: string;
+  modifiedTime?: string;
+}
+
+export interface SheetListResponse {
+  sheets: SheetFile[];
+}
+
+export interface SheetReadResponse {
+  bills: Bill[];
+  openingBalance?: number;
+  paycheckAmount?: number;
+  weekCount?: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  sheetTitle?: string;
+}
+
+export interface SheetReadByUrlRequest {
+  url: string;
+}
+
+export interface SheetWriteRequest {
+  weeks: WeeklyBudget[];
+  billsSummary?: Bill[];
+  sheetTitle?: string;
+}
+
+export interface SheetWriteResponse {
+  success: boolean;
+  sheetTitle?: string;
+}
+
+export type AuthLogout200 = {
+  ok: boolean;
+};
+
+export type AuthLoginGoogleParams = {
+  redirect?: string;
+};
+
+export type AuthLoginGoogle200 = {
+  url: string;
+};
+
+export type AuthLoginAppleParams = {
+  redirect?: string;
+};
+
+export type AuthLoginApple200 = {
+  url: string;
+};
+
+export type SavedBudgetDelete200 = {
+  ok: boolean;
+};
+
+export type GetGoogleAuthUrlParams = {
+  redirect?: string;
+};
+
+export type GetGoogleAuthUrl200 = {
+  url: string;
+};
+
+export type GoogleDisconnect200 = {
+  ok: boolean;
+};
