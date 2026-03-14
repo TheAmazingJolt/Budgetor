@@ -18,12 +18,15 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Budget Automator App
 
-A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet:
-1. **Upload** — drop the existing budget file; reads bills and existing week history
+A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet or Google Sheets:
+1. **Upload** — drop the existing budget file, start from scratch, or connect to Google Sheets
 2. **Configure** — set start date, number of weeks (end date auto-calculates), opening balance, paycheck; choose output mode (append vs new file); toggle "Set Remaining Acct to $0"
-3. **Download** — generates balanced weekly bill distribution with proper formatting and downloads
+3. **Download** — generates balanced weekly bill distribution with proper formatting and downloads (or writes directly to Google Sheets)
 
 Features:
+- **Three input modes**: Upload .xlsx file, Start from scratch (manual bill entry), or Google Sheets (direct read/write)
+- **Google Sheets integration**: OAuth2 flow for reading budget data from and writing formatted budget columns to Google Sheets (requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI env vars for Railway)
+- **Start from scratch**: Create a budget without uploading any file; enter bills manually
 - **Week count selector**: pick how many weeks to generate; end date auto-fills (start + weeks × 7 - 1 days)
 - **Monthly bill reset**: rent/utilities/car split across weeks within each calendar month and reset at the new month
 - **Weekly balancing**: within each month, partial rent/utilities/car amounts are adjusted so every week ends with the exact same remaining balance; uses proportional allocation with month-level rounding reconciliation
@@ -41,6 +44,8 @@ Key files:
 - `artifacts/budget-automator/src/store/use-budget-store.ts` — zustand store with auto end-date calculation
 - `artifacts/api-server/src/lib/budget.ts` — bill distribution logic with per-month rent/utilities/car reset
 - `artifacts/api-server/src/routes/budget.ts` — POST /api/budget/generate endpoint
+- `artifacts/api-server/src/routes/google-auth.ts` — Google OAuth2 endpoints (auth, callback, status, disconnect)
+- `artifacts/api-server/src/routes/sheets.ts` — Google Sheets API endpoints (list, read, write with formatting)
 
 ## Structure
 

@@ -21,6 +21,13 @@ import type {
   BudgetResponse,
   ErrorResponse,
   HealthStatus,
+  GoogleAuthStatus,
+  GoogleAuthUrl,
+  GoogleDisconnectResult,
+  SheetListResponse,
+  SheetReadResponse,
+  SheetWriteRequest,
+  SheetWriteResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -193,4 +200,203 @@ export const useGenerateBudget = <
   TContext
 > => {
   return useMutation(getGenerateBudgetMutationOptions(options));
+};
+
+export const getGoogleAuthStatusUrl = () => `/api/auth/google/status`;
+
+export const googleAuthStatus = async (
+  options?: RequestInit,
+): Promise<GoogleAuthStatus> => {
+  return customFetch<GoogleAuthStatus>(getGoogleAuthStatusUrl(), {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getGoogleAuthStatusQueryKey = () => [`/api/auth/google/status`] as const;
+
+export const getGoogleAuthStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof googleAuthStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof googleAuthStatus>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGoogleAuthStatusQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof googleAuthStatus>>> = ({ signal }) =>
+    googleAuthStatus({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof googleAuthStatus>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useGoogleAuthStatus<
+  TData = Awaited<ReturnType<typeof googleAuthStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof googleAuthStatus>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGoogleAuthStatusQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGoogleAuthUrl = async (
+  redirect?: string,
+  options?: RequestInit,
+): Promise<GoogleAuthUrl> => {
+  const params = redirect ? `?redirect=${encodeURIComponent(redirect)}` : "";
+  return customFetch<GoogleAuthUrl>(`/api/auth/google${params}`, {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const googleDisconnect = async (
+  options?: RequestInit,
+): Promise<GoogleDisconnectResult> => {
+  return customFetch<GoogleDisconnectResult>(`/api/auth/google/disconnect`, {
+    ...options,
+    method: "POST",
+    credentials: "include",
+  });
+};
+
+export const useGoogleDisconnect = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof googleDisconnect>>,
+    TError,
+    void,
+    TContext
+  >;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof googleDisconnect>>, void> = () =>
+    googleDisconnect();
+  return useMutation({ mutationFn, ...mutationOptions });
+};
+
+export const getSheetListUrl = () => `/api/sheets/list`;
+
+export const sheetList = async (
+  options?: RequestInit,
+): Promise<SheetListResponse> => {
+  return customFetch<SheetListResponse>(getSheetListUrl(), {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getSheetListQueryKey = () => [`/api/sheets/list`] as const;
+
+export const getSheetListQueryOptions = <
+  TData = Awaited<ReturnType<typeof sheetList>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof sheetList>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getSheetListQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof sheetList>>> = ({ signal }) =>
+    sheetList({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof sheetList>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useSheetList<
+  TData = Awaited<ReturnType<typeof sheetList>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof sheetList>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSheetListQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getSheetReadUrl = (id: string) => `/api/sheets/${id}/read`;
+
+export const sheetRead = async (
+  id: string,
+  options?: RequestInit,
+): Promise<SheetReadResponse> => {
+  return customFetch<SheetReadResponse>(getSheetReadUrl(id), {
+    ...options,
+    method: "GET",
+    credentials: "include",
+  });
+};
+
+export const getSheetReadQueryKey = (id: string) => [`/api/sheets/${id}/read`] as const;
+
+export const getSheetReadQueryOptions = <
+  TData = Awaited<ReturnType<typeof sheetRead>>,
+  TError = ErrorType<unknown>,
+>(id: string, options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof sheetRead>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getSheetReadQueryKey(id);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof sheetRead>>> = ({ signal }) =>
+    sheetRead(id, { signal, ...requestOptions });
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof sheetRead>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useSheetRead<
+  TData = Awaited<ReturnType<typeof sheetRead>>,
+  TError = ErrorType<unknown>,
+>(id: string, options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof sheetRead>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSheetReadQueryOptions(id, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const sheetWrite = async (
+  id: string,
+  data: SheetWriteRequest,
+  options?: RequestInit,
+): Promise<SheetWriteResponse> => {
+  return customFetch<SheetWriteResponse>(`/api/sheets/${id}/write`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+    credentials: "include",
+  });
+};
+
+export const useSheetWrite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sheetWrite>>,
+    TError,
+    { id: string; data: SheetWriteRequest },
+    TContext
+  >;
+}) => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sheetWrite>>,
+    { id: string; data: SheetWriteRequest }
+  > = ({ id, data }) => sheetWrite(id, data);
+  return useMutation({ mutationFn, ...mutationOptions });
 };

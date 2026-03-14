@@ -44,6 +44,72 @@ export const GenerateBudgetBody = zod.object({
   ),
 });
 
+export const GoogleAuthStatusResponse = zod.object({
+  configured: zod.boolean(),
+  authenticated: zod.boolean(),
+});
+
+export const GoogleAuthUrlResponse = zod.object({
+  url: zod.string(),
+});
+
+export const GoogleDisconnectResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+export const SheetListItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  modifiedTime: zod.string().optional(),
+});
+
+export const SheetListResponse = zod.object({
+  sheets: zod.array(SheetListItem),
+});
+
+export const SheetReadWeek = zod.object({
+  label: zod.string(),
+  startCol: zod.number(),
+  openingBalance: zod.number(),
+  paycheck: zod.number(),
+  items: zod.array(zod.object({ name: zod.string(), amount: zod.number() })),
+  remaining: zod.number(),
+});
+
+export const SheetReadResponse = zod.object({
+  bills: zod.array(zod.object({
+    name: zod.string(),
+    amount: zod.number(),
+    dayOfMonth: zod.number().nullish(),
+    category: zod.enum(["rent", "utilities", "car", "fixed", "weekly"]),
+  })),
+  existingWeeks: zod.array(SheetReadWeek),
+  nextWeekStartCol: zod.number(),
+  lastRemaining: zod.number(),
+  sheetTitle: zod.string(),
+});
+
+export const SheetWriteRequest = zod.object({
+  weeks: zod.array(zod.object({
+    weekLabel: zod.string(),
+    startDate: zod.string(),
+    endDate: zod.string(),
+    openingBalance: zod.number(),
+    paycheck: zod.number(),
+    bills: zod.array(zod.object({ name: zod.string(), amount: zod.number() })),
+    totalBills: zod.number(),
+    closingBalance: zod.number(),
+  })),
+  startCol: zod.number(),
+  includeRemainingAcct: zod.boolean(),
+  sheetTitle: zod.string().optional(),
+});
+
+export const SheetWriteResponse = zod.object({
+  ok: zod.boolean(),
+  message: zod.string(),
+});
+
 export const GenerateBudgetResponse = zod.object({
   weeks: zod.array(
     zod.object({

@@ -1,0 +1,92 @@
+import { Router, type IRouter } from "express";
+import { google } from "googleapis";
+
+const router: IRouter = Router();
+
+function getOAuth2Client() {
+  const clientId = process.env["GOOGLE_CLIENT_ID"];
+  const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
+  const redirectUri = process.env["GOOGLE_REDIRECT_URI"];
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    return null;
+  }
+
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+}
+
+const SCOPES = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/drive.readonly",
+];
+
+router.get("/auth/google/status", (req, res) => {
+  const configured = !!(
+    process.env["GOOGLE_CLIENT_ID"] &&
+    process.env["GOOGLE_CLIENT_SECRET"] &&
+    process.env["GOOGLE_REDIRECT_URI"]
+  );
+
+  const session = (req as any).session;
+  const authenticated = !!(session?.googleTokens?.access_token);
+
+  res.json({ configured, authenticated });
+});
+
+router.get("/auth/google", (req, res) => {
+  const oauth2Client = getOAuth2Client();
+  if (!oauth2Client) {
+    res.status(500).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI." });
+    return;
+  }
+
+  const frontendUrl = req.query["redirect"] as string | undefined;
+  const state = frontendUrl ? Buffer.from(frontendUrl).toString("base64") : "";
+
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: SCOPES,
+    prompt: "consent",
+    state,
+  });
+
+  res.json({ url: authUrl });
+});
+
+router.get("/auth/google/callback", async (req, res): Promise<void> => {
+  const oauth2Client = getOAuth2Client();
+  if (!oauth2Client) {
+    res.status(500).json({ error: "Google OAuth not configured" });
+    return;
+  }
+
+  const code = req.query["code"] as string;
+  if (!code) {
+    res.status(400).json({ error: "Missing authorization code" });
+    return;
+  }
+
+  try {
+    const { tokens } = await oauth2Client.getToken(code);
+    (req as any).session.googleTokens = tokens;
+
+    const state = req.query["state"] as string | undefined;
+    let redirectUrl = "/";
+    if (state) {
+      try {
+        redirectUrl = Buffer.from(state, "base64").toString("utf-8");
+      } catch {}
+    }
+
+    res.redirect(redirectUrl);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to exchange code: " + (err.message ?? String(err)) });
+  }
+});
+
+router.post("/auth/google/disconnect", (req, res) => {
+  (req as any).session.googleTokens = null;
+  res.json({ ok: true });
+});
+
+export default router;

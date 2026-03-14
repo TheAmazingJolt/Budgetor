@@ -27,6 +27,7 @@ timeoutMs = 20000
 
 [nix]
 packages = ["zip"]
+channel = "stable-25_05"
 
 [[ports]]
 localPort = 8080

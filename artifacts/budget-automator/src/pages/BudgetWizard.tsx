@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,14 +16,27 @@ import {
   Edit2,
   Eye,
   FastForward,
+  FilePlus2,
+  Sheet,
+  LogOut,
+  CloudUpload,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 import { useBudgetStore } from "@/store/use-budget-store";
 import { parseBudgetSpreadsheet } from "@/lib/xlsx-parser";
 import { appendBudgetWeeks, createBlankBudget, downloadBlob } from "@/lib/xlsx-writer";
-import { useGenerateBudget } from "@workspace/api-client-react";
+import {
+  useGenerateBudget,
+  useGoogleAuthStatus,
+  useSheetList,
+  useSheetRead,
+  useSheetWrite,
+  getGoogleAuthUrl,
+  googleDisconnect,
+} from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,10 +51,6 @@ import type { Bill } from "@workspace/api-client-react";
 
 const STEPS = ["Upload", "Configure", "Download"];
 
-/**
- * Parses a week label like "Budget from 3/1/26 to 3/7/26" and returns the ISO
- * date string for the day *after* the end date — i.e. the suggested next start.
- */
 function nextStartAfterLabel(label: string): string | null {
   const m = label.match(/to\s+(\d{1,2})\/(\d{1,2})\/(\d{2})\s*$/i);
   if (!m) return null;
@@ -50,12 +59,22 @@ function nextStartAfterLabel(label: string): string | null {
   return d.toISOString().split('T')[0];
 }
 
+type InputMode = "upload" | "scratch" | "google";
+
 export function BudgetWizard() {
   const [step, setStep] = useState(0);
   const [isParsing, setIsParsing] = useState(false);
   const [isBillDialogOpen, setIsBillDialogOpen] = useState(false);
   const [editingBillIndex, setEditingBillIndex] = useState<number | null>(null);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
+  const [inputMode, setInputMode] = useState<InputMode>("upload");
+
+  const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
+  const [selectedSheetName, setSelectedSheetName] = useState<string | null>(null);
+  const [googleSheetTitle, setGoogleSheetTitle] = useState<string>("Budget");
+  const [googleNextCol, setGoogleNextCol] = useState(2);
+  const [isWritingToSheet, setIsWritingToSheet] = useState(false);
+  const [sheetWriteSuccess, setSheetWriteSuccess] = useState(false);
 
   const {
     uploadedFile,
@@ -90,14 +109,56 @@ export function BudgetWizard() {
   } = useBudgetStore();
 
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const generateMutation = useGenerateBudget();
+  const sheetWriteMutation = useSheetWrite();
 
-  // ISO start date suggested by the last existing week (day after its end date)
+  const googleAuth = useGoogleAuthStatus({
+    query: { retry: false, staleTime: 30000 },
+  });
+  const googleConfigured = googleAuth.data?.configured ?? false;
+  const googleAuthenticated = googleAuth.data?.authenticated ?? false;
+
+  const sheetListQuery = useSheetList({
+    query: {
+      enabled: googleConfigured && googleAuthenticated,
+      retry: false,
+    },
+  });
+
+  const sheetReadQuery = useSheetRead(selectedSheetId ?? "", {
+    query: {
+      enabled: !!selectedSheetId && googleAuthenticated,
+      retry: false,
+    },
+  });
+
+  useEffect(() => {
+    if (sheetReadQuery.data && selectedSheetId) {
+      const data = sheetReadQuery.data;
+      setBills(data.bills);
+      setOpeningBalance(data.lastRemaining);
+      setGoogleSheetTitle(data.sheetTitle);
+      setGoogleNextCol(data.nextWeekStartCol);
+
+      const lastWeek = data.existingWeeks.at(-1);
+      if (lastWeek) {
+        const nextStart = nextStartAfterLabel(lastWeek.label);
+        if (nextStart) setStartDate(nextStart);
+      }
+
+      toast({
+        title: "Sheet loaded",
+        description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
+      });
+      setStep(1);
+    }
+  }, [sheetReadQuery.data, selectedSheetId]);
+
   const suggestedNextStart = parsedWorkbook?.existingWeeks.length
     ? nextStartAfterLabel(parsedWorkbook.existingWeeks.at(-1)?.label ?? '')
     : null;
 
-  // ── Step 1: Upload ──────────────────────────────────────────────────────
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
@@ -107,6 +168,7 @@ export function BudgetWizard() {
         const parsed = await parseBudgetSpreadsheet(file);
         setUploadedFile(file);
         setParsedWorkbook(parsed);
+        setInputMode("upload");
         toast({
           title: "Spreadsheet loaded",
           description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
@@ -135,9 +197,45 @@ export function BudgetWizard() {
     disabled: isParsing,
   });
 
-  // ── Step 3: Generate & Download ─────────────────────────────────────────
+  const handleStartFromScratch = () => {
+    reset();
+    setInputMode("scratch");
+    setBlankMode(true);
+    setIncludeBillsSummary(true);
+    setStep(1);
+  };
+
+  const handleConnectGoogle = async () => {
+    try {
+      const currentUrl = window.location.href;
+      const result = await getGoogleAuthUrl(currentUrl);
+      window.location.href = result.url;
+    } catch (err) {
+      toast({
+        title: "Failed to start Google auth",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    try {
+      await googleDisconnect();
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+      setSelectedSheetId(null);
+      setSelectedSheetName(null);
+      toast({ title: "Disconnected from Google" });
+    } catch {}
+  };
+
+  const handleSelectSheet = (id: string, name: string) => {
+    setSelectedSheetId(id);
+    setSelectedSheetName(name);
+  };
+
   const handleGenerate = () => {
-    if (!parsedWorkbook) return;
+    if (inputMode === "upload" && !parsedWorkbook) return;
 
     const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
 
@@ -157,27 +255,27 @@ export function BudgetWizard() {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
 
-          let blob: Blob;
-          if (blankMode) {
-            // Blank mode: copy the original bills section verbatim if available,
-            // otherwise fall back to a generated bills list.
-            const rawBills = includeBillsSummary
-              ? (parsedWorkbook?.rawBillsSection ?? null)
-              : null;
-            const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
-            blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes);
+          if (inputMode === "google") {
+            setGeneratedBlob(null);
           } else {
-            // Append mode: re-read the original bytes inside the writer so all
-            // existing cell styles (fills, fonts, borders) survive unchanged.
-            blob = appendBudgetWeeks(
-              parsedWorkbook!.rawBytes,
-              data.weeks,
-              parsedWorkbook!.nextWeekStartCol,
-              !zeroOpeningBalance,
-              sheetStyle,
-            );
+            let blob: Blob;
+            if (blankMode || inputMode === "scratch") {
+              const rawBills = includeBillsSummary
+                ? (parsedWorkbook?.rawBillsSection ?? null)
+                : null;
+              const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
+              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes);
+            } else {
+              blob = appendBudgetWeeks(
+                parsedWorkbook!.rawBytes,
+                data.weeks,
+                parsedWorkbook!.nextWeekStartCol,
+                !zeroOpeningBalance,
+                sheetStyle,
+              );
+            }
+            setGeneratedBlob(blob);
           }
-          setGeneratedBlob(blob);
           setStep(2);
         },
         onError: (err) => {
@@ -191,10 +289,41 @@ export function BudgetWizard() {
     );
   };
 
+  const handleWriteToGoogleSheets = async () => {
+    if (!generatedWeek || !selectedSheetId) return;
+    setIsWritingToSheet(true);
+    setSheetWriteSuccess(false);
+
+    try {
+      await sheetWriteMutation.mutateAsync({
+        id: selectedSheetId,
+        data: {
+          weeks: generatedWeek.weeks,
+          startCol: googleNextCol,
+          includeRemainingAcct: !zeroOpeningBalance,
+          sheetTitle: googleSheetTitle,
+        },
+      });
+      setSheetWriteSuccess(true);
+      toast({
+        title: "Written to Google Sheets",
+        description: `${generatedWeek.weeks.length} budget weeks written to "${selectedSheetName}".`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to write to sheet",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsWritingToSheet(false);
+    }
+  };
+
   const handleDownload = () => {
     if (!generatedBlob) return;
     let filename: string;
-    if (blankMode) {
+    if (blankMode || inputMode === "scratch") {
       const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
       filename = `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
     } else {
@@ -215,9 +344,10 @@ export function BudgetWizard() {
     return map[cat] ?? map.fixed;
   };
 
+  const canGenerate = bills.length > 0 && !generateMutation.isPending;
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -230,7 +360,6 @@ export function BudgetWizard() {
             </div>
           </div>
 
-          {/* Step indicators */}
           <div className="hidden sm:flex items-center gap-2">
             {STEPS.map((label, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -257,7 +386,6 @@ export function BudgetWizard() {
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
         <AnimatePresence mode="wait">
-          {/* ── Step 0: Upload ── */}
           {step === 0 && (
             <motion.div
               key="upload"
@@ -267,17 +395,15 @@ export function BudgetWizard() {
               className="space-y-8"
             >
               <div>
-                <h2 className="text-3xl font-bold text-foreground mb-2">Upload your spreadsheet</h2>
+                <h2 className="text-3xl font-bold text-foreground mb-2">Get started</h2>
                 <p className="text-muted-foreground">
-                  Drop your existing budget .xlsx file. The app will read your bills and existing
-                  weeks, then let you add the next one.
+                  Choose how you'd like to set up your budget.
                 </p>
               </div>
 
-              {/* Upload zone */}
               <div
                 {...getRootProps()}
-                className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${
+                className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-300 ${
                   isDragActive
                     ? "border-primary bg-primary/5 scale-[1.01]"
                     : "border-border/60 hover:border-primary/50 hover:bg-emerald-50/40 bg-white/60"
@@ -294,19 +420,125 @@ export function BudgetWizard() {
                   )}
                   <div>
                     <p className="text-lg font-semibold text-foreground">
-                      {isParsing ? "Reading spreadsheet…" : isDragActive ? "Drop it here!" : "Drop your .xlsx file here"}
+                      {isParsing ? "Reading spreadsheet…" : isDragActive ? "Drop it here!" : "Upload your .xlsx file"}
                     </p>
                     {!isParsing && (
-                      <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
+                      <p className="text-sm text-muted-foreground mt-1">Drop here or click to browse</p>
                     )}
                   </div>
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={handleStartFromScratch}
+                  className="text-left rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-violet-100 group-hover:bg-violet-200 transition-colors">
+                      <FilePlus2 className="w-5 h-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">Start from scratch</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Create a new budget without an existing spreadsheet. Enter your bills manually.</p>
+                    </div>
+                  </div>
+                </button>
+
+                {googleConfigured && (
+                  <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
+                    {googleAuthenticated ? (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 p-2 rounded-xl bg-green-100">
+                            <Sheet className="w-5 h-5 text-green-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-sm text-foreground">Google Sheets</p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs text-muted-foreground"
+                                onClick={handleDisconnectGoogle}
+                              >
+                                <LogOut className="w-3 h-3 mr-1" /> Disconnect
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">Select a spreadsheet to read and write directly.</p>
+                          </div>
+                        </div>
+
+                        {sheetListQuery.isLoading && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" /> Loading your spreadsheets…
+                          </div>
+                        )}
+
+                        {sheetListQuery.isError && (
+                          <p className="text-sm text-destructive">Failed to load spreadsheets. Try disconnecting and reconnecting.</p>
+                        )}
+
+                        {sheetListQuery.data && (
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {sheetListQuery.data.sheets.length === 0 ? (
+                              <p className="text-sm text-muted-foreground py-2">No spreadsheets found.</p>
+                            ) : (
+                              sheetListQuery.data.sheets.map((s) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setInputMode("google");
+                                    handleSelectSheet(s.id, s.name);
+                                  }}
+                                  disabled={sheetReadQuery.isLoading}
+                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
+                                    selectedSheetId === s.id && sheetReadQuery.isLoading
+                                      ? "bg-primary/10"
+                                      : ""
+                                  }`}
+                                >
+                                  <span className="font-medium text-foreground">{s.name}</span>
+                                  {s.modifiedTime && (
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      {new Date(s.modifiedTime).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                  {selectedSheetId === s.id && sheetReadQuery.isLoading && (
+                                    <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogle}
+                        className="w-full text-left group"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 p-2 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-colors">
+                            <Sheet className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm text-foreground">Connect Google Sheets</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Sign in with Google to read and write budget data directly in your spreadsheet.</p>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
             </motion.div>
           )}
 
-          {/* ── Step 1: Configure ── */}
           {step === 1 && (
             <motion.div
               key="configure"
@@ -317,24 +549,26 @@ export function BudgetWizard() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-3xl font-bold text-foreground mb-2">Configure the new week</h2>
+                  <h2 className="text-3xl font-bold text-foreground mb-2">Configure your budget</h2>
                   <p className="text-muted-foreground">
-                    Set the week's dates, opening balance, and paycheck. Your bills are pre-loaded
-                    from the spreadsheet — edit as needed.
+                    {inputMode === "scratch"
+                      ? "Set up your dates, opening balance, and add your bills manually."
+                      : inputMode === "google"
+                      ? `Editing "${selectedSheetName}". Your bills are pre-loaded — edit as needed.`
+                      : "Set the week's dates, opening balance, and paycheck. Your bills are pre-loaded from the spreadsheet — edit as needed."}
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setInputMode("upload"); setStep(0); }}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
               </div>
 
-              {/* Existing weeks summary */}
-              {parsedWorkbook && parsedWorkbook.existingWeeks.length > 0 && (
+              {parsedWorkbook && parsedWorkbook.existingWeeks.length > 0 && inputMode === "upload" && (
                 <Card className="bg-emerald-50/60 border-emerald-200/60">
                   <CardContent className="p-5">
                     <p className="text-sm font-semibold text-emerald-800 mb-1">
@@ -354,7 +588,25 @@ export function BudgetWizard() {
                 </Card>
               )}
 
-              {/* Week settings */}
+              {inputMode === "google" && sheetReadQuery.data && sheetReadQuery.data.existingWeeks.length > 0 && (
+                <Card className="bg-emerald-50/60 border-emerald-200/60">
+                  <CardContent className="p-5">
+                    <p className="text-sm font-semibold text-emerald-800 mb-1">
+                      Last budget week (from Google Sheet)
+                    </p>
+                    <p className="text-lg font-bold text-emerald-900">
+                      {sheetReadQuery.data.existingWeeks.at(-1)?.label}
+                    </p>
+                    <p className="text-sm text-emerald-700 mt-1">
+                      Ending balance:{" "}
+                      <span className="font-semibold">
+                        ${sheetReadQuery.data.existingWeeks.at(-1)?.remaining.toFixed(2)}
+                      </span>
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card className="border-border/40">
                 <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -362,7 +614,7 @@ export function BudgetWizard() {
                       <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                         <Settings2 className="w-4 h-4" /> Start Date
                       </Label>
-                      {suggestedNextStart && (
+                      {suggestedNextStart && inputMode === "upload" && (
                         <Button
                           type="button"
                           size="sm"
@@ -452,78 +704,81 @@ export function BudgetWizard() {
                 </CardContent>
               </Card>
 
-              {/* Output mode */}
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold text-foreground">Output format</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setBlankMode(false)}
-                    className={`text-left rounded-2xl border-2 p-4 transition-all ${
-                      !blankMode
-                        ? "border-primary bg-primary/5"
-                        : "border-border/50 bg-white/60 hover:border-primary/40"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${!blankMode ? "border-primary" : "border-border"}`}>
-                        {!blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
+              {inputMode === "upload" && (
+                <div className="space-y-3">
+                  <h3 className="text-base font-semibold text-foreground">Output format</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setBlankMode(false)}
+                      className={`text-left rounded-2xl border-2 p-4 transition-all ${
+                        !blankMode
+                          ? "border-primary bg-primary/5"
+                          : "border-border/50 bg-white/60 hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${!blankMode ? "border-primary" : "border-border"}`}>
+                          {!blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">Append to my spreadsheet</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">New budget columns are added to your uploaded file.</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-sm text-foreground">Append to my spreadsheet</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">New budget columns are added to your uploaded file.</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBlankMode(true)}
+                      className={`text-left rounded-2xl border-2 p-4 transition-all ${
+                        blankMode
+                          ? "border-primary bg-primary/5"
+                          : "border-border/50 bg-white/60 hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${blankMode ? "border-primary" : "border-border"}`}>
+                          {blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">New file — budget only</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Download a fresh spreadsheet with only the new budget columns.</p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBlankMode(true)}
-                    className={`text-left rounded-2xl border-2 p-4 transition-all ${
-                      blankMode
-                        ? "border-primary bg-primary/5"
-                        : "border-border/50 bg-white/60 hover:border-primary/40"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${blankMode ? "border-primary" : "border-border"}`}>
-                        {blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-foreground">New file — budget only</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Download a fresh spreadsheet with only the new budget columns.</p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Include bills in spreadsheet */}
-                <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 transition-all select-none">
-                  <Checkbox
-                    checked={includeBillsSummary}
-                    onCheckedChange={(v) => setIncludeBillsSummary(!!v)}
-                    id="include-bills"
-                    className="mt-0.5 rounded"
-                  />
-                  <div>
-                    <p className="font-semibold text-sm text-foreground">Include bills list in spreadsheet</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Adds a color-coded bills summary (columns A–B) to the output file, matching the original format. Budget weeks shift right.
-                    </p>
+                    </button>
                   </div>
-                </label>
-              </div>
 
-              {/* Quick generate button (top) */}
+                  <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 transition-all select-none">
+                    <Checkbox
+                      checked={includeBillsSummary}
+                      onCheckedChange={(v) => setIncludeBillsSummary(!!v)}
+                      id="include-bills"
+                      className="mt-0.5 rounded"
+                    />
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">Include bills list in spreadsheet</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Adds a color-coded bills summary (columns A–B) to the output file, matching the original format. Budget weeks shift right.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+
               <Card className="border-primary/20 bg-primary/5">
                 <CardContent className="p-4 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold text-foreground">Ready to generate?</p>
-                    <p className="text-xs text-muted-foreground">Bills are pre-loaded below. Hit generate if you don't need to edit them.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {inputMode === "scratch"
+                        ? "Add your bills below, then hit generate."
+                        : "Bills are pre-loaded below. Hit generate if you don't need to edit them."}
+                    </p>
                   </div>
                   <Button
                     size="default"
                     onClick={handleGenerate}
-                    disabled={generateMutation.isPending || bills.length === 0}
+                    disabled={!canGenerate}
                     className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                   >
                     {generateMutation.isPending ? (
@@ -535,7 +790,6 @@ export function BudgetWizard() {
                 </CardContent>
               </Card>
 
-              {/* Bills list */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -612,12 +866,11 @@ export function BudgetWizard() {
                 )}
               </div>
 
-              {/* Generate button */}
               <div className="flex justify-end pt-2">
                 <Button
                   size="lg"
                   onClick={handleGenerate}
-                  disabled={generateMutation.isPending || bills.length === 0}
+                  disabled={!canGenerate}
                   className="rounded-xl px-8 h-12 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                 >
                   {generateMutation.isPending ? (
@@ -645,7 +898,6 @@ export function BudgetWizard() {
             </motion.div>
           )}
 
-          {/* ── Step 2: Download ── */}
           {step === 2 && (
             <motion.div
               key="download"
@@ -658,13 +910,14 @@ export function BudgetWizard() {
                 <h2 className="text-3xl font-bold text-foreground mb-2">Your budget is ready</h2>
                 <p className="text-muted-foreground">
                   {generatedWeek && generatedWeek.weeks.length > 1
-                    ? `${generatedWeek.weeks.length} budget weeks have been appended to your spreadsheet.`
-                    : "The new week has been appended to your spreadsheet."}{" "}
-                  Download the updated file below.
+                    ? `${generatedWeek.weeks.length} budget weeks have been generated.`
+                    : "The new week has been generated."}{" "}
+                  {inputMode === "google"
+                    ? "Write them to your Google Sheet or download as a file."
+                    : "Download the updated file below."}
                 </p>
               </div>
 
-              {/* Summary card */}
               <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
                 <CardContent className="p-6 space-y-4">
                   <p className="font-semibold text-emerald-900 text-lg">
@@ -690,7 +943,6 @@ export function BudgetWizard() {
                 </CardContent>
               </Card>
 
-              {/* Spreadsheet preview */}
               {generatedWeek && generatedWeek.weeks.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -765,23 +1017,49 @@ export function BudgetWizard() {
                 </div>
               )}
 
-              {/* Download button */}
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  size="lg"
-                  onClick={handleDownload}
-                  className="flex-1 h-14 text-base rounded-2xl bg-gradient-to-r from-primary to-emerald-600 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all"
-                >
-                  <Download className="w-5 h-5 mr-2" />
-                  Download Updated Spreadsheet
-                </Button>
+                {inputMode === "google" && selectedSheetId && (
+                  <Button
+                    size="lg"
+                    onClick={handleWriteToGoogleSheets}
+                    disabled={isWritingToSheet || sheetWriteSuccess}
+                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                      sheetWriteSuccess
+                        ? "bg-emerald-600"
+                        : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
+                    }`}
+                  >
+                    {isWritingToSheet ? (
+                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Google Sheets…</>
+                    ) : sheetWriteSuccess ? (
+                      <><Check className="w-5 h-5 mr-2" /> Written to Google Sheets</>
+                    ) : (
+                      <><CloudUpload className="w-5 h-5 mr-2" /> Write to Google Sheets</>
+                    )}
+                  </Button>
+                )}
+
+                {(inputMode !== "google" || generatedBlob) && (
+                  <Button
+                    size="lg"
+                    onClick={handleDownload}
+                    disabled={!generatedBlob && inputMode !== "google"}
+                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
+                      inputMode === "google" ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
+                    }`}
+                  >
+                    <Download className="w-5 h-5 mr-2" />
+                    Download Spreadsheet
+                  </Button>
+                )}
+
                 <Button
                   size="lg"
                   variant="outline"
                   onClick={() => setStep(1)}
                   className="sm:w-auto h-14 rounded-2xl border-border/60"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Add Another Week
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to Configure
                 </Button>
               </div>
             </motion.div>
@@ -789,7 +1067,6 @@ export function BudgetWizard() {
         </AnimatePresence>
       </main>
 
-      {/* Bill edit dialog */}
       <Dialog open={isBillDialogOpen} onOpenChange={setIsBillDialogOpen}>
         <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">

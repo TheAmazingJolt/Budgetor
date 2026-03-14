@@ -62,6 +62,58 @@ export interface WeeklyBudget {
   closingBalance: number;
 }
 
+export interface GoogleAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+}
+
+export interface GoogleAuthUrl {
+  url: string;
+}
+
+export interface GoogleDisconnectResult {
+  ok: boolean;
+}
+
+export interface SheetListItem {
+  id: string;
+  name: string;
+  modifiedTime?: string;
+}
+
+export interface SheetListResponse {
+  sheets: SheetListItem[];
+}
+
+export interface SheetReadWeek {
+  label: string;
+  startCol: number;
+  openingBalance: number;
+  paycheck: number;
+  items: { name: string; amount: number }[];
+  remaining: number;
+}
+
+export interface SheetReadResponse {
+  bills: Bill[];
+  existingWeeks: SheetReadWeek[];
+  nextWeekStartCol: number;
+  lastRemaining: number;
+  sheetTitle: string;
+}
+
+export interface SheetWriteRequest {
+  weeks: WeeklyBudget[];
+  startCol: number;
+  includeRemainingAcct: boolean;
+  sheetTitle?: string;
+}
+
+export interface SheetWriteResponse {
+  ok: boolean;
+  message: string;
+}
+
 export interface BudgetRequest {
   /** ISO date string for first week start */
   startDate: string;
