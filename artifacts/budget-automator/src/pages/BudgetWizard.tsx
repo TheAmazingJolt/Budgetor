@@ -764,6 +764,7 @@ export function BudgetWizard() {
   const handleSelectSheet = (id: string, name: string) => {
     setSelectedSheetId(id);
     setSelectedSheetName(name);
+    setInputMode("google");
   };
 
   const handlePasteUrl = () => {
@@ -1122,7 +1123,7 @@ export function BudgetWizard() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
-              className="space-y-8"
+              className="space-y-5"
             >
               <div>
                 <h2 className="text-3xl font-bold text-foreground mb-2">Get started</h2>
@@ -1133,7 +1134,7 @@ export function BudgetWizard() {
 
               <div
                 {...getRootProps()}
-                className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-300 ${
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 ${
                   isDragActive
                     ? "border-primary bg-primary/5 scale-[1.01]"
                     : "border-border/60 hover:border-primary/50 hover:bg-emerald-50/40 bg-white/60"
@@ -1332,6 +1333,92 @@ export function BudgetWizard() {
                           <div>
                             <p className="font-semibold text-sm text-foreground">Connect Excel Online</p>
                             <p className="text-xs text-muted-foreground mt-0.5">Sign in with Microsoft to read and write budget data directly in your OneDrive Excel files.</p>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {googleConfigured && (
+                  <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-green-50/30 p-5 transition-all">
+                    {googleAuthenticated ? (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 p-2 rounded-xl bg-green-100">
+                            <Sheet className="w-5 h-5 text-green-700" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-sm text-foreground">Google Sheets</p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs text-muted-foreground"
+                                onClick={handleDisconnectGoogle}
+                              >
+                                <LogOut className="w-3 h-3 mr-1" /> Disconnect
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">Select a spreadsheet from your Google Drive to read and write directly.</p>
+                          </div>
+                        </div>
+
+                        {sheetListQuery.isLoading && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" /> Loading your Google Sheets…
+                          </div>
+                        )}
+
+                        {sheetListQuery.isError && (
+                          <p className="text-sm text-destructive">Failed to load sheets. Try disconnecting and reconnecting.</p>
+                        )}
+
+                        {sheetListQuery.data && (
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {sheetListQuery.data.sheets.length === 0 ? (
+                              <p className="text-sm text-muted-foreground py-2">No spreadsheets found in Google Drive.</p>
+                            ) : (
+                              sheetListQuery.data.sheets.map((s: { id: string; name: string; modifiedTime?: string }) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => handleSelectSheet(s.id, s.name)}
+                                  disabled={sheetReadQuery.isLoading}
+                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
+                                    selectedSheetId === s.id && sheetReadQuery.isLoading
+                                      ? "bg-primary/10"
+                                      : ""
+                                  }`}
+                                >
+                                  <span className="font-medium text-foreground">{s.name}</span>
+                                  {s.modifiedTime && (
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      {new Date(s.modifiedTime).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                  {selectedSheetId === s.id && sheetReadQuery.isLoading && (
+                                    <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogle}
+                        className="w-full text-left group"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 p-2 rounded-xl bg-green-100 group-hover:bg-green-200 transition-colors">
+                            <Sheet className="w-5 h-5 text-green-700" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm text-foreground">Connect Google Sheets</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Sign in with Google to read and write budget data directly in your Google Sheets.</p>
                           </div>
                         </div>
                       </button>
