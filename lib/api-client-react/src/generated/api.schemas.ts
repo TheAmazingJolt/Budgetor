@@ -14,7 +14,7 @@ export interface ErrorResponse {
 }
 
 /**
- * Category for large-bill balancing
+ * Category for large-bill balancing (legacy — kept for backward compatibility)
  */
 export type BillCategory = (typeof BillCategory)[keyof typeof BillCategory];
 
@@ -22,6 +22,17 @@ export const BillCategory = {
   rent: "rent",
   utilities: "utilities",
   car: "car",
+  fixed: "fixed",
+  weekly: "weekly",
+} as const;
+
+/**
+ * How the bill is distributed across weeks
+ */
+export type BillType = (typeof BillType)[keyof typeof BillType];
+
+export const BillType = {
+  balanced: "balanced",
   fixed: "fixed",
   weekly: "weekly",
 } as const;
@@ -35,8 +46,12 @@ export interface Bill {
    * @nullable
    */
   dayOfMonth?: number | null;
-  /** Category for large-bill balancing */
-  category: BillCategory;
+  /** User-defined label for this bill, e.g. Rent, Phone Bill */
+  category: string;
+  /** How the bill is distributed across weeks */
+  type: BillType;
+  /** Color key for UI display, e.g. blue, green, orange */
+  color?: string;
 }
 
 export interface WeeklyBill {

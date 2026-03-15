@@ -38,8 +38,12 @@ export const GenerateBudgetBody = zod.object({
         .nullish()
         .describe("Day of month bill is due (null for weekly bills)"),
       category: zod
-        .enum(["rent", "utilities", "car", "fixed", "weekly"])
-        .describe("Category for large-bill balancing"),
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod.string().optional().describe("Color key for UI display"),
     }),
   ),
 });
@@ -277,8 +281,12 @@ export const SheetReadResponse = zod.object({
         .nullish()
         .describe("Day of month bill is due (null for weekly bills)"),
       category: zod
-        .enum(["rent", "utilities", "car", "fixed", "weekly"])
-        .describe("Category for large-bill balancing"),
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod.string().optional().describe("Color key for UI display"),
     }),
   ),
   existingWeeks: zod.array(
@@ -314,8 +322,12 @@ export const SheetReadByUrlResponse = zod.object({
         .nullish()
         .describe("Day of month bill is due (null for weekly bills)"),
       category: zod
-        .enum(["rent", "utilities", "car", "fixed", "weekly"])
-        .describe("Category for large-bill balancing"),
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod.string().optional().describe("Color key for UI display"),
     }),
   ),
   existingWeeks: zod.array(
@@ -377,8 +389,12 @@ export const SheetWriteBody = zod.object({
           .nullish()
           .describe("Day of month bill is due (null for weekly bills)"),
         category: zod
-          .enum(["rent", "utilities", "car", "fixed", "weekly"])
-          .describe("Category for large-bill balancing"),
+          .string()
+          .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+        type: zod
+          .enum(["balanced", "fixed", "weekly"])
+          .describe("How the bill is distributed across weeks"),
+        color: zod.string().optional().describe("Color key for UI display"),
       }),
     )
     .optional(),
@@ -486,8 +502,12 @@ export const ExcelReadResponse = zod.object({
         .nullish()
         .describe("Day of month bill is due (null for weekly bills)"),
       category: zod
-        .enum(["rent", "utilities", "car", "fixed", "weekly"])
-        .describe("Category for large-bill balancing"),
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod.string().optional().describe("Color key for UI display"),
     }),
   ),
   existingWeeks: zod.array(
@@ -523,8 +543,12 @@ export const ExcelReadByUrlResponse = zod.object({
         .nullish()
         .describe("Day of month bill is due (null for weekly bills)"),
       category: zod
-        .enum(["rent", "utilities", "car", "fixed", "weekly"])
-        .describe("Category for large-bill balancing"),
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod.string().optional().describe("Color key for UI display"),
     }),
   ),
   existingWeeks: zod.array(

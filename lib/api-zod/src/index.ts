@@ -10,6 +10,7 @@ export type {
   AuthUserResponse,
   Bill,
   BillCategory,
+  BillType,
   BudgetRequest,
   BudgetResponse,
   ErrorResponse,

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Bill, BillCategory } from '@workspace/api-client-react';
+import type { Bill } from '@workspace/api-client-react';
 
 export interface ParsedWeek {
   label: string;
@@ -84,23 +84,25 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
               ? parseInt(dayStr)
               : null;
 
-          let category: BillCategory = 'fixed';
+          let type: Bill['type'] = 'fixed';
+          let color = 'slate';
           const lower = name.toLowerCase();
-          if (lower.includes('rent')) category = 'rent';
+          if (lower.includes('rent')) { type = 'balanced'; color = 'blue'; }
           else if (
             lower.includes('util') ||
             lower.includes('electric') ||
             lower.includes('water') ||
             lower === 'utilities'
-          )
-            category = 'utilities';
-          else if (lower.includes('car')) category = 'car';
+          ) { type = 'balanced'; color = 'orange'; }
+          else if (lower.includes('car')) { type = 'balanced'; color = 'purple'; }
 
           bills.push({
             name,
             amount: amount > 0 ? -amount : amount,
             dayOfMonth,
-            category,
+            category: name,
+            type,
+            color,
           });
         }
 
@@ -124,7 +126,9 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
               name,
               amount: amount > 0 ? -amount : amount,
               dayOfMonth: null,
-              category: 'weekly',
+              category: name,
+              type: 'weekly',
+              color: 'green',
             });
           }
         }

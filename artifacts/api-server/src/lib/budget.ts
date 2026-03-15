@@ -28,16 +28,11 @@ export function generateWeeklyBudgets(
   numberOfWeeks: number,
   bills: Bill[]
 ): WeeklyBudget[] {
-  const rentBills = bills.filter((b) => b.category === "rent");
-  const utilitiesBills = bills.filter((b) => b.category === "utilities");
-  const carBills = bills.filter((b) => b.category === "car");
-  const fixedBills = bills.filter((b) => b.category === "fixed");
-  const weeklyBills = bills.filter((b) => b.category === "weekly");
+  const balancedBills = bills.filter((b) => b.type === "balanced");
+  const fixedBills = bills.filter((b) => b.type === "fixed");
+  const weeklyBills = bills.filter((b) => b.type === "weekly");
 
-  const rentTotal = rentBills.reduce((s, b) => s + Math.abs(b.amount), 0);
-  const utilitiesTotal = utilitiesBills.reduce((s, b) => s + Math.abs(b.amount), 0);
-  const carTotal = carBills.reduce((s, b) => s + Math.abs(b.amount), 0);
-  const largeTotal = rentTotal + utilitiesTotal + carTotal;
+  const balancedTotal = balancedBills.reduce((s, b) => s + Math.abs(b.amount), 0);
 
   // ── Build week date windows ─────────────────────────────────────────────
   interface WeekData {
@@ -105,15 +100,15 @@ export function generateWeeklyBudgets(
   }
 
   // ── Balance large bills so every week in a month has the same remaining ─
-  // For each month group, we adjust rent/utilities/car so that
+  // For each month group, we adjust balanced bills so that
   // closing = opening + paycheck + fixed_weekly + large is equal across weeks.
   //
   // Per month with N weeks:
   //   F_i = sum of fixed+weekly bills for week i (negative)
-  //   total_large_neg = -(rentTotal + utilitiesTotal + carTotal) for this month
+  //   total_large_neg = -(balancedTotal) for this month
   //   target K = opening + paycheck + (total_large_neg + sum(F_i)) / N
   //   large_i = K - opening - paycheck - F_i
-  //   Split large_i proportionally into rent/utilities/car
+  //   Split large_i proportionally across individual balanced bills
 
   for (const mk of monthsInRange) {
     const monthWeekIndices = weeks
@@ -121,7 +116,7 @@ export function generateWeeklyBudgets(
       .filter((i) => i >= 0);
     const N = monthWeekIndices.length;
 
-    const totalLargeNeg = -largeTotal; // negative amount for this month
+    const totalLargeNeg = -balancedTotal;
 
     // F_i for each week in this month
     const F = monthWeekIndices.map((idx) =>
@@ -138,11 +133,13 @@ export function generateWeeklyBudgets(
       const largeAmount = K - openingBalance - paycheckAmount - F[j];
 
       const items: WeeklyBill[] = [];
-      if (largeTotal > 0) {
-        const parts: { name: string; ratio: number }[] = [];
-        if (rentTotal > 0) parts.push({ name: "Partial Rent", ratio: rentTotal / largeTotal });
-        if (utilitiesTotal > 0) parts.push({ name: "Partial Utilities", ratio: utilitiesTotal / largeTotal });
-        if (carTotal > 0) parts.push({ name: "Partial Car", ratio: carTotal / largeTotal });
+      if (balancedTotal > 0) {
+        const parts = balancedBills
+          .filter((b) => Math.abs(b.amount) > 0)
+          .map((b) => ({
+            name: `Partial ${b.name}`,
+            ratio: Math.abs(b.amount) / balancedTotal,
+          }));
 
         let allocated = 0;
         for (let p = 0; p < parts.length; p++) {

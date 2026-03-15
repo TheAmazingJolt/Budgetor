@@ -17,6 +17,7 @@ export * from "./authUser";
 export * from "./authUserResponse";
 export * from "./bill";
 export * from "./billCategory";
+export * from "./billType";
 export * from "./budgetRequest";
 export * from "./budgetResponse";
 export * from "./errorResponse";

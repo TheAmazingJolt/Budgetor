@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { BillCategory } from "./billCategory";
+import type { BillType } from "./billType";
 
 export interface Bill {
   name: string;
@@ -16,6 +16,10 @@ export interface Bill {
    * @nullable
    */
   dayOfMonth?: number | null;
-  /** Category for large-bill balancing */
-  category: BillCategory;
+  /** User-defined label for this bill, e.g. Rent, Phone Bill */
+  category: string;
+  /** How the bill is distributed across weeks */
+  type: BillType;
+  /** Color key for UI display, e.g. blue, green, orange */
+  color?: string;
 }

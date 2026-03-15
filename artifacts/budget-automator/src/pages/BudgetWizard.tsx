@@ -84,6 +84,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Bill, SavedBudget } from "@workspace/api-client-react";
+import { getBillColorEntry } from "@/lib/billColors";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
 
@@ -643,7 +644,7 @@ export function BudgetWizard() {
 
   const handleLoadSavedBudget = (budget: SavedBudget) => {
     reset();
-    const b = budget.bills as Bill[];
+    const b = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
     const s = budget.settings as SavedBudgetSettings;
     setBills(b);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
@@ -990,15 +991,13 @@ export function BudgetWizard() {
     downloadBlob(generatedBlob, filename);
   };
 
-  const getCategoryColor = (cat: string) => {
-    const map: Record<string, string> = {
-      rent: "bg-blue-100 text-blue-800 border-blue-200",
-      utilities: "bg-orange-100 text-orange-800 border-orange-200",
-      car: "bg-purple-100 text-purple-800 border-purple-200",
-      fixed: "bg-slate-100 text-slate-700 border-slate-200",
-      weekly: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    };
-    return map[cat] ?? map.fixed;
+  const migrateLegacyBill = (bill: any): Bill => {
+    if (bill.type) return bill as Bill;
+    const legacyTypeMap: Record<string, string> = { rent: "balanced", utilities: "balanced", car: "balanced", fixed: "fixed", weekly: "weekly" };
+    const legacyColorMap: Record<string, string> = { rent: "blue", utilities: "orange", car: "purple", fixed: "slate", weekly: "green" };
+    const legacyCategoryMap: Record<string, string> = { rent: "Rent", utilities: "Utilities", car: "Car", fixed: "Fixed", weekly: "Weekly" };
+    const cat = bill.category ?? "fixed";
+    return { ...bill, type: legacyTypeMap[cat] ?? "fixed", color: legacyColorMap[cat] ?? "slate", category: legacyCategoryMap[cat] ?? bill.category } as Bill;
   };
 
   const canGenerate = bills.length > 0 && !generateMutation.isPending;
@@ -1848,16 +1847,16 @@ export function BudgetWizard() {
                         transition={{ delay: i * 0.03 }}
                       >
                         <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 hover:bg-primary transition-colors" />
+                          <div className={`absolute top-0 left-0 w-1 h-full ${getBillColorEntry((bill as any).color).leftBar} transition-colors`} />
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start mb-2">
                               <div className="space-y-1">
                                 <p className="font-semibold text-sm text-foreground leading-tight">{bill.name}</p>
                                 <Badge
                                   variant="outline"
-                                  className={`text-xs px-2 py-0.5 ${getCategoryColor(bill.category)}`}
+                                  className={`text-xs px-2 py-0.5 ${getBillColorEntry((bill as any).color).badge}`}
                                 >
-                                  {bill.category}
+                                  {(bill as any).category ?? ""}
                                 </Badge>
                               </div>
                               <Currency value={bill.amount} className="text-sm font-semibold" />

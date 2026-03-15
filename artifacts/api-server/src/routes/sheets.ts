@@ -114,19 +114,19 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         ? parseInt(dayStr)
         : null;
 
-    let category: string = "fixed";
+    let type: string = "fixed";
+    let color: string = "slate";
     const lower = nameCell.toLowerCase();
-    if (lower.includes("rent")) category = "rent";
+    if (lower.includes("rent")) { type = "balanced"; color = "blue"; }
     else if (
       lower.includes("util") ||
       lower.includes("electric") ||
       lower.includes("water") ||
       lower === "utilities"
-    )
-      category = "utilities";
-    else if (lower.includes("car")) category = "car";
+    ) { type = "balanced"; color = "orange"; }
+    else if (lower.includes("car")) { type = "balanced"; color = "purple"; }
 
-    bills.push({ name: nameCell, amount, dayOfMonth, category });
+    bills.push({ name: nameCell, amount, dayOfMonth, category: nameCell, type, color });
   }
 
   let weeklyStart = -1;
@@ -152,7 +152,9 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         name,
         amount: rawAmt > 0 ? -rawAmt : rawAmt,
         dayOfMonth: null,
-        category: "weekly",
+        category: name,
+        type: "weekly",
+        color: "green",
       });
     }
   }

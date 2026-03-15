@@ -629,12 +629,19 @@ components:
           description: Day of month bill is due (null for weekly bills)
         category:
           type: string
-          enum: [rent, utilities, car, fixed, weekly]
-          description: Category for large-bill balancing
+          description: User-defined label for this bill, e.g. Rent, Phone Bill
+        type:
+          type: string
+          enum: [balanced, fixed, weekly]
+          description: How the bill is distributed across weeks
+        color:
+          type: string
+          description: Color key for UI display, e.g. blue, green, orange
       required:
         - name
         - amount
         - category
+        - type
 
     WeeklyBill:
       type: object

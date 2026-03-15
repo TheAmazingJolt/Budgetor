@@ -142,13 +142,14 @@ function parseExcelData(rows: (string | number | boolean | null)[][]): {
         ? parseInt(dayStr)
         : null;
 
-    let category = "fixed";
+    let type = "fixed";
+    let color = "slate";
     const lower = nameCell.toLowerCase();
-    if (lower.includes("rent")) category = "rent";
-    else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) category = "utilities";
-    else if (lower.includes("car")) category = "car";
+    if (lower.includes("rent")) { type = "balanced"; color = "blue"; }
+    else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) { type = "balanced"; color = "orange"; }
+    else if (lower.includes("car")) { type = "balanced"; color = "purple"; }
 
-    bills.push({ name: nameCell, amount, dayOfMonth, category });
+    bills.push({ name: nameCell, amount, dayOfMonth, category: nameCell, type, color });
   }
 
   let weeklyStart = -1;
@@ -166,7 +167,7 @@ function parseExcelData(rows: (string | number | boolean | null)[][]): {
       if (!name || name.toLowerCase().includes("yearly")) break;
       const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
       if (isNaN(rawAmt)) continue;
-      bills.push({ name, amount: rawAmt > 0 ? -rawAmt : rawAmt, dayOfMonth: null, category: "weekly" });
+      bills.push({ name, amount: rawAmt > 0 ? -rawAmt : rawAmt, dayOfMonth: null, category: name, type: "weekly", color: "green" });
     }
   }
 
