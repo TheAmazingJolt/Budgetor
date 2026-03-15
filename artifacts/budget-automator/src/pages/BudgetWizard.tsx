@@ -275,6 +275,9 @@ export function BudgetWizard() {
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
   const [editDraft, setEditDraft] = useState<{ paycheck: string; openingBalance: string; items: { name: string; amount: string }[] } | null>(null);
+  const [showEditOb, setShowEditOb] = useState(false);
+  const [visitedStep1, setVisitedStep1] = useState(false);
+  const [deleteBudgetTarget, setDeleteBudgetTarget] = useState<{ id: string; name: string } | null>(null);
   const weekHeaderRefs = useRef<(HTMLTableCellElement | null)[]>([]);
   const [googleFirstBudgetCol, setGoogleFirstBudgetCol] = useState(2);
   const [excelFirstBudgetCol, setExcelFirstBudgetCol] = useState(2);
@@ -543,6 +546,7 @@ export function BudgetWizard() {
     setInputMode("scratch");
     setBlankMode(true);
     setIncludeBillsSummary(true);
+    setVisitedStep1(true);
     setStep(1);
   };
 
@@ -736,12 +740,16 @@ export function BudgetWizard() {
     });
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await Promise.allSettled([googleDisconnect(), microsoftDisconnect()]);
+
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
         localStorage.removeItem("auth_token");
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+        queryClient.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
         toast({ title: "Signed out" });
       },
     });
@@ -1033,6 +1041,7 @@ export function BudgetWizard() {
 
   const handleGenerate = (overrides?: GenerateOverrides) => {
     if (inputMode === "upload" && !parsedWorkbook) return;
+    if (step === 1) setVisitedStep1(true);
 
     const effectiveOpeningBalance = overrides?.openingBalance
       ?? (zeroOpeningBalance ? 0 : openingBalance);
@@ -1101,6 +1110,14 @@ export function BudgetWizard() {
     handleGenerate(params);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGenerateTick]);
+
+  useEffect(() => {
+    if (Object.keys(weekEdits).length > 0) {
+      if (sheetWriteSuccess) setSheetWriteSuccess(false);
+      if (excelWriteSuccess) setExcelWriteSuccess(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekEdits]);
 
   const buildAllWriteWeeks = () => {
     const source = getExistingWeeks()
@@ -1835,13 +1852,13 @@ export function BudgetWizard() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteSavedBudget(budget.id, budget.name);
+                                    setDeleteBudgetTarget({ id: budget.id, name: budget.name });
                                   }}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
                             </div>
@@ -1930,7 +1947,7 @@ export function BudgetWizard() {
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -2532,10 +2549,12 @@ export function BudgetWizard() {
                   const week = allWeeks[wi];
                   if (!week) return;
                   const e = weekEdits[week.label];
+                  const obVal = e?.openingBalance ?? week.openingBalance ?? 0;
                   setSelectedWeekIdx(wi);
+                  setShowEditOb(obVal !== 0);
                   setEditDraft({
                     paycheck: String(e?.paycheck ?? week.paycheck ?? 0),
-                    openingBalance: String(e?.openingBalance ?? week.openingBalance ?? 0),
+                    openingBalance: String(obVal),
                     items: (e?.items ?? week.items).map(b => ({ name: b.name, amount: String(Math.abs(b.amount)) })),
                   });
                 };
@@ -2769,15 +2788,21 @@ export function BudgetWizard() {
                                         const item = rowItems[r];
                                         if (!item) {
                                           return (
-                                            <td key={`${wi}-l`} colSpan={2} className="border-r border-border/30 last:border-r-0" />
+                                            <td
+                                              key={`${wi}-l`}
+                                              colSpan={2}
+                                              className={`border-r border-border/30 last:border-r-0${editModeOn ? " cursor-pointer" : ""}`}
+                                              onClick={editModeOn ? () => openEditPanel(wi) : undefined}
+                                            />
                                           );
                                         }
                                         const dimmed = !week.isNew ? " text-muted-foreground" : "";
+                                        const cellClick = editModeOn ? () => openEditPanel(wi) : undefined;
                                         return [
-                                          <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}${dimmed}`}>
+                                          <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
                                             {item.label}
                                           </td>,
-                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}`}>
+                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
                                             ${item.value.toFixed(2)}
                                           </td>,
                                         ];
@@ -2803,7 +2828,7 @@ export function BudgetWizard() {
                               <DialogTitle className="text-base">{week.label}</DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4">
-                              {week.openingBalance !== undefined && (
+                              {showEditOb ? (
                                 <div>
                                   <Label className="text-xs font-semibold uppercase text-muted-foreground">Opening Balance</Label>
                                   <Input
@@ -2814,6 +2839,14 @@ export function BudgetWizard() {
                                     className="mt-1"
                                   />
                                 </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="text-xs text-primary hover:text-primary/80 font-medium"
+                                  onClick={() => setShowEditOb(true)}
+                                >
+                                  Set opening balance
+                                </button>
                               )}
                               <div>
                                 <Label className="text-xs font-semibold uppercase text-muted-foreground">Paycheck</Label>
@@ -3025,11 +3058,22 @@ export function BudgetWizard() {
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => setStep(1)}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
                   className="sm:w-auto h-14 rounded-2xl border-border/60"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to Configure
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to menu
                 </Button>
+
+                {visitedStep1 && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setStep(1)}
+                    className="sm:w-auto h-14 rounded-2xl border-border/60"
+                  >
+                    <Settings2 className="w-4 h-4 mr-1" /> Configure
+                  </Button>
+                )}
 
                 {(inputMode === "google" && selectedSheetId) || (inputMode === "excel" && selectedExcelFileId) ? (
                   <Button
@@ -3169,6 +3213,31 @@ export function BudgetWizard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteBudgetTarget} onOpenChange={(open) => { if (!open) setDeleteBudgetTarget(null); }}>
+        <AlertDialogContent className="sm:rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this budget?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleteBudgetTarget?.name}" will be permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteBudgetTarget) {
+                  handleDeleteSavedBudget(deleteBudgetTarget.id, deleteBudgetTarget.name);
+                  setDeleteBudgetTarget(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent className="sm:rounded-2xl">
