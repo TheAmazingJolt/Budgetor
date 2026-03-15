@@ -15,6 +15,7 @@ export const db = drizzle(pool, { schema });
 
 export async function initDb(): Promise<void> {
   const client = await pool.connect();
+  console.log("[initDb] running schema migrations...");
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -58,6 +59,7 @@ export async function initDb(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS user_sessions_expire_idx ON user_sessions (expire);
     `);
+    console.log("[initDb] schema migrations complete");
   } finally {
     client.release();
   }

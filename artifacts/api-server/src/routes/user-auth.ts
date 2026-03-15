@@ -406,7 +406,10 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
     res.redirect(`${redirectUrl}${sep}auth_code=${authCode}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: "Google login failed: " + message });
+    const cause = (err instanceof Error && err.cause instanceof Error) ? err.cause.message : undefined;
+    const full = cause ? `${message} (cause: ${cause})` : message;
+    console.error("Google login error:", err);
+    res.status(500).json({ error: "Google login failed: " + full });
   }
 });
 
