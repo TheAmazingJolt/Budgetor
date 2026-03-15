@@ -31,8 +31,10 @@ Features:
 - **User accounts**: Sign in with Google, Apple, or continue as guest. Guest accounts auto-created when saving; can upgrade to Google/Apple keeping saved budgets
 - **Saved budgets**: CRUD for saving/loading budget configurations (bills + settings) per user account
 - **Week count selector**: pick how many weeks to generate; end date auto-fills (start + weeks × 7 - 1 days)
-- **Monthly bill reset**: rent/utilities/car split across weeks within each calendar month and reset at the new month
-- **Weekly balancing**: within each month, partial rent/utilities/car amounts are adjusted so every week ends with the exact same remaining balance; uses proportional allocation with month-level rounding reconciliation
+- **Custom bill categories**: Bill schema uses `category` (free-form user label), `type` (balanced|fixed|weekly), `color` (12-color named palette). Replaces old hardcoded 5-value enum.
+- **Balanced bills**: Any bill with `type="balanced"` is spread evenly across weeks (was: rent/utilities/car). All balanced bills grouped together and distributed proportionally.
+- **Weekly balancing**: within each month, partial balanced bill amounts are adjusted so every week ends with the exact same remaining balance; uses proportional allocation with month-level rounding reconciliation
+- **Color coding**: Bills have a named color key (blue/green/orange/purple/red/slate/amber/teal/rose/indigo/yellow/cyan); shown as colored badge and left-bar on bill cards
 - **SUM formula**: the Remaining row uses `=SUM()` of cells above (not a hardcoded number)
 - **In-app preview**: download step shows a spreadsheet-like table with colored rows before downloading
 - **Quick generate button**: shown at top of configure step so user doesn't have to scroll past bills
