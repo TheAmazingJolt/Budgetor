@@ -643,6 +643,14 @@ export function BudgetWizard() {
     });
   };
 
+  const getExistingWeeks = (): any[] => {
+    if (inputMode === "google") return sheetReadQuery.data?.existingWeeks ?? [];
+    if (inputMode === "excel") return excelReadQuery.data?.existingWeeks ?? [];
+    if (inputMode === "cloud") return cloudExistingWeeks;
+    if (inputMode === "upload") return parsedWorkbook?.existingWeeks ?? [];
+    return [];
+  };
+
   const handleSaveBudget = () => {
     if (!saveBudgetName.trim()) return;
 
@@ -657,13 +665,6 @@ export function BudgetWizard() {
           },
         });
       }
-    };
-
-    const getExistingWeeks = (): any[] => {
-      if (inputMode === "google") return sheetReadQuery.data?.existingWeeks ?? [];
-      if (inputMode === "excel") return excelReadQuery.data?.existingWeeks ?? [];
-      if (inputMode === "cloud") return cloudExistingWeeks;
-      return [];
     };
 
     ensureSignedIn(() => {
@@ -2041,120 +2042,205 @@ export function BudgetWizard() {
               exit={{ opacity: 0, y: -16 }}
               className="space-y-8"
             >
-              <div>
-                <h2 className="text-3xl font-bold text-foreground mb-2">Your budget is ready</h2>
-                <p className="text-muted-foreground">
-                  {generatedWeek && generatedWeek.weeks.length > 1
-                    ? `${generatedWeek.weeks.length} budget weeks have been generated.`
-                    : "The new week has been generated."}{" "}
-                  {inputMode === "google"
-                    ? "Write them to your Google Sheet or download as a file."
-                    : inputMode === "excel"
-                    ? "Write them to your Excel Online file or download as a file."
-                    : inputMode === "cloud"
-                    ? "Save them back to your cloud budget or download as a file."
-                    : "Download the updated file below."}
-                </p>
-              </div>
+              {(() => {
+                const sourceExisting = getExistingWeeks();
+                const historyWeeks = sourceExisting
+                  .filter((w: any) => w.items || w.openingBalance !== undefined)
+                  .map((w: any) => ({
+                    label: w.label,
+                    openingBalance: w.openingBalance as number | undefined,
+                    paycheck: w.paycheck as number | undefined,
+                    items: (w.items ?? []) as { name: string; amount: number }[],
+                    remaining: w.remaining as number,
+                    isNew: false,
+                  }));
+                const cloudOnlyWeeks = sourceExisting
+                  .filter((w: any) => !w.items && w.openingBalance === undefined)
+                  .map((w: any) => ({
+                    label: w.label as string,
+                    remaining: w.remaining as number,
+                  }));
+                const newWeeks = (generatedWeek?.weeks ?? []).map((w) => ({
+                  label: w.weekLabel,
+                  openingBalance: w.openingBalance as number | undefined,
+                  paycheck: w.paycheck as number | undefined,
+                  items: (w.bills ?? []) as { name: string; amount: number }[],
+                  remaining: w.closingBalance,
+                  isNew: true,
+                }));
+                const allWeeks = [...historyWeeks, ...newWeeks];
+                const hasHistory = historyWeeks.length > 0 || cloudOnlyWeeks.length > 0;
+                const newCount = newWeeks.length;
 
-              <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
-                <CardContent className="p-6 space-y-4">
-                  <p className="font-semibold text-emerald-900 text-lg">
-                    {format(parseISO(newWeekStartDate), "MMM d")} –{" "}
-                    {format(parseISO(newWeekEndDate), "MMM d, yyyy")}
-                  </p>
-                  <div className="grid grid-cols-3 gap-4">
+                return (
+                  <>
                     <div>
-                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Opening</p>
-                      <p className="text-xl font-bold text-emerald-900">${(zeroOpeningBalance ? 0 : openingBalance).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Paycheck</p>
-                      <p className="text-xl font-bold text-emerald-900">${paycheckAmount.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Bills</p>
-                      <p className="text-xl font-bold text-emerald-900">
-                        {bills.length} items
+                      <h2 className="text-3xl font-bold text-foreground mb-2">
+                        {hasHistory ? "Budget overview" : "Your budget is ready"}
+                      </h2>
+                      <p className="text-muted-foreground">
+                        {hasHistory
+                          ? `${historyWeeks.length + cloudOnlyWeeks.length} existing week${(historyWeeks.length + cloudOnlyWeeks.length) !== 1 ? "s" : ""} + ${newCount} new week${newCount !== 1 ? "s" : ""} generated.`
+                          : newCount > 1
+                          ? `${newCount} budget weeks have been generated.`
+                          : "The new week has been generated."}{" "}
+                        {inputMode === "google"
+                          ? "Write new weeks to your Google Sheet or download as a file."
+                          : inputMode === "excel"
+                          ? "Write new weeks to your Excel Online file or download as a file."
+                          : inputMode === "cloud"
+                          ? "Save new weeks back to your cloud budget or download as a file."
+                          : "Download the updated file below."}
                       </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
 
-              {generatedWeek && generatedWeek.weeks.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold text-foreground">Budget Preview</h3>
-                  </div>
-                  <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-border/40">
-                          {generatedWeek.weeks.map((week, wi) => (
-                            <th key={wi} colSpan={2} className="px-4 py-3 text-left font-bold text-foreground border-r border-border/30 last:border-r-0 whitespace-nowrap">
-                              {week.weekLabel}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          const weeks = generatedWeek.weeks;
-                          const maxRows = Math.max(...weeks.map(w => {
-                            let count = 0;
-                            if (!zeroOpeningBalance) count++;
-                            count++;
-                            count += w.bills.length;
-                            count++;
-                            return count;
-                          }));
+                    <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
+                      <CardContent className="p-6 space-y-4">
+                        <p className="font-semibold text-emerald-900 text-lg">
+                          {format(parseISO(newWeekStartDate), "MMM d")} –{" "}
+                          {format(parseISO(newWeekEndDate), "MMM d, yyyy")}
+                        </p>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Opening</p>
+                            <p className="text-xl font-bold text-emerald-900">${(zeroOpeningBalance ? 0 : openingBalance).toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Paycheck</p>
+                            <p className="text-xl font-bold text-emerald-900">${paycheckAmount.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Bills</p>
+                            <p className="text-xl font-bold text-emerald-900">
+                              {bills.length} items
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                          const rows: React.ReactNode[] = [];
-                          for (let r = 0; r < maxRows; r++) {
-                            rows.push(
-                              <tr key={r} className={r % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                                {weeks.map((week, wi) => {
-                                  let rowItems: { label: string; value: number; style?: string }[] = [];
-                                  if (!zeroOpeningBalance) {
-                                    rowItems.push({ label: "Remaining Acct", value: week.openingBalance });
-                                  }
-                                  rowItems.push({ label: "Paycheck", value: week.paycheck });
-                                  for (const bill of week.bills) {
-                                    const billStyle =
-                                      bill.name === "Partial Rent" ? "bg-orange-100 text-orange-900" :
-                                      bill.name === "Partial Utilities" ? "bg-purple-100 text-purple-900" :
-                                      bill.name === "Partial Car" ? "bg-green-100 text-green-900" : "";
-                                    rowItems.push({ label: bill.name, value: bill.amount, style: billStyle });
-                                  }
-                                  rowItems.push({ label: "Remaining", value: week.closingBalance, style: "font-bold border-t-2 border-foreground/20" });
-
-                                  const item = rowItems[r];
-                                  if (!item) {
-                                    return (
-                                      <td key={`${wi}-l`} colSpan={2} className="border-r border-border/30 last:border-r-0" />
-                                    );
-                                  }
-                                  return [
-                                    <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}`}>
-                                      {item.label}
-                                    </td>,
-                                    <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}`}>
-                                      ${item.value.toFixed(2)}
-                                    </td>,
-                                  ];
-                                })}
+                    {cloudOnlyWeeks.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Eye className="w-4 h-4 text-muted-foreground" />
+                          <h3 className="text-lg font-semibold text-foreground">Budget History</h3>
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-slate-100 border-b border-border/40">
+                                {cloudOnlyWeeks.map((w, i) => (
+                                  <th key={i} className="px-4 py-3 text-left font-bold text-muted-foreground border-r border-border/30 last:border-r-0 whitespace-nowrap">
+                                    {w.label}
+                                  </th>
+                                ))}
                               </tr>
-                            );
-                          }
-                          return rows;
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+                            </thead>
+                            <tbody>
+                              <tr className="bg-white">
+                                {cloudOnlyWeeks.map((w, i) => (
+                                  <td key={i} className="px-3 py-2 text-right tabular-nums font-semibold border-r border-border/30 last:border-r-0">
+                                    Remaining: ${w.remaining.toFixed(2)}
+                                  </td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {allWeeks.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Eye className="w-4 h-4 text-muted-foreground" />
+                          <h3 className="text-lg font-semibold text-foreground">
+                            {hasHistory ? "Full Budget View" : "Budget Preview"}
+                          </h3>
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border/40">
+                                {allWeeks.map((week, wi) => (
+                                  <th
+                                    key={wi}
+                                    colSpan={2}
+                                    className={`px-4 py-3 text-left font-bold border-r border-border/30 last:border-r-0 whitespace-nowrap ${
+                                      week.isNew
+                                        ? "bg-emerald-50 text-emerald-900"
+                                        : "bg-slate-100 text-muted-foreground"
+                                    }`}
+                                  >
+                                    {week.label}
+                                    {week.isNew && historyWeeks.length > 0 && (
+                                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-full">
+                                        NEW
+                                      </span>
+                                    )}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(() => {
+                                const maxRows = Math.max(...allWeeks.map(w => {
+                                  let count = 0;
+                                  if (w.openingBalance !== undefined) count++;
+                                  if (w.paycheck !== undefined) count++;
+                                  count += w.items.length;
+                                  count++;
+                                  return count;
+                                }));
+
+                                const rows: React.ReactNode[] = [];
+                                for (let r = 0; r < maxRows; r++) {
+                                  rows.push(
+                                    <tr key={r} className={r % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                      {allWeeks.map((week, wi) => {
+                                        let rowItems: { label: string; value: number; style?: string }[] = [];
+                                        if (week.openingBalance !== undefined) {
+                                          rowItems.push({ label: "Remaining Acct", value: week.openingBalance });
+                                        }
+                                        if (week.paycheck !== undefined) {
+                                          rowItems.push({ label: "Paycheck", value: week.paycheck });
+                                        }
+                                        for (const bill of week.items) {
+                                          const billStyle =
+                                            bill.name.startsWith("Partial ") ? "bg-amber-50 text-amber-900" : "";
+                                          rowItems.push({ label: bill.name, value: bill.amount, style: billStyle });
+                                        }
+                                        rowItems.push({ label: "Remaining", value: week.remaining, style: "font-bold border-t-2 border-foreground/20" });
+
+                                        const item = rowItems[r];
+                                        if (!item) {
+                                          return (
+                                            <td key={`${wi}-l`} colSpan={2} className="border-r border-border/30 last:border-r-0" />
+                                          );
+                                        }
+                                        const dimmed = !week.isNew ? " text-muted-foreground" : "";
+                                        return [
+                                          <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}${dimmed}`}>
+                                            {item.label}
+                                          </td>,
+                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}`}>
+                                            ${item.value.toFixed(2)}
+                                          </td>,
+                                        ];
+                                      })}
+                                    </tr>
+                                  );
+                                }
+                                return rows;
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div className="flex flex-col sm:flex-row gap-4">
                 {inputMode === "google" && selectedSheetId && (
