@@ -11,7 +11,7 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const { startDate, endDate, openingBalance, paycheckAmount, numberOfWeeks, bills } = parsed.data;
+  const { startDate, endDate, openingBalance, paycheckAmount, numberOfWeeks, bills, payPeriod } = parsed.data;
 
   const startDateObj = new Date(startDate);
   const endDateObj = new Date(endDate);
@@ -27,7 +27,8 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
     openingBalance,
     paycheckAmount,
     numberOfWeeks,
-    bills
+    bills,
+    payPeriod ?? "weekly"
   );
 
   const totalMonthlyBills = bills.reduce((s, b) => s + Math.abs(b.amount), 0);

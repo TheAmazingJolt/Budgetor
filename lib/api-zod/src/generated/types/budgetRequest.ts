@@ -18,5 +18,7 @@ export interface BudgetRequest {
   paycheckAmount: number;
   /** Number of weeks to generate (calculated from date range) */
   numberOfWeeks: number;
+  /** Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month) */
+  payPeriod?: "weekly" | "biweekly" | "monthly";
   bills: Bill[];
 }

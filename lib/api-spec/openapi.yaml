@@ -710,6 +710,10 @@ components:
         numberOfWeeks:
           type: integer
           description: Number of weeks to generate (calculated from date range)
+        payPeriod:
+          type: string
+          enum: [weekly, biweekly, monthly]
+          description: "Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)"
         bills:
           type: array
           items:

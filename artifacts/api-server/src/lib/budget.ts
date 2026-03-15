@@ -20,13 +20,22 @@ function monthKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}`;
 }
 
+function getMonthEnd(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function getNextMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+}
+
 export function generateWeeklyBudgets(
   startDate: Date,
   endDate: Date,
   openingBalance: number,
   paycheckAmount: number,
   numberOfWeeks: number,
-  bills: Bill[]
+  bills: Bill[],
+  payPeriod: "weekly" | "biweekly" | "monthly" = "weekly"
 ): WeeklyBudget[] {
   const balancedBills = bills.filter((b) => b.type === "balanced");
   const fixedBills = bills.filter((b) => b.type === "fixed");
@@ -49,17 +58,34 @@ export function generateWeeklyBudgets(
 
   const weeks: WeekData[] = [];
 
-  for (let i = 0; i < numberOfWeeks; i++) {
-    const start = addDays(startDate, i * 7);
-    const end = i === numberOfWeeks - 1 ? endDate : addDays(start, 6);
-    weeks.push({
-      start,
-      end,
-      month: monthKey(start),
-      fixedWeeklyBills: [],
-      largeBills: [],
-      paycheck: paycheckAmount,
-    });
+  if (payPeriod === "monthly") {
+    let periodStart = new Date(startDate);
+    for (let i = 0; i < numberOfWeeks; i++) {
+      const end = i === numberOfWeeks - 1 ? endDate : getMonthEnd(periodStart);
+      weeks.push({
+        start: new Date(periodStart),
+        end,
+        month: monthKey(periodStart),
+        fixedWeeklyBills: [],
+        largeBills: [],
+        paycheck: paycheckAmount,
+      });
+      periodStart = getNextMonthStart(periodStart);
+    }
+  } else {
+    const daysPerPeriod = payPeriod === "biweekly" ? 14 : 7;
+    for (let i = 0; i < numberOfWeeks; i++) {
+      const start = addDays(startDate, i * daysPerPeriod);
+      const end = i === numberOfWeeks - 1 ? endDate : addDays(start, daysPerPeriod - 1);
+      weeks.push({
+        start,
+        end,
+        month: monthKey(start),
+        fixedWeeklyBills: [],
+        largeBills: [],
+        paycheck: paycheckAmount,
+      });
+    }
   }
 
   // ── Count weeks per month and months spanned ────────────────────────────
@@ -95,10 +121,23 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Add weekly bills to every week ──────────────────────────────────────
+  // ── Add weekly bills to every period ────────────────────────────────────
   for (const bill of weeklyBills) {
     for (let i = 0; i < weeks.length; i++) {
-      weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount });
+      if (payPeriod === "weekly") {
+        weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount });
+      } else {
+        const periodStart = weeks[i].start;
+        const periodEnd = weeks[i].end;
+        const diffDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000) + 1;
+        const occurrences = Math.max(1, Math.ceil(diffDays / 7));
+        for (let o = 0; o < occurrences; o++) {
+          weeks[i].fixedWeeklyBills.push({
+            name: occurrences > 1 ? `${bill.name} (wk ${o + 1})` : bill.name,
+            amount: bill.amount,
+          });
+        }
+      }
     }
   }
 

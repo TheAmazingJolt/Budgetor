@@ -12,12 +12,29 @@ function addDaysISO(dateStr: string, days: number): string {
   return toISO(d);
 }
 
+type PayPeriod = "weekly" | "biweekly" | "monthly";
+
+function computeEndDate(startDate: string, weekCount: number, payPeriod: PayPeriod): string {
+  if (payPeriod === "monthly") {
+    const d = new Date(startDate + 'T12:00:00');
+    const endDate = new Date(d.getFullYear(), d.getMonth() + weekCount, 0, 12, 0, 0);
+    return toISO(endDate);
+  }
+  const daysPerPeriod = payPeriod === "biweekly" ? 14 : 7;
+  return addDaysISO(startDate, weekCount * daysPerPeriod - 1);
+}
+
+function monthDiff(startStr: string, endStr: string): number {
+  const s = new Date(startStr + 'T12:00:00');
+  const e = new Date(endStr + 'T12:00:00');
+  return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
+}
+
 interface BudgetState {
   uploadedFile: File | null;
   parsedWorkbook: ParsedWorkbook | null;
   blankMode: boolean;
   includeBillsSummary: boolean;
-  /** Style sampled from the uploaded spreadsheet, if any */
   sheetStyle: SheetStyle | null;
 
   bills: Bill[];
@@ -27,6 +44,7 @@ interface BudgetState {
   openingBalance: number;
   paycheckAmount: number;
   zeroOpeningBalance: boolean;
+  payPeriod: PayPeriod;
 
   generatedWeek: BudgetResponse | null;
 
@@ -45,6 +63,7 @@ interface BudgetState {
   setOpeningBalance: (val: number) => void;
   setPaycheckAmount: (val: number) => void;
   setZeroOpeningBalance: (val: boolean) => void;
+  setPayPeriod: (val: PayPeriod) => void;
   setGeneratedWeek: (budget: BudgetResponse | null) => void;
   reset: () => void;
 }
@@ -72,6 +91,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   openingBalance: 0,
   paycheckAmount: 0,
   zeroOpeningBalance: false,
+  payPeriod: "weekly",
   generatedWeek: null,
 
   setUploadedFile: (file) => set({ uploadedFile: file }),
@@ -96,25 +116,57 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
     set((state) => ({ bills: state.bills.filter((_, i) => i !== index) })),
 
   setStartDate: (start) =>
-    set((state) => ({
-      newWeekStartDate: start,
-      newWeekEndDate: addDaysISO(start, state.weekCount * 7 - 1),
-    })),
+    set((state) => {
+      let effectiveStart = start;
+      if (state.payPeriod === "monthly") {
+        const d = new Date(start + 'T12:00:00');
+        effectiveStart = toISO(new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0));
+      }
+      return {
+        newWeekStartDate: effectiveStart,
+        newWeekEndDate: computeEndDate(effectiveStart, state.weekCount, state.payPeriod),
+      };
+    }),
 
   setEndDate: (end) =>
     set((state) => {
+      if (state.payPeriod === "monthly") {
+        const wc = Math.max(1, monthDiff(state.newWeekStartDate, end));
+        return {
+          newWeekEndDate: computeEndDate(state.newWeekStartDate, wc, "monthly"),
+          weekCount: wc,
+        };
+      }
       const startMs = new Date(state.newWeekStartDate + 'T12:00:00').getTime();
       const endMs = new Date(end + 'T12:00:00').getTime();
       const diffDays = Math.round((endMs - startMs) / 86400000) + 1;
-      const wc = Math.max(1, Math.ceil(diffDays / 7));
+      const daysPerPeriod = state.payPeriod === "biweekly" ? 14 : 7;
+      const wc = Math.max(1, Math.ceil(diffDays / daysPerPeriod));
       return { newWeekEndDate: end, weekCount: wc };
     }),
 
   setWeekCount: (count) =>
     set((state) => ({
       weekCount: Math.max(1, count),
-      newWeekEndDate: addDaysISO(state.newWeekStartDate, Math.max(1, count) * 7 - 1),
+      newWeekEndDate: computeEndDate(state.newWeekStartDate, Math.max(1, count), state.payPeriod),
     })),
+
+  setPayPeriod: (val) =>
+    set((state) => {
+      let effectiveStart = state.newWeekStartDate;
+      let effectiveCount = state.weekCount;
+      if (val === "monthly") {
+        const d = new Date(state.newWeekStartDate + 'T12:00:00');
+        effectiveStart = toISO(new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0));
+        effectiveCount = 1;
+      }
+      return {
+        payPeriod: val,
+        weekCount: effectiveCount,
+        newWeekStartDate: effectiveStart,
+        newWeekEndDate: computeEndDate(effectiveStart, effectiveCount, val),
+      };
+    }),
 
   setNewWeekDates: (start, end) =>
     set({ newWeekStartDate: start, newWeekEndDate: end }),
@@ -134,5 +186,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       paycheckAmount: 0,
       zeroOpeningBalance: false,
       weekCount: 1,
+      payPeriod: "weekly",
     }),
 }));

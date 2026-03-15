@@ -102,6 +102,7 @@ interface SavedBudgetSettings {
   blankMode?: boolean;
   inputMode?: InputMode;
   existingWeeks?: any[];
+  payPeriod?: "weekly" | "biweekly" | "monthly";
 }
 
 interface GenerateOverrides {
@@ -205,6 +206,8 @@ export function BudgetWizard() {
     setZeroOpeningBalance,
     setGeneratedWeek,
     generatedWeek,
+    payPeriod,
+    setPayPeriod,
     reset,
   } = useBudgetStore();
 
@@ -732,6 +735,7 @@ export function BudgetWizard() {
               blankMode,
               inputMode,
               existingWeeks: getExistingWeeks(),
+              payPeriod,
             },
           },
         },
@@ -760,6 +764,7 @@ export function BudgetWizard() {
     const b = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
     const s = budget.settings as SavedBudgetSettings;
     setBills(b);
+    if (s?.payPeriod) setPayPeriod(s.payPeriod);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
     if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
@@ -870,6 +875,7 @@ export function BudgetWizard() {
             blankMode,
             inputMode: "cloud",
             existingWeeks: updatedExistingWeeks,
+            payPeriod,
           },
         },
       },
@@ -976,6 +982,7 @@ export function BudgetWizard() {
           paycheckAmount: overrides?.paycheckAmount ?? paycheckAmount,
           numberOfWeeks: overrides?.weekCount ?? weekCount,
           bills: overrides?.bills ?? bills,
+          payPeriod,
         },
       },
       {
@@ -1844,6 +1851,27 @@ export function BudgetWizard() {
 
               <Card className="border-border/40">
                 <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                      <CalendarDays className="w-4 h-4" /> Pay Period
+                    </Label>
+                    <div className="flex rounded-xl border border-border/60 overflow-hidden h-11">
+                      {(["weekly", "biweekly", "monthly"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setPayPeriod(option)}
+                          className={`flex-1 text-sm font-medium transition-colors ${
+                            payPeriod === option
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {option === "weekly" ? "Weekly (7 days)" : option === "biweekly" ? "Biweekly (14 days)" : "Monthly"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
@@ -1871,7 +1899,7 @@ export function BudgetWizard() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <Settings2 className="w-4 h-4" /> Number of Weeks
+                      <Settings2 className="w-4 h-4" /> {payPeriod === "weekly" ? "Number of Weeks" : payPeriod === "biweekly" ? "Number of Periods" : "Number of Months"}
                     </Label>
                     <Input
                       type="number"

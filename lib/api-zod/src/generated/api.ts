@@ -29,6 +29,10 @@ export const GenerateBudgetBody = zod.object({
   numberOfWeeks: zod
     .number()
     .describe("Number of weeks to generate (calculated from date range)"),
+  payPeriod: zod
+    .enum(["weekly", "biweekly", "monthly"])
+    .optional()
+    .describe("Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)"),
   bills: zod.array(
     zod.object({
       name: zod.string(),
