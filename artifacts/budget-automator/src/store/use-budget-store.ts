@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Bill, BudgetResponse } from '@workspace/api-client-react';
+import type { Bill, BudgetResponse, Debt } from '@workspace/api-client-react';
 import type { ParsedWorkbook, SheetStyle } from '@/lib/xlsx-parser';
 
 function toISO(d: Date): string {
@@ -38,6 +38,7 @@ interface BudgetState {
   sheetStyle: SheetStyle | null;
 
   bills: Bill[];
+  debts: Debt[];
   newWeekStartDate: string;
   newWeekEndDate: string;
   weekCount: number;
@@ -56,6 +57,10 @@ interface BudgetState {
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
   removeBill: (index: number) => void;
+  setDebts: (debts: Debt[]) => void;
+  addDebt: (debt: Debt) => void;
+  updateDebt: (index: number, debt: Debt) => void;
+  removeDebt: (index: number) => void;
   setStartDate: (start: string) => void;
   setEndDate: (end: string) => void;
   setWeekCount: (count: number) => void;
@@ -85,6 +90,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   includeBillsSummary: false,
   sheetStyle: null,
   bills: [],
+  debts: [],
   newWeekStartDate: friday,
   newWeekEndDate: addDaysISO(friday, 6),
   weekCount: 1,
@@ -114,6 +120,17 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
     }),
   removeBill: (index) =>
     set((state) => ({ bills: state.bills.filter((_, i) => i !== index) })),
+
+  setDebts: (debts) => set({ debts }),
+  addDebt: (debt) => set((state) => ({ debts: [...state.debts, debt] })),
+  updateDebt: (index, debt) =>
+    set((state) => {
+      const newDebts = [...state.debts];
+      newDebts[index] = debt;
+      return { debts: newDebts };
+    }),
+  removeDebt: (index) =>
+    set((state) => ({ debts: state.debts.filter((_, i) => i !== index) })),
 
   setStartDate: (start) =>
     set((state) => {
@@ -181,6 +198,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       blankMode: false,
       sheetStyle: null,
       bills: [],
+      debts: [],
       generatedWeek: null,
       openingBalance: 0,
       paycheckAmount: 0,

@@ -39,6 +39,8 @@ export interface Bill {
   type: BillType;
   /** Color key for UI display, e.g. blue, green, orange */
   color?: string;
+  /** ID of the debt this bill was imported from (if any) */
+  sourceDebtId?: string;
 }
 
 export interface WeeklyBill {
@@ -64,6 +66,18 @@ export interface WeeklyBudget {
   closingBalance: number;
 }
 
+/**
+ * Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)
+ */
+export type BudgetRequestPayPeriod =
+  (typeof BudgetRequestPayPeriod)[keyof typeof BudgetRequestPayPeriod];
+
+export const BudgetRequestPayPeriod = {
+  weekly: "weekly",
+  biweekly: "biweekly",
+  monthly: "monthly",
+} as const;
+
 export interface BudgetRequest {
   /** ISO date string for first week start */
   startDate: string;
@@ -76,7 +90,7 @@ export interface BudgetRequest {
   /** Number of weeks to generate (calculated from date range) */
   numberOfWeeks: number;
   /** Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month) */
-  payPeriod?: "weekly" | "biweekly" | "monthly";
+  payPeriod?: BudgetRequestPayPeriod;
   bills: Bill[];
 }
 
@@ -108,6 +122,26 @@ export interface AuthProviders {
   apple: boolean;
 }
 
+export type DebtType = (typeof DebtType)[keyof typeof DebtType];
+
+export const DebtType = {
+  credit_card: "credit_card",
+  loan: "loan",
+  collections: "collections",
+} as const;
+
+export interface Debt {
+  id: string;
+  name: string;
+  type: DebtType;
+  /** Current balance owed (positive number) */
+  balance: number;
+  /** APR percentage (optional) */
+  interestRate?: number | null;
+  /** Minimum monthly/weekly payment amount (positive number) */
+  minimumPayment: number;
+}
+
 export type SavedBudgetSettings = { [key: string]: unknown };
 
 export interface SavedBudget {
@@ -116,6 +150,7 @@ export interface SavedBudget {
   name: string;
   bills: unknown[];
   settings: SavedBudgetSettings;
+  debts?: Debt[];
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +169,7 @@ export interface SavedBudgetCreateRequest {
   name: string;
   bills: unknown[];
   settings: SavedBudgetCreateRequestSettings;
+  debts?: Debt[];
 }
 
 export type SavedBudgetUpdateRequestSettings = { [key: string]: unknown };
@@ -142,6 +178,7 @@ export interface SavedBudgetUpdateRequest {
   name?: string;
   bills?: unknown[];
   settings?: SavedBudgetUpdateRequestSettings;
+  debts?: Debt[];
 }
 
 export interface GoogleAuthStatus {

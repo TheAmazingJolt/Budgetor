@@ -7,6 +7,7 @@ export const savedBudgetsTable = pgTable("saved_budgets", {
   name: text("name").notNull(),
   bills: jsonb("bills").notNull(),
   settings: jsonb("settings").notNull(),
+  debts: jsonb("debts").default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -16,6 +17,7 @@ export type InsertSavedBudget = {
   name: string;
   bills: unknown;
   settings: unknown;
+  debts?: unknown;
 };
 
 export type SavedBudget = typeof savedBudgetsTable.$inferSelect;

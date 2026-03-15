@@ -22,4 +22,6 @@ export interface Bill {
   type: BillType;
   /** Color key for UI display, e.g. blue, green, orange */
   color?: string;
+  /** ID of the debt this bill was imported from (if any) */
+  sourceDebtId?: string;
 }

@@ -29,7 +29,8 @@ Features:
 - **Microsoft Excel Online integration**: OAuth2 via Azure AD v2.0 for reading/writing OneDrive Excel workbooks (requires MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI env vars). Uses Microsoft Graph REST API (no SDK). Tokens stored in session as `microsoftTokens` and persisted to DB (microsoftAccessToken, microsoftRefreshToken, microsoftTokenExpiry columns on users table) for signed-in users. Scopes: openid, offline_access, Files.ReadWrite, User.Read. Includes "Save to new Excel file" button that creates a new workbook in OneDrive and writes budget data
 - **Start from scratch**: Create a budget without uploading any file; enter bills manually
 - **User accounts**: Sign in with Google, Apple, or continue as guest. Guest accounts auto-created when saving; can upgrade to Google/Apple keeping saved budgets
-- **Saved budgets**: CRUD for saving/loading budget configurations (bills + settings) per user account
+- **Saved budgets**: CRUD for saving/loading budget configurations (bills + settings + debts) per user account
+- **Debt tracking**: Track credit cards, loans, and collections accounts with balance, interest rate (optional), and minimum payment. Debts are saved alongside bills in cloud budgets. Total debt summary card shows across the Configure and Results views. Minimum payments can be imported as bills via "As bill" toggle per debt.
 - **Week count selector**: pick how many weeks to generate; end date auto-fills (start + weeks × 7 - 1 days)
 - **Custom bill categories**: Bill schema uses `category` (free-form user label), `type` (balanced|fixed|weekly), `color` (12-color named palette). Replaces old hardcoded 5-value enum.
 - **Balanced bills**: Any bill with `type="balanced"` is spread evenly across weeks (was: rent/utilities/car). All balanced bills grouped together and distributed proportionally.

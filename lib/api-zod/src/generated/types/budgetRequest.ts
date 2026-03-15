@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Bill } from "./bill";
+import type { BudgetRequestPayPeriod } from "./budgetRequestPayPeriod";
 
 export interface BudgetRequest {
   /** ISO date string for first week start */
@@ -19,6 +20,6 @@ export interface BudgetRequest {
   /** Number of weeks to generate (calculated from date range) */
   numberOfWeeks: number;
   /** Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month) */
-  payPeriod?: "weekly" | "biweekly" | "monthly";
+  payPeriod?: BudgetRequestPayPeriod;
   bills: Bill[];
 }

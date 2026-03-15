@@ -25,7 +25,7 @@ router.get("/budgets", requireAuth, async (req: Request, res: Response): Promise
 
 router.post("/budgets", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.id;
-  const { name, bills, settings } = req.body as { name?: string; bills?: unknown[]; settings?: unknown };
+  const { name, bills, settings, debts } = req.body as { name?: string; bills?: unknown[]; settings?: unknown; debts?: unknown[] };
 
   if (!name || typeof name !== "string") {
     res.status(400).json({ error: "Missing or invalid 'name'" });
@@ -44,6 +44,7 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
         name: name.trim(),
         bills,
         settings: settings || {},
+        debts: Array.isArray(debts) ? debts : [],
       })
       .returning();
 
@@ -57,12 +58,13 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
 router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const userId = req.user!.id;
   const budgetId = req.params.id;
-  const { name, bills, settings } = req.body as { name?: string; bills?: unknown[]; settings?: unknown };
+  const { name, bills, settings, debts } = req.body as { name?: string; bills?: unknown[]; settings?: unknown; debts?: unknown[] };
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name.trim();
   if (bills !== undefined) updates.bills = bills;
   if (settings !== undefined) updates.settings = settings;
+  if (debts !== undefined) updates.debts = debts;
 
   try {
     const [budget] = await db

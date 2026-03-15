@@ -92,6 +92,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { BillForm } from "@/components/BillForm";
+import { DebtForm } from "@/components/DebtForm";
 import { Currency } from "@/components/Currency";
 import {
   DropdownMenu,
@@ -100,8 +101,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Bill, SavedBudget } from "@workspace/api-client-react";
+import type { Bill, SavedBudget, Debt } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
+import { CreditCard, Landmark, AlertTriangle, DollarSign } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
 
@@ -146,6 +148,30 @@ type UnifiedWeek = {
 
 const STEPS = ["Upload", "Configure", "Download"];
 
+const DEBT_TYPE_LABELS: Record<string, string> = {
+  credit_card: "Credit Card",
+  loan: "Loan",
+  collections: "Collections",
+};
+
+function DebtTypeIcon({ type }: { type: string }) {
+  if (type === "credit_card") return <CreditCard className="w-4 h-4 text-blue-600" />;
+  if (type === "loan") return <Landmark className="w-4 h-4 text-purple-600" />;
+  return <AlertTriangle className="w-4 h-4 text-amber-600" />;
+}
+
+function debtTypeBadgeClass(type: string): string {
+  if (type === "credit_card") return "bg-blue-100 text-blue-700 border-blue-200";
+  if (type === "loan") return "bg-purple-100 text-purple-700 border-purple-200";
+  return "bg-amber-100 text-amber-700 border-amber-200";
+}
+
+function debtTypeLeftBar(type: string): string {
+  if (type === "credit_card") return "bg-blue-500";
+  if (type === "loan") return "bg-purple-500";
+  return "bg-amber-500";
+}
+
 function nextStartAfterLabel(label: string): string | null {
   const m = label.match(/to\s+(\d{1,2})\/(\d{1,2})\/(\d{2})\s*$/i);
   if (!m) return null;
@@ -169,6 +195,9 @@ export function BudgetWizard() {
   const [isParsing, setIsParsing] = useState(false);
   const [isBillDialogOpen, setIsBillDialogOpen] = useState(false);
   const [editingBillIndex, setEditingBillIndex] = useState<number | null>(null);
+  const [isDebtDialogOpen, setIsDebtDialogOpen] = useState(false);
+  const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
+  const [debtBillImports, setDebtBillImports] = useState<Set<string>>(new Set());
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>("upload");
 
@@ -209,6 +238,11 @@ export function BudgetWizard() {
     setBlankMode,
     setIncludeBillsSummary,
     setBills,
+    debts,
+    setDebts,
+    addDebt,
+    updateDebt,
+    removeDebt,
     addBill,
     updateBill,
     removeBill,
@@ -756,6 +790,7 @@ export function BudgetWizard() {
               existingWeeks: getExistingWeeks(),
               payPeriod,
             },
+            debts,
           },
         },
         {
@@ -784,6 +819,15 @@ export function BudgetWizard() {
     const s = budget.settings as SavedBudgetSettings;
     setBills(b);
     if (s?.payPeriod) setPayPeriod(s.payPeriod);
+    const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
+    setDebts(restoredDebts);
+    const importedIds = new Set<string>();
+    for (const debt of restoredDebts) {
+      if (b.some((bill: Bill) => bill.sourceDebtId === debt.id)) {
+        importedIds.add(debt.id);
+      }
+    }
+    setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
     if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
@@ -896,6 +940,7 @@ export function BudgetWizard() {
             existingWeeks: updatedExistingWeeks,
             payPeriod,
           },
+          debts,
         },
       },
       {
@@ -1272,6 +1317,37 @@ export function BudgetWizard() {
     const cat = bill.category ?? "fixed";
     return { ...bill, type: legacyTypeMap[cat] ?? "fixed", color: legacyColorMap[cat] ?? "slate", category: legacyCategoryMap[cat] ?? bill.category } as Bill;
   };
+
+  const toggleDebtAsBill = (debtId: string, checked: boolean) => {
+    setDebtBillImports(prev => {
+      const next = new Set(prev);
+      const debt = debts.find(d => d.id === debtId);
+      if (!debt) return next;
+      if (checked) {
+        next.add(debtId);
+        const alreadyExists = bills.some(b => b.sourceDebtId === debtId);
+        if (!alreadyExists) {
+          addBill({
+            name: `${debt.name} (min payment)`,
+            amount: -Math.abs(debt.minimumPayment),
+            dayOfMonth: 1,
+            category: "Debt Payment",
+            type: "balanced",
+            color: "red",
+            sourceDebtId: debtId,
+          });
+        }
+      } else {
+        next.delete(debtId);
+        const idx = bills.findIndex(b => b.sourceDebtId === debtId);
+        if (idx >= 0) removeBill(idx);
+      }
+      return next;
+    });
+  };
+
+  const totalDebtBalance = debts.reduce((sum, d) => sum + d.balance, 0);
+  const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
   const canGenerate = bills.length > 0 && !generateMutation.isPending;
 
@@ -1731,6 +1807,10 @@ export function BudgetWizard() {
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                   {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
                                   {(() => {
+                                    const debtCount = Array.isArray(budget.debts) ? budget.debts.length : 0;
+                                    return debtCount > 0 ? ` \u00b7 ${debtCount} debts` : "";
+                                  })()}
+                                  {(() => {
                                     const ewCount = ((budget.settings as any)?.existingWeeks?.length ?? 0);
                                     return ewCount > 0 ? ` \u00b7 ${ewCount} saved weeks` : "";
                                   })()}
@@ -1774,6 +1854,31 @@ export function BudgetWizard() {
                   )}
                 </div>
               )}
+
+              <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-red-300 hover:bg-red-50/30 p-5 transition-all">
+                <button
+                  type="button"
+                  onClick={() => { handleStartFromScratch(); setTimeout(() => { const el = document.getElementById("debts-section"); if (el) el.scrollIntoView({ behavior: "smooth" }); }, 200); }}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-red-100">
+                      <DollarSign className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-foreground">Manage Debts</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Track credit cards, loans, and collections.
+                        {debts.length > 0 && (
+                          <span className="ml-1 font-medium text-red-600">
+                            {debts.length} {debts.length === 1 ? "account" : "accounts"} &middot; ${debts.reduce((s, d) => s + d.balance, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} total
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
 
               {!isSignedIn && (
                 <div className="rounded-2xl border-2 border-dashed border-border/50 bg-white/40 p-5 text-center">
@@ -2110,7 +2215,7 @@ export function BudgetWizard() {
                     </Button>
                     <Button
                       size="default"
-                      onClick={handleGenerate}
+                      onClick={() => handleGenerate()}
                       disabled={!canGenerate}
                       className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                     >
@@ -2200,10 +2305,122 @@ export function BudgetWizard() {
                 )}
               </div>
 
+              <div className="space-y-4">
+                <div id="debts-section" className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" /> Debts
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Track credit cards, loans, and collections. Optionally include minimum payments as bills.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                    className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add Debt
+                  </Button>
+                </div>
+
+                {debts.length > 0 && (
+                  <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
+                    <CardContent className="p-5">
+                      <div className="flex items-center gap-3 mb-1">
+                        <DollarSign className="w-5 h-5 text-red-600" />
+                        <p className="font-semibold text-red-900 text-lg">
+                          Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <p className="text-sm text-red-700">
+                        across {debts.length} account{debts.length !== 1 ? "s" : ""} — ${totalMinPayments.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo minimum payments
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {debts.length === 0 ? (
+                  <Card className="border-dashed border-2 p-10 text-center">
+                    <p className="text-muted-foreground">No debts tracked yet. Add debts to see your full financial picture.</p>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {debts.map((debt, i) => (
+                      <motion.div
+                        key={debt.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.03 }}
+                      >
+                        <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                          <div className={`absolute top-0 left-0 w-1 h-full ${debtTypeLeftBar(debt.type)} transition-colors`} />
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="space-y-1">
+                                <p className="font-semibold text-sm text-foreground leading-tight">{debt.name}</p>
+                                <Badge variant="outline" className={`text-xs px-2 py-0.5 ${debtTypeBadgeClass(debt.type)}`}>
+                                  <DebtTypeIcon type={debt.type} />
+                                  <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
+                                </Badge>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                {debt.interestRate != null && (
+                                  <p className="text-xs text-muted-foreground">{debt.interestRate}% APR</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">
+                                  Min: ${debt.minimumPayment.toFixed(2)}/mo
+                                </span>
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                  <Checkbox
+                                    checked={debtBillImports.has(debt.id)}
+                                    onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
+                                    className="rounded h-3.5 w-3.5"
+                                  />
+                                  <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
+                                </label>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                                  onClick={() => { setEditingDebtIndex(i); setIsDebtDialogOpen(true); }}
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                                  onClick={() => {
+                                    const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
+                                    if (billIdx >= 0) removeBill(billIdx);
+                                    setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
+                                    removeDebt(i);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end pt-2">
                 <Button
                   size="lg"
-                  onClick={handleGenerate}
+                  onClick={() => handleGenerate()}
                   disabled={!canGenerate}
                   className="rounded-xl px-8 h-12 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                 >
@@ -2396,6 +2613,34 @@ export function BudgetWizard() {
                         </div>
                       </CardContent>
                     </Card>
+
+                    {debts.length > 0 && (
+                      <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
+                        <CardContent className="p-5">
+                          <div className="flex items-center gap-3 mb-2">
+                            <DollarSign className="w-5 h-5 text-red-600" />
+                            <p className="font-semibold text-red-900 text-lg">
+                              Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <p className="text-sm text-red-700 mb-3">
+                            across {debts.length} account{debts.length !== 1 ? "s" : ""} — ${totalMinPayments.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo minimum payments
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {debts.map(debt => (
+                              <div key={debt.id} className="flex items-center gap-2 rounded-lg bg-white/60 px-3 py-2 border border-red-100">
+                                <DebtTypeIcon type={debt.type} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-foreground truncate">{debt.name}</p>
+                                  <p className="text-[10px] text-muted-foreground">{DEBT_TYPE_LABELS[debt.type]}</p>
+                                </div>
+                                <p className="text-xs font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
 
                     {cloudOnlyWeeks.length > 0 && (
                       <div className="space-y-3">
@@ -2824,6 +3069,28 @@ export function BudgetWizard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isDebtDialogOpen} onOpenChange={setIsDebtDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl font-bold">
+              {editingDebtIndex !== null ? "Edit Debt" : "Add Debt"}
+            </DialogTitle>
+          </DialogHeader>
+          <DebtForm
+            initialData={editingDebtIndex !== null ? debts[editingDebtIndex] : undefined}
+            onSubmit={(data: Debt) => {
+              if (editingDebtIndex !== null) {
+                updateDebt(editingDebtIndex, data);
+              } else {
+                addDebt(data);
+              }
+              setIsDebtDialogOpen(false);
+            }}
+            onCancel={() => setIsDebtDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
         <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">
@@ -2842,7 +3109,7 @@ export function BudgetWizard() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              {bills.length} bills will be saved along with your current settings.
+              {bills.length} bill{bills.length !== 1 ? "s" : ""}{debts.length > 0 ? ` and ${debts.length} debt${debts.length !== 1 ? "s" : ""}` : ""} will be saved along with your current settings.
               {!isSignedIn && " A guest account will be created automatically."}
             </p>
             <div className="flex justify-end gap-2">

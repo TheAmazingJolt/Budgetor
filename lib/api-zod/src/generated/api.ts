@@ -32,7 +32,9 @@ export const GenerateBudgetBody = zod.object({
   payPeriod: zod
     .enum(["weekly", "biweekly", "monthly"])
     .optional()
-    .describe("Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)"),
+    .describe(
+      "Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)",
+    ),
   bills: zod.array(
     zod.object({
       name: zod.string(),
@@ -51,6 +53,10 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
     }),
   ),
 });
@@ -169,6 +175,27 @@ export const SavedBudgetListResponse = zod.object({
       name: zod.string(),
       bills: zod.array(zod.unknown()),
       settings: zod.object({}).passthrough(),
+      debts: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            name: zod.string(),
+            type: zod.enum(["credit_card", "loan", "collections"]),
+            balance: zod
+              .number()
+              .describe("Current balance owed (positive number)"),
+            interestRate: zod
+              .number()
+              .nullish()
+              .describe("APR percentage (optional)"),
+            minimumPayment: zod
+              .number()
+              .describe(
+                "Minimum monthly\/weekly payment amount (positive number)",
+              ),
+          }),
+        )
+        .optional(),
       createdAt: zod.date(),
       updatedAt: zod.date(),
     }),
@@ -182,6 +209,25 @@ export const SavedBudgetCreateBody = zod.object({
   name: zod.string(),
   bills: zod.array(zod.unknown()),
   settings: zod.object({}).passthrough(),
+  debts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.enum(["credit_card", "loan", "collections"]),
+        balance: zod
+          .number()
+          .describe("Current balance owed (positive number)"),
+        interestRate: zod
+          .number()
+          .nullish()
+          .describe("APR percentage (optional)"),
+        minimumPayment: zod
+          .number()
+          .describe("Minimum monthly\/weekly payment amount (positive number)"),
+      }),
+    )
+    .optional(),
 });
 
 export const SavedBudgetCreateResponse = zod.object({
@@ -191,6 +237,27 @@ export const SavedBudgetCreateResponse = zod.object({
     name: zod.string(),
     bills: zod.array(zod.unknown()),
     settings: zod.object({}).passthrough(),
+    debts: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+          type: zod.enum(["credit_card", "loan", "collections"]),
+          balance: zod
+            .number()
+            .describe("Current balance owed (positive number)"),
+          interestRate: zod
+            .number()
+            .nullish()
+            .describe("APR percentage (optional)"),
+          minimumPayment: zod
+            .number()
+            .describe(
+              "Minimum monthly\/weekly payment amount (positive number)",
+            ),
+        }),
+      )
+      .optional(),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -207,6 +274,25 @@ export const SavedBudgetUpdateBody = zod.object({
   name: zod.string().optional(),
   bills: zod.array(zod.unknown()).optional(),
   settings: zod.object({}).passthrough().optional(),
+  debts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.enum(["credit_card", "loan", "collections"]),
+        balance: zod
+          .number()
+          .describe("Current balance owed (positive number)"),
+        interestRate: zod
+          .number()
+          .nullish()
+          .describe("APR percentage (optional)"),
+        minimumPayment: zod
+          .number()
+          .describe("Minimum monthly\/weekly payment amount (positive number)"),
+      }),
+    )
+    .optional(),
 });
 
 export const SavedBudgetUpdateResponse = zod.object({
@@ -216,6 +302,27 @@ export const SavedBudgetUpdateResponse = zod.object({
     name: zod.string(),
     bills: zod.array(zod.unknown()),
     settings: zod.object({}).passthrough(),
+    debts: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+          type: zod.enum(["credit_card", "loan", "collections"]),
+          balance: zod
+            .number()
+            .describe("Current balance owed (positive number)"),
+          interestRate: zod
+            .number()
+            .nullish()
+            .describe("APR percentage (optional)"),
+          minimumPayment: zod
+            .number()
+            .describe(
+              "Minimum monthly\/weekly payment amount (positive number)",
+            ),
+        }),
+      )
+      .optional(),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -297,6 +404,10 @@ export const SheetReadResponse = zod.object({
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -341,6 +452,10 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -411,6 +526,10 @@ export const SheetWriteBody = zod.object({
           .string()
           .optional()
           .describe("Color key for UI display, e.g. blue, green, orange"),
+        sourceDebtId: zod
+          .string()
+          .optional()
+          .describe("ID of the debt this bill was imported from (if any)"),
       }),
     )
     .optional(),
@@ -538,6 +657,10 @@ export const ExcelReadResponse = zod.object({
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -582,6 +705,10 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
     }),
   ),
   existingWeeks: zod.array(

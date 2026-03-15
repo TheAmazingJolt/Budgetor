@@ -15,6 +15,13 @@
       "when": 1773531236968,
       "tag": "0001_deep_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773615836626,
+      "tag": "0002_ambitious_drax",
+      "breakpoints": true
     }
   ]
 }

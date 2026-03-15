@@ -12,6 +12,8 @@ export type {
   BillType,
   BudgetRequest,
   BudgetResponse,
+  Debt,
+  DebtType,
   ErrorResponse,
   ExcelFile,
   ExcelListResponse,

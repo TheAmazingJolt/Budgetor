@@ -1,0 +1,1 @@
+ALTER TABLE "saved_budgets" ADD COLUMN "debts" jsonb DEFAULT '[]'::jsonb;

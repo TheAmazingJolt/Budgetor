@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Debt } from "./debt";
 import type { SavedBudgetSettings } from "./savedBudgetSettings";
 
 export interface SavedBudget {
@@ -13,6 +14,7 @@ export interface SavedBudget {
   name: string;
   bills: unknown[];
   settings: SavedBudgetSettings;
+  debts?: Debt[];
   createdAt: Date;
   updatedAt: Date;
 }

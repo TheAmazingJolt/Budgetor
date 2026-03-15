@@ -691,6 +691,9 @@ components:
         color:
           type: string
           description: Color key for UI display, e.g. blue, green, orange
+        sourceDebtId:
+          type: string
+          description: ID of the debt this bill was imported from (if any)
       required:
         - name
         - amount
@@ -849,6 +852,39 @@ components:
         - google
         - apple
 
+    DebtType:
+      type: string
+      enum:
+        - credit_card
+        - loan
+        - collections
+
+    Debt:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/DebtType"
+        balance:
+          type: number
+          description: Current balance owed (positive number)
+        interestRate:
+          type: number
+          nullable: true
+          description: APR percentage (optional)
+        minimumPayment:
+          type: number
+          description: Minimum monthly/weekly payment amount (positive number)
+      required:
+        - id
+        - name
+        - type
+        - balance
+        - minimumPayment
+
     SavedBudget:
       type: object
       properties:
@@ -863,6 +899,10 @@ components:
           items: {}
         settings:
           type: object
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
         createdAt:
           type: string
           format: date-time
@@ -906,6 +946,10 @@ components:
           items: {}
         settings:
           type: object
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
       required:
         - name
         - bills
@@ -921,6 +965,10 @@ components:
           items: {}
         settings:
           type: object
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
 
     GoogleAuthStatus:
       type: object
