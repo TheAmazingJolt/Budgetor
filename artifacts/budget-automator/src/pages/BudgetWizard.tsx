@@ -1105,9 +1105,6 @@ export function BudgetWizard() {
                       Sign in with Apple
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={handleGuestLogin}>
-                    Continue as guest
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1508,9 +1505,6 @@ export function BudgetWizard() {
                         <LogIn className="w-4 h-4" /> Sign in with Apple
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={handleGuestLogin} className="text-muted-foreground">
-                      Continue as guest
-                    </Button>
                   </div>
                 </div>
               )}
