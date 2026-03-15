@@ -66,6 +66,10 @@ import {
   getMicrosoftAuthStatusQueryKey,
   useSheetCreateAndWrite,
   useExcelCreateAndWrite,
+  useSheetDelete,
+  useExcelDelete,
+  getSheetListQueryKey,
+  getExcelListQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,6 +81,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { BillForm } from "@/components/BillForm";
 import { Currency } from "@/components/Currency";
 import {
@@ -240,6 +254,11 @@ export function BudgetWizard() {
   const excelWriteMutation = useExcelWrite();
   const excelCreateAndWriteMutation = useExcelCreateAndWrite();
   const excelReadByUrlMutation = useExcelReadByUrl();
+  const sheetDeleteMutation = useSheetDelete();
+  const excelDeleteMutation = useExcelDelete();
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
@@ -1203,6 +1222,47 @@ export function BudgetWizard() {
     }
     downloadBlob(generatedBlob, filename);
   };
+
+  const handleDeleteSpreadsheet = async () => {
+    setIsDeletingSpreadsheet(true);
+    try {
+      if (inputMode === "google" && selectedSheetId) {
+        await sheetDeleteMutation.mutateAsync({ id: selectedSheetId });
+        toast({ title: "Spreadsheet deleted", description: `"${selectedSheetName}" has been permanently deleted from Google Drive.` });
+      } else if (inputMode === "excel" && selectedExcelFileId) {
+        await excelDeleteMutation.mutateAsync({ id: selectedExcelFileId });
+        toast({ title: "File deleted", description: `"${selectedExcelFileName}" has been permanently deleted from OneDrive.` });
+      }
+      setIsDeleteDialogOpen(false);
+      if (inputMode === "google") {
+        queryClient.invalidateQueries({ queryKey: getSheetListQueryKey() });
+      } else if (inputMode === "excel") {
+        queryClient.invalidateQueries({ queryKey: getExcelListQueryKey() });
+      }
+      reset();
+      setSelectedSheetId(null);
+      setSelectedSheetName(null);
+      setSelectedExcelFileId(null);
+      setSelectedExcelFileName(null);
+      setActiveCloudBudgetId(null);
+      setActiveCloudBudgetName(null);
+      setCloudExistingWeeks([]);
+      setCloudSaveSuccess(false);
+      setWeekEdits({});
+      setEditModeOn(false);
+      setSelectedWeekIdx(null);
+      setInputMode("upload");
+      setStep(0);
+    } catch (err: any) {
+      const message = err?.data?.error || err?.message || "An unexpected error occurred.";
+      toast({ title: "Failed to delete", description: message, variant: "destructive" });
+    } finally {
+      setIsDeletingSpreadsheet(false);
+    }
+  };
+
+  const deleteSpreadsheetName = inputMode === "google" ? selectedSheetName : selectedExcelFileName;
+  const deleteProviderLabel = inputMode === "google" ? "Google Drive" : "OneDrive";
 
   const migrateLegacyBill = (bill: any): Bill => {
     if (bill.type) return bill as Bill;
@@ -2716,14 +2776,27 @@ export function BudgetWizard() {
               </div>
               )}
 
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => setStep(1)}
-                className="sm:w-auto h-14 rounded-2xl border-border/60"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" /> Back to Configure
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => setStep(1)}
+                  className="sm:w-auto h-14 rounded-2xl border-border/60"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to Configure
+                </Button>
+
+                {(inputMode === "google" && selectedSheetId) || (inputMode === "excel" && selectedExcelFileId) ? (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setIsDeleteDialogOpen(true)}
+                    className="sm:w-auto h-14 rounded-2xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" /> Delete spreadsheet
+                  </Button>
+                ) : null}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2829,6 +2902,31 @@ export function BudgetWizard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="sm:rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete spreadsheet</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete "{deleteSpreadsheetName}" from {deleteProviderLabel}? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingSpreadsheet}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSpreadsheet}
+              disabled={isDeletingSpreadsheet}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeletingSpreadsheet ? (
+                <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Deleting…</>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

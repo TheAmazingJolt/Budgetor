@@ -718,6 +718,39 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
   }
 });
 
+router.delete("/sheets/:id", async (req, res): Promise<void> => {
+  const auth = getAuthedClient(req);
+  if (!auth) {
+    res.status(401).json({ error: "Not authenticated with Google" });
+    return;
+  }
+
+  const fileId = req.params["id"];
+
+  try {
+    const drive = google.drive({ version: "v3", auth });
+    await drive.files.delete({ fileId });
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.code === 401) {
+      req.session.googleTokens = undefined;
+      res.status(401).json({ error: "Google session expired. Please reconnect." });
+      return;
+    }
+    if (err.code === 404) {
+      res.status(404).json({ error: "Spreadsheet not found or already deleted." });
+      return;
+    }
+    if (err.code === 403) {
+      res.status(403).json({ error: "You don't have permission to delete this spreadsheet." });
+      return;
+    }
+    res.status(500).json({
+      error: "Failed to delete spreadsheet: " + (err.message ?? String(err)),
+    });
+  }
+});
+
 function columnToLetter(col: number): string {
   let letter = "";
   let n = col;

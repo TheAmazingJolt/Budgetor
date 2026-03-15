@@ -30,6 +30,7 @@ import type {
   ErrorResponse,
   ExcelCreateAndWriteRequest,
   ExcelCreateAndWriteResponse,
+  ExcelDelete200,
   ExcelListResponse,
   ExcelReadByUrlRequest,
   ExcelReadResponse,
@@ -51,6 +52,7 @@ import type {
   SavedBudgetUpdateRequest,
   SheetCreateAndWriteRequest,
   SheetCreateAndWriteResponse,
+  SheetDelete200,
   SheetListResponse,
   SheetReadByUrlRequest,
   SheetReadResponse,
@@ -1636,6 +1638,90 @@ export const useSheetWrite = <
 };
 
 /**
+ * @summary Delete a Google Sheet from Google Drive
+ */
+export const getSheetDeleteUrl = (id: string) => {
+  return `/api/sheets/${id}`;
+};
+
+export const sheetDelete = async (
+  id: string,
+  options?: RequestInit,
+): Promise<SheetDelete200> => {
+  return customFetch<SheetDelete200>(getSheetDeleteUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getSheetDeleteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sheetDelete>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sheetDelete>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["sheetDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sheetDelete>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return sheetDelete(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SheetDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sheetDelete>>
+>;
+
+export type SheetDeleteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a Google Sheet from Google Drive
+ */
+export const useSheetDelete = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sheetDelete>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sheetDelete>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getSheetDeleteMutationOptions(options));
+};
+
+/**
  * @summary Create a new Google Sheet and write budget data
  */
 export const getSheetCreateAndWriteUrl = () => {
@@ -2304,6 +2390,90 @@ export const useExcelWrite = <
   TContext
 > => {
   return useMutation(getExcelWriteMutationOptions(options));
+};
+
+/**
+ * @summary Delete an Excel file from OneDrive
+ */
+export const getExcelDeleteUrl = (id: string) => {
+  return `/api/excel/${id}`;
+};
+
+export const excelDelete = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ExcelDelete200> => {
+  return customFetch<ExcelDelete200>(getExcelDeleteUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getExcelDeleteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelDelete>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof excelDelete>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["excelDelete"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof excelDelete>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return excelDelete(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExcelDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof excelDelete>>
+>;
+
+export type ExcelDeleteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete an Excel file from OneDrive
+ */
+export const useExcelDelete = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof excelDelete>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof excelDelete>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getExcelDeleteMutationOptions(options));
 };
 
 /**

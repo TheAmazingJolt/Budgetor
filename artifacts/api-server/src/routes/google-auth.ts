@@ -25,7 +25,7 @@ function getOAuth2Client() {
 
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/drive.file",
 ];
 
 router.get("/auth/google/status", (req, res) => {

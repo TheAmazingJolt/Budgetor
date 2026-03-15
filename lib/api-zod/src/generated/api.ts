@@ -47,7 +47,10 @@ export const GenerateBudgetBody = zod.object({
       type: zod
         .enum(["balanced", "fixed", "weekly"])
         .describe("How the bill is distributed across weeks"),
-      color: zod.string().optional().describe("Color key for UI display"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
     }),
   ),
 });
@@ -290,7 +293,10 @@ export const SheetReadResponse = zod.object({
       type: zod
         .enum(["balanced", "fixed", "weekly"])
         .describe("How the bill is distributed across weeks"),
-      color: zod.string().optional().describe("Color key for UI display"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
     }),
   ),
   existingWeeks: zod.array(
@@ -331,7 +337,10 @@ export const SheetReadByUrlResponse = zod.object({
       type: zod
         .enum(["balanced", "fixed", "weekly"])
         .describe("How the bill is distributed across weeks"),
-      color: zod.string().optional().describe("Color key for UI display"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
     }),
   ),
   existingWeeks: zod.array(
@@ -398,7 +407,10 @@ export const SheetWriteBody = zod.object({
         type: zod
           .enum(["balanced", "fixed", "weekly"])
           .describe("How the bill is distributed across weeks"),
-        color: zod.string().optional().describe("Color key for UI display"),
+        color: zod
+          .string()
+          .optional()
+          .describe("Color key for UI display, e.g. blue, green, orange"),
       }),
     )
     .optional(),
@@ -410,6 +422,17 @@ export const SheetWriteBody = zod.object({
 export const SheetWriteResponse = zod.object({
   success: zod.boolean(),
   sheetTitle: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a Google Sheet from Google Drive
+ */
+export const SheetDeleteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SheetDeleteResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**
@@ -511,7 +534,10 @@ export const ExcelReadResponse = zod.object({
       type: zod
         .enum(["balanced", "fixed", "weekly"])
         .describe("How the bill is distributed across weeks"),
-      color: zod.string().optional().describe("Color key for UI display"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
     }),
   ),
   existingWeeks: zod.array(
@@ -552,7 +578,10 @@ export const ExcelReadByUrlResponse = zod.object({
       type: zod
         .enum(["balanced", "fixed", "weekly"])
         .describe("How the bill is distributed across weeks"),
-      color: zod.string().optional().describe("Color key for UI display"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
     }),
   ),
   existingWeeks: zod.array(
@@ -612,6 +641,17 @@ export const ExcelWriteBody = zod.object({
 export const ExcelWriteResponse = zod.object({
   ok: zod.boolean(),
   message: zod.string().optional(),
+});
+
+/**
+ * @summary Delete an Excel file from OneDrive
+ */
+export const ExcelDeleteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ExcelDeleteResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**

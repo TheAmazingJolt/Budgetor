@@ -345,7 +345,7 @@ router.get("/auth/login/google", (req: Request, res: Response) => {
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
       "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/drive.file",
     ],
     prompt: "consent",
     state,

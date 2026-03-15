@@ -406,6 +406,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/SheetWriteResponse"
 
+  /sheets/{id}:
+    delete:
+      operationId: sheetDelete
+      tags: [sheets]
+      summary: Delete a Google Sheet from Google Drive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+
   /sheets/create-and-write:
     post:
       operationId: sheetCreateAndWrite
@@ -572,6 +596,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExcelWriteResponse"
+        "401":
+          description: Not authenticated with Microsoft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /excel/{id}:
+    delete:
+      operationId: excelDelete
+      tags: [excel]
+      summary: Delete an Excel file from OneDrive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
         "401":
           description: Not authenticated with Microsoft
           content:

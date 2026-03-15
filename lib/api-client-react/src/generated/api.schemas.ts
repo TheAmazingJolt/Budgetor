@@ -14,19 +14,6 @@ export interface ErrorResponse {
 }
 
 /**
- * Category for large-bill balancing (legacy — kept for backward compatibility)
- */
-export type BillCategory = (typeof BillCategory)[keyof typeof BillCategory];
-
-export const BillCategory = {
-  rent: "rent",
-  utilities: "utilities",
-  car: "car",
-  fixed: "fixed",
-  weekly: "weekly",
-} as const;
-
-/**
  * How the bill is distributed across weeks
  */
 export type BillType = (typeof BillType)[keyof typeof BillType];
@@ -307,6 +294,10 @@ export type GoogleDisconnect200 = {
   ok: boolean;
 };
 
+export type SheetDelete200 = {
+  ok: boolean;
+};
+
 export type GetMicrosoftAuthUrlParams = {
   redirect?: string;
 };
@@ -316,5 +307,9 @@ export type GetMicrosoftAuthUrl200 = {
 };
 
 export type MicrosoftDisconnect200 = {
+  ok: boolean;
+};
+
+export type ExcelDelete200 = {
   ok: boolean;
 };

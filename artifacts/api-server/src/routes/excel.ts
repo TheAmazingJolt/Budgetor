@@ -578,4 +578,38 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
   }
 });
 
+router.delete("/excel/:id", async (req, res): Promise<void> => {
+  const token = await getAccessToken(req);
+  if (!token) {
+    res.status(401).json({ error: "Not authenticated with Microsoft" });
+    return;
+  }
+
+  const fileId = req.params["id"];
+
+  try {
+    const delRes = await fetch(`${GRAPH}/me/drive/items/${fileId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!delRes.ok) {
+      const body = await delRes.text();
+      const err: any = new Error(`Graph API error: ${body}`);
+      err.status = delRes.status;
+      throw err;
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.status === 404) {
+      res.status(404).json({ error: "File not found or already deleted." });
+      return;
+    }
+    if (err.status === 403) {
+      res.status(403).json({ error: "You don't have permission to delete this file." });
+      return;
+    }
+    handleGraphError(err, req, res, "delete Excel file");
+  }
+});
+
 export default router;
