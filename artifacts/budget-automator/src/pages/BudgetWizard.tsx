@@ -1066,6 +1066,14 @@ export function BudgetWizard() {
                     )}
                   </div>
                   <DropdownMenuSeparator />
+                  {!isGuest && (
+                    <>
+                      <DropdownMenuItem onClick={() => { setStep(0); }}>
+                        <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   {isGuest && (
                     <>
                       {googleLoginAvailable && (
@@ -1424,67 +1432,73 @@ export function BudgetWizard() {
 
               </div>
 
-              {savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 && (
+              {isSignedIn && !isGuest && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <FolderOpen className="w-4 h-4 text-muted-foreground" />
                     <h3 className="text-lg font-semibold text-foreground">My Saved Budgets</h3>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {savedBudgetsQuery.data.budgets.map((budget) => (
-                      <Card
-                        key={budget.id}
-                        className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl cursor-pointer border-border/40"
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <button
-                              type="button"
-                              className="flex-1 text-left"
-                              onClick={() => handleLoadSavedBudget(budget)}
-                            >
-                              <p className="font-semibold text-sm text-foreground">{budget.name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
-                                {(() => {
-                                  const ewCount = ((budget.settings as any)?.existingWeeks?.length ?? 0);
-                                  return ewCount > 0 ? ` \u00b7 ${ewCount} saved weeks` : "";
-                                })()}
-                                {" \u00b7 "}
-                                Saved {new Date(budget.updatedAt).toLocaleDateString()}
-                              </p>
-                            </button>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setRenameBudgetId(budget.id);
-                                  setRenameBudgetValue(budget.name);
-                                  setIsRenameDialogOpen(true);
-                                }}
+                  {savedBudgetsQuery.isLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading...</p>
+                  ) : savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {savedBudgetsQuery.data.budgets.map((budget) => (
+                        <Card
+                          key={budget.id}
+                          className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl cursor-pointer border-border/40"
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <button
+                                type="button"
+                                className="flex-1 text-left"
+                                onClick={() => handleLoadSavedBudget(budget)}
                               >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSavedBudget(budget.id, budget.name);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                                <p className="font-semibold text-sm text-foreground">{budget.name}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
+                                  {(() => {
+                                    const ewCount = ((budget.settings as any)?.existingWeeks?.length ?? 0);
+                                    return ewCount > 0 ? ` \u00b7 ${ewCount} saved weeks` : "";
+                                  })()}
+                                  {" \u00b7 "}
+                                  Saved {new Date(budget.updatedAt).toLocaleDateString()}
+                                </p>
+                              </button>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenameBudgetId(budget.id);
+                                    setRenameBudgetValue(budget.name);
+                                    setIsRenameDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSavedBudget(budget.id, budget.name);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No saved budgets yet. Configure a budget and save it to access it here.</p>
+                  )}
                 </div>
               )}
 
