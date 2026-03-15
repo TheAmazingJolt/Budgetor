@@ -142,7 +142,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             )}
           />
 
-          {billType !== "weekly" && (
+          {billType === "fixed" && (
             <FormField
               control={form.control}
               name="dayOfMonth"
