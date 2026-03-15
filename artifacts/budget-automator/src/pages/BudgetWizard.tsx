@@ -2166,6 +2166,11 @@ export function BudgetWizard() {
                                   <th
                                     key={wi}
                                     colSpan={2}
+                                    ref={week.isNew && !allWeeks[wi - 1]?.isNew ? (el) => {
+                                      if (el && historyWeeks.length > 0) {
+                                        setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" }), 300);
+                                      }
+                                    } : undefined}
                                     className={`px-4 py-3 text-left font-bold border-r border-border/30 last:border-r-0 whitespace-nowrap ${
                                       week.isNew
                                         ? "bg-emerald-50 text-emerald-900"
@@ -2242,6 +2247,7 @@ export function BudgetWizard() {
                 );
               })()}
 
+              {(generatedWeek?.weeks?.length ?? 0) > 0 && (
               <div className="flex flex-col sm:flex-row gap-4">
                 {inputMode === "google" && selectedSheetId && (
                   <Button
@@ -2386,15 +2392,17 @@ export function BudgetWizard() {
                   </Button>
                 )}
 
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setStep(1)}
-                  className="sm:w-auto h-14 rounded-2xl border-border/60"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to Configure
-                </Button>
               </div>
+              )}
+
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setStep(1)}
+                className="sm:w-auto h-14 rounded-2xl border-border/60"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back to Configure
+              </Button>
             </motion.div>
           )}
         </AnimatePresence>
