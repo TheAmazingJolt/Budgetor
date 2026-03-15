@@ -251,7 +251,7 @@ export function BudgetWizard() {
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query: { enabled: isSignedIn, retry: false, staleTime: 15000 } as any,
+    query: { enabled: isSignedIn && !isGuest, retry: false, staleTime: 15000 } as any,
   });
 
   const googleAuth = useGoogleAuthStatus({
