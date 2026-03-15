@@ -32,7 +32,10 @@ export function generateWeeklyBudgets(
   const fixedBills = bills.filter((b) => b.type === "fixed");
   const weeklyBills = bills.filter((b) => b.type === "weekly");
 
-  const balancedTotal = balancedBills.reduce((s, b) => s + Math.abs(b.amount), 0);
+  const alwaysBills = balancedBills.filter((b) => !b.dayOfMonth);
+  const timedBills = balancedBills.filter((b) => !!b.dayOfMonth);
+
+  const alwaysTotal = alwaysBills.reduce((s, b) => s + Math.abs(b.amount), 0);
 
   // ── Build week date windows ─────────────────────────────────────────────
   interface WeekData {
@@ -116,29 +119,26 @@ export function generateWeeklyBudgets(
       .filter((i) => i >= 0);
     const N = monthWeekIndices.length;
 
-    const totalLargeNeg = -balancedTotal;
+    const totalLargeNeg = -alwaysTotal;
 
-    // F_i for each week in this month
     const F = monthWeekIndices.map((idx) =>
       weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0)
     );
     const sumF = F.reduce((s, v) => s + v, 0);
 
-    // Target closing balance (same for every week)
     const K = openingBalance + paycheckAmount + (totalLargeNeg + sumF) / N;
 
     for (let j = 0; j < monthWeekIndices.length; j++) {
       const idx = monthWeekIndices[j];
-      // Total large bill allocation for this week
       const largeAmount = K - openingBalance - paycheckAmount - F[j];
 
       const items: WeeklyBill[] = [];
-      if (balancedTotal > 0) {
-        const parts = balancedBills
+      if (alwaysTotal > 0) {
+        const parts = alwaysBills
           .filter((b) => Math.abs(b.amount) > 0)
           .map((b) => ({
             name: `Partial ${b.name}`,
-            ratio: Math.abs(b.amount) / balancedTotal,
+            ratio: Math.abs(b.amount) / alwaysTotal,
           }));
 
         let allocated = 0;
@@ -155,7 +155,6 @@ export function generateWeeklyBudgets(
       weeks[idx].largeBills = items;
     }
 
-    // Month-level reconciliation: ensure all weeks have exactly the same closing
     const closings = monthWeekIndices.map((idx) => {
       const fw = weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0);
       const lg = weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0);
@@ -167,6 +166,44 @@ export function generateWeeklyBudgets(
       if (diff !== 0 && weeks[monthWeekIndices[j]].largeBills.length > 0) {
         const last = weeks[monthWeekIndices[j]].largeBills;
         last[last.length - 1].amount = Math.round((last[last.length - 1].amount - diff) * 100) / 100;
+      }
+    }
+
+    for (const bill of timedBills) {
+      const day = bill.dayOfMonth!;
+      const [yearStr, monthStr] = mk.split("-");
+      const year = parseInt(yearStr);
+      const month = parseInt(monthStr);
+      const maxDay = new Date(year, month + 1, 0).getDate();
+      const actualDay = Math.min(day, maxDay);
+      const dueDate = new Date(year, month, actualDay);
+
+      let activeIndices = monthWeekIndices.filter((idx) => weeks[idx].start <= dueDate);
+
+      if (activeIndices.length === 0) {
+        if (monthWeekIndices[0] === 0) {
+          activeIndices = [0];
+        } else {
+          continue;
+        }
+      }
+
+      const perWeek = Math.round((bill.amount / activeIndices.length) * 100) / 100;
+      let allocated = 0;
+      for (let a = 0; a < activeIndices.length; a++) {
+        const idx = activeIndices[a];
+        if (a === activeIndices.length - 1) {
+          weeks[idx].largeBills.push({
+            name: `Partial ${bill.name}`,
+            amount: Math.round((bill.amount - allocated) * 100) / 100,
+          });
+        } else {
+          weeks[idx].largeBills.push({
+            name: `Partial ${bill.name}`,
+            amount: perWeek,
+          });
+          allocated += perWeek;
+        }
       }
     }
   }

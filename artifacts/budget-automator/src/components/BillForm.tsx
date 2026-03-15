@@ -142,7 +142,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             )}
           />
 
-          {billType === "fixed" && (
+          {billType !== "weekly" && (
             <FormField
               control={form.control}
               name="dayOfMonth"
@@ -161,7 +161,11 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                       className="focus:ring-primary/20 focus:border-primary"
                     />
                   </FormControl>
-                  <FormDescription>Leave blank if not applicable.</FormDescription>
+                  <FormDescription>
+                    {billType === "fixed"
+                      ? "Full amount appears in the week this day falls."
+                      : "Bill is only spread across weeks leading up to and including this day. Leave blank to spread across all weeks."}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
