@@ -1217,8 +1217,8 @@ export function BudgetWizard() {
               <FileSpreadsheet className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg leading-none text-foreground">Budget Automator</h1>
-              <p className="text-xs text-muted-foreground">Append weekly budgets to your spreadsheet</p>
+              <h1 className="font-bold text-lg leading-none text-foreground">MoneyPal</h1>
+              <p className="text-xs text-muted-foreground">Your personal budget companion</p>
             </div>
           </div>
 

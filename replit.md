@@ -16,7 +16,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
-## Budget Automator App
+## MoneyPal App
 
 A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet, Google Sheets, or Microsoft Excel Online:
 1. **Upload** — drop the existing budget file, start from scratch, connect to Google Sheets, or connect to Microsoft Excel (OneDrive)
