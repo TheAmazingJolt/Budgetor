@@ -2167,7 +2167,8 @@ export function BudgetWizard() {
                                     key={wi}
                                     colSpan={2}
                                     ref={week.isNew && !allWeeks[wi - 1]?.isNew ? (el) => {
-                                      if (el && historyWeeks.length > 0) {
+                                      if (el && historyWeeks.length > 0 && !(el as any).__scrolled) {
+                                        (el as any).__scrolled = true;
                                         setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" }), 300);
                                       }
                                     } : undefined}
