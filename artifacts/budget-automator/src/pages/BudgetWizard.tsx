@@ -26,6 +26,9 @@ import {
   Save,
   FolderOpen,
   LogIn,
+  CalendarDays,
+  Pencil,
+  X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -110,6 +113,22 @@ interface GenerateOverrides {
   weekCount?: number;
 }
 
+type WeekEdit = {
+  paycheck?: number;
+  openingBalance?: number;
+  items?: { name: string; amount: number }[];
+  deleted?: boolean;
+};
+
+type UnifiedWeek = {
+  label: string;
+  openingBalance?: number;
+  paycheck?: number;
+  items: { name: string; amount: number }[];
+  remaining: number;
+  isNew: boolean;
+};
+
 const STEPS = ["Upload", "Configure", "Download"];
 
 function nextStartAfterLabel(label: string): string | null {
@@ -118,6 +137,16 @@ function nextStartAfterLabel(label: string): string | null {
   const d = new Date(2000 + parseInt(m[3]), parseInt(m[1]) - 1, parseInt(m[2]));
   d.setDate(d.getDate() + 1);
   return d.toISOString().split('T')[0];
+}
+
+function parseLabelDates(label: string): { start: Date; end: Date } | null {
+  const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
+  if (!m) return null;
+  const toFullYear = (yy: string) => 2000 + parseInt(yy);
+  return {
+    start: new Date(toFullYear(m[3]), parseInt(m[1]) - 1, parseInt(m[2])),
+    end:   new Date(toFullYear(m[6]), parseInt(m[4]) - 1, parseInt(m[5])),
+  };
 }
 
 export function BudgetWizard() {
@@ -190,6 +219,14 @@ export function BudgetWizard() {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [renameBudgetId, setRenameBudgetId] = useState<string | null>(null);
   const [renameBudgetValue, setRenameBudgetValue] = useState("");
+
+  const [editModeOn, setEditModeOn] = useState(false);
+  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
+  const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
+  const [editDraft, setEditDraft] = useState<{ paycheck: string; openingBalance: string; items: { name: string; amount: string }[] } | null>(null);
+  const weekHeaderRefs = useRef<(HTMLTableCellElement | null)[]>([]);
+  const [googleFirstBudgetCol, setGoogleFirstBudgetCol] = useState(2);
+  const [excelFirstBudgetCol, setExcelFirstBudgetCol] = useState(2);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -324,6 +361,7 @@ export function BudgetWizard() {
       setOpeningBalance(data.lastRemaining);
       setGoogleSheetTitle(data.sheetTitle);
       setGoogleNextCol(data.nextWeekStartCol);
+      if (data.existingWeeks.length > 0) setGoogleFirstBudgetCol(data.existingWeeks[0].startCol ?? 2);
 
       let effectiveStartDate = newWeekStartDate;
       const lastWeek = data.existingWeeks.at(-1);
@@ -335,6 +373,7 @@ export function BudgetWizard() {
         }
       }
 
+      setWeekEdits({});
       toast({
         title: "Sheet loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
@@ -355,7 +394,9 @@ export function BudgetWizard() {
       setOpeningBalance(data.lastRemaining);
       setExcelSheetTitle(data.sheetTitle);
       setExcelNextCol(data.nextWeekStartCol);
+      if (data.existingWeeks.length > 0) setExcelFirstBudgetCol((data.existingWeeks[0] as any).startCol ?? 2);
 
+      setWeekEdits({});
       let effectiveStartDate = newWeekStartDate;
       const lastWeek = data.existingWeeks.at(-1) as any;
       if (lastWeek) {
@@ -565,20 +606,27 @@ export function BudgetWizard() {
     setIsWritingToExcel(true);
     setExcelWriteSuccess(false);
 
+    const fullOverwrite = hasHistoricalEdits();
+    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek.weeks;
+    const startCol = fullOverwrite ? excelFirstBudgetCol : excelNextCol;
+
     try {
       await excelWriteMutation.mutateAsync({
         id: selectedExcelFileId,
         data: {
-          weeks: generatedWeek.weeks,
-          startCol: excelNextCol,
+          weeks: weeksToWrite,
+          startCol,
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: excelSheetTitle,
         },
       });
       setExcelWriteSuccess(true);
+      setWeekEdits({});
       toast({
         title: "Written to Excel Online",
-        description: `${generatedWeek.weeks.length} budget weeks written to "${selectedExcelFileName}".`,
+        description: fullOverwrite
+          ? `All ${weeksToWrite.length} budget weeks written to "${selectedExcelFileName}".`
+          : `${generatedWeek.weeks.length} budget weeks written to "${selectedExcelFileName}".`,
       });
     } catch (err) {
       toast({
@@ -788,13 +836,23 @@ export function BudgetWizard() {
     setIsSavingToCloud(true);
     setCloudSaveSuccess(false);
 
-    const newWeeks = generatedWeek.weeks.map((w) => ({
-      label: w.weekLabel,
-      remaining: w.closingBalance,
-    }));
-    const existingLabels = new Set(cloudExistingWeeks.map((w: any) => w.label));
+    const editedCloudWeeks = cloudExistingWeeks
+      .filter((w: any) => !weekEdits[w.label]?.deleted)
+      .map((w: any) => {
+        const e = weekEdits[w.label];
+        if (!e) return w;
+        return { ...w, remaining: e.openingBalance !== undefined || e.paycheck !== undefined || e.items ? ((e.openingBalance ?? w.openingBalance ?? 0) + (e.paycheck ?? w.paycheck ?? 0) + (e.items ?? w.items ?? []).reduce((s: number, b: any) => s + b.amount, 0)) : w.remaining };
+      });
+    const newWeeks = generatedWeek.weeks
+      .filter((w) => !weekEdits[w.weekLabel]?.deleted)
+      .map((w) => {
+        const e = weekEdits[w.weekLabel];
+        const closing = e ? ((e.openingBalance ?? w.openingBalance) + (e.paycheck ?? w.paycheck) + (e.items ?? w.bills).reduce((s, b) => s + b.amount, 0)) : w.closingBalance;
+        return { label: w.weekLabel, remaining: closing };
+      });
+    const existingLabels = new Set(editedCloudWeeks.map((w: any) => w.label));
     const deduped = newWeeks.filter((w) => !existingLabels.has(w.label));
-    const updatedExistingWeeks = [...cloudExistingWeeks, ...deduped];
+    const updatedExistingWeeks = [...editedCloudWeeks, ...deduped];
 
     cloudSaveMutation.mutate(
       {
@@ -973,25 +1031,77 @@ export function BudgetWizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGenerateTick]);
 
+  const buildAllWriteWeeks = () => {
+    const source = getExistingWeeks()
+      .filter((w: any) => (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
+      .map((w: any) => {
+        const e = weekEdits[w.label];
+        const items = e?.items ?? w.items ?? [];
+        const paycheck = e?.paycheck ?? w.paycheck ?? 0;
+        const ob = e?.openingBalance ?? w.openingBalance ?? 0;
+        const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
+        const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : (w.remaining ?? 0);
+        const dates = parseLabelDates(w.label);
+        return {
+          weekLabel: w.label,
+          startDate: dates?.start.toISOString().split("T")[0] ?? "",
+          endDate: dates?.end.toISOString().split("T")[0] ?? "",
+          openingBalance: ob,
+          paycheck,
+          bills: items,
+          totalBills,
+          closingBalance: closing,
+        };
+      });
+    const gen = (generatedWeek?.weeks ?? [])
+      .filter((w) => !weekEdits[w.weekLabel]?.deleted)
+      .map((w) => {
+        const e = weekEdits[w.weekLabel];
+        const items = e?.items ?? w.bills;
+        const paycheck = e?.paycheck ?? w.paycheck;
+        const ob = e?.openingBalance ?? w.openingBalance;
+        const totalBills = items.reduce((s, b) => s + b.amount, 0);
+        const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : w.closingBalance;
+        return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
+      });
+    return [...source, ...gen];
+  };
+
+  const hasHistoricalEdits = () => {
+    const sourceLabels = new Set(
+      getExistingWeeks()
+        .filter((w: any) => w.items || w.openingBalance !== undefined)
+        .map((w: any) => w.label)
+    );
+    return Object.keys(weekEdits).some(label => sourceLabels.has(label));
+  };
+
   const handleWriteToGoogleSheets = async () => {
     if (!generatedWeek || !selectedSheetId) return;
     setIsWritingToSheet(true);
     setSheetWriteSuccess(false);
 
+    const fullOverwrite = hasHistoricalEdits();
+    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek.weeks;
+    const startCol = fullOverwrite ? googleFirstBudgetCol : googleNextCol;
+
     try {
       await sheetWriteMutation.mutateAsync({
         id: selectedSheetId,
         data: {
-          weeks: generatedWeek.weeks,
-          startCol: googleNextCol,
+          weeks: weeksToWrite,
+          startCol,
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: googleSheetTitle,
         },
       });
       setSheetWriteSuccess(true);
+      setWeekEdits({});
       toast({
         title: "Written to Google Sheets",
-        description: `${generatedWeek.weeks.length} budget weeks written to "${selectedSheetName}".`,
+        description: fullOverwrite
+          ? `All ${weeksToWrite.length} budget weeks written to "${selectedSheetName}".`
+          : `${generatedWeek.weeks.length} budget weeks written to "${selectedSheetName}".`,
       });
     } catch (err) {
       toast({
@@ -1648,7 +1758,7 @@ export function BudgetWizard() {
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setInputMode("upload"); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setStep(0); }}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -2044,7 +2154,7 @@ export function BudgetWizard() {
             >
               {(() => {
                 const sourceExisting = getExistingWeeks();
-                const historyWeeks = sourceExisting
+                const rawHistoryWeeks: UnifiedWeek[] = sourceExisting
                   .filter((w: any) => w.items || w.openingBalance !== undefined)
                   .map((w: any) => ({
                     label: w.label,
@@ -2060,7 +2170,7 @@ export function BudgetWizard() {
                     label: w.label as string,
                     remaining: w.remaining as number,
                   }));
-                const newWeeks = (generatedWeek?.weeks ?? []).map((w) => ({
+                const rawNewWeeks: UnifiedWeek[] = (generatedWeek?.weeks ?? []).map((w) => ({
                   label: w.weekLabel,
                   openingBalance: w.openingBalance as number | undefined,
                   paycheck: w.paycheck as number | undefined,
@@ -2068,9 +2178,89 @@ export function BudgetWizard() {
                   remaining: w.closingBalance,
                   isNew: true,
                 }));
-                const allWeeks = [...historyWeeks, ...newWeeks];
-                const hasHistory = historyWeeks.length > 0 || cloudOnlyWeeks.length > 0;
-                const newCount = newWeeks.length;
+
+                const applyEdit = (w: UnifiedWeek): UnifiedWeek | null => {
+                  const e = weekEdits[w.label];
+                  if (!e) return w;
+                  if (e.deleted) return null;
+                  const editedItems = e.items ?? w.items;
+                  const editedPaycheck = e.paycheck ?? w.paycheck;
+                  const editedOpening = e.openingBalance ?? w.openingBalance;
+                  const totalBills = editedItems.reduce((s, b) => s + b.amount, 0);
+                  const recalcRemaining = (editedOpening ?? 0) + (editedPaycheck ?? 0) + totalBills;
+                  return {
+                    ...w,
+                    paycheck: editedPaycheck,
+                    openingBalance: editedOpening,
+                    items: editedItems,
+                    remaining: (e.paycheck !== undefined || e.openingBalance !== undefined || e.items) ? recalcRemaining : w.remaining,
+                  };
+                };
+
+                const allWeeks = [...rawHistoryWeeks, ...rawNewWeeks]
+                  .map(applyEdit)
+                  .filter(Boolean) as UnifiedWeek[];
+                const hasHistory = rawHistoryWeeks.length > 0 || cloudOnlyWeeks.length > 0;
+                const newCount = rawNewWeeks.length;
+                const hasEdits = Object.keys(weekEdits).length > 0;
+
+                const handleJumpToToday = () => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  let bestIdx = -1;
+                  let closestFutureIdx = -1;
+                  let closestFutureDiff = Infinity;
+                  for (let i = 0; i < allWeeks.length; i++) {
+                    const d = parseLabelDates(allWeeks[i].label);
+                    if (!d) continue;
+                    if (today >= d.start && today <= d.end) { bestIdx = i; break; }
+                    const diff = d.start.getTime() - today.getTime();
+                    if (diff > 0 && diff < closestFutureDiff) { closestFutureDiff = diff; closestFutureIdx = i; }
+                  }
+                  if (bestIdx === -1) bestIdx = closestFutureIdx !== -1 ? closestFutureIdx : allWeeks.length - 1;
+                  if (bestIdx >= 0 && weekHeaderRefs.current[bestIdx]) {
+                    weekHeaderRefs.current[bestIdx]!.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+                  }
+                };
+
+                const openEditPanel = (wi: number) => {
+                  const week = allWeeks[wi];
+                  if (!week) return;
+                  const e = weekEdits[week.label];
+                  setSelectedWeekIdx(wi);
+                  setEditDraft({
+                    paycheck: String(e?.paycheck ?? week.paycheck ?? 0),
+                    openingBalance: String(e?.openingBalance ?? week.openingBalance ?? 0),
+                    items: (e?.items ?? week.items).map(b => ({ name: b.name, amount: String(Math.abs(b.amount)) })),
+                  });
+                };
+
+                const saveEditDraft = () => {
+                  if (selectedWeekIdx === null || !editDraft) return;
+                  const week = allWeeks[selectedWeekIdx];
+                  if (!week) return;
+                  setWeekEdits(prev => ({
+                    ...prev,
+                    [week.label]: {
+                      paycheck: parseFloat(editDraft.paycheck) || 0,
+                      openingBalance: parseFloat(editDraft.openingBalance) || 0,
+                      items: editDraft.items.map(b => ({ name: b.name, amount: -(Math.abs(parseFloat(b.amount) || 0)) })),
+                    },
+                  }));
+                  setSelectedWeekIdx(null);
+                  setEditDraft(null);
+                };
+
+                const deleteWeek = () => {
+                  if (selectedWeekIdx === null) return;
+                  const week = allWeeks[selectedWeekIdx];
+                  if (!week) return;
+                  setWeekEdits(prev => ({ ...prev, [week.label]: { deleted: true } }));
+                  setSelectedWeekIdx(null);
+                  setEditDraft(null);
+                };
+
+                weekHeaderRefs.current = [];
 
                 return (
                   <>
@@ -2080,7 +2270,7 @@ export function BudgetWizard() {
                       </h2>
                       <p className="text-muted-foreground">
                         {hasHistory
-                          ? `${historyWeeks.length + cloudOnlyWeeks.length} existing week${(historyWeeks.length + cloudOnlyWeeks.length) !== 1 ? "s" : ""} + ${newCount} new week${newCount !== 1 ? "s" : ""} generated.`
+                          ? `${rawHistoryWeeks.length + cloudOnlyWeeks.length} existing week${(rawHistoryWeeks.length + cloudOnlyWeeks.length) !== 1 ? "s" : ""} + ${newCount} new week${newCount !== 1 ? "s" : ""} generated.`
                           : newCount > 1
                           ? `${newCount} budget weeks have been generated.`
                           : "The new week has been generated."}{" "}
@@ -2152,40 +2342,65 @@ export function BudgetWizard() {
 
                     {allWeeks.length > 0 && (
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center flex-wrap gap-2">
                           <Eye className="w-4 h-4 text-muted-foreground" />
                           <h3 className="text-lg font-semibold text-foreground">
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
+                          <div className="flex-1" />
+                          {allWeeks.length > 1 && (
+                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
+                              <CalendarDays className="w-3.5 h-3.5" /> Today
+                            </Button>
+                          )}
+                          <Button
+                            variant={editModeOn ? "default" : "outline"}
+                            size="sm"
+                            className={`h-8 text-xs gap-1.5 ${editModeOn ? "bg-teal-600 hover:bg-teal-700" : ""}`}
+                            onClick={() => { setEditModeOn(v => !v); setSelectedWeekIdx(null); setEditDraft(null); }}
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> {editModeOn ? "Done" : "Edit"}
+                          </Button>
+                          {hasEdits && (
+                            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setWeekEdits({})}>
+                              Reset edits
+                            </Button>
+                          )}
                         </div>
                         <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-border/40">
-                                {allWeeks.map((week, wi) => (
-                                  <th
-                                    key={wi}
-                                    colSpan={2}
-                                    ref={week.isNew && !allWeeks[wi - 1]?.isNew ? (el) => {
-                                      if (el && historyWeeks.length > 0 && !(el as any).__scrolled) {
-                                        (el as any).__scrolled = true;
-                                        setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" }), 300);
-                                      }
-                                    } : undefined}
-                                    className={`px-4 py-3 text-left font-bold border-r border-border/30 last:border-r-0 whitespace-nowrap ${
-                                      week.isNew
-                                        ? "bg-emerald-50 text-emerald-900"
-                                        : "bg-slate-100 text-muted-foreground"
-                                    }`}
-                                  >
-                                    {week.label}
-                                    {week.isNew && historyWeeks.length > 0 && (
-                                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-full">
-                                        NEW
-                                      </span>
-                                    )}
-                                  </th>
-                                ))}
+                                {allWeeks.map((week, wi) => {
+                                  const isEdited = !!weekEdits[week.label] && !weekEdits[week.label].deleted;
+                                  return (
+                                    <th
+                                      key={wi}
+                                      colSpan={2}
+                                      ref={(el) => { weekHeaderRefs.current[wi] = el; }}
+                                      onClick={editModeOn ? () => openEditPanel(wi) : undefined}
+                                      className={`px-4 py-3 text-left font-bold border-r border-border/30 last:border-r-0 whitespace-nowrap ${
+                                        week.isNew
+                                          ? "bg-emerald-50 text-emerald-900"
+                                          : "bg-slate-100 text-muted-foreground"
+                                      }${editModeOn ? " cursor-pointer hover:ring-2 hover:ring-teal-400 hover:ring-inset transition-shadow" : ""}${
+                                        editModeOn && selectedWeekIdx === wi ? " ring-2 ring-teal-500 ring-inset" : ""
+                                      }`}
+                                    >
+                                      {week.label}
+                                      {week.isNew && rawHistoryWeeks.length > 0 && (
+                                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-full">
+                                          NEW
+                                        </span>
+                                      )}
+                                      {isEdited && (
+                                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">
+                                          EDITED
+                                        </span>
+                                      )}
+                                    </th>
+                                  );
+                                })}
                               </tr>
                             </thead>
                             <tbody>
@@ -2244,6 +2459,83 @@ export function BudgetWizard() {
                         </div>
                       </div>
                     )}
+
+                    {editModeOn && selectedWeekIdx !== null && editDraft && (() => {
+                      const week = allWeeks[selectedWeekIdx];
+                      if (!week) return null;
+                      return (
+                        <Dialog open onOpenChange={(open) => { if (!open) { setSelectedWeekIdx(null); setEditDraft(null); } }}>
+                          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle className="text-base">{week.label}</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              {week.openingBalance !== undefined && (
+                                <div>
+                                  <Label className="text-xs font-semibold uppercase text-muted-foreground">Opening Balance</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={editDraft.openingBalance}
+                                    onChange={(e) => setEditDraft(d => d ? { ...d, openingBalance: e.target.value } : d)}
+                                    className="mt-1"
+                                  />
+                                </div>
+                              )}
+                              <div>
+                                <Label className="text-xs font-semibold uppercase text-muted-foreground">Paycheck</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={editDraft.paycheck}
+                                  onChange={(e) => setEditDraft(d => d ? { ...d, paycheck: e.target.value } : d)}
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Bills</Label>
+                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                  {editDraft.items.map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                      <span className="text-sm truncate flex-1 min-w-0">{item.name}</span>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={item.amount}
+                                        onChange={(e) => {
+                                          setEditDraft(d => {
+                                            if (!d) return d;
+                                            const newItems = [...d.items];
+                                            newItems[idx] = { ...newItems[idx], amount: e.target.value };
+                                            return { ...d, items: newItems };
+                                          });
+                                        }}
+                                        className="w-28 text-right"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2 pt-2">
+                                <Button className="flex-1" onClick={saveEditDraft}>
+                                  <Check className="w-4 h-4 mr-1" /> Save
+                                </Button>
+                                <Button variant="outline" onClick={() => { setSelectedWeekIdx(null); setEditDraft(null); }}>
+                                  Cancel
+                                </Button>
+                              </div>
+                              <Button
+                                variant="destructive"
+                                className="w-full"
+                                onClick={deleteWeek}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" /> Delete this week
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      );
+                    })()}
                   </>
                 );
               })()}
