@@ -29,6 +29,7 @@ import {
   CalendarDays,
   Pencil,
   X,
+  HelpCircle,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -110,6 +111,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
+import { HelpDialog } from "@/components/HelpDialog";
 import { CreditCard, Landmark, AlertTriangle, DollarSign } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
@@ -305,6 +307,7 @@ export function BudgetWizard() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
@@ -328,37 +331,6 @@ export function BudgetWizard() {
   const currentUser = authQuery.data?.user ?? null;
   const isSignedIn = !!currentUser;
   const isGuest = currentUser?.provider === "guest";
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const authCode = params.get("auth_code");
-    if (!authCode) return;
-    params.delete("auth_code");
-    const newSearch = params.toString();
-    const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
-    window.history.replaceState({}, "", newUrl);
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined ?? "").replace(/\/+$/, "");
-    fetch(`${apiBase}/api/auth/exchange`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ code: authCode }),
-    })
-      .then((r) => r.json())
-      .then((data: { user?: unknown; token?: string }) => {
-        if (data.token) {
-          localStorage.setItem("auth_token", data.token);
-        }
-        if (data.user) {
-          queryClient.setQueryData(getAuthMeQueryKey(), { user: data.user });
-          queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
-        }
-      })
-      .catch(() => {
-        authQuery.refetch();
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } as any });
@@ -421,6 +393,15 @@ export function BudgetWizard() {
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debts, isSignedIn]);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const key = `moneypal_welcome_seen_${currentUser.id}`;
+    if (!localStorage.getItem(key)) {
+      setHelpOpen(true);
+      localStorage.setItem(key, "1");
+    }
+  }, [currentUser?.id]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1537,6 +1518,16 @@ export function BudgetWizard() {
                 </div>
               ))}
             </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl w-8 h-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setHelpOpen(true)}
+              title="Help"
+            >
+              <HelpCircle className="w-4.5 h-4.5" />
+            </Button>
 
             {isSignedIn ? (
               <DropdownMenu>
@@ -3581,6 +3572,8 @@ export function BudgetWizard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }

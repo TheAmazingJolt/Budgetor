@@ -24,6 +24,8 @@ A 3-step wizard that generates weekly budget columns for an `.xlsx` spreadsheet,
 3. **Download** — generates balanced weekly bill distribution with proper formatting and downloads (or writes directly to Google Sheets / Excel Online)
 
 Features:
+- **Sign-in landing page**: Unauthenticated users see a branded MoneyPal sign-in page with "Sign in with Google", "Sign in with Apple" (when configured), and "Continue as guest" options. Authenticated users skip directly to the main app. Auth routing is handled in `App.tsx` using `useAuthMe`/`useAuthProviders` React Query hooks (cache-shared with BudgetWizard via identical query keys).
+- **Help dialog**: A `HelpCircle` icon button in the header opens "How MoneyPal works" — a dialog explaining budgets, bills, pay periods, cloud save, debts, and spreadsheet integrations. Auto-opens once for new users (first-login welcome, tracked via `localStorage` key `moneypal_welcome_seen_{userId}`).
 - **Four input modes**: Upload .xlsx file, Start from scratch (manual bill entry), Google Sheets (direct read/write), or Microsoft Excel Online / OneDrive (direct read/write)
 - **Google Sheets integration**: OAuth2 flow for reading budget data from and writing formatted budget columns to Google Sheets (requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI env vars for Railway)
 - **Microsoft Excel Online integration**: OAuth2 via Azure AD v2.0 for reading/writing OneDrive Excel workbooks (requires MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI env vars). Uses Microsoft Graph REST API (no SDK). Tokens stored in session as `microsoftTokens` and persisted to DB (microsoftAccessToken, microsoftRefreshToken, microsoftTokenExpiry columns on users table) for signed-in users. Scopes: openid, offline_access, Files.ReadWrite, User.Read. Includes "Save to new Excel file" button that creates a new workbook in OneDrive and writes budget data
@@ -45,6 +47,9 @@ Features:
 - **Zero opening balance**: checkbox omits the Remaining Acct row entirely
 
 Key files:
+- `artifacts/budget-automator/src/App.tsx` — auth routing: splash → sign-in landing page → BudgetWizard; handles auth_code exchange
+- `artifacts/budget-automator/src/pages/SignInPage.tsx` — branded sign-in/landing page (Google, Apple, guest)
+- `artifacts/budget-automator/src/components/HelpDialog.tsx` — "How MoneyPal works" help modal
 - `artifacts/budget-automator/src/lib/xlsx-parser.ts` — reads workbook: extracts bills and existing budget weeks
 - `artifacts/budget-automator/src/lib/xlsx-writer.ts` — writes budget columns with styles + SUM formulas (uses `xlsx-js-style`)
 - `artifacts/budget-automator/src/pages/BudgetWizard.tsx` — main 3-step wizard UI
