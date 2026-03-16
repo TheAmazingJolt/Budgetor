@@ -108,7 +108,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
-import type { Bill, SavedBudget, Debt } from "@workspace/api-client-react";
+import type { Bill, SavedBudget, Debt, UserPreferencesResponse } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { CreditCard, Landmark, AlertTriangle, DollarSign } from "lucide-react";
 
@@ -374,16 +374,14 @@ export function BudgetWizard() {
   const updateUserPrefsMutation = useUpdateUserPreferences();
 
   const userDebtsQuery = useGetUserDebts({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query: { enabled: isSignedIn, retry: false, staleTime: 30000 } as any,
+    query: { enabled: isSignedIn, retry: false, staleTime: 30000 },
   });
   const userPrefsQuery = useGetUserPreferences({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query: { enabled: isSignedIn, retry: false, staleTime: 30000 } as any,
+    query: { enabled: isSignedIn, retry: false, staleTime: 30000 },
   });
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
-  const autoOpenLastSheet = prefsLoaded && (userPrefsQuery.data?.preferences as Record<string, unknown> | undefined)?.autoOpenLastSheet !== false;
+  const autoOpenLastSheet = prefsLoaded && userPrefsQuery.data?.preferences?.autoOpenLastSheet !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1566,7 +1564,7 @@ export function BudgetWizard() {
                           checked={autoOpenLastSheet}
                           onCheckedChange={(checked) => {
                             updateUserPrefsMutation.mutate({ data: { preferences: { autoOpenLastSheet: checked } } });
-                            queryClient.setQueryData(getGetUserPreferencesQueryKey(), (old: any) => ({
+                            queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
                               ...old,
                               preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: checked },
                             }));
