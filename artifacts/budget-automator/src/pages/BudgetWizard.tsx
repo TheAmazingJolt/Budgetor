@@ -383,6 +383,18 @@ export function BudgetWizard() {
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
   const autoOpenLastSheet = prefsLoaded && userPrefsQuery.data?.preferences?.autoOpenLastSheet !== false;
+  const skipOpeningScreen = prefsLoaded && !!userPrefsQuery.data?.preferences?.skipOpeningScreen;
+
+  const skipOpeningScreenHasRunRef = useRef(false);
+  useEffect(() => {
+    if (skipOpeningScreenHasRunRef.current) return;
+    if (!prefsLoaded) return;
+    if (!skipOpeningScreen) return;
+    if (step !== 0) return;
+    if (bills.length === 0) return;
+    skipOpeningScreenHasRunRef.current = true;
+    setStep(1);
+  }, [prefsLoaded, skipOpeningScreen, step, bills.length]);
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1499,6 +1511,15 @@ export function BudgetWizard() {
           </div>
 
           <div className="flex items-center gap-3">
+            {step > 0 && (
+              <button
+                onClick={() => setStep(step - 1)}
+                className="sm:hidden flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-3 py-1 rounded-full transition-colors"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                {STEPS[step - 1]}
+              </button>
+            )}
             <div className="hidden sm:flex items-center gap-2">
               {STEPS.map((label, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -3511,6 +3532,35 @@ export function BudgetWizard() {
                         queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
                           ...old,
                           preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
+                        }));
+                        toast({ title: "Failed to save preference", variant: "destructive" });
+                      },
+                    },
+                  );
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="text-sm font-medium">Skip opening screen</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Go straight to Configure when you already have bills set up</p>
+              </div>
+              <Switch
+                className="ml-4 shrink-0"
+                checked={skipOpeningScreen}
+                onCheckedChange={(checked) => {
+                  const previousValue = skipOpeningScreen;
+                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                    ...old,
+                    preferences: { ...(old?.preferences ?? {}), skipOpeningScreen: checked },
+                  }));
+                  updateUserPrefsMutation.mutate(
+                    { data: { preferences: { skipOpeningScreen: checked } } },
+                    {
+                      onError: () => {
+                        queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                          ...old,
+                          preferences: { ...(old?.preferences ?? {}), skipOpeningScreen: previousValue },
                         }));
                         toast({ title: "Failed to save preference", variant: "destructive" });
                       },

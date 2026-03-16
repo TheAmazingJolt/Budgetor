@@ -1359,6 +1359,8 @@ components:
           properties:
             autoOpenLastSheet:
               type: boolean
+            skipOpeningScreen:
+              type: boolean
           additionalProperties: true
       required:
         - preferences
@@ -1370,6 +1372,8 @@ components:
           type: object
           properties:
             autoOpenLastSheet:
+              type: boolean
+            skipOpeningScreen:
               type: boolean
           additionalProperties: true
       required:

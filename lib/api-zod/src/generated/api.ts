@@ -196,7 +196,9 @@ export const SavedBudgetListResponse = zod.object({
             originalAmount: zod
               .number()
               .nullish()
-              .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
+              .describe(
+                "Original amount borrowed or charged (optional, for tracking payoff progress)",
+              ),
           }),
         )
         .optional(),
@@ -232,7 +234,9 @@ export const SavedBudgetCreateBody = zod.object({
         originalAmount: zod
           .number()
           .nullish()
-          .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
+          .describe(
+            "Original amount borrowed or charged (optional, for tracking payoff progress)",
+          ),
       }),
     )
     .optional(),
@@ -266,7 +270,9 @@ export const SavedBudgetCreateResponse = zod.object({
           originalAmount: zod
             .number()
             .nullish()
-            .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
+            .describe(
+              "Original amount borrowed or charged (optional, for tracking payoff progress)",
+            ),
         }),
       )
       .optional(),
@@ -305,7 +311,9 @@ export const SavedBudgetUpdateBody = zod.object({
         originalAmount: zod
           .number()
           .nullish()
-          .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
+          .describe(
+            "Original amount borrowed or charged (optional, for tracking payoff progress)",
+          ),
       }),
     )
     .optional(),
@@ -339,7 +347,9 @@ export const SavedBudgetUpdateResponse = zod.object({
           originalAmount: zod
             .number()
             .nullish()
-            .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
+            .describe(
+              "Original amount borrowed or charged (optional, for tracking payoff progress)",
+            ),
         }),
       )
       .optional(),
@@ -857,6 +867,12 @@ export const GetUserDebtsResponse = zod.object({
       minimumPayment: zod
         .number()
         .describe("Minimum monthly\/weekly payment amount (positive number)"),
+      originalAmount: zod
+        .number()
+        .nullish()
+        .describe(
+          "Original amount borrowed or charged (optional, for tracking payoff progress)",
+        ),
     }),
   ),
 });
@@ -879,6 +895,12 @@ export const UpdateUserDebtsBody = zod.object({
       minimumPayment: zod
         .number()
         .describe("Minimum monthly\/weekly payment amount (positive number)"),
+      originalAmount: zod
+        .number()
+        .nullish()
+        .describe(
+          "Original amount borrowed or charged (optional, for tracking payoff progress)",
+        ),
     }),
   ),
 });
@@ -897,6 +919,12 @@ export const UpdateUserDebtsResponse = zod.object({
       minimumPayment: zod
         .number()
         .describe("Minimum monthly\/weekly payment amount (positive number)"),
+      originalAmount: zod
+        .number()
+        .nullish()
+        .describe(
+          "Original amount borrowed or charged (optional, for tracking payoff progress)",
+        ),
     }),
   ),
 });
@@ -908,6 +936,7 @@ export const UpdateUserDebtsResponse = zod.object({
 export const GetUserPreferencesResponse = zod.object({
   preferences: zod.object({
     autoOpenLastSheet: zod.boolean().optional(),
+    skipOpeningScreen: zod.boolean().optional(),
   }),
 });
 
@@ -918,11 +947,13 @@ export const GetUserPreferencesResponse = zod.object({
 export const UpdateUserPreferencesBody = zod.object({
   preferences: zod.object({
     autoOpenLastSheet: zod.boolean().optional(),
+    skipOpeningScreen: zod.boolean().optional(),
   }),
 });
 
 export const UpdateUserPreferencesResponse = zod.object({
   preferences: zod.object({
     autoOpenLastSheet: zod.boolean().optional(),
+    skipOpeningScreen: zod.boolean().optional(),
   }),
 });

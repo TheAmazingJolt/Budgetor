@@ -8,5 +8,6 @@
 
 export type UserPreferencesResponsePreferences = {
   autoOpenLastSheet?: boolean;
+  skipOpeningScreen?: boolean;
   [key: string]: unknown;
 };

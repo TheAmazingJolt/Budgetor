@@ -307,6 +307,7 @@ export interface UpdateUserDebtsRequest {
 
 export type UserPreferencesResponsePreferences = {
   autoOpenLastSheet?: boolean;
+  skipOpeningScreen?: boolean;
   [key: string]: unknown;
 };
 
@@ -316,6 +317,7 @@ export interface UserPreferencesResponse {
 
 export type UpdateUserPreferencesRequestPreferences = {
   autoOpenLastSheet?: boolean;
+  skipOpeningScreen?: boolean;
   [key: string]: unknown;
 };
 
