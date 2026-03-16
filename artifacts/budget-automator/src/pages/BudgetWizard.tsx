@@ -385,8 +385,18 @@ export function BudgetWizard() {
   const autoOpenLastSheet = (userPrefsQuery.data?.preferences as Record<string, unknown> | undefined)?.autoOpenLastSheet !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
+  const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevDebtsRef = useRef<string>("");
   useEffect(() => {
     if (!isSignedIn || !currentUser) {
+      if (debtsLoadedForUserRef.current) {
+        setDebts([]);
+        prevDebtsRef.current = "";
+        if (debtsSaveTimerRef.current) {
+          clearTimeout(debtsSaveTimerRef.current);
+          debtsSaveTimerRef.current = null;
+        }
+      }
       debtsLoadedForUserRef.current = null;
       return;
     }
@@ -399,8 +409,6 @@ export function BudgetWizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userDebtsQuery.data]);
 
-  const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevDebtsRef = useRef<string>("");
   useEffect(() => {
     if (!isSignedIn) return;
     if (!debtsLoadedForUserRef.current) return;
@@ -817,6 +825,10 @@ export function BudgetWizard() {
         setDebts([]);
         debtsLoadedForUserRef.current = null;
         prevDebtsRef.current = "";
+        if (debtsSaveTimerRef.current) {
+          clearTimeout(debtsSaveTimerRef.current);
+          debtsSaveTimerRef.current = null;
+        }
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
         queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
@@ -1548,7 +1560,7 @@ export function BudgetWizard() {
                     <>
                       <DropdownMenuSeparator />
                       <div className="flex items-center justify-between px-2 py-1.5 text-sm">
-                        <span className="mr-3">Auto-open sheet</span>
+                        <span className="mr-3 whitespace-nowrap">Auto-open last sheet</span>
                         <Switch
                           checked={autoOpenLastSheet}
                           onCheckedChange={(checked) => {
