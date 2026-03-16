@@ -626,6 +626,7 @@ export function BudgetWizard() {
           setOpeningBalance(data.lastRemaining);
           setExcelSheetTitle(data.sheetTitle);
           setExcelNextCol(data.nextWeekStartCol);
+          if (data.existingWeeks.length > 0) setExcelFirstBudgetCol((data.existingWeeks[0] as any).startCol ?? 2);
           setSelectedExcelFileId(data.fileId ?? null);
           setSelectedExcelFileName(data.sheetTitle);
 
@@ -927,7 +928,18 @@ export function BudgetWizard() {
       .map((w: any) => {
         const e = weekEdits[w.label];
         if (!e) return w;
-        return { ...w, remaining: e.openingBalance !== undefined || e.paycheck !== undefined || e.items ? ((e.openingBalance ?? w.openingBalance ?? 0) + (e.paycheck ?? w.paycheck ?? 0) + (e.items ?? w.items ?? []).reduce((s: number, b: any) => s + b.amount, 0)) : w.remaining };
+        const editedItems = e.items ?? w.items;
+        const editedPaycheck = e.paycheck ?? w.paycheck;
+        const editedOpening = e.openingBalance ?? w.openingBalance;
+        const recalc = (editedOpening ?? 0) + (editedPaycheck ?? 0) + (editedItems ?? []).reduce((s: number, b: any) => s + b.amount, 0);
+        const hasChange = e.paycheck !== undefined || e.openingBalance !== undefined || e.items;
+        return {
+          ...w,
+          ...(e.paycheck !== undefined ? { paycheck: e.paycheck } : {}),
+          ...(e.openingBalance !== undefined ? { openingBalance: e.openingBalance } : {}),
+          ...(e.items ? { items: e.items } : {}),
+          remaining: hasChange ? recalc : w.remaining,
+        };
       });
     const newWeeks = generatedWeek.weeks
       .filter((w) => !weekEdits[w.weekLabel]?.deleted)
@@ -1004,6 +1016,7 @@ export function BudgetWizard() {
           setOpeningBalance(data.lastRemaining);
           setGoogleSheetTitle(data.sheetTitle);
           setGoogleNextCol(data.nextWeekStartCol);
+          if (data.existingWeeks.length > 0) setGoogleFirstBudgetCol((data.existingWeeks[0] as any).startCol ?? 2);
           setSelectedSheetId(data.spreadsheetId ?? null);
           setSelectedSheetName(data.sheetTitle);
 
@@ -2710,7 +2723,7 @@ export function BudgetWizard() {
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
                           <div className="flex-1" />
-                          {allWeeks.length > 1 && (
+                          {allWeeks.length > 0 && (
                             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
                               <CalendarDays className="w-3.5 h-3.5" /> Today
                             </Button>
