@@ -304,6 +304,7 @@ export function BudgetWizard() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
+  const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
@@ -1556,34 +1557,9 @@ export function BudgetWizard() {
                     </>
                   )}
                   {!isGuest && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <div className="flex items-center justify-between px-2 py-1.5 text-sm">
-                        <span className="mr-3 whitespace-nowrap">Auto-open last Google Sheet</span>
-                        <Switch
-                          checked={autoOpenLastSheet}
-                          onCheckedChange={(checked) => {
-                            const previousValue = autoOpenLastSheet;
-                            queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                              ...old,
-                              preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: checked },
-                            }));
-                            updateUserPrefsMutation.mutate(
-                              { data: { preferences: { autoOpenLastSheet: checked } } },
-                              {
-                                onError: () => {
-                                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                                    ...old,
-                                    preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
-                                  }));
-                                  toast({ title: "Failed to save preference", variant: "destructive" });
-                                },
-                              },
-                            );
-                          }}
-                        />
-                      </div>
-                    </>
+                    <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
+                      <Settings2 className="w-4 h-4 mr-2" /> Preferences
+                    </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
@@ -3480,6 +3456,45 @@ export function BudgetWizard() {
                   "Rename"
                 )}
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPrefsDialogOpen} onOpenChange={setIsPrefsDialogOpen}>
+        <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl font-bold">Preferences</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between py-3 border-b border-border/40">
+              <div>
+                <p className="text-sm font-medium">Auto-open last Google Sheet</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Automatically reconnect to the last sheet you used when you sign in</p>
+              </div>
+              <Switch
+                className="ml-4 shrink-0"
+                checked={autoOpenLastSheet}
+                onCheckedChange={(checked) => {
+                  const previousValue = autoOpenLastSheet;
+                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                    ...old,
+                    preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: checked },
+                  }));
+                  updateUserPrefsMutation.mutate(
+                    { data: { preferences: { autoOpenLastSheet: checked } } },
+                    {
+                      onError: () => {
+                        queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                          ...old,
+                          preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
+                        }));
+                        toast({ title: "Failed to save preference", variant: "destructive" });
+                      },
+                    },
+                  );
+                }}
+              />
             </div>
           </div>
         </DialogContent>
