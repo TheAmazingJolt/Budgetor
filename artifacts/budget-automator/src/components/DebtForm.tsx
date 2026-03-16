@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -106,7 +107,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             <p><span className="font-semibold text-foreground">Credit Card:</span> Revolving credit with a variable balance and minimum payment due each month.</p>
           )}
           {debtType === "loan" && (
-            <p><span className="font-semibold text-foreground">Loan:</span> Installment debt like auto loans, student loans, or personal loans with fixed payments.</p>
+            <p><span className="font-semibold text-foreground">Loan:</span> Installment debt like auto loans, student loans, or personal loans with fixed payments. Enter your current payoff or remaining principal balance — interest is calculated separately using the APR field.</p>
           )}
           {debtType === "collections" && (
             <p><span className="font-semibold text-foreground">Collections:</span> Debt that has been sent to a collection agency. May have a negotiated payment plan.</p>
@@ -126,6 +127,9 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                     <Input type="number" step="0.01" placeholder="0.00" {...field} className="pl-7 focus:ring-primary/20 focus:border-primary" />
                   </div>
                 </FormControl>
+                {debtType === "loan" && (
+                  <FormDescription>Enter your remaining principal — do not include future interest.</FormDescription>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -143,6 +147,9 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                     <Input type="number" step="0.01" placeholder="0.00" {...field} className="pl-7 focus:ring-primary/20 focus:border-primary" />
                   </div>
                 </FormControl>
+                {debtType === "loan" && (
+                  <FormDescription>Your regular monthly installment amount.</FormDescription>
+                )}
                 <FormMessage />
               </FormItem>
             )}
