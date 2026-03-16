@@ -308,6 +308,7 @@ export function BudgetWizard() {
 
   const pendingAutoGenerateRef = useRef<GenerateOverrides | null>(null);
   const [autoGenerateTick, setAutoGenerateTick] = useState(0);
+  const suppressSheetAutoSelectRef = useRef(false);
 
   const scheduleAutoGenerate = (params: GenerateOverrides) => {
     pendingAutoGenerateRef.current = params;
@@ -448,6 +449,10 @@ export function BudgetWizard() {
   }, [sheetReadQuery.data, selectedSheetId]);
 
   useEffect(() => {
+    if (suppressSheetAutoSelectRef.current) {
+      suppressSheetAutoSelectRef.current = false;
+      return;
+    }
     const sheets = sheetListQuery.data?.sheets;
     if (!sheets || sheets.length === 0) return;
     if (selectedSheetId) return;
@@ -1324,6 +1329,7 @@ export function BudgetWizard() {
       }
       setIsDeleteDialogOpen(false);
       if (inputMode === "google") {
+        suppressSheetAutoSelectRef.current = true;
         queryClient.invalidateQueries({ queryKey: getSheetListQueryKey() });
       } else if (inputMode === "excel") {
         queryClient.invalidateQueries({ queryKey: getExcelListQueryKey() });
