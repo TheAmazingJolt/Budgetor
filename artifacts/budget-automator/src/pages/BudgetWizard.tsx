@@ -447,6 +447,16 @@ export function BudgetWizard() {
   }, [sheetReadQuery.data, selectedSheetId]);
 
   useEffect(() => {
+    const sheets = sheetListQuery.data?.sheets;
+    if (!sheets || sheets.length === 0) return;
+    if (selectedSheetId) return;
+    if (inputMode !== "upload") return;
+    const first = sheets[0] as { id: string; name: string };
+    handleSelectSheet(first.id, first.name);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetListQuery.data]);
+
+  useEffect(() => {
     if (excelReadQuery.data && selectedExcelFileId) {
       const data = excelReadQuery.data;
       setBills(data.bills);
