@@ -37,6 +37,9 @@ export async function initDb(): Promise<void> {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_refresh_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_token_expiry BIGINT;
 
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS debts JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
+
       CREATE UNIQUE INDEX IF NOT EXISTS users_provider_provider_id_unique
         ON users (provider, provider_id)
         WHERE provider_id IS NOT NULL;

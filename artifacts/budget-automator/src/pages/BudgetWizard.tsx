@@ -384,27 +384,26 @@ export function BudgetWizard() {
 
   const autoOpenLastSheet = (userPrefsQuery.data?.preferences as Record<string, unknown> | undefined)?.autoOpenLastSheet !== false;
 
-  const debtsLoadedRef = useRef(false);
+  const debtsLoadedForUserRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isSignedIn) {
-      debtsLoadedRef.current = false;
+    if (!isSignedIn || !currentUser) {
+      debtsLoadedForUserRef.current = null;
       return;
     }
-    if (debtsLoadedRef.current) return;
+    if (debtsLoadedForUserRef.current === currentUser.id) return;
     if (!userDebtsQuery.data) return;
-    const serverDebts = userDebtsQuery.data.debts as Debt[];
-    if (serverDebts && serverDebts.length > 0) {
-      setDebts(serverDebts);
-    }
-    debtsLoadedRef.current = true;
+    const serverDebts = (userDebtsQuery.data.debts ?? []) as Debt[];
+    setDebts(serverDebts);
+    prevDebtsRef.current = JSON.stringify(serverDebts);
+    debtsLoadedForUserRef.current = currentUser.id;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn, userDebtsQuery.data]);
+  }, [isSignedIn, currentUser?.id, userDebtsQuery.data]);
 
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevDebtsRef = useRef<string>("");
   useEffect(() => {
     if (!isSignedIn) return;
-    if (!debtsLoadedRef.current) return;
+    if (!debtsLoadedForUserRef.current) return;
     const serialized = JSON.stringify(debts);
     if (serialized === prevDebtsRef.current) return;
     prevDebtsRef.current = serialized;
@@ -816,7 +815,7 @@ export function BudgetWizard() {
       onSuccess: () => {
         localStorage.removeItem("auth_token");
         setDebts([]);
-        debtsLoadedRef.current = false;
+        debtsLoadedForUserRef.current = null;
         prevDebtsRef.current = "";
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
