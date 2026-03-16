@@ -835,6 +835,21 @@ export function BudgetWizard() {
         queryClient.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
         queryClient.removeQueries({ queryKey: getGetUserDebtsQueryKey() });
         queryClient.removeQueries({ queryKey: getGetUserPreferencesQueryKey() });
+        reset();
+        setSelectedSheetId(null);
+        setSelectedSheetName(null);
+        setSelectedExcelFileId(null);
+        setSelectedExcelFileName(null);
+        setActiveCloudBudgetId(null);
+        setActiveCloudBudgetName(null);
+        setCloudExistingWeeks([]);
+        setCloudSaveSuccess(false);
+        setWeekEdits({});
+        setEditModeOn(false);
+        setSelectedWeekIdx(null);
+        setInputMode("upload");
+        setVisitedStep1(false);
+        setStep(0);
         toast({ title: "Signed out" });
       },
     });
