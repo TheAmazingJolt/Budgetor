@@ -599,12 +599,33 @@ async function writeBudgetToSheet(
   const range = `'${escapedTitle}'!${rangeStart}:${rangeEnd}`;
 
   const CLEAR_WIDTH_BUFFER = 200;
-  const clearEndCol = columnToLetter(Math.max(totalCols - 1, startCol + CLEAR_WIDTH_BUFFER));
+  const clearEndColIdx = Math.max(totalCols - 1, startCol + CLEAR_WIDTH_BUFFER);
+  const clearEndCol = columnToLetter(clearEndColIdx);
   const clearRange = `'${escapedTitle}'!${rangeStart}:${clearEndCol}`;
-  await sheetsApi.spreadsheets.values.clear({
-    spreadsheetId,
-    range: clearRange,
-  });
+
+  await Promise.all([
+    sheetsApi.spreadsheets.values.clear({
+      spreadsheetId,
+      range: clearRange,
+    }),
+    sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 0,
+              startColumnIndex: startCol,
+              endColumnIndex: clearEndColIdx + 1,
+            },
+            cell: {},
+            fields: "userEnteredFormat",
+          },
+        }],
+      },
+    }),
+  ]);
 
   await sheetsApi.spreadsheets.values.update({
     spreadsheetId,
