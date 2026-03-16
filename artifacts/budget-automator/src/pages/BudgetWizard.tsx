@@ -382,7 +382,8 @@ export function BudgetWizard() {
     query: { enabled: isSignedIn, retry: false, staleTime: 30000 } as any,
   });
 
-  const autoOpenLastSheet = (userPrefsQuery.data?.preferences as Record<string, unknown> | undefined)?.autoOpenLastSheet !== false;
+  const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
+  const autoOpenLastSheet = prefsLoaded && (userPrefsQuery.data?.preferences as Record<string, unknown> | undefined)?.autoOpenLastSheet !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
