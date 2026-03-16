@@ -1559,15 +1559,27 @@ export function BudgetWizard() {
                     <>
                       <DropdownMenuSeparator />
                       <div className="flex items-center justify-between px-2 py-1.5 text-sm">
-                        <span className="mr-3 whitespace-nowrap">Auto-open last sheet</span>
+                        <span className="mr-3 whitespace-nowrap">Auto-open last Google Sheet</span>
                         <Switch
                           checked={autoOpenLastSheet}
                           onCheckedChange={(checked) => {
-                            updateUserPrefsMutation.mutate({ data: { preferences: { autoOpenLastSheet: checked } } });
+                            const previousValue = autoOpenLastSheet;
                             queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
                               ...old,
                               preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: checked },
                             }));
+                            updateUserPrefsMutation.mutate(
+                              { data: { preferences: { autoOpenLastSheet: checked } } },
+                              {
+                                onError: () => {
+                                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                                    ...old,
+                                    preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
+                                  }));
+                                  toast({ title: "Failed to save preference", variant: "destructive" });
+                                },
+                              },
+                            );
                           }}
                         />
                       </div>
