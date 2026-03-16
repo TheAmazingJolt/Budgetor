@@ -1567,7 +1567,7 @@ export function BudgetWizard() {
                   <DropdownMenuSeparator />
                   {!isGuest && (
                     <>
-                      <DropdownMenuItem onClick={() => { setStep(0); }}>
+                      <DropdownMenuItem onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}>
                         <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
