@@ -198,7 +198,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       blankMode: false,
       sheetStyle: null,
       bills: [],
-      debts: [],
       generatedWeek: null,
       openingBalance: 0,
       paycheckAmount: 0,
