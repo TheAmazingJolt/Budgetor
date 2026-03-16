@@ -1065,6 +1065,9 @@ export function BudgetWizard() {
   const handleGenerate = (overrides?: GenerateOverrides) => {
     if (inputMode === "upload" && !parsedWorkbook) return;
     if (step === 1) setVisitedStep1(true);
+    setEditModeOn(false);
+    setSelectedWeekIdx(null);
+    setEditDraft(null);
 
     const effectiveOpeningBalance = overrides?.openingBalance
       ?? (zeroOpeningBalance ? 0 : openingBalance);
@@ -2806,7 +2809,8 @@ export function BudgetWizard() {
                                             bill.name.startsWith("Partial ") ? "bg-amber-50 text-amber-900" : "";
                                           rowItems.push({ label: bill.name, value: bill.amount, style: billStyle });
                                         }
-                                        rowItems.push({ label: "Remaining", value: week.remaining, style: "font-bold border-t-2 border-foreground/20" });
+                                        const isEdited = !!weekEdits[week.label] && !weekEdits[week.label].deleted;
+                                        rowItems.push({ label: isEdited ? "Remaining*" : "Remaining", value: week.remaining, style: "font-bold border-t-2 border-foreground/20" });
 
                                         const item = rowItems[r];
                                         if (!item) {
@@ -2838,6 +2842,9 @@ export function BudgetWizard() {
                             </tbody>
                           </table>
                         </div>
+                        {hasEdits && (
+                          <p className="text-xs text-muted-foreground px-1 mt-1">* Remaining is estimated from your edits. Exact balances recalculate when you save.</p>
+                        )}
                       </div>
                     )}
 
