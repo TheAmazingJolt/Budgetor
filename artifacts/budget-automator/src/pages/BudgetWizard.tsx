@@ -197,6 +197,7 @@ export function BudgetWizard() {
   const [editingBillIndex, setEditingBillIndex] = useState<number | null>(null);
   const [isDebtDialogOpen, setIsDebtDialogOpen] = useState(false);
   const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
+  const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
   const [debtBillImports, setDebtBillImports] = useState<Set<string>>(new Set());
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>("upload");
@@ -1901,7 +1902,7 @@ export function BudgetWizard() {
               <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-red-300 hover:bg-red-50/30 p-5 transition-all">
                 <button
                   type="button"
-                  onClick={() => { handleStartFromScratch(); setTimeout(() => { const el = document.getElementById("debts-section"); if (el) el.scrollIntoView({ behavior: "smooth" }); }, 200); }}
+                  onClick={() => setIsDebtManagerOpen(true)}
                   className="w-full text-left"
                 >
                   <div className="flex items-start gap-3">
@@ -3162,6 +3163,120 @@ export function BudgetWizard() {
             }}
             onCancel={() => setIsDebtDialogOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDebtManagerOpen} onOpenChange={setIsDebtManagerOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <DollarSign className="w-6 h-6 text-red-600" /> Your Debts
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add Debt
+              </Button>
+            </div>
+
+            {debts.length > 0 && (
+              <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-1">
+                    <DollarSign className="w-5 h-5 text-red-600" />
+                    <p className="font-semibold text-red-900 text-lg">
+                      Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <p className="text-sm text-red-700">
+                    across {debts.length} account{debts.length !== 1 ? "s" : ""} — ${totalMinPayments.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo minimum payments
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {debts.length === 0 ? (
+              <Card className="border-dashed border-2 p-10 text-center">
+                <p className="text-muted-foreground">No debts tracked yet. Add debts to see your full financial picture.</p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {debts.map((debt, i) => (
+                  <motion.div
+                    key={debt.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                  >
+                    <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                      <div className={`absolute top-0 left-0 w-1 h-full ${debtTypeLeftBar(debt.type)} transition-colors`} />
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="space-y-1">
+                            <p className="font-semibold text-sm text-foreground leading-tight">{debt.name}</p>
+                            <Badge variant="outline" className={`text-xs px-2 py-0.5 ${debtTypeBadgeClass(debt.type)}`}>
+                              <DebtTypeIcon type={debt.type} />
+                              <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
+                            </Badge>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                            {debt.interestRate != null && (
+                              <p className="text-xs text-muted-foreground">{debt.interestRate}% APR</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              Min: ${debt.minimumPayment.toFixed(2)}/mo
+                            </span>
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <Checkbox
+                                checked={debtBillImports.has(debt.id)}
+                                onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
+                                className="rounded h-3.5 w-3.5"
+                              />
+                              <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
+                            </label>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                              onClick={() => { setEditingDebtIndex(i); setIsDebtDialogOpen(true); }}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                              onClick={() => {
+                                const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
+                                if (billIdx >= 0) removeBill(billIdx);
+                                setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
+                                removeDebt(i);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
