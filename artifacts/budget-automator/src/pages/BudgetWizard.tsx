@@ -383,18 +383,6 @@ export function BudgetWizard() {
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
   const autoOpenLastSheet = prefsLoaded && userPrefsQuery.data?.preferences?.autoOpenLastSheet !== false;
-  const skipOpeningScreen = prefsLoaded && !!userPrefsQuery.data?.preferences?.skipOpeningScreen;
-
-  const skipOpeningScreenHasRunRef = useRef(false);
-  useEffect(() => {
-    if (skipOpeningScreenHasRunRef.current) return;
-    if (!prefsLoaded) return;
-    if (!skipOpeningScreen) return;
-    if (step !== 0) return;
-    if (bills.length === 0) return;
-    skipOpeningScreenHasRunRef.current = true;
-    setStep(1);
-  }, [prefsLoaded, skipOpeningScreen, step, bills.length]);
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3532,35 +3520,6 @@ export function BudgetWizard() {
                         queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
                           ...old,
                           preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
-                        }));
-                        toast({ title: "Failed to save preference", variant: "destructive" });
-                      },
-                    },
-                  );
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3">
-              <div>
-                <p className="text-sm font-medium">Skip opening screen</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Go straight to Configure when you already have bills set up</p>
-              </div>
-              <Switch
-                className="ml-4 shrink-0"
-                checked={skipOpeningScreen}
-                onCheckedChange={(checked) => {
-                  const previousValue = skipOpeningScreen;
-                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                    ...old,
-                    preferences: { ...(old?.preferences ?? {}), skipOpeningScreen: checked },
-                  }));
-                  updateUserPrefsMutation.mutate(
-                    { data: { preferences: { skipOpeningScreen: checked } } },
-                    {
-                      onError: () => {
-                        queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                          ...old,
-                          preferences: { ...(old?.preferences ?? {}), skipOpeningScreen: previousValue },
                         }));
                         toast({ title: "Failed to save preference", variant: "destructive" });
                       },
