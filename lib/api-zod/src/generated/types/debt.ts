@@ -17,4 +17,6 @@ export interface Debt {
   interestRate?: number | null;
   /** Minimum monthly/weekly payment amount (positive number) */
   minimumPayment: number;
+  /** Original amount borrowed or charged (optional, for tracking payoff progress) */
+  originalAmount?: number | null;
 }

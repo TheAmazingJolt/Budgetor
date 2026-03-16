@@ -3336,6 +3336,28 @@ export function BudgetWizard() {
                             )}
                           </div>
                         </div>
+                        {debt.originalAmount != null && debt.originalAmount > debt.balance && (() => {
+                          const paidOff = debt.originalAmount - debt.balance;
+                          const pct = Math.min(100, Math.round((paidOff / debt.originalAmount) * 100));
+                          return (
+                            <div className="mt-2.5 space-y-1">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-emerald-600 font-medium">
+                                  ${paidOff.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} paid
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {pct}%
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-500 transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                         <div className="flex items-center justify-between mt-3">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">

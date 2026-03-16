@@ -193,6 +193,10 @@ export const SavedBudgetListResponse = zod.object({
               .describe(
                 "Minimum monthly\/weekly payment amount (positive number)",
               ),
+            originalAmount: zod
+              .number()
+              .nullish()
+              .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
           }),
         )
         .optional(),
@@ -225,6 +229,10 @@ export const SavedBudgetCreateBody = zod.object({
         minimumPayment: zod
           .number()
           .describe("Minimum monthly\/weekly payment amount (positive number)"),
+        originalAmount: zod
+          .number()
+          .nullish()
+          .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
       }),
     )
     .optional(),
@@ -255,6 +263,10 @@ export const SavedBudgetCreateResponse = zod.object({
             .describe(
               "Minimum monthly\/weekly payment amount (positive number)",
             ),
+          originalAmount: zod
+            .number()
+            .nullish()
+            .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
         }),
       )
       .optional(),
@@ -290,6 +302,10 @@ export const SavedBudgetUpdateBody = zod.object({
         minimumPayment: zod
           .number()
           .describe("Minimum monthly\/weekly payment amount (positive number)"),
+        originalAmount: zod
+          .number()
+          .nullish()
+          .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
       }),
     )
     .optional(),
@@ -320,6 +336,10 @@ export const SavedBudgetUpdateResponse = zod.object({
             .describe(
               "Minimum monthly\/weekly payment amount (positive number)",
             ),
+          originalAmount: zod
+            .number()
+            .nullish()
+            .describe("Original amount borrowed or charged (optional, for tracking payoff progress)"),
         }),
       )
       .optional(),

@@ -21,7 +21,11 @@ const formSchema = z.object({
   balance: z.coerce.number().min(0.01, "Balance must be greater than 0"),
   interestRate: z.coerce.number().min(0).max(100).nullable().optional(),
   minimumPayment: z.coerce.number().min(0.01, "Minimum payment is required"),
-});
+  originalAmount: z.coerce.number().min(0).nullable().optional(),
+}).refine(
+  (data) => data.originalAmount == null || data.originalAmount >= data.balance,
+  { message: "Original amount must be greater than or equal to the current balance", path: ["originalAmount"] }
+);
 
 interface DebtFormProps {
   initialData?: Debt;
@@ -39,6 +43,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           balance: initialData.balance ?? 0,
           interestRate: initialData.interestRate ?? null,
           minimumPayment: initialData.minimumPayment ?? 0,
+          originalAmount: initialData.originalAmount ?? null,
         }
       : {
           name: "",
@@ -46,6 +51,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           balance: 0,
           interestRate: null,
           minimumPayment: 0,
+          originalAmount: null,
         },
   });
 
@@ -59,6 +65,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       balance: values.balance,
       interestRate: values.interestRate ?? undefined,
       minimumPayment: values.minimumPayment,
+      originalAmount: values.originalAmount ?? undefined,
     });
   };
 
@@ -175,6 +182,31 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                 </div>
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="originalAmount"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Original Amount<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                    className="pl-7 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+              </FormControl>
+              <p className="text-xs text-muted-foreground">The total amount you originally borrowed or charged. Used to track payoff progress.</p>
               <FormMessage />
             </FormItem>
           )}

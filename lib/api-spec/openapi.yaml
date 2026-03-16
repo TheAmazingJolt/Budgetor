@@ -966,6 +966,10 @@ components:
         minimumPayment:
           type: number
           description: Minimum monthly/weekly payment amount (positive number)
+        originalAmount:
+          type: number
+          nullable: true
+          description: Original amount borrowed or charged (optional, for tracking payoff progress)
       required:
         - id
         - name
