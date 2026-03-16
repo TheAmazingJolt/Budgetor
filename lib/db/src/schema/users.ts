@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, uniqueIndex, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, uniqueIndex, bigint, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const usersTable = pgTable("users", {
@@ -14,6 +14,8 @@ export const usersTable = pgTable("users", {
   microsoftAccessToken: text("microsoft_access_token"),
   microsoftRefreshToken: text("microsoft_refresh_token"),
   microsoftTokenExpiry: bigint("microsoft_token_expiry", { mode: "number" }),
+  debts: jsonb("debts").default([]),
+  preferences: jsonb("preferences").default({}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

@@ -58,6 +58,10 @@ import type {
   SheetReadResponse,
   SheetWriteRequest,
   SheetWriteResponse,
+  UpdateUserDebtsRequest,
+  UpdateUserPreferencesRequest,
+  UserDebtsResponse,
+  UserPreferencesResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -2561,4 +2565,331 @@ export const useExcelCreateAndWrite = <
   TContext
 > => {
   return useMutation(getExcelCreateAndWriteMutationOptions(options));
+};
+
+/**
+ * Returns the authenticated user's saved debts
+ * @summary Get user debts
+ */
+export const getGetUserDebtsUrl = () => {
+  return `/api/user/debts`;
+};
+
+export const getUserDebts = async (
+  options?: RequestInit,
+): Promise<UserDebtsResponse> => {
+  return customFetch<UserDebtsResponse>(getGetUserDebtsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserDebtsQueryKey = () => {
+  return [`/api/user/debts`] as const;
+};
+
+export const getGetUserDebtsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserDebts>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserDebts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserDebtsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDebts>>> = ({
+    signal,
+  }) => getUserDebts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserDebts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserDebtsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserDebts>>
+>;
+export type GetUserDebtsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get user debts
+ */
+
+export function useGetUserDebts<
+  TData = Awaited<ReturnType<typeof getUserDebts>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserDebts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserDebtsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Replaces the authenticated user's saved debts
+ * @summary Update user debts
+ */
+export const getUpdateUserDebtsUrl = () => {
+  return `/api/user/debts`;
+};
+
+export const updateUserDebts = async (
+  updateUserDebtsRequest: UpdateUserDebtsRequest,
+  options?: RequestInit,
+): Promise<UserDebtsResponse> => {
+  return customFetch<UserDebtsResponse>(getUpdateUserDebtsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateUserDebtsRequest),
+  });
+};
+
+export const getUpdateUserDebtsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUserDebts>>,
+    TError,
+    { data: BodyType<UpdateUserDebtsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateUserDebts>>,
+  TError,
+  { data: BodyType<UpdateUserDebtsRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateUserDebts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateUserDebts>>,
+    { data: BodyType<UpdateUserDebtsRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateUserDebts(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateUserDebtsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateUserDebts>>
+>;
+export type UpdateUserDebtsMutationBody = BodyType<UpdateUserDebtsRequest>;
+export type UpdateUserDebtsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update user debts
+ */
+export const useUpdateUserDebts = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUserDebts>>,
+    TError,
+    { data: BodyType<UpdateUserDebtsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateUserDebts>>,
+  TError,
+  { data: BodyType<UpdateUserDebtsRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateUserDebtsMutationOptions(options));
+};
+
+/**
+ * Returns the authenticated user's preferences
+ * @summary Get user preferences
+ */
+export const getGetUserPreferencesUrl = () => {
+  return `/api/user/preferences`;
+};
+
+export const getUserPreferences = async (
+  options?: RequestInit,
+): Promise<UserPreferencesResponse> => {
+  return customFetch<UserPreferencesResponse>(getGetUserPreferencesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserPreferencesQueryKey = () => {
+  return [`/api/user/preferences`] as const;
+};
+
+export const getGetUserPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserPreferences>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUserPreferences>>
+  > = ({ signal }) => getUserPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserPreferences>>
+>;
+export type GetUserPreferencesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get user preferences
+ */
+
+export function useGetUserPreferences<
+  TData = Awaited<ReturnType<typeof getUserPreferences>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Merges the provided preferences into the authenticated user's preferences
+ * @summary Update user preferences
+ */
+export const getUpdateUserPreferencesUrl = () => {
+  return `/api/user/preferences`;
+};
+
+export const updateUserPreferences = async (
+  updateUserPreferencesRequest: UpdateUserPreferencesRequest,
+  options?: RequestInit,
+): Promise<UserPreferencesResponse> => {
+  return customFetch<UserPreferencesResponse>(getUpdateUserPreferencesUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateUserPreferencesRequest),
+  });
+};
+
+export const getUpdateUserPreferencesMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUserPreferences>>,
+    TError,
+    { data: BodyType<UpdateUserPreferencesRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateUserPreferences>>,
+  TError,
+  { data: BodyType<UpdateUserPreferencesRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateUserPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateUserPreferences>>,
+    { data: BodyType<UpdateUserPreferencesRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateUserPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateUserPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateUserPreferences>>
+>;
+export type UpdateUserPreferencesMutationBody =
+  BodyType<UpdateUserPreferencesRequest>;
+export type UpdateUserPreferencesMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update user preferences
+ */
+export const useUpdateUserPreferences = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUserPreferences>>,
+    TError,
+    { data: BodyType<UpdateUserPreferencesRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateUserPreferences>>,
+  TError,
+  { data: BodyType<UpdateUserPreferencesRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateUserPreferencesMutationOptions(options));
 };

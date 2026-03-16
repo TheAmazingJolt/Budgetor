@@ -543,6 +543,38 @@ router.get("/auth/providers", (_req: Request, res: Response) => {
   });
 });
 
+router.get("/user/debts", requireAuth, async (req: Request, res: Response) => {
+  const debts = (req.user as User).debts ?? [];
+  res.json({ debts });
+});
+
+router.put("/user/debts", requireAuth, async (req: Request, res: Response) => {
+  const { debts } = req.body as { debts: unknown[] };
+  if (!Array.isArray(debts)) {
+    res.status(400).json({ error: "debts must be an array" });
+    return;
+  }
+  await db.update(usersTable).set({ debts, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  res.json({ debts });
+});
+
+router.get("/user/preferences", requireAuth, async (req: Request, res: Response) => {
+  const preferences = (req.user as User).preferences ?? {};
+  res.json({ preferences });
+});
+
+router.put("/user/preferences", requireAuth, async (req: Request, res: Response) => {
+  const { preferences } = req.body as { preferences: Record<string, unknown> };
+  if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) {
+    res.status(400).json({ error: "preferences must be an object" });
+    return;
+  }
+  const current = ((req.user as User).preferences ?? {}) as Record<string, unknown>;
+  const merged = { ...current, ...preferences };
+  await db.update(usersTable).set({ preferences: merged, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  res.json({ preferences: merged });
+});
+
 router.post("/auth/logout", (req: Request, res: Response) => {
   req.session.userId = undefined;
   res.json({ ok: true });

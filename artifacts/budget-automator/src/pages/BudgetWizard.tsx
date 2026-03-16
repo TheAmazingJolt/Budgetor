@@ -70,6 +70,12 @@ import {
   useExcelDelete,
   getSheetListQueryKey,
   getExcelListQueryKey,
+  useGetUserDebts,
+  useUpdateUserDebts,
+  useGetUserPreferences,
+  useUpdateUserPreferences,
+  getGetUserDebtsQueryKey,
+  getGetUserPreferencesQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -101,6 +107,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { CreditCard, Landmark, AlertTriangle, DollarSign } from "lucide-react";
@@ -363,6 +370,50 @@ export function BudgetWizard() {
   const renameBudgetMutation = useSavedBudgetUpdate();
   const cloudSaveMutation = useSavedBudgetUpdate();
   const deleteBudgetMutation = useSavedBudgetDelete();
+  const updateUserDebtsMutation = useUpdateUserDebts();
+  const updateUserPrefsMutation = useUpdateUserPreferences();
+
+  const userDebtsQuery = useGetUserDebts({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { enabled: isSignedIn, retry: false, staleTime: 30000 } as any,
+  });
+  const userPrefsQuery = useGetUserPreferences({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { enabled: isSignedIn, retry: false, staleTime: 30000 } as any,
+  });
+
+  const autoOpenLastSheet = (userPrefsQuery.data?.preferences as Record<string, unknown> | undefined)?.autoOpenLastSheet !== false;
+
+  const debtsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!isSignedIn) {
+      debtsLoadedRef.current = false;
+      return;
+    }
+    if (debtsLoadedRef.current) return;
+    if (!userDebtsQuery.data) return;
+    const serverDebts = userDebtsQuery.data.debts as Debt[];
+    if (serverDebts && serverDebts.length > 0) {
+      setDebts(serverDebts);
+    }
+    debtsLoadedRef.current = true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, userDebtsQuery.data]);
+
+  const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevDebtsRef = useRef<string>("");
+  useEffect(() => {
+    if (!isSignedIn) return;
+    if (!debtsLoadedRef.current) return;
+    const serialized = JSON.stringify(debts);
+    if (serialized === prevDebtsRef.current) return;
+    prevDebtsRef.current = serialized;
+    if (debtsSaveTimerRef.current) clearTimeout(debtsSaveTimerRef.current);
+    debtsSaveTimerRef.current = setTimeout(() => {
+      updateUserDebtsMutation.mutate({ data: { debts } });
+    }, 1000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debts, isSignedIn]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -453,6 +504,7 @@ export function BudgetWizard() {
       suppressSheetAutoSelectRef.current = false;
       return;
     }
+    if (!autoOpenLastSheet) return;
     const sheets = sheetListQuery.data?.sheets;
     if (!sheets || sheets.length === 0) return;
     if (selectedSheetId) return;
@@ -460,7 +512,7 @@ export function BudgetWizard() {
     const first = sheets[0] as { id: string; name: string };
     handleSelectSheet(first.id, first.name);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetListQuery.data]);
+  }, [sheetListQuery.data, autoOpenLastSheet]);
 
   useEffect(() => {
     if (excelReadQuery.data && selectedExcelFileId) {
@@ -763,10 +815,15 @@ export function BudgetWizard() {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
         localStorage.removeItem("auth_token");
+        setDebts([]);
+        debtsLoadedRef.current = false;
+        prevDebtsRef.current = "";
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
         queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
         queryClient.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
+        queryClient.removeQueries({ queryKey: getGetUserDebtsQueryKey() });
+        queryClient.removeQueries({ queryKey: getGetUserPreferencesQueryKey() });
         toast({ title: "Signed out" });
       },
     });
@@ -1488,6 +1545,25 @@ export function BudgetWizard() {
                       {(googleLoginAvailable || appleLoginAvailable) && <DropdownMenuSeparator />}
                     </>
                   )}
+                  {!isGuest && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <div className="flex items-center justify-between px-2 py-1.5 text-sm">
+                        <span className="mr-3">Auto-open sheet</span>
+                        <Switch
+                          checked={autoOpenLastSheet}
+                          onCheckedChange={(checked) => {
+                            updateUserPrefsMutation.mutate({ data: { preferences: { autoOpenLastSheet: checked } } });
+                            queryClient.setQueryData(getGetUserPreferencesQueryKey(), (old: any) => ({
+                              ...old,
+                              preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: checked },
+                            }));
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="w-4 h-4 mr-2" /> Sign out
                   </DropdownMenuItem>

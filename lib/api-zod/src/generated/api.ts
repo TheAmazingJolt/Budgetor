@@ -818,3 +818,91 @@ export const ExcelCreateAndWriteResponse = zod.object({
   fileId: zod.string(),
   webUrl: zod.string(),
 });
+
+/**
+ * Returns the authenticated user's saved debts
+ * @summary Get user debts
+ */
+export const GetUserDebtsResponse = zod.object({
+  debts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.enum(["credit_card", "loan", "collections"]),
+      balance: zod.number().describe("Current balance owed (positive number)"),
+      interestRate: zod
+        .number()
+        .nullish()
+        .describe("APR percentage (optional)"),
+      minimumPayment: zod
+        .number()
+        .describe("Minimum monthly\/weekly payment amount (positive number)"),
+    }),
+  ),
+});
+
+/**
+ * Replaces the authenticated user's saved debts
+ * @summary Update user debts
+ */
+export const UpdateUserDebtsBody = zod.object({
+  debts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.enum(["credit_card", "loan", "collections"]),
+      balance: zod.number().describe("Current balance owed (positive number)"),
+      interestRate: zod
+        .number()
+        .nullish()
+        .describe("APR percentage (optional)"),
+      minimumPayment: zod
+        .number()
+        .describe("Minimum monthly\/weekly payment amount (positive number)"),
+    }),
+  ),
+});
+
+export const UpdateUserDebtsResponse = zod.object({
+  debts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.enum(["credit_card", "loan", "collections"]),
+      balance: zod.number().describe("Current balance owed (positive number)"),
+      interestRate: zod
+        .number()
+        .nullish()
+        .describe("APR percentage (optional)"),
+      minimumPayment: zod
+        .number()
+        .describe("Minimum monthly\/weekly payment amount (positive number)"),
+    }),
+  ),
+});
+
+/**
+ * Returns the authenticated user's preferences
+ * @summary Get user preferences
+ */
+export const GetUserPreferencesResponse = zod.object({
+  preferences: zod.object({
+    autoOpenLastSheet: zod.boolean().optional(),
+  }),
+});
+
+/**
+ * Merges the provided preferences into the authenticated user's preferences
+ * @summary Update user preferences
+ */
+export const UpdateUserPreferencesBody = zod.object({
+  preferences: zod.object({
+    autoOpenLastSheet: zod.boolean().optional(),
+  }),
+});
+
+export const UpdateUserPreferencesResponse = zod.object({
+  preferences: zod.object({
+    autoOpenLastSheet: zod.boolean().optional(),
+  }),
+});

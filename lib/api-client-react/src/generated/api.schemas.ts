@@ -295,6 +295,32 @@ export interface ExcelCreateAndWriteResponse {
   webUrl: string;
 }
 
+export interface UserDebtsResponse {
+  debts: Debt[];
+}
+
+export interface UpdateUserDebtsRequest {
+  debts: Debt[];
+}
+
+export type UserPreferencesResponsePreferences = {
+  autoOpenLastSheet?: boolean;
+  [key: string]: unknown;
+};
+
+export interface UserPreferencesResponse {
+  preferences: UserPreferencesResponsePreferences;
+}
+
+export type UpdateUserPreferencesRequestPreferences = {
+  autoOpenLastSheet?: boolean;
+  [key: string]: unknown;
+};
+
+export interface UpdateUserPreferencesRequest {
+  preferences: UpdateUserPreferencesRequestPreferences;
+}
+
 export type AuthLogout200 = {
   ok: boolean;
 };

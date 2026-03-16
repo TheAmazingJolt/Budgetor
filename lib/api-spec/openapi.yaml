@@ -652,6 +652,94 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExcelCreateAndWriteResponse"
 
+  /user/debts:
+    get:
+      operationId: getUserDebts
+      tags: [auth]
+      summary: Get user debts
+      description: Returns the authenticated user's saved debts
+      responses:
+        "200":
+          description: User debts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDebtsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateUserDebts
+      tags: [auth]
+      summary: Update user debts
+      description: Replaces the authenticated user's saved debts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserDebtsRequest"
+      responses:
+        "200":
+          description: Updated debts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDebtsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/preferences:
+    get:
+      operationId: getUserPreferences
+      tags: [auth]
+      summary: Get user preferences
+      description: Returns the authenticated user's preferences
+      responses:
+        "200":
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateUserPreferences
+      tags: [auth]
+      summary: Update user preferences
+      description: Merges the provided preferences into the authenticated user's preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserPreferencesRequest"
+      responses:
+        "200":
+          description: Updated preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1238,3 +1326,47 @@ components:
       required:
         - fileId
         - webUrl
+
+    UserDebtsResponse:
+      type: object
+      properties:
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
+      required:
+        - debts
+
+    UpdateUserDebtsRequest:
+      type: object
+      properties:
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
+      required:
+        - debts
+
+    UserPreferencesResponse:
+      type: object
+      properties:
+        preferences:
+          type: object
+          properties:
+            autoOpenLastSheet:
+              type: boolean
+          additionalProperties: true
+      required:
+        - preferences
+
+    UpdateUserPreferencesRequest:
+      type: object
+      properties:
+        preferences:
+          type: object
+          properties:
+            autoOpenLastSheet:
+              type: boolean
+          additionalProperties: true
+      required:
+        - preferences
