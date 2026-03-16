@@ -1487,18 +1487,26 @@ export function BudgetWizard() {
             <div className="hidden sm:flex items-center gap-2">
               {STEPS.map((label, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <div
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                      i === step
-                        ? "bg-primary text-white"
-                        : i < step
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-muted-foreground"
-                    }`}
-                  >
-                    {i < step ? <Check className="w-3 h-3" /> : <span>{i + 1}</span>}
-                    {label}
-                  </div>
+                  {i < step ? (
+                    <button
+                      onClick={() => setStep(i)}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer"
+                    >
+                      <Check className="w-3 h-3" />
+                      {label}
+                    </button>
+                  ) : (
+                    <div
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                        i === step
+                          ? "bg-primary text-white"
+                          : "bg-slate-100 text-muted-foreground"
+                      }`}
+                    >
+                      <span>{i + 1}</span>
+                      {label}
+                    </div>
+                  )}
                   {i < STEPS.length - 1 && (
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   )}
