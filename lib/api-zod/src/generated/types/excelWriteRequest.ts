@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Bill } from "./bill";
 import type { Debt } from "./debt";
 import type { WeeklyBudget } from "./weeklyBudget";
 
@@ -14,4 +15,5 @@ export interface ExcelWriteRequest {
   includeRemainingAcct: boolean;
   sheetTitle?: string;
   debts?: Debt[];
+  bills?: Bill[];
 }

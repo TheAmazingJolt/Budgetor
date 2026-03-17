@@ -108,11 +108,10 @@ function parseExcelData(rows: (string | number | boolean | null)[][]): {
   lastRemaining: number;
   sheetTitle: string;
 } {
-  const bills: any[] = [];
   const existingWeeks: any[] = [];
 
   if (!rows || rows.length === 0) {
-    return { bills, existingWeeks, nextWeekStartCol: 2, lastRemaining: 0, sheetTitle: "Budget" };
+    return { bills: [], existingWeeks, nextWeekStartCol: 2, lastRemaining: 0, sheetTitle: "Budget" };
   }
 
   const headerRow = rows[0] ?? [];
@@ -127,47 +126,77 @@ function parseExcelData(rows: (string | number | boolean | null)[][]): {
   }
   if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
 
-  for (let i = 1; i < rows.length; i++) {
-    const cells = rows[i] ?? [];
-    const nameCell = String(cells[0] ?? "").trim();
-    if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
-
-    const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
-    if (isNaN(rawAmt)) continue;
-    const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-
-    const dayStr = String(cells[2] ?? "");
-    const dayOfMonth =
-      dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
-        ? parseInt(dayStr)
-        : null;
-
-    let type = "fixed";
-    let color = "slate";
-    const lower = nameCell.toLowerCase();
-    if (lower.includes("rent")) { type = "balanced"; color = "blue"; }
-    else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) { type = "balanced"; color = "orange"; }
-    else if (lower.includes("car")) { type = "balanced"; color = "purple"; }
-
-    bills.push({ name: nameCell, amount, dayOfMonth, category: nameCell, type, color });
+  // ── Try structured bills metadata section first ─────────────────────────
+  const bills: any[] = [];
+  let billsMetaStart = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const val = String(rows[i]?.[0] ?? "").trim();
+    if (val === "## BILLS ##") { billsMetaStart = i; break; }
   }
 
-  let weeklyStart = -1;
-  for (let i = 15; i < Math.min(30, rows.length); i++) {
-    const val = String(rows[i]?.[0] ?? "").toLowerCase();
-    if (val.includes("weekly")) {
-      weeklyStart = i + 1;
-      break;
-    }
-  }
-  if (weeklyStart !== -1) {
-    for (let i = weeklyStart; i < Math.min(weeklyStart + 10, rows.length); i++) {
+  if (billsMetaStart !== -1) {
+    // Skip marker (billsMetaStart) and header row (billsMetaStart + 1)
+    for (let i = billsMetaStart + 2; i < rows.length; i++) {
       const cells = rows[i] ?? [];
       const name = String(cells[0] ?? "").trim();
-      if (!name || name.toLowerCase().includes("yearly")) break;
+      if (!name) break;
+      const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
+      if (isNaN(rawAmt)) break;
+      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+      const type = String(cells[2] ?? "").trim() || "fixed";
+      const category = String(cells[3] ?? "").trim() || name;
+      const dayStr = String(cells[4] ?? "").trim();
+      const dayOfMonth =
+        dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+          ? parseInt(dayStr)
+          : null;
+      const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
+      bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+    }
+  } else {
+    // ── Fallback: keyword-based detection for sheets without metadata ──────
+    for (let i = 1; i < rows.length; i++) {
+      const cells = rows[i] ?? [];
+      const nameCell = String(cells[0] ?? "").trim();
+      if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
+
       const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
       if (isNaN(rawAmt)) continue;
-      bills.push({ name, amount: rawAmt > 0 ? -rawAmt : rawAmt, dayOfMonth: null, category: name, type: "weekly", color: "green" });
+      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+
+      const dayStr = String(cells[2] ?? "");
+      const dayOfMonth =
+        dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+          ? parseInt(dayStr)
+          : null;
+
+      let type = "fixed";
+      let color = "slate";
+      const lower = nameCell.toLowerCase();
+      if (lower.includes("rent")) { type = "balanced"; color = "blue"; }
+      else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) { type = "balanced"; color = "orange"; }
+      else if (lower.includes("car")) { type = "balanced"; color = "purple"; }
+
+      bills.push({ name: nameCell, amount, dayOfMonth, category: nameCell, type, color });
+    }
+
+    let weeklyStart = -1;
+    for (let i = 15; i < Math.min(30, rows.length); i++) {
+      const val = String(rows[i]?.[0] ?? "").toLowerCase();
+      if (val.includes("weekly")) {
+        weeklyStart = i + 1;
+        break;
+      }
+    }
+    if (weeklyStart !== -1) {
+      for (let i = weeklyStart; i < Math.min(weeklyStart + 10, rows.length); i++) {
+        const cells = rows[i] ?? [];
+        const name = String(cells[0] ?? "").trim();
+        if (!name || name.toLowerCase().includes("yearly")) break;
+        const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
+        if (isNaN(rawAmt)) continue;
+        bills.push({ name, amount: rawAmt > 0 ? -rawAmt : rawAmt, dayOfMonth: null, category: name, type: "weekly", color: "green" });
+      }
     }
   }
 
@@ -335,6 +364,16 @@ interface DebtItem {
   minimumPayment: number;
 }
 
+interface BillMeta {
+  name: string;
+  amount: number;
+  type?: string;
+  category?: string;
+  dayOfMonth?: number | null;
+  color?: string;
+  sourceDebtId?: string;
+}
+
 interface ExcelWriteRequest {
   weeks: Array<{
     weekLabel: string;
@@ -350,6 +389,7 @@ interface ExcelWriteRequest {
   includeRemainingAcct: boolean;
   sheetTitle?: string;
   debts?: DebtItem[];
+  bills?: BillMeta[];
 }
 
 interface ExcelCreateAndWriteRequest {
@@ -357,6 +397,7 @@ interface ExcelCreateAndWriteRequest {
   weeks: ExcelWriteRequest["weeks"];
   includeRemainingAcct?: boolean;
   debts?: DebtItem[];
+  bills?: BillMeta[];
 }
 
 function buildExcelDebtGrid(debts: DebtItem[]): (string | number)[][] {
@@ -413,6 +454,33 @@ async function writeExcelDebtRows(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
     { color: "#FEF2F2" }
+  );
+}
+
+async function writeExcelBillRows(
+  token: string,
+  fileId: string,
+  sheetName: string,
+  startRow: number,
+  bills: BillMeta[],
+) {
+  const billsGrid: (string | number)[][] = [
+    ["## BILLS ##"],
+    ["Name", "Amount", "Type", "Category", "Day"],
+    ...bills.map((b) => [
+      b.name,
+      Math.abs(b.amount),
+      b.type ?? "fixed",
+      b.category ?? b.name,
+      b.dayOfMonth != null ? b.dayOfMonth : "varies",
+    ]),
+  ];
+  const startAddr = `A${startRow + 1}`;
+  const endAddr = `E${startRow + billsGrid.length}`;
+  await graphPatch(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${startAddr}:${endAddr}')`,
+    { values: billsGrid }
   );
 }
 
@@ -533,8 +601,14 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       { bold: true, name: "Arial", size: 10 }
     );
 
+    let debtRowCount = 0;
     if (body.debts && body.debts.length > 0) {
       await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
+      debtRowCount = 3 + body.debts.length;
+    }
+    if (body.bills && body.bills.length > 0) {
+      const billsStartRow = totalRows + debtRowCount + 1;
+      await writeExcelBillRows(token, fileId, sheetName, billsStartRow, body.bills);
     }
 
     res.json({ fileId, webUrl });
@@ -641,8 +715,14 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       { bold: false, name: "Arial", size: 10 }
     );
 
+    let debtRowCount = 0;
     if (body.debts && body.debts.length > 0) {
       await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
+      debtRowCount = 3 + body.debts.length;
+    }
+    if (body.bills && body.bills.length > 0) {
+      const billsStartRow = totalRows + debtRowCount + 1;
+      await writeExcelBillRows(token, fileId, sheetName, billsStartRow, body.bills);
     }
 
     res.json({

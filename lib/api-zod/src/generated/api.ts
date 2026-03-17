@@ -615,7 +615,7 @@ export const SheetWriteBody = zod.object({
       closingBalance: zod.number().describe("Amount remaining after all bills"),
     }),
   ),
-  billsSummary: zod
+  bills: zod
     .array(
       zod.object({
         name: zod.string(),
@@ -769,6 +769,32 @@ export const SheetCreateAndWriteBody = zod.object({
           .max(sheetCreateAndWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+      }),
+    )
+    .optional(),
+  bills: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        amount: zod.number().describe("Monthly amount (negative = expense)"),
+        dayOfMonth: zod
+          .number()
+          .nullish()
+          .describe("Day of month bill is due (null for weekly bills)"),
+        category: zod
+          .string()
+          .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+        type: zod
+          .enum(["balanced", "fixed", "weekly"])
+          .describe("How the bill is distributed across weeks"),
+        color: zod
+          .string()
+          .optional()
+          .describe("Color key for UI display, e.g. blue, green, orange"),
+        sourceDebtId: zod
+          .string()
+          .optional()
+          .describe("ID of the debt this bill was imported from (if any)"),
       }),
     )
     .optional(),
@@ -990,6 +1016,32 @@ export const ExcelWriteBody = zod.object({
       }),
     )
     .optional(),
+  bills: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        amount: zod.number().describe("Monthly amount (negative = expense)"),
+        dayOfMonth: zod
+          .number()
+          .nullish()
+          .describe("Day of month bill is due (null for weekly bills)"),
+        category: zod
+          .string()
+          .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+        type: zod
+          .enum(["balanced", "fixed", "weekly"])
+          .describe("How the bill is distributed across weeks"),
+        color: zod
+          .string()
+          .optional()
+          .describe("Color key for UI display, e.g. blue, green, orange"),
+        sourceDebtId: zod
+          .string()
+          .optional()
+          .describe("ID of the debt this bill was imported from (if any)"),
+      }),
+    )
+    .optional(),
 });
 
 export const ExcelWriteResponse = zod.object({
@@ -1076,6 +1128,32 @@ export const ExcelCreateAndWriteBody = zod.object({
           .max(excelCreateAndWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+      }),
+    )
+    .optional(),
+  bills: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        amount: zod.number().describe("Monthly amount (negative = expense)"),
+        dayOfMonth: zod
+          .number()
+          .nullish()
+          .describe("Day of month bill is due (null for weekly bills)"),
+        category: zod
+          .string()
+          .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+        type: zod
+          .enum(["balanced", "fixed", "weekly"])
+          .describe("How the bill is distributed across weeks"),
+        color: zod
+          .string()
+          .optional()
+          .describe("Color key for UI display, e.g. blue, green, orange"),
+        sourceDebtId: zod
+          .string()
+          .optional()
+          .describe("ID of the debt this bill was imported from (if any)"),
       }),
     )
     .optional(),

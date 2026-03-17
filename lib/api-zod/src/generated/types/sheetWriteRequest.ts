@@ -11,7 +11,7 @@ import type { WeeklyBudget } from "./weeklyBudget";
 
 export interface SheetWriteRequest {
   weeks: WeeklyBudget[];
-  billsSummary?: Bill[];
+  bills?: Bill[];
   sheetTitle?: string;
   startCol: number;
   includeRemainingAcct?: boolean;

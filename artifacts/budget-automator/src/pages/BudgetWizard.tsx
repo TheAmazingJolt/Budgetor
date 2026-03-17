@@ -826,6 +826,7 @@ export function BudgetWizard({
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: excelSheetTitle,
           ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(bills.length > 0 ? { bills } : {}),
         },
       });
       setExcelWriteSuccess(true);
@@ -1390,6 +1391,7 @@ export function BudgetWizard({
           sheetTitle: googleSheetTitle,
           ...(existingLastCol != null ? { existingLastCol } : {}),
           ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(bills.length > 0 ? { bills } : {}),
         },
       });
       setSheetWriteSuccess(true);
@@ -1428,6 +1430,7 @@ export function BudgetWizard({
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
           ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(bills.length > 0 ? { bills } : {}),
         },
       });
       setNewSheetSaveSuccess(true);
@@ -1464,6 +1467,7 @@ export function BudgetWizard({
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
           ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(bills.length > 0 ? { bills } : {}),
         },
       });
       setNewExcelSaveSuccess(true);

@@ -1214,7 +1214,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WeeklyBudget"
-        billsSummary:
+        bills:
           type: array
           items:
             $ref: "#/components/schemas/Bill"
@@ -1259,6 +1259,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Debt"
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
       required:
         - title
         - weeks
@@ -1359,6 +1363,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Debt"
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
       required:
         - weeks
         - startCol
@@ -1389,6 +1397,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Debt"
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
       required:
         - title
         - weeks

@@ -84,7 +84,6 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
   const gridData = budgetSheet.data[0];
   const rows = gridData.rowData ?? [];
 
-  const bills: any[] = [];
   const existingWeeks: any[] = [];
 
   const headerRow = rows[0]?.values ?? [];
@@ -99,63 +98,96 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
   }
   if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
 
-  for (let i = 1; i < rows.length; i++) {
-    const cells = rows[i]?.values ?? [];
-    const nameCell = cells[0]?.formattedValue?.trim() ?? "";
-    if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
-
-    const rawAmt = cells[1]?.effectiveValue?.numberValue;
-    if (rawAmt == null) continue;
-    const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-
-    const dayStr = cells[2]?.formattedValue ?? "";
-    const dayOfMonth =
-      dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
-        ? parseInt(dayStr)
-        : null;
-
-    let type: string = "fixed";
-    let color: string = "slate";
-    const lower = nameCell.toLowerCase();
-    if (lower.includes("rent")) { type = "balanced"; color = "blue"; }
-    else if (
-      lower.includes("util") ||
-      lower.includes("electric") ||
-      lower.includes("water") ||
-      lower === "utilities"
-    ) { type = "balanced"; color = "orange"; }
-    else if (lower.includes("car")) { type = "balanced"; color = "purple"; }
-
-    bills.push({ name: nameCell, amount, dayOfMonth, category: nameCell, type, color });
+  // ── Try structured bills metadata section first ─────────────────────────
+  // Written by the app as: ## BILLS ## / header row / bill rows in cols A-E
+  const bills: any[] = [];
+  let billsMetaStart = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const val = rows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
+    if (val === "## BILLS ##") { billsMetaStart = i; break; }
   }
 
-  let weeklyStart = -1;
-  for (let i = 15; i < Math.min(30, rows.length); i++) {
-    const val = rows[i]?.values?.[0]?.formattedValue ?? "";
-    if (val.toLowerCase().includes("weekly")) {
-      weeklyStart = i + 1;
-      break;
-    }
-  }
-  if (weeklyStart !== -1) {
-    for (
-      let i = weeklyStart;
-      i < Math.min(weeklyStart + 10, rows.length);
-      i++
-    ) {
+  if (billsMetaStart !== -1) {
+    // Skip marker row (billsMetaStart) and header row (billsMetaStart + 1)
+    for (let i = billsMetaStart + 2; i < rows.length; i++) {
       const cells = rows[i]?.values ?? [];
       const name = cells[0]?.formattedValue?.trim() ?? "";
-      if (!name || name.toLowerCase().includes("yearly")) break;
+      if (!name) break;
+      const rawAmt = cells[1]?.effectiveValue?.numberValue;
+      if (rawAmt == null) break;
+      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+      const type = cells[2]?.formattedValue?.trim() || "fixed";
+      const category = cells[3]?.formattedValue?.trim() || name;
+      const dayStr = cells[4]?.formattedValue?.trim() ?? "";
+      const dayOfMonth =
+        dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+          ? parseInt(dayStr)
+          : null;
+      const colorMap: Record<string, string> = {
+        balanced: "blue", weekly: "green", fixed: "slate",
+      };
+      bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+    }
+  } else {
+    // ── Fallback: keyword-based detection for sheets without metadata ──────
+    for (let i = 1; i < rows.length; i++) {
+      const cells = rows[i]?.values ?? [];
+      const nameCell = cells[0]?.formattedValue?.trim() ?? "";
+      if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
+
       const rawAmt = cells[1]?.effectiveValue?.numberValue;
       if (rawAmt == null) continue;
-      bills.push({
-        name,
-        amount: rawAmt > 0 ? -rawAmt : rawAmt,
-        dayOfMonth: null,
-        category: name,
-        type: "weekly",
-        color: "green",
-      });
+      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+
+      const dayStr = cells[2]?.formattedValue ?? "";
+      const dayOfMonth =
+        dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+          ? parseInt(dayStr)
+          : null;
+
+      let type: string = "fixed";
+      let color: string = "slate";
+      const lower = nameCell.toLowerCase();
+      if (lower.includes("rent")) { type = "balanced"; color = "blue"; }
+      else if (
+        lower.includes("util") ||
+        lower.includes("electric") ||
+        lower.includes("water") ||
+        lower === "utilities"
+      ) { type = "balanced"; color = "orange"; }
+      else if (lower.includes("car")) { type = "balanced"; color = "purple"; }
+
+      bills.push({ name: nameCell, amount, dayOfMonth, category: nameCell, type, color });
+    }
+
+    let weeklyStart = -1;
+    for (let i = 15; i < Math.min(30, rows.length); i++) {
+      const val = rows[i]?.values?.[0]?.formattedValue ?? "";
+      if (val.toLowerCase().includes("weekly")) {
+        weeklyStart = i + 1;
+        break;
+      }
+    }
+    if (weeklyStart !== -1) {
+      for (
+        let i = weeklyStart;
+        i < Math.min(weeklyStart + 10, rows.length);
+        i++
+      ) {
+        const cells = rows[i]?.values ?? [];
+        const name = cells[0]?.formattedValue?.trim() ?? "";
+        if (!name || name.toLowerCase().includes("yearly")) break;
+        const rawAmt = cells[1]?.effectiveValue?.numberValue;
+        if (rawAmt == null) continue;
+        bills.push({
+          name,
+          amount: rawAmt > 0 ? -rawAmt : rawAmt,
+          dayOfMonth: null,
+          category: name,
+          type: "weekly",
+          color: "green",
+        });
+      }
     }
   }
 
@@ -356,6 +388,16 @@ interface DebtItem {
   minimumPayment: number;
 }
 
+interface BillMeta {
+  name: string;
+  amount: number;
+  type?: string;
+  category?: string;
+  dayOfMonth?: number | null;
+  color?: string;
+  sourceDebtId?: string;
+}
+
 interface WriteRequest {
   weeks: Array<{
     weekLabel: string;
@@ -371,7 +413,16 @@ interface WriteRequest {
   includeRemainingAcct: boolean;
   sheetTitle?: string;
   debts?: DebtItem[];
+  bills?: BillMeta[];
   existingLastCol?: number;
+}
+
+interface CreateAndWriteRequest {
+  title: string;
+  weeks: WriteRequest["weeks"];
+  includeRemainingAcct?: boolean;
+  debts?: DebtItem[];
+  bills?: BillMeta[];
 }
 
 const CATEGORY_COLORS: Record<string, { red: number; green: number; blue: number }> = {
@@ -721,6 +772,7 @@ async function writeBudgetToSheet(
   debts?: DebtItem[],
   sheetColumnCount: number = 1000,
   existingLastCol?: number,
+  bills?: BillMeta[],
 ) {
   const { requests, widthRequests, paddedRows, totalRows, totalCols } =
     buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId, sheetColumnCount);
@@ -800,8 +852,10 @@ async function writeBudgetToSheet(
     });
   }
 
+  let debtRowCount = 0;
   if (debts && debts.length > 0) {
     const { debtRows, debtRequests } = buildDebtRows(debts, totalRows, sheetId);
+    debtRowCount = debtRows.length;
 
     const debtRangeStart = `A${totalRows + 1}`;
     const debtRangeEnd = `D${totalRows + debtRows.length}`;
@@ -821,13 +875,31 @@ async function writeBudgetToSheet(
       });
     }
   }
-}
 
-interface CreateAndWriteRequest {
-  title: string;
-  weeks: WriteRequest["weeks"];
-  includeRemainingAcct?: boolean;
-  debts?: DebtItem[];
+  // ── Write bills metadata section so the app can restore type/category ────
+  // Layout: ## BILLS ## marker / header row / one row per bill (cols A-E)
+  if (bills && bills.length > 0) {
+    const billsSectionStart1 = totalRows + debtRowCount + 2; // 1-indexed (gap row before)
+    const billsGrid: (string | number)[][] = [
+      ["## BILLS ##"],
+      ["Name", "Amount", "Type", "Category", "Day"],
+      ...bills.map((b) => [
+        b.name,
+        Math.abs(b.amount),
+        b.type ?? "fixed",
+        b.category ?? b.name,
+        b.dayOfMonth != null ? b.dayOfMonth : "varies",
+      ]),
+    ];
+    const billsEnd1 = billsSectionStart1 + billsGrid.length - 1;
+    const billsRange = `'${escapedTitle}'!A${billsSectionStart1}:E${billsEnd1}`;
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: billsRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: billsGrid },
+    });
+  }
 }
 
 router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
@@ -863,7 +935,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     const spreadsheetId = createResponse.data.spreadsheetId!;
     const spreadsheetUrl = createResponse.data.spreadsheetUrl!;
 
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
 
     res.json({ spreadsheetId, spreadsheetUrl });
   } catch (err: any) {
@@ -905,7 +977,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     const sheetTitleStr = sheetTitle ?? "Budget";
     const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
 
     res.json({
       ok: true,

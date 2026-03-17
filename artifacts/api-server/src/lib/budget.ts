@@ -41,7 +41,9 @@ export function generateWeeklyBudgets(
   const fixedBills = bills.filter((b) => b.type === "fixed");
   const weeklyBills = bills.filter((b) => b.type === "weekly");
 
+  // alwaysBills = balanced with no specific due day (varies across all weeks)
   const alwaysBills = balancedBills.filter((b) => !b.dayOfMonth);
+  // timedBills = balanced with a specific due day
   const timedBills = balancedBills.filter((b) => !!b.dayOfMonth);
 
   const alwaysTotal = alwaysBills.reduce((s, b) => s + Math.abs(b.amount), 0);
@@ -141,16 +143,17 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Balance large bills so every week in a month has the same remaining ─
-  // For each month group, we adjust balanced bills so that
-  // closing = opening + paycheck + fixed_weekly + large is equal across weeks.
+  // ── Balance "varies" bills so every week ends at the same remaining ─────
   //
   // Per month with N weeks:
   //   F_i = sum of fixed+weekly bills for week i (negative)
-  //   total_large_neg = -(balancedTotal) for this month
-  //   target K = opening + paycheck + (total_large_neg + sum(F_i)) / N
-  //   large_i = K - opening - paycheck - F_i
-  //   Split large_i proportionally across individual balanced bills
+  //   totalLargeNeg = -(alwaysTotal) for this month
+  //   target K = opening + paycheck + (totalLargeNeg + sumF) / N
+  //   largeAmount_i = K - opening - paycheck - F_i  (always ≤ 0)
+  //
+  // We clamp largeAmount to 0 so balanced bills never appear as income.
+  // A week that is already overloaded with fixed expenses just gets 0
+  // balanced allocation; the other weeks are equalized to week-0's closing.
 
   for (const mk of monthsInRange) {
     const monthWeekIndices = weeks
@@ -169,10 +172,13 @@ export function generateWeeklyBudgets(
 
     for (let j = 0; j < monthWeekIndices.length; j++) {
       const idx = monthWeekIndices[j];
-      const largeAmount = K - openingBalance - paycheckAmount - F[j];
+      // Clamp to 0: balanced partial amounts must always be expenses (≤ 0).
+      const rawLargeAmount = K - openingBalance - paycheckAmount - F[j];
+      const largeAmount = Math.min(0, rawLargeAmount);
 
       const items: WeeklyBill[] = [];
-      if (alwaysTotal > 0) {
+      // Only distribute if there is actually a negative amount to allocate.
+      if (alwaysTotal > 0 && largeAmount < 0) {
         const parts = alwaysBills
           .filter((b) => Math.abs(b.amount) > 0)
           .map((b) => ({
@@ -194,6 +200,7 @@ export function generateWeeklyBudgets(
       weeks[idx].largeBills = items;
     }
 
+    // Equalize closing balances across weeks (weeks with large bills only)
     const closings = monthWeekIndices.map((idx) => {
       const fw = weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0);
       const lg = weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0);
@@ -204,9 +211,20 @@ export function generateWeeklyBudgets(
       const diff = Math.round((closings[j] - targetClosing) * 100) / 100;
       if (diff !== 0 && weeks[monthWeekIndices[j]].largeBills.length > 0) {
         const last = weeks[monthWeekIndices[j]].largeBills;
-        last[last.length - 1].amount = Math.round((last[last.length - 1].amount - diff) * 100) / 100;
+        const adjusted = Math.round((last[last.length - 1].amount - diff) * 100) / 100;
+        // Keep the adjustment clamped so it never flips positive
+        last[last.length - 1].amount = Math.min(0, adjusted);
       }
     }
+
+    // ── Spread timed balanced bills across weeks preceding their due day ──
+    //
+    // "Balanced with a due day" means: split the bill evenly across every
+    // week whose START date is on or before the due date.
+    //
+    // If the due date falls BEFORE every week in the month (e.g. rent due
+    // on the 1st but the budget starts the 2nd), we fall back to spreading
+    // across ALL weeks in the month so the bill is never silently dropped.
 
     for (const bill of timedBills) {
       const day = bill.dayOfMonth!;
@@ -220,11 +238,9 @@ export function generateWeeklyBudgets(
       let activeIndices = monthWeekIndices.filter((idx) => weeks[idx].start <= dueDate);
 
       if (activeIndices.length === 0) {
-        if (monthWeekIndices[0] === 0) {
-          activeIndices = [0];
-        } else {
-          continue;
-        }
+        // Due date is before all weeks in this month — spread across all weeks
+        // so the bill is always represented and never silently dropped.
+        activeIndices = [...monthWeekIndices];
       }
 
       const perWeek = Math.round((bill.amount / activeIndices.length) * 100) / 100;
