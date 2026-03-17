@@ -70,13 +70,15 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
         // ── Parse bills from columns A-B (rows 1 to ~19) ──────────────────
         const bills: Bill[] = [];
 
-        const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day']);
+        const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day', 'paycheck', 'remaining', 'partial']);
+        const BILL_WEEK_KEYWORDS = ['paycheck', 'remaining', 'partial'];
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
           if (!row || !row[0]) continue;
           const name = String(row[0]).trim();
           if (!name) break;
           if (BILL_STOP_MARKERS.has(name.toLowerCase())) break;
+          if (BILL_WEEK_KEYWORDS.some(kw => name.toLowerCase().startsWith(kw))) break;
           if (name.toLowerCase().startsWith('total')) break;
 
           const amount = parseFloat(String(row[1]));

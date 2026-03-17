@@ -633,29 +633,17 @@ export function BudgetWizard({
         if (isGuest) {
           setDebts(parsed.debts);
         }
-        let effectiveStartDate = newWeekStartDate;
-        let effectiveOpeningBalance = openingBalance;
         const lastWeek = parsed.existingWeeks.at(-1);
         if (lastWeek) {
           if (lastWeek.remaining !== undefined) {
             setOpeningBalance(lastWeek.remaining);
-            effectiveOpeningBalance = lastWeek.remaining;
           }
           const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
-          if (nextStart) {
-            setStartDatePreserveCount(nextStart);
-            effectiveStartDate = nextStart;
-          }
+          if (nextStart) setStartDatePreserveCount(nextStart);
         }
         toast({
           title: "Spreadsheet loaded",
           description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
-        });
-        scheduleAutoGenerate({
-          bills: parsed.bills,
-          openingBalance: effectiveOpeningBalance,
-          paycheckAmount: 0,
-          startDate: effectiveStartDate,
         });
       } catch (err) {
         toast({
