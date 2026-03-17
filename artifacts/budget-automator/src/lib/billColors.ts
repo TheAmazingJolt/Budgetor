@@ -1,4 +1,5 @@
 export const BILL_COLOR_PALETTE = [
+  { key: "none",   swatch: "bg-transparent border border-dashed border-muted-foreground/40", badge: "bg-muted text-muted-foreground border-border", leftBar: "bg-transparent" },
   { key: "blue",   swatch: "bg-blue-500",   badge: "bg-blue-100 text-blue-800 border-blue-200",   leftBar: "bg-blue-400" },
   { key: "green",  swatch: "bg-green-500",  badge: "bg-green-100 text-green-800 border-green-200",  leftBar: "bg-green-400" },
   { key: "orange", swatch: "bg-orange-500", badge: "bg-orange-100 text-orange-800 border-orange-200", leftBar: "bg-orange-400" },
@@ -16,5 +17,5 @@ export const BILL_COLOR_PALETTE = [
 export type BillColorKey = typeof BILL_COLOR_PALETTE[number]["key"];
 
 export function getBillColorEntry(key?: string | null) {
-  return BILL_COLOR_PALETTE.find(c => c.key === key) ?? BILL_COLOR_PALETTE.find(c => c.key === "slate")!;
+  return BILL_COLOR_PALETTE.find(c => c.key === key) ?? BILL_COLOR_PALETTE.find(c => c.key === "none")!;
 }

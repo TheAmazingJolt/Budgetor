@@ -19,11 +19,11 @@ import { BILL_COLOR_PALETTE } from "@/lib/billColors";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
-  amount: z.coerce.number().max(-0.01, "Amount must be a negative number"),
+  amount: z.coerce.number().refine(v => v !== 0, "Amount is required").transform(v => -Math.abs(v)),
   dayOfMonth: z.coerce.number().min(1).max(31).nullable().optional(),
   category: z.string().min(1, "Category label is required"),
   type: z.enum(["balanced", "fixed", "weekly"]),
-  color: z.string().default("slate"),
+  color: z.string().default("none"),
 });
 
 interface BillFormProps {
@@ -43,7 +43,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           dayOfMonth: d.dayOfMonth ?? null,
           category: d.category ?? "",
           type: d.type ?? "fixed",
-          color: d.color ?? "slate",
+          color: d.color ?? "none",
         }
       : {
           name: "",
@@ -51,7 +51,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           dayOfMonth: null,
           category: "",
           type: "fixed",
-          color: "slate",
+          color: "none",
         },
   });
 
@@ -82,10 +82,21 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Monthly Amount</FormLabel>
+                <FormLabel>Amount</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.01" placeholder="-100.00" {...field} className="focus:ring-primary/20 focus:border-primary" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="100.00"
+                    {...field}
+                    value={field.value ? Math.abs(field.value) : ""}
+                    onChange={e => field.onChange(e.target.value === "" ? "" : e.target.value)}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
                 </FormControl>
+                <FormDescription>
+                  Automatically saved as a negative (expense).
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -149,22 +160,26 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Day of Month Due</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="31"
-                      placeholder="e.g. 15"
-                      {...field}
-                      value={field.value || ""}
-                      onChange={e => field.onChange(e.target.value === "" ? null : parseInt(e.target.value))}
-                      className="focus:ring-primary/20 focus:border-primary"
-                    />
-                  </FormControl>
+                  <Select
+                    onValueChange={v => field.onChange(v === "varies" ? null : parseInt(v))}
+                    value={field.value == null ? "varies" : String(field.value)}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
+                        <SelectValue placeholder="Select day" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="varies">Varies (unpredictable)</SelectItem>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                        <SelectItem key={day} value={String(day)}>{day}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormDescription>
                     {billType === "fixed"
                       ? "Full amount appears in the week this day falls."
-                      : "Bill is only spread across weeks leading up to and including this day. Leave blank to spread across all weeks."}
+                      : "Bill is only spread across weeks leading up to and including this day. \"Varies\" spreads across all weeks."}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -189,10 +204,10 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                       className={`relative h-7 w-7 rounded-full ${c.swatch} transition-transform hover:scale-110 ${
                         selectedColor === c.key ? "ring-2 ring-offset-2 ring-foreground scale-110" : ""
                       }`}
-                      title={c.key.charAt(0).toUpperCase() + c.key.slice(1)}
+                      title={c.key === "none" ? "No color" : c.key.charAt(0).toUpperCase() + c.key.slice(1)}
                     >
                       {selectedColor === c.key && (
-                        <Check className="absolute inset-0 m-auto h-3.5 w-3.5 text-white drop-shadow" />
+                        <Check className={`absolute inset-0 m-auto h-3.5 w-3.5 drop-shadow ${c.key === "none" ? "text-foreground" : "text-white"}`} />
                       )}
                     </button>
                   ))}
