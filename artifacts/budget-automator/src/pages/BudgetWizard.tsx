@@ -293,6 +293,7 @@ export function BudgetWizard({
     updateBill,
     removeBill,
     setStartDate,
+    setStartDatePreserveCount,
     setEndDate,
     setWeekCount,
     setOpeningBalance,
@@ -547,7 +548,7 @@ export function BudgetWizard({
       if (lastWeek) {
         const nextStart = nextStartAfterLabel(lastWeek.label);
         if (nextStart) {
-          setStartDate(nextStart);
+          setStartDatePreserveCount(nextStart);
           effectiveStartDate = nextStart;
         }
       }
@@ -598,7 +599,7 @@ export function BudgetWizard({
       if (lastWeek) {
         const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
         if (nextStart) {
-          setStartDate(nextStart);
+          setStartDatePreserveCount(nextStart);
           effectiveStartDate = nextStart;
         }
       }
@@ -643,7 +644,7 @@ export function BudgetWizard({
           }
           const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
           if (nextStart) {
-            setStartDate(nextStart);
+            setStartDatePreserveCount(nextStart);
             effectiveStartDate = nextStart;
           }
         }
@@ -774,7 +775,7 @@ export function BudgetWizard({
           if (lastWeek) {
             const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
             if (nextStart) {
-              setStartDate(nextStart);
+              setStartDatePreserveCount(nextStart);
               effectiveStartDate = nextStart;
             }
           }
@@ -1058,7 +1059,7 @@ export function BudgetWizard({
       }
       const nextStart = lastWeek?.label ? nextStartAfterLabel(lastWeek.label) : null;
       if (nextStart) {
-        setStartDate(nextStart);
+        setStartDatePreserveCount(nextStart);
         effectiveStartDate = nextStart;
       }
     }
@@ -1224,7 +1225,7 @@ export function BudgetWizard({
           if (lastWeek) {
             const nextStart = nextStartAfterLabel(lastWeek.label);
             if (nextStart) {
-              setStartDate(nextStart);
+              setStartDatePreserveCount(nextStart);
               effectiveStartDate = nextStart;
             }
           }

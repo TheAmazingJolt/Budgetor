@@ -64,6 +64,7 @@ interface BudgetState {
   updateDebt: (index: number, debt: Debt) => void;
   removeDebt: (index: number) => void;
   setStartDate: (start: string) => void;
+  setStartDatePreserveCount: (start: string) => void;
   setEndDate: (end: string) => void;
   setWeekCount: (count: number) => void;
   setNewWeekDates: (start: string, end: string) => void;
@@ -171,6 +172,19 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
         newWeekStartDate: effectiveStart,
         newWeekEndDate: endDate,
         weekCount: wc,
+      };
+    }),
+
+  setStartDatePreserveCount: (start) =>
+    set((state) => {
+      let effectiveStart = start;
+      if (state.payPeriod === "monthly") {
+        const d = new Date(start + 'T12:00:00');
+        effectiveStart = toISO(new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0));
+      }
+      return {
+        newWeekStartDate: effectiveStart,
+        newWeekEndDate: computeEndDate(effectiveStart, state.weekCount, state.payPeriod),
       };
     }),
 
