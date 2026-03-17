@@ -652,6 +652,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExcelCreateAndWriteResponse"
 
+  /user/bills:
+    get:
+      operationId: getUserBills
+      tags: [auth]
+      summary: Get user bills
+      description: Returns the authenticated user's saved bills
+      responses:
+        "200":
+          description: User bills
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBillsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateUserBills
+      tags: [auth]
+      summary: Update user bills
+      description: Replaces the authenticated user's saved bills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBillsRequest"
+      responses:
+        "200":
+          description: Updated bills
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBillsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /user/debts:
     get:
       operationId: getUserDebts
@@ -1357,6 +1401,26 @@ components:
       required:
         - fileId
         - webUrl
+
+    UserBillsResponse:
+      type: object
+      properties:
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
+      required:
+        - bills
+
+    UpdateUserBillsRequest:
+      type: object
+      properties:
+        bills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bill"
+      required:
+        - bills
 
     UserDebtsResponse:
       type: object

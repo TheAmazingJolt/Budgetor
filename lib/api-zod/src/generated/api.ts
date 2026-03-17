@@ -1086,6 +1086,95 @@ export const ExcelCreateAndWriteResponse = zod.object({
 });
 
 /**
+ * Returns the authenticated user's saved bills
+ * @summary Get user bills
+ */
+export const GetUserBillsResponse = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
+    }),
+  ),
+});
+
+/**
+ * Replaces the authenticated user's saved bills
+ * @summary Update user bills
+ */
+export const UpdateUserBillsBody = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
+    }),
+  ),
+});
+
+export const UpdateUserBillsResponse = zod.object({
+  bills: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.number().describe("Monthly amount (negative = expense)"),
+      dayOfMonth: zod
+        .number()
+        .nullish()
+        .describe("Day of month bill is due (null for weekly bills)"),
+      category: zod
+        .string()
+        .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
+      type: zod
+        .enum(["balanced", "fixed", "weekly"])
+        .describe("How the bill is distributed across weeks"),
+      color: zod
+        .string()
+        .optional()
+        .describe("Color key for UI display, e.g. blue, green, orange"),
+      sourceDebtId: zod
+        .string()
+        .optional()
+        .describe("ID of the debt this bill was imported from (if any)"),
+    }),
+  ),
+});
+
+/**
  * Returns the authenticated user's saved debts
  * @summary Get user debts
  */

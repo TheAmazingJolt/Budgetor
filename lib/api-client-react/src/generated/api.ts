@@ -58,8 +58,10 @@ import type {
   SheetReadResponse,
   SheetWriteRequest,
   SheetWriteResponse,
+  UpdateUserBillsRequest,
   UpdateUserDebtsRequest,
   UpdateUserPreferencesRequest,
+  UserBillsResponse,
   UserDebtsResponse,
   UserPreferencesResponse,
 } from "./api.schemas";
@@ -2565,6 +2567,169 @@ export const useExcelCreateAndWrite = <
   TContext
 > => {
   return useMutation(getExcelCreateAndWriteMutationOptions(options));
+};
+
+/**
+ * Returns the authenticated user's saved bills
+ * @summary Get user bills
+ */
+export const getGetUserBillsUrl = () => {
+  return `/api/user/bills`;
+};
+
+export const getUserBills = async (
+  options?: RequestInit,
+): Promise<UserBillsResponse> => {
+  return customFetch<UserBillsResponse>(getGetUserBillsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserBillsQueryKey = () => {
+  return [`/api/user/bills`] as const;
+};
+
+export const getGetUserBillsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserBills>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserBills>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserBillsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserBills>>> = ({
+    signal,
+  }) => getUserBills({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserBills>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserBillsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserBills>>
+>;
+export type GetUserBillsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get user bills
+ */
+
+export function useGetUserBills<
+  TData = Awaited<ReturnType<typeof getUserBills>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserBills>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserBillsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Replaces the authenticated user's saved bills
+ * @summary Update user bills
+ */
+export const getUpdateUserBillsUrl = () => {
+  return `/api/user/bills`;
+};
+
+export const updateUserBills = async (
+  updateUserBillsRequest: UpdateUserBillsRequest,
+  options?: RequestInit,
+): Promise<UserBillsResponse> => {
+  return customFetch<UserBillsResponse>(getUpdateUserBillsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateUserBillsRequest),
+  });
+};
+
+export const getUpdateUserBillsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUserBills>>,
+    TError,
+    { data: BodyType<UpdateUserBillsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateUserBills>>,
+  TError,
+  { data: BodyType<UpdateUserBillsRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateUserBills"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateUserBills>>,
+    { data: BodyType<UpdateUserBillsRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateUserBills(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateUserBillsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateUserBills>>
+>;
+export type UpdateUserBillsMutationBody = BodyType<UpdateUserBillsRequest>;
+export type UpdateUserBillsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update user bills
+ */
+export const useUpdateUserBills = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUserBills>>,
+    TError,
+    { data: BodyType<UpdateUserBillsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateUserBills>>,
+  TError,
+  { data: BodyType<UpdateUserBillsRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateUserBillsMutationOptions(options));
 };
 
 /**

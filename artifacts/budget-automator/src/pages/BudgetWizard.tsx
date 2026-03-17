@@ -71,9 +71,12 @@ import {
   getExcelListQueryKey,
   useGetUserDebts,
   useUpdateUserDebts,
+  useGetUserBills,
+  useUpdateUserBills,
   useGetUserPreferences,
   useUpdateUserPreferences,
   getGetUserDebtsQueryKey,
+  getGetUserBillsQueryKey,
   getGetUserPreferencesQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -360,10 +363,14 @@ export function BudgetWizard({
   const cloudSaveMutation = useSavedBudgetUpdate();
   const deleteBudgetMutation = useSavedBudgetDelete();
   const updateUserDebtsMutation = useUpdateUserDebts();
+  const updateUserBillsMutation = useUpdateUserBills();
   const updateUserPrefsMutation = useUpdateUserPreferences();
 
   const userDebtsQuery = useGetUserDebts({
     query: { queryKey: getGetUserDebtsQueryKey(), enabled: isSignedIn, retry: false, staleTime: 30000 },
+  });
+  const userBillsQuery = useGetUserBills({
+    query: { queryKey: getGetUserBillsQueryKey(), enabled: isSignedIn, retry: false, staleTime: 30000 },
   });
   const userPrefsQuery = useGetUserPreferences({
     query: { queryKey: getGetUserPreferencesQueryKey(), enabled: isSignedIn, retry: false, staleTime: 30000 },
@@ -409,6 +416,44 @@ export function BudgetWizard({
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debts, isSignedIn]);
+
+  const billsLoadedForUserRef = useRef<string | null>(null);
+  const billsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevBillsRef = useRef<string>("");
+  useEffect(() => {
+    if (!isSignedIn || !currentUser) {
+      if (billsLoadedForUserRef.current) {
+        setBills([]);
+        prevBillsRef.current = "";
+        if (billsSaveTimerRef.current) {
+          clearTimeout(billsSaveTimerRef.current);
+          billsSaveTimerRef.current = null;
+        }
+      }
+      billsLoadedForUserRef.current = null;
+      return;
+    }
+    if (billsLoadedForUserRef.current === currentUser.id) return;
+    if (!userBillsQuery.data) return;
+    const serverBills = (userBillsQuery.data.bills ?? []) as Bill[];
+    setBills(serverBills);
+    prevBillsRef.current = JSON.stringify(serverBills);
+    billsLoadedForUserRef.current = currentUser.id;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, currentUser?.id, userBillsQuery.data]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    if (!billsLoadedForUserRef.current) return;
+    const serialized = JSON.stringify(bills);
+    if (serialized === prevBillsRef.current) return;
+    prevBillsRef.current = serialized;
+    if (billsSaveTimerRef.current) clearTimeout(billsSaveTimerRef.current);
+    billsSaveTimerRef.current = setTimeout(() => {
+      updateUserBillsMutation.mutate({ data: { bills: bills as any } });
+    }, 1000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bills, isSignedIn]);
 
   useEffect(() => {
     if (!currentUser?.id) return;

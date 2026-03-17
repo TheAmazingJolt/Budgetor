@@ -558,6 +558,21 @@ router.put("/user/debts", requireAuth, async (req: Request, res: Response) => {
   res.json({ debts });
 });
 
+router.get("/user/bills", requireAuth, async (req: Request, res: Response) => {
+  const bills = (req.user as User).bills ?? [];
+  res.json({ bills });
+});
+
+router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
+  const { bills } = req.body as { bills: unknown[] };
+  if (!Array.isArray(bills)) {
+    res.status(400).json({ error: "bills must be an array" });
+    return;
+  }
+  await db.update(usersTable).set({ bills, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  res.json({ bills });
+});
+
 router.get("/user/preferences", requireAuth, async (req: Request, res: Response) => {
   const preferences = (req.user as User).preferences ?? {};
   res.json({ preferences });

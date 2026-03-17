@@ -311,6 +311,14 @@ export interface ExcelCreateAndWriteResponse {
   webUrl: string;
 }
 
+export interface UserBillsResponse {
+  bills: Bill[];
+}
+
+export interface UpdateUserBillsRequest {
+  bills: Bill[];
+}
+
 export interface UserDebtsResponse {
   debts: Debt[];
 }

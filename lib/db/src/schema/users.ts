@@ -15,6 +15,7 @@ export const usersTable = pgTable("users", {
   microsoftRefreshToken: text("microsoft_refresh_token"),
   microsoftTokenExpiry: bigint("microsoft_token_expiry", { mode: "number" }),
   debts: jsonb("debts").default([]),
+  bills: jsonb("bills").default([]),
   preferences: jsonb("preferences").default({}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
