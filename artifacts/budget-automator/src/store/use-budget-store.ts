@@ -143,14 +143,43 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
         const d = new Date(start + 'T12:00:00');
         effectiveStart = toISO(new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0));
       }
+
+      const endDate = state.newWeekEndDate;
+      const endMs = new Date(endDate + 'T12:00:00').getTime();
+      const startMs = new Date(effectiveStart + 'T12:00:00').getTime();
+
+      if (!endDate || isNaN(endMs) || isNaN(startMs) || endMs < startMs) {
+        return {
+          newWeekStartDate: effectiveStart,
+          newWeekEndDate: computeEndDate(effectiveStart, state.weekCount, state.payPeriod),
+        };
+      }
+
+      if (state.payPeriod === "monthly") {
+        const wc = Math.max(1, monthDiff(effectiveStart, endDate));
+        return {
+          newWeekStartDate: effectiveStart,
+          newWeekEndDate: computeEndDate(effectiveStart, wc, "monthly"),
+          weekCount: wc,
+        };
+      }
+
+      const diffDays = Math.round((endMs - startMs) / 86400000) + 1;
+      const daysPerPeriod = state.payPeriod === "biweekly" ? 14 : 7;
+      const wc = Math.max(1, Math.ceil(diffDays / daysPerPeriod));
       return {
         newWeekStartDate: effectiveStart,
-        newWeekEndDate: computeEndDate(effectiveStart, state.weekCount, state.payPeriod),
+        newWeekEndDate: endDate,
+        weekCount: wc,
       };
     }),
 
   setEndDate: (end) =>
     set((state) => {
+      const endMs = new Date(end + 'T12:00:00').getTime();
+      if (!end || isNaN(endMs)) {
+        return { newWeekEndDate: end };
+      }
       if (state.payPeriod === "monthly") {
         const wc = Math.max(1, monthDiff(state.newWeekStartDate, end));
         return {
@@ -159,7 +188,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
         };
       }
       const startMs = new Date(state.newWeekStartDate + 'T12:00:00').getTime();
-      const endMs = new Date(end + 'T12:00:00').getTime();
       const diffDays = Math.round((endMs - startMs) / 86400000) + 1;
       const daysPerPeriod = state.payPeriod === "biweekly" ? 14 : 7;
       const wc = Math.max(1, Math.ceil(diffDays / daysPerPeriod));
