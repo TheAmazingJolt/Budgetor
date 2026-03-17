@@ -570,7 +570,7 @@ export function BudgetWizard({
         title: "Sheet loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      setStep(s => s === 0 ? 1 : s);
+      scheduleAutoGenerate({});
     }
   }, [sheetReadQuery.data, selectedSheetId]);
 
@@ -611,7 +611,7 @@ export function BudgetWizard({
         title: "Excel file loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      setStep(s => s === 0 ? 1 : s);
+      scheduleAutoGenerate({});
     }
   }, [excelReadQuery.data, selectedExcelFileId]);
 
@@ -647,7 +647,7 @@ export function BudgetWizard({
           title: "Spreadsheet loaded",
           description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
         });
-        setStep(s => s === 0 ? 1 : s);
+        scheduleAutoGenerate({});
       } catch (err) {
         toast({
           title: "Failed to read file",
@@ -774,7 +774,7 @@ export function BudgetWizard({
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Connect Microsoft to write back." : ""}`,
           });
           setIsLoadingExcelUrl(false);
-          setStep(s => s === 0 ? 1 : s);
+          scheduleAutoGenerate({});
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that file. Make sure the link is correct and you are signed in with Microsoft.";
@@ -1221,7 +1221,7 @@ export function BudgetWizard({
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Download as .xlsx (sign in with Google to write back)." : ""}`,
           });
           setIsLoadingUrl(false);
-          setStep(s => s === 0 ? 1 : s);
+          scheduleAutoGenerate({});
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.";
