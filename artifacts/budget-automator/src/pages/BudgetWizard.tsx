@@ -3402,7 +3402,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {inputMode === "cloud" && activeCloudBudgetId && (
+                {inputMode === "cloud" && activeCloudBudgetId && generatedWeek && (
                   <Button
                     size="lg"
                     onClick={handleSaveToCloud}
