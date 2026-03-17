@@ -308,6 +308,7 @@ export function BudgetWizard({
   const [activeCloudBudgetId, setActiveCloudBudgetId] = useState<string | null>(null);
   const [activeCloudBudgetName, setActiveCloudBudgetName] = useState<string | null>(null);
   const [cloudExistingWeeks, setCloudExistingWeeks] = useState<any[]>([]);
+  const cloudBudgetLoadedBillsRef = useRef<string>("");
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
 
@@ -501,6 +502,7 @@ export function BudgetWizard({
     query: {
       enabled: !!selectedSheetId && googleAuthenticated,
       retry: false,
+      staleTime: Infinity,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any,
   });
@@ -524,6 +526,7 @@ export function BudgetWizard({
     query: {
       enabled: !!selectedExcelFileId && microsoftAuthenticated,
       retry: false,
+      staleTime: Infinity,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any,
   });
@@ -999,8 +1002,28 @@ export function BudgetWizard({
     reset();
     const b = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
     const s = budget.settings as SavedBudgetSettings;
-    setBills(b);
-    prevBillsRef.current = JSON.stringify(b);
+
+    const loadedSnapshot = cloudBudgetLoadedBillsRef.current;
+    const isReloadingSameBudget = budget.id === activeCloudBudgetId && loadedSnapshot !== "";
+    let billsToSet = b;
+    if (isReloadingSameBudget) {
+      const billKey = (bill: Bill) =>
+        `${bill.name}|${bill.amount}|${bill.dayOfMonth ?? ""}|${bill.category}|${bill.type}|${bill.sourceDebtId ?? ""}`;
+      const loadedKeys = new Set(
+        (JSON.parse(loadedSnapshot) as Bill[]).map(billKey)
+      );
+      const incomingKeys = new Set(b.map(billKey));
+      const userAddedBills = bills.filter(
+        (bill: Bill) => !loadedKeys.has(billKey(bill)) && !incomingKeys.has(billKey(bill))
+      );
+      if (userAddedBills.length > 0) {
+        billsToSet = [...b, ...userAddedBills];
+      }
+    }
+
+    setBills(billsToSet);
+    cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
+    prevBillsRef.current = JSON.stringify(billsToSet);
     if (s?.payPeriod) setPayPeriod(s.payPeriod);
     const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
     setDebts(restoredDebts);
@@ -1039,10 +1062,10 @@ export function BudgetWizard({
         effectiveStartDate = nextStart;
       }
     }
-    toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${b.length} bills.` });
+    toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${billsToSet.length} bills.` });
     setStep(1);
     scheduleAutoGenerate({
-      bills: b,
+      bills: billsToSet,
       openingBalance: effectiveOpeningBalance,
       paycheckAmount: s?.paycheckAmount ?? 0,
       startDate: effectiveStartDate,
@@ -1143,6 +1166,7 @@ export function BudgetWizard({
         onSuccess: () => {
           setCloudExistingWeeks(updatedExistingWeeks);
           setCloudSaveSuccess(true);
+          cloudBudgetLoadedBillsRef.current = JSON.stringify(bills);
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({
             title: "Saved to Cloud",
