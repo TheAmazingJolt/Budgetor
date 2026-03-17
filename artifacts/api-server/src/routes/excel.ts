@@ -101,7 +101,41 @@ function colLetter(n: number): string {
   return s;
 }
 
-function parseExcelData(rows: (string | number | boolean | null)[][]): {
+function parseBillMetaRows(
+  rows: (string | number | boolean | null)[][],
+  markerValues: string[],
+): any[] {
+  const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
+  const bills: any[] = [];
+  let startIdx = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const val = String(rows[i]?.[0] ?? "").trim();
+    if (markerValues.includes(val)) { startIdx = i; break; }
+  }
+  if (startIdx === -1) return bills;
+  for (let i = startIdx + 2; i < rows.length; i++) {
+    const cells = rows[i] ?? [];
+    const name = String(cells[0] ?? "").trim();
+    if (!name) break;
+    const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
+    if (isNaN(rawAmt)) break;
+    const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+    const type = String(cells[2] ?? "").trim() || "fixed";
+    const category = String(cells[3] ?? "").trim() || name;
+    const dayStr = String(cells[4] ?? "").trim();
+    const dayOfMonth =
+      dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+        ? parseInt(dayStr)
+        : null;
+    bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+  }
+  return bills;
+}
+
+function parseExcelData(
+  rows: (string | number | boolean | null)[][],
+  metaRows?: (string | number | boolean | null)[][],
+): {
   bills: any[];
   existingWeeks: any[];
   nextWeekStartCol: number;
@@ -126,34 +160,18 @@ function parseExcelData(rows: (string | number | boolean | null)[][]): {
   }
   if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
 
-  // ── Try structured bills metadata section first ─────────────────────────
-  const bills: any[] = [];
-  let billsMetaStart = -1;
-  for (let i = 0; i < rows.length; i++) {
-    const val = String(rows[i]?.[0] ?? "").trim();
-    if (val === "## BILLS ##") { billsMetaStart = i; break; }
+  // ── Try _MoneyPalData hidden sheet first (written by app) ───────────────
+  let bills: any[] = [];
+  if (metaRows && metaRows.length > 0) {
+    bills = parseBillMetaRows(metaRows, ["Bills"]);
   }
 
-  if (billsMetaStart !== -1) {
-    // Skip marker (billsMetaStart) and header row (billsMetaStart + 1)
-    for (let i = billsMetaStart + 2; i < rows.length; i++) {
-      const cells = rows[i] ?? [];
-      const name = String(cells[0] ?? "").trim();
-      if (!name) break;
-      const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
-      if (isNaN(rawAmt)) break;
-      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-      const type = String(cells[2] ?? "").trim() || "fixed";
-      const category = String(cells[3] ?? "").trim() || name;
-      const dayStr = String(cells[4] ?? "").trim();
-      const dayOfMonth =
-        dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
-          ? parseInt(dayStr)
-          : null;
-      const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
-      bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
-    }
-  } else {
+  // ── Fallback: check main sheet for legacy Bills / ## BILLS ## marker ────
+  if (bills.length === 0) {
+    bills = parseBillMetaRows(rows, ["Bills", "## BILLS ##"]);
+  }
+
+  if (bills.length === 0) {
     // ── Fallback: keyword-based detection for sheets without metadata ──────
     for (let i = 1; i < rows.length; i++) {
       const cells = rows[i] ?? [];
@@ -298,9 +316,19 @@ router.get("/excel/:id/read", async (req, res): Promise<void> => {
 
     const sheetName = encodeURIComponent(targetSheet.name);
     const rangeData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`);
-
     const rows: any[][] = rangeData.values ?? [];
-    const result = parseExcelData(rows);
+
+    let metaRows: any[][] | undefined;
+    const metaSheet = sheets.find((s: any) => s.name === "_MoneyPalData");
+    if (metaSheet) {
+      const metaSheetName = encodeURIComponent(metaSheet.name);
+      try {
+        const metaData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`);
+        metaRows = metaData.values ?? [];
+      } catch { /* ignore if meta sheet can't be read */ }
+    }
+
+    const result = parseExcelData(rows, metaRows);
     result.sheetTitle = targetSheet.name;
 
     res.json(result);
@@ -340,9 +368,19 @@ router.post("/excel/read-url", async (req, res): Promise<void> => {
 
     const sheetName = encodeURIComponent(targetSheet.name);
     const rangeData = await graphGet(token, `/me/drive/items/${itemId}/workbook/worksheets/${sheetName}/usedRange`);
-
     const rows: any[][] = rangeData.values ?? [];
-    const result = parseExcelData(rows);
+
+    let metaRows: any[][] | undefined;
+    const metaSheet = sheets.find((s: any) => s.name === "_MoneyPalData");
+    if (metaSheet) {
+      const metaSheetName = encodeURIComponent(metaSheet.name);
+      try {
+        const metaData = await graphGet(token, `/me/drive/items/${itemId}/workbook/worksheets/${metaSheetName}/usedRange`);
+        metaRows = metaData.values ?? [];
+      } catch { /* ignore if meta sheet can't be read */ }
+    }
+
+    const result = parseExcelData(rows, metaRows);
     result.sheetTitle = targetSheet.name;
 
     res.json({ ...result, fileId: itemId });
@@ -457,15 +495,45 @@ async function writeExcelDebtRows(
   );
 }
 
-async function writeExcelBillRows(
+async function writeHiddenExcelBillsSheet(
   token: string,
   fileId: string,
-  sheetName: string,
-  startRow: number,
   bills: BillMeta[],
 ) {
-  const billsGrid: (string | number)[][] = [
-    ["## BILLS ##"],
+  if (!bills || bills.length === 0) return;
+  const META_SHEET = "_MoneyPalData";
+
+  const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
+  const allSheets: any[] = sheetsData.value ?? [];
+  const existing = allSheets.find((s: any) => s.name === META_SHEET);
+
+  let metaSheetName: string;
+  if (existing) {
+    metaSheetName = encodeURIComponent(existing.name);
+    const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`);
+    const endAddr = usedRange.address?.split("!")?.[1] ?? "E100";
+    await graphPatch(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endAddr}')`,
+      { values: Array.from({ length: 50 }, () => Array(5).fill("")) }
+    );
+  } else {
+    const added = await graphPost(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/add`,
+      { name: META_SHEET }
+    );
+    metaSheetName = encodeURIComponent(added.name ?? META_SHEET);
+  }
+
+  await graphPatch(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}`,
+    { visibility: "Hidden" }
+  );
+
+  const grid: (string | number)[][] = [
+    ["Bills"],
     ["Name", "Amount", "Type", "Category", "Day"],
     ...bills.map((b) => [
       b.name,
@@ -475,12 +543,11 @@ async function writeExcelBillRows(
       b.dayOfMonth != null ? b.dayOfMonth : "varies",
     ]),
   ];
-  const startAddr = `A${startRow + 1}`;
-  const endAddr = `E${startRow + billsGrid.length}`;
+  const endRow = grid.length;
   await graphPatch(
     token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${startAddr}:${endAddr}')`,
-    { values: billsGrid }
+    `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:E${endRow}')`,
+    { values: grid }
   );
 }
 
@@ -601,14 +668,11 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       { bold: true, name: "Arial", size: 10 }
     );
 
-    let debtRowCount = 0;
     if (body.debts && body.debts.length > 0) {
       await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
-      debtRowCount = 3 + body.debts.length;
     }
     if (body.bills && body.bills.length > 0) {
-      const billsStartRow = totalRows + debtRowCount + 1;
-      await writeExcelBillRows(token, fileId, sheetName, billsStartRow, body.bills);
+      await writeHiddenExcelBillsSheet(token, fileId, body.bills);
     }
 
     res.json({ fileId, webUrl });
@@ -715,14 +779,11 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       { bold: false, name: "Arial", size: 10 }
     );
 
-    let debtRowCount = 0;
     if (body.debts && body.debts.length > 0) {
       await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
-      debtRowCount = 3 + body.debts.length;
     }
     if (body.bills && body.bills.length > 0) {
-      const billsStartRow = totalRows + debtRowCount + 1;
-      await writeExcelBillRows(token, fileId, sheetName, billsStartRow, body.bills);
+      await writeHiddenExcelBillsSheet(token, fileId, body.bills);
     }
 
     res.json({

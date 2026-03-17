@@ -98,37 +98,63 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
   }
   if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
 
-  // ── Try structured bills metadata section first ─────────────────────────
-  // Written by the app as: ## BILLS ## / header row / bill rows in cols A-E
+  // ── Try _MoneyPalData hidden sheet first (written by app) ──────────────
   const bills: any[] = [];
-  let billsMetaStart = -1;
-  for (let i = 0; i < rows.length; i++) {
-    const val = rows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
-    if (val === "## BILLS ##") { billsMetaStart = i; break; }
+  const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
+
+  const metaSheet = sheetsData.find((s) => s.properties?.title === "_MoneyPalData");
+  const metaRows = metaSheet?.data?.[0]?.rowData ?? [];
+  let foundBillsMarker = false;
+  for (let i = 0; i < metaRows.length; i++) {
+    const val = metaRows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
+    if (val === "Bills") { foundBillsMarker = true; }
+    if (!foundBillsMarker) continue;
+    if (val === "Bills" || val.toLowerCase() === "name") continue;
+    if (!val) break;
+    const cells = metaRows[i]?.values ?? [];
+    const name = cells[0]?.formattedValue?.trim() ?? "";
+    if (!name) break;
+    const rawAmt = cells[1]?.effectiveValue?.numberValue;
+    if (rawAmt == null) break;
+    const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+    const type = cells[2]?.formattedValue?.trim() || "fixed";
+    const category = cells[3]?.formattedValue?.trim() || name;
+    const dayStr = cells[4]?.formattedValue?.trim() ?? "";
+    const dayOfMonth =
+      dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+        ? parseInt(dayStr)
+        : null;
+    bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
   }
 
-  if (billsMetaStart !== -1) {
-    // Skip marker row (billsMetaStart) and header row (billsMetaStart + 1)
-    for (let i = billsMetaStart + 2; i < rows.length; i++) {
-      const cells = rows[i]?.values ?? [];
-      const name = cells[0]?.formattedValue?.trim() ?? "";
-      if (!name) break;
-      const rawAmt = cells[1]?.effectiveValue?.numberValue;
-      if (rawAmt == null) break;
-      const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-      const type = cells[2]?.formattedValue?.trim() || "fixed";
-      const category = cells[3]?.formattedValue?.trim() || name;
-      const dayStr = cells[4]?.formattedValue?.trim() ?? "";
-      const dayOfMonth =
-        dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
-          ? parseInt(dayStr)
-          : null;
-      const colorMap: Record<string, string> = {
-        balanced: "blue", weekly: "green", fixed: "slate",
-      };
-      bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+  if (!foundBillsMarker) {
+    // ── Fallback: check main sheet for ## BILLS ## marker (legacy) ──────
+    let billsMetaStart = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const val = rows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
+      if (val === "## BILLS ##" || val === "Bills") { billsMetaStart = i; break; }
     }
-  } else {
+    if (billsMetaStart !== -1) {
+      for (let i = billsMetaStart + 2; i < rows.length; i++) {
+        const cells = rows[i]?.values ?? [];
+        const name = cells[0]?.formattedValue?.trim() ?? "";
+        if (!name) break;
+        const rawAmt = cells[1]?.effectiveValue?.numberValue;
+        if (rawAmt == null) break;
+        const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+        const type = cells[2]?.formattedValue?.trim() || "fixed";
+        const category = cells[3]?.formattedValue?.trim() || name;
+        const dayStr = cells[4]?.formattedValue?.trim() ?? "";
+        const dayOfMonth =
+          dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+            ? parseInt(dayStr)
+            : null;
+        bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+      }
+    }
+  }
+
+  if (bills.length === 0) {
     // ── Fallback: keyword-based detection for sheets without metadata ──────
     for (let i = 1; i < rows.length; i++) {
       const cells = rows[i]?.values ?? [];
@@ -876,30 +902,52 @@ async function writeBudgetToSheet(
     }
   }
 
-  // ── Write bills metadata section so the app can restore type/category ────
-  // Layout: ## BILLS ## marker / header row / one row per bill (cols A-E)
-  if (bills && bills.length > 0) {
-    const billsSectionStart1 = totalRows + debtRowCount + 2; // 1-indexed (gap row before)
-    const billsGrid: (string | number)[][] = [
-      ["## BILLS ##"],
-      ["Name", "Amount", "Type", "Category", "Day"],
-      ...bills.map((b) => [
-        b.name,
-        Math.abs(b.amount),
-        b.type ?? "fixed",
-        b.category ?? b.name,
-        b.dayOfMonth != null ? b.dayOfMonth : "varies",
-      ]),
-    ];
-    const billsEnd1 = billsSectionStart1 + billsGrid.length - 1;
-    const billsRange = `'${escapedTitle}'!A${billsSectionStart1}:E${billsEnd1}`;
-    await sheetsApi.spreadsheets.values.update({
+}
+
+async function writeHiddenBillsSheet(
+  sheetsApi: sheets_v4.Sheets,
+  spreadsheetId: string,
+  bills: BillMeta[],
+) {
+  if (!bills || bills.length === 0) return;
+
+  const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
+  const sheets = meta.data.sheets ?? [];
+  const existing = sheets.find((s) => s.properties?.title === "_MoneyPalData");
+
+  if (existing) {
+    const sheetId = existing.properties?.sheetId ?? 0;
+    await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: "_MoneyPalData" });
+    await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
-      range: billsRange,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: billsGrid },
+      requestBody: {
+        requests: [{ updateSheetProperties: { properties: { sheetId, hidden: true }, fields: "hidden" } }],
+      },
+    });
+  } else {
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: "_MoneyPalData", hidden: true } } }] },
     });
   }
+
+  const grid: (string | number)[][] = [
+    ["Bills"],
+    ["Name", "Amount", "Type", "Category", "Day"],
+    ...bills.map((b) => [
+      b.name,
+      Math.abs(b.amount),
+      b.type ?? "fixed",
+      b.category ?? b.name,
+      b.dayOfMonth != null ? b.dayOfMonth : "varies",
+    ]),
+  ];
+  await sheetsApi.spreadsheets.values.update({
+    spreadsheetId,
+    range: `_MoneyPalData!A1:E${grid.length}`,
+    valueInputOption: "RAW",
+    requestBody: { values: grid },
+  });
 }
 
 router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
@@ -936,6 +984,9 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     const spreadsheetUrl = createResponse.data.spreadsheetUrl!;
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
+    if (body.bills && body.bills.length > 0) {
+      await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills);
+    }
 
     res.json({ spreadsheetId, spreadsheetUrl });
   } catch (err: any) {
@@ -978,6 +1029,9 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
+    if (body.bills && body.bills.length > 0) {
+      await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills);
+    }
 
     res.json({
       ok: true,
