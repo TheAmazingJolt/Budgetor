@@ -3329,7 +3329,7 @@ export function BudgetWizard({
                 );
               })()}
 
-              {((generatedWeek?.weeks?.length ?? 0) > 0 || hasHistoricalEdits()) && (
+              {(getExistingWeeks().length > 0 || (generatedWeek?.weeks?.length ?? 0) > 0) && (
               <div className="flex flex-col sm:flex-row gap-4">
                 {inputMode === "google" && selectedSheetId && (
                   <div className="flex flex-col gap-2 flex-1">
