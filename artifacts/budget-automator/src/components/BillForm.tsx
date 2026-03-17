@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Bill } from "@workspace/api-client-react";
 import { BILL_COLOR_PALETTE } from "@/lib/billColors";
 
@@ -25,6 +27,62 @@ const formSchema = z.object({
   type: z.enum(["balanced", "fixed", "weekly"]),
   color: z.string().default("none"),
 });
+
+function DayOfMonthInput({ value, onChange }: { value: number | null | undefined; onChange: (v: number | null) => void }) {
+  const [varies, setVaries] = useState(value == null);
+  const [inputValue, setInputValue] = useState(value != null ? String(value) : "");
+
+  useEffect(() => {
+    setVaries(value == null);
+    setInputValue(value != null ? String(value) : "");
+  }, [value]);
+
+  return (
+    <div className="flex items-center gap-3">
+      <FormControl>
+        <Input
+          type="number"
+          min={1}
+          max={31}
+          placeholder="1–31"
+          disabled={varies}
+          value={varies ? "" : inputValue}
+          onChange={e => {
+            const raw = e.target.value;
+            setInputValue(raw);
+            if (raw === "") return;
+            const num = parseInt(raw, 10);
+            if (!isNaN(num)) onChange(num);
+          }}
+          onBlur={() => {
+            if (!varies && inputValue === "") {
+              onChange(null);
+              setVaries(true);
+            }
+          }}
+          className="w-24 focus:ring-primary/20 focus:border-primary"
+        />
+      </FormControl>
+      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+        <Checkbox
+          checked={varies}
+          onCheckedChange={(checked) => {
+            const isVaries = !!checked;
+            setVaries(isVaries);
+            if (isVaries) {
+              setInputValue("");
+              onChange(null);
+            } else {
+              setInputValue("1");
+              onChange(1);
+            }
+          }}
+        />
+        Varies
+      </label>
+    </div>
+  );
+}
 
 interface BillFormProps {
   initialData?: Bill;
@@ -160,22 +218,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Day of Month Due</FormLabel>
-                  <Select
-                    onValueChange={v => field.onChange(v === "varies" ? null : parseInt(v))}
-                    value={field.value == null ? "varies" : String(field.value)}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
-                        <SelectValue placeholder="Select day" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="varies">Varies (unpredictable)</SelectItem>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                        <SelectItem key={day} value={String(day)}>{day}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DayOfMonthInput value={field.value} onChange={field.onChange} />
                   <FormDescription>
                     {billType === "fixed"
                       ? "Full amount appears in the week this day falls."
