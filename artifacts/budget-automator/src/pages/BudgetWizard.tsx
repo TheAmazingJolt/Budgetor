@@ -1579,6 +1579,32 @@ export function BudgetWizard({
     });
   };
 
+  const toggleAllDebtsAsBills = (enable: boolean) => {
+    if (enable) {
+      const newImports = new Set(debts.map(d => d.id));
+      setDebtBillImports(newImports);
+      const debtIdsWithBill = new Set(bills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string));
+      const newDebtBills = debts
+        .filter(d => !debtIdsWithBill.has(d.id))
+        .map(d => ({
+          name: `${d.name} (min payment)`,
+          amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: d.dueDay ?? 1,
+          category: "Debt Payment",
+          type: "fixed" as const,
+          color: "red",
+          sourceDebtId: d.id,
+        }));
+      if (newDebtBills.length > 0) {
+        setBills([...bills, ...newDebtBills]);
+      }
+    } else {
+      const debtIds = new Set(debts.map(d => d.id));
+      setDebtBillImports(new Set());
+      setBills(bills.filter(b => !b.sourceDebtId || !debtIds.has(b.sourceDebtId)));
+    }
+  };
+
   const totalDebtBalance = debts.reduce((sum, d) => sum + d.balance, 0);
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
@@ -2599,13 +2625,28 @@ export function BudgetWizard({
                       Track credit cards, loans, and more. Optionally include minimum payments as bills.
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
-                    className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Add Debt
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {debts.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const allActive = debts.every(d => debtBillImports.has(d.id));
+                          toggleAllDebtsAsBills(!allActive);
+                        }}
+                        className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
+                      >
+                        {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                      className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add Debt
+                    </Button>
+                  </div>
                 </div>
 
                 {debts.length > 0 && (
@@ -3413,6 +3454,23 @@ export function BudgetWizard({
                 updateDebt(editingDebtIndex, data);
               } else {
                 addDebt(data);
+                setDebtBillImports(prev => {
+                  const next = new Set(prev);
+                  next.add(data.id);
+                  return next;
+                });
+                const alreadyExists = bills.some(b => b.sourceDebtId === data.id);
+                if (!alreadyExists) {
+                  addBill({
+                    name: `${data.name} (min payment)`,
+                    amount: -Math.abs(data.minimumPayment),
+                    dayOfMonth: data.dueDay ?? 1,
+                    category: "Debt Payment",
+                    type: "fixed",
+                    color: "red",
+                    sourceDebtId: data.id,
+                  });
+                }
               }
               setIsDebtDialogOpen(false);
             }}
@@ -3430,7 +3488,20 @@ export function BudgetWizard({
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {debts.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const allActive = debts.every(d => debtBillImports.has(d.id));
+                    toggleAllDebtsAsBills(!allActive);
+                  }}
+                  className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
+                >
+                  {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}

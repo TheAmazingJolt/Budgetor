@@ -451,10 +451,19 @@ interface CreateAndWriteRequest {
   bills?: BillMeta[];
 }
 
-const CATEGORY_COLORS: Record<string, { red: number; green: number; blue: number }> = {
-  "Partial Rent": { red: 1.0, green: 0.6, blue: 0.0 },
-  "Partial Utilities": { red: 0.6, green: 0.0, blue: 1.0 },
-  "Partial Car": { red: 0.0, green: 1.0, blue: 0.0 },
+const COLOR_KEY_TO_RGB: Record<string, { red: number; green: number; blue: number }> = {
+  blue:   { red: 0.68, green: 0.80, blue: 0.97 },
+  green:  { red: 0.71, green: 0.92, blue: 0.72 },
+  orange: { red: 1.00, green: 0.83, blue: 0.63 },
+  purple: { red: 0.84, green: 0.73, blue: 0.97 },
+  red:    { red: 1.00, green: 0.71, blue: 0.71 },
+  slate:  { red: 0.84, green: 0.87, blue: 0.90 },
+  amber:  { red: 1.00, green: 0.90, blue: 0.55 },
+  teal:   { red: 0.70, green: 0.92, blue: 0.90 },
+  rose:   { red: 1.00, green: 0.74, blue: 0.80 },
+  indigo: { red: 0.74, green: 0.75, blue: 0.97 },
+  yellow: { red: 1.00, green: 0.96, blue: 0.60 },
+  cyan:   { red: 0.67, green: 0.92, blue: 0.97 },
 };
 
 function buildBudgetWriteData(
@@ -463,7 +472,14 @@ function buildBudgetWriteData(
   includeRemainingAcct: boolean,
   sheetId: number,
   sheetColumnCount: number = 1000,
+  billsMeta?: BillMeta[],
 ) {
+  const billColorByName: Record<string, string> = {};
+  if (billsMeta) {
+    for (const b of billsMeta) {
+      if (b.color && b.color !== "none") billColorByName[b.name] = b.color;
+    }
+  }
   const maxBills = Math.max(...weeks.map((w) => w.bills.length));
   const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
   const remainingRowIdx = totalRows - 1;
@@ -539,7 +555,8 @@ function buildBudgetWriteData(
       valueRows[nextRow][labelCol] = bill.name;
       valueRows[nextRow][valCol] = bill.amount;
 
-      const bgColor = CATEGORY_COLORS[bill.name];
+      const colorKey = billColorByName[bill.name];
+      const bgColor = colorKey ? COLOR_KEY_TO_RGB[colorKey] : undefined;
       if (bgColor) {
         requests.push({
           repeatCell: {
@@ -801,7 +818,7 @@ async function writeBudgetToSheet(
   bills?: BillMeta[],
 ) {
   const { requests, widthRequests, paddedRows, totalRows, totalCols } =
-    buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId, sheetColumnCount);
+    buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId, sheetColumnCount, bills);
 
   // Expand sheet columns if the new budget weeks need more than currently exist
   if (totalCols > sheetColumnCount) {
