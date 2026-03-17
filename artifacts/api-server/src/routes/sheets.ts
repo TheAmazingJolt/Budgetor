@@ -160,6 +160,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       const cells = rows[i]?.values ?? [];
       const nameCell = cells[0]?.formattedValue?.trim() ?? "";
       if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
+      if (["debts", "bills", "balance", "apr %", "min payment", "name", "due day"].includes(nameCell.toLowerCase())) break;
 
       const rawAmt = cells[1]?.effectiveValue?.numberValue;
       if (rawAmt == null) continue;

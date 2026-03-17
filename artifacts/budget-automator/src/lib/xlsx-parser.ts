@@ -69,11 +69,14 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
         // ── Parse bills from columns A-B (rows 1 to ~19) ──────────────────
         const bills: Bill[] = [];
 
+        const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day']);
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
           if (!row || !row[0]) continue;
           const name = String(row[0]).trim();
-          if (!name || name.toLowerCase().startsWith('total')) break;
+          if (!name) break;
+          if (BILL_STOP_MARKERS.has(name.toLowerCase())) break;
+          if (name.toLowerCase().startsWith('total')) break;
 
           const amount = parseFloat(String(row[1]));
           if (isNaN(amount)) continue;
@@ -176,6 +179,7 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
               paycheck = isNaN(num) ? 0 : num;
             } else if (key.toLowerCase() === 'remaining') {
               remaining = isNaN(num) ? 0 : num;
+              break;
             } else if (key) {
               if (!isNaN(num)) {
                 items.push({ name: key, amount: num });
