@@ -521,6 +521,7 @@ export function BudgetWizard({
     if (sheetReadQuery.data && selectedSheetId) {
       const data = sheetReadQuery.data;
       setBills(data.bills);
+      prevBillsRef.current = JSON.stringify(data.bills);
       setOpeningBalance(data.lastRemaining);
       setGoogleSheetTitle(data.sheetTitle);
       setGoogleNextCol(data.nextWeekStartCol);
@@ -569,6 +570,7 @@ export function BudgetWizard({
     if (excelReadQuery.data && selectedExcelFileId) {
       const data = excelReadQuery.data;
       setBills(data.bills);
+      prevBillsRef.current = JSON.stringify(data.bills);
       setOpeningBalance(data.lastRemaining);
       setExcelSheetTitle(data.sheetTitle);
       setExcelNextCol(data.nextWeekStartCol);
@@ -613,6 +615,7 @@ export function BudgetWizard({
         setParsedWorkbook(parsed);
         setInputMode("upload");
         setBills(parsed.bills);
+        prevBillsRef.current = JSON.stringify(parsed.bills);
         let effectiveStartDate = newWeekStartDate;
         let effectiveOpeningBalance = openingBalance;
         const lastWeek = parsed.existingWeeks.at(-1);
@@ -732,6 +735,7 @@ export function BudgetWizard({
       {
         onSuccess: (data) => {
           setBills(data.bills);
+          prevBillsRef.current = JSON.stringify(data.bills);
           setOpeningBalance(data.lastRemaining);
           setExcelSheetTitle(data.sheetTitle);
           setExcelNextCol(data.nextWeekStartCol);
@@ -970,6 +974,7 @@ export function BudgetWizard({
     const b = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
     const s = budget.settings as SavedBudgetSettings;
     setBills(b);
+    prevBillsRef.current = JSON.stringify(b);
     if (s?.payPeriod) setPayPeriod(s.payPeriod);
     const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
     setDebts(restoredDebts);
@@ -1146,6 +1151,7 @@ export function BudgetWizard({
       {
         onSuccess: (data) => {
           setBills(data.bills);
+          prevBillsRef.current = JSON.stringify(data.bills);
           setOpeningBalance(data.lastRemaining);
           setGoogleSheetTitle(data.sheetTitle);
           setGoogleNextCol(data.nextWeekStartCol);
