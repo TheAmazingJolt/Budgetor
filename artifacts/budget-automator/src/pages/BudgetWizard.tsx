@@ -35,6 +35,7 @@ import { format, parseISO } from "date-fns";
 
 import { useBudgetStore } from "@/store/use-budget-store";
 import { parseBudgetSpreadsheet } from "@/lib/xlsx-parser";
+import type { ParsedWeek } from "@/lib/xlsx-parser";
 import { appendBudgetWeeks, createBlankBudget, downloadBlob } from "@/lib/xlsx-writer";
 import {
   useGenerateBudget,
@@ -110,7 +111,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
-import type { Bill, SavedBudget, Debt, UserPreferencesResponse } from "@workspace/api-client-react";
+import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt } from "lucide-react";
@@ -224,6 +225,19 @@ interface BudgetWizardProps {
 
 function stripDebtMinPayments(bills: Bill[]): Bill[] {
   return bills.filter(b => !b.name.endsWith(" (min payment)"));
+}
+
+function parsedWeekToWeeklyBudget(w: ParsedWeek): WeeklyBudget {
+  return {
+    weekLabel: w.label,
+    startDate: "",
+    endDate: "",
+    openingBalance: w.openingBalance,
+    paycheck: w.paycheck,
+    bills: w.items.map(i => ({ name: i.name, amount: i.amount })),
+    totalBills: w.items.reduce((s, i) => s + i.amount, 0),
+    closingBalance: w.remaining,
+  };
 }
 
 export function BudgetWizard({
@@ -543,13 +557,11 @@ export function BudgetWizard({
       setGoogleNextCol(data.nextWeekStartCol);
       if (data.existingWeeks.length > 0) setGoogleFirstBudgetCol(data.existingWeeks[0].startCol ?? 2);
 
-      let effectiveStartDate = newWeekStartDate;
       const lastWeek = data.existingWeeks.at(-1);
       if (lastWeek) {
         const nextStart = nextStartAfterLabel(lastWeek.label);
         if (nextStart) {
           setStartDatePreserveCount(nextStart);
-          effectiveStartDate = nextStart;
         }
       }
 
@@ -557,12 +569,6 @@ export function BudgetWizard({
       toast({
         title: "Sheet loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
-      });
-      scheduleAutoGenerate({
-        bills: data.bills,
-        openingBalance: data.lastRemaining,
-        paycheckAmount: 0,
-        startDate: effectiveStartDate,
       });
     }
   }, [sheetReadQuery.data, selectedSheetId]);
@@ -594,25 +600,15 @@ export function BudgetWizard({
       if (data.existingWeeks.length > 0) setExcelFirstBudgetCol((data.existingWeeks[0] as any).startCol ?? 2);
 
       setWeekEdits({});
-      let effectiveStartDate = newWeekStartDate;
-      const lastWeek = data.existingWeeks.at(-1) as any;
-      if (lastWeek) {
-        const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
-        if (nextStart) {
-          setStartDatePreserveCount(nextStart);
-          effectiveStartDate = nextStart;
-        }
+      const lastWeekExcel = data.existingWeeks.at(-1) as any;
+      if (lastWeekExcel) {
+        const nextStart = nextStartAfterLabel(lastWeekExcel.label ?? "");
+        if (nextStart) setStartDatePreserveCount(nextStart);
       }
 
       toast({
         title: "Excel file loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
-      });
-      scheduleAutoGenerate({
-        bills: data.bills,
-        openingBalance: data.lastRemaining,
-        paycheckAmount: 0,
-        startDate: effectiveStartDate,
       });
     }
   }, [excelReadQuery.data, selectedExcelFileId]);
@@ -770,14 +766,10 @@ export function BudgetWizard({
             setIncludeBillsSummary(true);
           }
 
-          let effectiveStartDate = newWeekStartDate;
-          const lastWeek = data.existingWeeks.at(-1) as any;
-          if (lastWeek) {
-            const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
-            if (nextStart) {
-              setStartDatePreserveCount(nextStart);
-              effectiveStartDate = nextStart;
-            }
+          const lastWeekExcelUrl = data.existingWeeks.at(-1) as any;
+          if (lastWeekExcelUrl) {
+            const nextStart = nextStartAfterLabel(lastWeekExcelUrl.label ?? "");
+            if (nextStart) setStartDatePreserveCount(nextStart);
           }
 
           toast({
@@ -785,12 +777,6 @@ export function BudgetWizard({
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Connect Microsoft to write back." : ""}`,
           });
           setIsLoadingExcelUrl(false);
-          scheduleAutoGenerate({
-            bills: data.bills,
-            openingBalance: data.lastRemaining,
-            paycheckAmount: 0,
-            startDate: effectiveStartDate,
-          });
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that file. Make sure the link is correct and you are signed in with Microsoft.";
@@ -1226,14 +1212,10 @@ export function BudgetWizard({
             setIncludeBillsSummary(true);
           }
 
-          let effectiveStartDate = newWeekStartDate;
-          const lastWeek = data.existingWeeks.at(-1);
-          if (lastWeek) {
-            const nextStart = nextStartAfterLabel(lastWeek.label);
-            if (nextStart) {
-              setStartDatePreserveCount(nextStart);
-              effectiveStartDate = nextStart;
-            }
+          const lastWeekSheetsUrl = data.existingWeeks.at(-1);
+          if (lastWeekSheetsUrl) {
+            const nextStart = nextStartAfterLabel(lastWeekSheetsUrl.label);
+            if (nextStart) setStartDatePreserveCount(nextStart);
           }
 
           toast({
@@ -1241,12 +1223,6 @@ export function BudgetWizard({
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Download as .xlsx (sign in with Google to write back)." : ""}`,
           });
           setIsLoadingUrl(false);
-          scheduleAutoGenerate({
-            bills: data.bills,
-            openingBalance: data.lastRemaining,
-            paycheckAmount: 0,
-            startDate: effectiveStartDate,
-          });
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.";
@@ -1297,15 +1273,17 @@ export function BudgetWizard({
 
           {
             let blob: Blob;
-            if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud" || effectiveInputMode === "google" || effectiveInputMode === "excel") {
-              const rawBills = includeBillsSummary
-                ? (parsedWorkbook?.rawBillsSection ?? null)
-                : null;
-              const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
-              const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
+            const rawBills = includeBillsSummary
+              ? (parsedWorkbook?.rawBillsSection ?? null)
+              : null;
+            const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
+            const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
+            if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
+              const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
+              blob = createBlankBudget([...existingConverted, ...data.weeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+            } else if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
               blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
             } else {
-              const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
               blob = appendBudgetWeeks(
                 parsedWorkbook!.rawBytes,
                 data.weeks,
