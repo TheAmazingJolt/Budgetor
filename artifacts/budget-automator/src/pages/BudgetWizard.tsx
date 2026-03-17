@@ -450,7 +450,7 @@ export function BudgetWizard({
     prevBillsRef.current = serialized;
     if (billsSaveTimerRef.current) clearTimeout(billsSaveTimerRef.current);
     billsSaveTimerRef.current = setTimeout(() => {
-      updateUserBillsMutation.mutate({ data: { bills: bills as any } });
+      updateUserBillsMutation.mutate({ data: { bills: bills as Bill[] } });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bills, isSignedIn]);
