@@ -558,19 +558,20 @@ export function BudgetWizard({
       if (data.existingWeeks.length > 0) setGoogleFirstBudgetCol(data.existingWeeks[0].startCol ?? 2);
 
       const lastWeek = data.existingWeeks.at(-1);
-      if (lastWeek) {
-        const nextStart = nextStartAfterLabel(lastWeek.label);
-        if (nextStart) {
-          setStartDatePreserveCount(nextStart);
-        }
-      }
+      const nextStart = lastWeek ? nextStartAfterLabel(lastWeek.label) : null;
+      if (nextStart) setStartDatePreserveCount(nextStart);
 
       setWeekEdits({});
       toast({
         title: "Sheet loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      scheduleAutoGenerate({});
+      scheduleAutoGenerate({
+        inputMode: "google",
+        bills: sheetBills,
+        openingBalance: data.lastRemaining,
+        startDate: nextStart ?? newWeekStartDate,
+      });
     }
   }, [sheetReadQuery.data, selectedSheetId]);
 
@@ -602,16 +603,19 @@ export function BudgetWizard({
 
       setWeekEdits({});
       const lastWeekExcel = data.existingWeeks.at(-1) as any;
-      if (lastWeekExcel) {
-        const nextStart = nextStartAfterLabel(lastWeekExcel.label ?? "");
-        if (nextStart) setStartDatePreserveCount(nextStart);
-      }
+      const nextStartExcel = lastWeekExcel ? nextStartAfterLabel(lastWeekExcel.label ?? "") : null;
+      if (nextStartExcel) setStartDatePreserveCount(nextStartExcel);
 
       toast({
         title: "Excel file loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      scheduleAutoGenerate({});
+      scheduleAutoGenerate({
+        inputMode: "excel",
+        bills: excelBills,
+        openingBalance: data.lastRemaining,
+        startDate: nextStartExcel ?? newWeekStartDate,
+      });
     }
   }, [excelReadQuery.data, selectedExcelFileId]);
 
@@ -636,18 +640,20 @@ export function BudgetWizard({
           setDebts(parsed.debts);
         }
         const lastWeek = parsed.existingWeeks.at(-1);
-        if (lastWeek) {
-          if (lastWeek.remaining !== undefined) {
-            setOpeningBalance(lastWeek.remaining);
-          }
-          const nextStart = nextStartAfterLabel(lastWeek.label ?? "");
-          if (nextStart) setStartDatePreserveCount(nextStart);
-        }
+        const uploadNextStart = lastWeek ? nextStartAfterLabel(lastWeek.label ?? "") : null;
+        const uploadOpeningBalance = lastWeek?.remaining ?? openingBalance;
+        if (lastWeek?.remaining !== undefined) setOpeningBalance(lastWeek.remaining);
+        if (uploadNextStart) setStartDatePreserveCount(uploadNextStart);
         toast({
           title: "Spreadsheet loaded",
           description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
         });
-        scheduleAutoGenerate({});
+        scheduleAutoGenerate({
+          inputMode: "upload",
+          bills: uploadBills,
+          openingBalance: uploadOpeningBalance,
+          startDate: uploadNextStart ?? newWeekStartDate,
+        });
       } catch (err) {
         toast({
           title: "Failed to read file",
@@ -764,17 +770,20 @@ export function BudgetWizard({
           }
 
           const lastWeekExcelUrl = data.existingWeeks.at(-1) as any;
-          if (lastWeekExcelUrl) {
-            const nextStart = nextStartAfterLabel(lastWeekExcelUrl.label ?? "");
-            if (nextStart) setStartDatePreserveCount(nextStart);
-          }
+          const excelUrlNextStart = lastWeekExcelUrl ? nextStartAfterLabel(lastWeekExcelUrl.label ?? "") : null;
+          if (excelUrlNextStart) setStartDatePreserveCount(excelUrlNextStart);
 
           toast({
             title: "Excel file loaded from URL",
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Connect Microsoft to write back." : ""}`,
           });
           setIsLoadingExcelUrl(false);
-          scheduleAutoGenerate({});
+          scheduleAutoGenerate({
+            inputMode: canWriteBack ? "excel" : "scratch",
+            bills: excelUrlBills,
+            openingBalance: data.lastRemaining,
+            startDate: excelUrlNextStart ?? newWeekStartDate,
+          });
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that file. Make sure the link is correct and you are signed in with Microsoft.";
@@ -1211,17 +1220,20 @@ export function BudgetWizard({
           }
 
           const lastWeekSheetsUrl = data.existingWeeks.at(-1);
-          if (lastWeekSheetsUrl) {
-            const nextStart = nextStartAfterLabel(lastWeekSheetsUrl.label);
-            if (nextStart) setStartDatePreserveCount(nextStart);
-          }
+          const sheetsUrlNextStart = lastWeekSheetsUrl ? nextStartAfterLabel(lastWeekSheetsUrl.label) : null;
+          if (sheetsUrlNextStart) setStartDatePreserveCount(sheetsUrlNextStart);
 
           toast({
             title: "Sheet loaded from URL",
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Download as .xlsx (sign in with Google to write back)." : ""}`,
           });
           setIsLoadingUrl(false);
-          scheduleAutoGenerate({});
+          scheduleAutoGenerate({
+            inputMode: canWriteBack ? "google" : "scratch",
+            bills: sheetUrlBills,
+            openingBalance: data.lastRemaining,
+            startDate: sheetsUrlNextStart ?? newWeekStartDate,
+          });
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.";
