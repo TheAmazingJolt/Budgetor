@@ -2609,7 +2609,7 @@ export function BudgetWizard({
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
-                                  onClick={() => removeBill(i)}
+                                  onClick={() => preserveScroll(() => removeBill(i))}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -2733,7 +2733,7 @@ export function BudgetWizard({
                                   className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
                                   onClick={() => {
                                     const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
-                                    if (billIdx >= 0) removeBill(billIdx);
+                                    if (billIdx >= 0) preserveScroll(() => removeBill(billIdx));
                                     setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
                                     removeDebt(i);
                                   }}
@@ -3451,7 +3451,7 @@ export function BudgetWizard({
       </main>
 
       <Dialog open={isBillDialogOpen} onOpenChange={setIsBillDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6">
+        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingBillIndex !== null ? "Edit Bill" : "Add Bill"}
@@ -3473,7 +3473,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isDebtDialogOpen} onOpenChange={setIsDebtDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6">
+        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingDebtIndex !== null ? "Edit Debt" : "Add Debt"}
@@ -3669,7 +3669,7 @@ export function BudgetWizard({
                               className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
                               onClick={() => {
                                 const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
-                                if (billIdx >= 0) removeBill(billIdx);
+                                if (billIdx >= 0) preserveScroll(() => removeBill(billIdx));
                                 setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
                                 removeDebt(i);
                               }}
