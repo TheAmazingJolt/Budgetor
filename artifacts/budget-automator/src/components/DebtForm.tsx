@@ -23,6 +23,7 @@ const formSchema = z.object({
   balance: z.coerce.number().min(0.01, "Balance must be greater than 0"),
   interestRate: z.coerce.number().min(0).max(100).nullable().optional(),
   minimumPayment: z.coerce.number().min(0.01, "Minimum payment is required"),
+  dueDay: z.coerce.number().int().min(1, "Must be 1–31").max(31, "Must be 1–31").nullable().optional(),
   originalAmount: z.coerce.number().min(0).nullable().optional(),
 }).refine(
   (data) => {
@@ -49,6 +50,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           balance: initialData.balance ?? 0,
           interestRate: initialData.interestRate ?? null,
           minimumPayment: initialData.minimumPayment ?? 0,
+          dueDay: initialData.dueDay ?? null,
           originalAmount: initialData.originalAmount ?? null,
         }
       : {
@@ -57,6 +59,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           balance: 0,
           interestRate: null,
           minimumPayment: 0,
+          dueDay: null,
           originalAmount: null,
         },
   });
@@ -73,6 +76,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       balance: values.balance,
       interestRate: values.interestRate ?? undefined,
       minimumPayment: values.minimumPayment,
+      dueDay: values.dueDay ?? undefined,
       originalAmount: values.originalAmount ?? undefined,
     });
   };
@@ -182,6 +186,30 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="dueDay"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Due Day<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  step={1}
+                  placeholder="e.g. 15"
+                  value={field.value ?? ""}
+                  onChange={e => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                  className="focus:ring-primary/20 focus:border-primary"
+                />
+              </FormControl>
+              <FormDescription>Day of the month your payment is due (1–31).</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}

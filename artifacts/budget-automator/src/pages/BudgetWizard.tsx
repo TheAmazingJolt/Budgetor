@@ -1466,7 +1466,7 @@ export function BudgetWizard({
           addBill({
             name: `${debt.name} (min payment)`,
             amount: -Math.abs(debt.minimumPayment),
-            dayOfMonth: 1,
+            dayOfMonth: debt.dueDay ?? 1,
             category: "Debt Payment",
             type: "balanced",
             color: "red",

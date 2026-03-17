@@ -168,6 +168,8 @@ export const AuthLoginAppleResponse = zod.object({
  * Returns all saved budgets for the authenticated user
  * @summary List saved budgets
  */
+export const savedBudgetListResponseBudgetsItemDebtsItemDueDayMax = 31;
+
 export const SavedBudgetListResponse = zod.object({
   budgets: zod.array(
     zod.object({
@@ -207,6 +209,12 @@ export const SavedBudgetListResponse = zod.object({
               .describe(
                 "Original amount borrowed or charged (optional, for tracking payoff progress)",
               ),
+            dueDay: zod
+              .number()
+              .min(1)
+              .max(savedBudgetListResponseBudgetsItemDebtsItemDueDayMax)
+              .nullish()
+              .describe("Day of month the payment is due (1-31, optional)"),
           }),
         )
         .optional(),
@@ -219,6 +227,8 @@ export const SavedBudgetListResponse = zod.object({
 /**
  * @summary Create a saved budget
  */
+export const savedBudgetCreateBodyDebtsItemDueDayMax = 31;
+
 export const SavedBudgetCreateBody = zod.object({
   name: zod.string(),
   bills: zod.array(zod.unknown()),
@@ -252,10 +262,18 @@ export const SavedBudgetCreateBody = zod.object({
           .describe(
             "Original amount borrowed or charged (optional, for tracking payoff progress)",
           ),
+        dueDay: zod
+          .number()
+          .min(1)
+          .max(savedBudgetCreateBodyDebtsItemDueDayMax)
+          .nullish()
+          .describe("Day of month the payment is due (1-31, optional)"),
       }),
     )
     .optional(),
 });
+
+export const savedBudgetCreateResponseBudgetDebtsItemDueDayMax = 31;
 
 export const SavedBudgetCreateResponse = zod.object({
   budget: zod.object({
@@ -295,6 +313,12 @@ export const SavedBudgetCreateResponse = zod.object({
             .describe(
               "Original amount borrowed or charged (optional, for tracking payoff progress)",
             ),
+          dueDay: zod
+            .number()
+            .min(1)
+            .max(savedBudgetCreateResponseBudgetDebtsItemDueDayMax)
+            .nullish()
+            .describe("Day of month the payment is due (1-31, optional)"),
         }),
       )
       .optional(),
@@ -309,6 +333,8 @@ export const SavedBudgetCreateResponse = zod.object({
 export const SavedBudgetUpdateParams = zod.object({
   id: zod.coerce.string(),
 });
+
+export const savedBudgetUpdateBodyDebtsItemDueDayMax = 31;
 
 export const SavedBudgetUpdateBody = zod.object({
   name: zod.string().optional(),
@@ -343,10 +369,18 @@ export const SavedBudgetUpdateBody = zod.object({
           .describe(
             "Original amount borrowed or charged (optional, for tracking payoff progress)",
           ),
+        dueDay: zod
+          .number()
+          .min(1)
+          .max(savedBudgetUpdateBodyDebtsItemDueDayMax)
+          .nullish()
+          .describe("Day of month the payment is due (1-31, optional)"),
       }),
     )
     .optional(),
 });
+
+export const savedBudgetUpdateResponseBudgetDebtsItemDueDayMax = 31;
 
 export const SavedBudgetUpdateResponse = zod.object({
   budget: zod.object({
@@ -386,6 +420,12 @@ export const SavedBudgetUpdateResponse = zod.object({
             .describe(
               "Original amount borrowed or charged (optional, for tracking payoff progress)",
             ),
+          dueDay: zod
+            .number()
+            .min(1)
+            .max(savedBudgetUpdateResponseBudgetDebtsItemDueDayMax)
+            .nullish()
+            .describe("Day of month the payment is due (1-31, optional)"),
         }),
       )
       .optional(),
@@ -547,6 +587,8 @@ export const SheetWriteParams = zod.object({
   id: zod.coerce.string(),
 });
 
+export const sheetWriteBodyDebtsItemDueDayMax = 31;
+
 export const SheetWriteBody = zod.object({
   weeks: zod.array(
     zod.object({
@@ -607,7 +649,14 @@ export const SheetWriteBody = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        type: zod.enum(["credit_card", "loan", "collections"]),
+        type: zod.enum([
+          "credit_card",
+          "personal_loan",
+          "student_loan",
+          "car_loan",
+          "installment",
+          "collections",
+        ]),
         balance: zod
           .number()
           .describe("Current balance owed (positive number)"),
@@ -624,6 +673,12 @@ export const SheetWriteBody = zod.object({
           .describe(
             "Original amount borrowed or charged (optional, for tracking payoff progress)",
           ),
+        dueDay: zod
+          .number()
+          .min(1)
+          .max(sheetWriteBodyDebtsItemDueDayMax)
+          .nullish()
+          .describe("Day of month the payment is due (1-31, optional)"),
       }),
     )
     .optional(),
@@ -648,6 +703,8 @@ export const SheetDeleteResponse = zod.object({
 /**
  * @summary Create a new Google Sheet and write budget data
  */
+export const sheetCreateAndWriteBodyDebtsItemDueDayMax = 31;
+
 export const SheetCreateAndWriteBody = zod.object({
   title: zod.string(),
   weeks: zod.array(
@@ -681,7 +738,14 @@ export const SheetCreateAndWriteBody = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        type: zod.enum(["credit_card", "loan", "collections"]),
+        type: zod.enum([
+          "credit_card",
+          "personal_loan",
+          "student_loan",
+          "car_loan",
+          "installment",
+          "collections",
+        ]),
         balance: zod
           .number()
           .describe("Current balance owed (positive number)"),
@@ -698,6 +762,12 @@ export const SheetCreateAndWriteBody = zod.object({
           .describe(
             "Original amount borrowed or charged (optional, for tracking payoff progress)",
           ),
+        dueDay: zod
+          .number()
+          .min(1)
+          .max(sheetCreateAndWriteBodyDebtsItemDueDayMax)
+          .nullish()
+          .describe("Day of month the payment is due (1-31, optional)"),
       }),
     )
     .optional(),
@@ -850,6 +920,8 @@ export const ExcelWriteParams = zod.object({
   id: zod.coerce.string(),
 });
 
+export const excelWriteBodyDebtsItemDueDayMax = 31;
+
 export const ExcelWriteBody = zod.object({
   weeks: zod.array(
     zod.object({
@@ -884,7 +956,14 @@ export const ExcelWriteBody = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        type: zod.enum(["credit_card", "loan", "collections"]),
+        type: zod.enum([
+          "credit_card",
+          "personal_loan",
+          "student_loan",
+          "car_loan",
+          "installment",
+          "collections",
+        ]),
         balance: zod
           .number()
           .describe("Current balance owed (positive number)"),
@@ -901,6 +980,12 @@ export const ExcelWriteBody = zod.object({
           .describe(
             "Original amount borrowed or charged (optional, for tracking payoff progress)",
           ),
+        dueDay: zod
+          .number()
+          .min(1)
+          .max(excelWriteBodyDebtsItemDueDayMax)
+          .nullish()
+          .describe("Day of month the payment is due (1-31, optional)"),
       }),
     )
     .optional(),
@@ -925,6 +1010,8 @@ export const ExcelDeleteResponse = zod.object({
 /**
  * @summary Create a new Excel workbook in OneDrive and write budget data
  */
+export const excelCreateAndWriteBodyDebtsItemDueDayMax = 31;
+
 export const ExcelCreateAndWriteBody = zod.object({
   title: zod.string(),
   weeks: zod.array(
@@ -958,7 +1045,14 @@ export const ExcelCreateAndWriteBody = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        type: zod.enum(["credit_card", "loan", "collections"]),
+        type: zod.enum([
+          "credit_card",
+          "personal_loan",
+          "student_loan",
+          "car_loan",
+          "installment",
+          "collections",
+        ]),
         balance: zod
           .number()
           .describe("Current balance owed (positive number)"),
@@ -975,6 +1069,12 @@ export const ExcelCreateAndWriteBody = zod.object({
           .describe(
             "Original amount borrowed or charged (optional, for tracking payoff progress)",
           ),
+        dueDay: zod
+          .number()
+          .min(1)
+          .max(excelCreateAndWriteBodyDebtsItemDueDayMax)
+          .nullish()
+          .describe("Day of month the payment is due (1-31, optional)"),
       }),
     )
     .optional(),
@@ -989,6 +1089,8 @@ export const ExcelCreateAndWriteResponse = zod.object({
  * Returns the authenticated user's saved debts
  * @summary Get user debts
  */
+export const getUserDebtsResponseDebtsItemDueDayMax = 31;
+
 export const GetUserDebtsResponse = zod.object({
   debts: zod.array(
     zod.object({
@@ -1016,6 +1118,12 @@ export const GetUserDebtsResponse = zod.object({
         .describe(
           "Original amount borrowed or charged (optional, for tracking payoff progress)",
         ),
+      dueDay: zod
+        .number()
+        .min(1)
+        .max(getUserDebtsResponseDebtsItemDueDayMax)
+        .nullish()
+        .describe("Day of month the payment is due (1-31, optional)"),
     }),
   ),
 });
@@ -1024,6 +1132,8 @@ export const GetUserDebtsResponse = zod.object({
  * Replaces the authenticated user's saved debts
  * @summary Update user debts
  */
+export const updateUserDebtsBodyDebtsItemDueDayMax = 31;
+
 export const UpdateUserDebtsBody = zod.object({
   debts: zod.array(
     zod.object({
@@ -1051,9 +1161,17 @@ export const UpdateUserDebtsBody = zod.object({
         .describe(
           "Original amount borrowed or charged (optional, for tracking payoff progress)",
         ),
+      dueDay: zod
+        .number()
+        .min(1)
+        .max(updateUserDebtsBodyDebtsItemDueDayMax)
+        .nullish()
+        .describe("Day of month the payment is due (1-31, optional)"),
     }),
   ),
 });
+
+export const updateUserDebtsResponseDebtsItemDueDayMax = 31;
 
 export const UpdateUserDebtsResponse = zod.object({
   debts: zod.array(
@@ -1082,6 +1200,12 @@ export const UpdateUserDebtsResponse = zod.object({
         .describe(
           "Original amount borrowed or charged (optional, for tracking payoff progress)",
         ),
+      dueDay: zod
+        .number()
+        .min(1)
+        .max(updateUserDebtsResponseDebtsItemDueDayMax)
+        .nullish()
+        .describe("Day of month the payment is due (1-31, optional)"),
     }),
   ),
 });

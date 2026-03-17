@@ -19,4 +19,10 @@ export interface Debt {
   minimumPayment: number;
   /** Original amount borrowed or charged (optional, for tracking payoff progress) */
   originalAmount?: number | null;
+  /**
+   * Day of month the payment is due (1-31, optional)
+   * @minimum 1
+   * @maximum 31
+   */
+  dueDay?: number | null;
 }

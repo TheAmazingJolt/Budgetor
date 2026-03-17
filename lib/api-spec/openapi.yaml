@@ -975,6 +975,12 @@ components:
           type: number
           nullable: true
           description: Original amount borrowed or charged (optional, for tracking payoff progress)
+        dueDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          nullable: true
+          description: Day of month the payment is due (1-31, optional)
       required:
         - id
         - name
