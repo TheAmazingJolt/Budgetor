@@ -1553,32 +1553,38 @@ export function BudgetWizard({
     return { ...bill, type: legacyTypeMap[cat] ?? "fixed", color: legacyColorMap[cat] ?? "slate", category: legacyCategoryMap[cat] ?? bill.category } as Bill;
   };
 
-  const toggleDebtAsBill = (debtId: string, checked: boolean) => {
-    setDebtBillImports(prev => {
-      const next = new Set(prev);
-      const debt = debts.find(d => d.id === debtId);
-      if (!debt) return next;
-      if (checked) {
-        next.add(debtId);
-        const alreadyExists = bills.some(b => b.sourceDebtId === debtId);
-        if (!alreadyExists) {
-          addBill({
-            name: `${debt.name} (min payment)`,
-            amount: -Math.abs(debt.minimumPayment),
-            dayOfMonth: debt.dueDay ?? 1,
-            category: "Debt Payment",
-            type: "fixed",
-            color: "red",
-            sourceDebtId: debtId,
-          });
-        }
-      } else {
-        next.delete(debtId);
-        const idx = bills.findIndex(b => b.sourceDebtId === debtId);
-        if (idx >= 0) removeBill(idx);
-      }
-      return next;
+  const preserveScroll = (fn: () => void) => {
+    const y = window.scrollY;
+    fn();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+      });
     });
+  };
+
+  const toggleDebtAsBill = (debtId: string, checked: boolean) => {
+    const debt = debts.find(d => d.id === debtId);
+    if (!debt) return;
+    if (checked) {
+      setDebtBillImports(prev => { const next = new Set(prev); next.add(debtId); return next; });
+      const alreadyExists = bills.some(b => b.sourceDebtId === debtId);
+      if (!alreadyExists) {
+        addBill({
+          name: `${debt.name} (min payment)`,
+          amount: -Math.abs(debt.minimumPayment),
+          dayOfMonth: debt.dueDay ?? 1,
+          category: "Debt Payment",
+          type: "fixed",
+          color: "red",
+          sourceDebtId: debtId,
+        });
+      }
+    } else {
+      setDebtBillImports(prev => { const next = new Set(prev); next.delete(debtId); return next; });
+      const idx = bills.findIndex(b => b.sourceDebtId === debtId);
+      if (idx >= 0) preserveScroll(() => removeBill(idx));
+    }
   };
 
   const toggleAllDebtsAsBills = (enable: boolean) => {
@@ -2634,7 +2640,7 @@ export function BudgetWizard({
                         variant="outline"
                         onClick={() => {
                           const allActive = debts.every(d => debtBillImports.has(d.id));
-                          toggleAllDebtsAsBills(!allActive);
+                          preserveScroll(() => toggleAllDebtsAsBills(!allActive));
                         }}
                         className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
                       >
@@ -3521,7 +3527,7 @@ export function BudgetWizard({
                   variant="outline"
                   onClick={() => {
                     const allActive = debts.every(d => debtBillImports.has(d.id));
-                    toggleAllDebtsAsBills(!allActive);
+                    preserveScroll(() => toggleAllDebtsAsBills(!allActive));
                   }}
                   className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
                 >
