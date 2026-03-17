@@ -630,6 +630,9 @@ export function BudgetWizard({
         const uploadBills = stripDebtMinPayments(parsed.bills);
         setBills(uploadBills);
         prevBillsRef.current = JSON.stringify(uploadBills);
+        if (isGuest) {
+          setDebts(parsed.debts);
+        }
         let effectiveStartDate = newWeekStartDate;
         let effectiveOpeningBalance = openingBalance;
         const lastWeek = parsed.existingWeeks.at(-1);
@@ -664,7 +667,7 @@ export function BudgetWizard({
         setIsParsing(false);
       }
     },
-    [setUploadedFile, setParsedWorkbook, toast]
+    [setUploadedFile, setParsedWorkbook, setDebts, isGuest, toast]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

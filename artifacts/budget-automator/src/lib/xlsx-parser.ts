@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Bill } from '@workspace/api-client-react';
+import type { Bill, Debt } from '@workspace/api-client-react';
 
 export interface ParsedWeek {
   label: string;
@@ -36,6 +36,7 @@ export interface RawBillsSection {
 export interface ParsedWorkbook {
   workbook: XLSX.WorkBook;
   bills: Bill[];
+  debts: Debt[];
   existingWeeks: ParsedWeek[];
   nextWeekStartCol: number;
   lastRemaining: number;
@@ -107,6 +108,47 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
             type,
             color,
           });
+        }
+
+        // ── Parse debts section ────────────────────────────────────────────
+        // Find the "Debts" header row, then read debt rows after the column headers.
+        const debts: Debt[] = [];
+        let debtsHeaderRow = -1;
+        for (let i = 1; i < rows.length; i++) {
+          const cell = String(rows[i]?.[0] ?? '').trim().toLowerCase();
+          if (cell === 'debts') { debtsHeaderRow = i; break; }
+        }
+        if (debtsHeaderRow !== -1) {
+          // Build a column-index map from the header row immediately after "Debts"
+          const colHeaderRow = rows[debtsHeaderRow + 1] ?? [];
+          const colMap: Record<string, number> = {};
+          for (let c = 0; c < colHeaderRow.length; c++) {
+            const h = String(colHeaderRow[c] ?? '').trim().toLowerCase();
+            if (h) colMap[h] = c;
+          }
+          // Data rows start two rows after the "Debts" header
+          for (let i = debtsHeaderRow + 2; i < rows.length; i++) {
+            const row = rows[i] ?? [];
+            const name = String(row[colMap['name'] ?? 0] ?? '').trim();
+            if (!name) break;
+            // Skip if it looks like another section header
+            if (name.toLowerCase() === 'weekly bills' || name.toLowerCase() === 'yearly bills') break;
+
+            const balance = parseFloat(String(row[colMap['balance'] ?? 1] ?? ''));
+            const apr = parseFloat(String(row[colMap['apr %'] ?? 2] ?? ''));
+            const minPayment = parseFloat(String(row[colMap['min payment'] ?? 3] ?? ''));
+            const dueDayRaw = parseInt(String(row[colMap['due day'] ?? 4] ?? ''), 10);
+
+            debts.push({
+              id: `parsed-${i}`,
+              name,
+              type: 'credit_card',
+              balance: isNaN(balance) ? 0 : Math.abs(balance),
+              interestRate: isNaN(apr) ? null : apr,
+              minimumPayment: isNaN(minPayment) ? 0 : Math.abs(minPayment),
+              dueDay: isNaN(dueDayRaw) || dueDayRaw < 1 || dueDayRaw > 31 ? null : dueDayRaw,
+            });
+          }
         }
 
         // Find weekly bills section
@@ -271,6 +313,7 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
         resolve({
           workbook,
           bills,
+          debts,
           existingWeeks,
           nextWeekStartCol,
           lastRemaining,
