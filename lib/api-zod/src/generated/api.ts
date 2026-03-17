@@ -602,6 +602,31 @@ export const SheetWriteBody = zod.object({
   sheetTitle: zod.string().optional(),
   startCol: zod.number(),
   includeRemainingAcct: zod.boolean().optional(),
+  debts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.enum(["credit_card", "loan", "collections"]),
+        balance: zod
+          .number()
+          .describe("Current balance owed (positive number)"),
+        interestRate: zod
+          .number()
+          .nullish()
+          .describe("APR percentage (optional)"),
+        minimumPayment: zod
+          .number()
+          .describe("Minimum monthly\/weekly payment amount (positive number)"),
+        originalAmount: zod
+          .number()
+          .nullish()
+          .describe(
+            "Original amount borrowed or charged (optional, for tracking payoff progress)",
+          ),
+      }),
+    )
+    .optional(),
 });
 
 export const SheetWriteResponse = zod.object({
@@ -651,6 +676,31 @@ export const SheetCreateAndWriteBody = zod.object({
     }),
   ),
   includeRemainingAcct: zod.boolean().optional(),
+  debts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.enum(["credit_card", "loan", "collections"]),
+        balance: zod
+          .number()
+          .describe("Current balance owed (positive number)"),
+        interestRate: zod
+          .number()
+          .nullish()
+          .describe("APR percentage (optional)"),
+        minimumPayment: zod
+          .number()
+          .describe("Minimum monthly\/weekly payment amount (positive number)"),
+        originalAmount: zod
+          .number()
+          .nullish()
+          .describe(
+            "Original amount borrowed or charged (optional, for tracking payoff progress)",
+          ),
+      }),
+    )
+    .optional(),
 });
 
 export const SheetCreateAndWriteResponse = zod.object({
@@ -829,6 +879,31 @@ export const ExcelWriteBody = zod.object({
   startCol: zod.number(),
   includeRemainingAcct: zod.boolean(),
   sheetTitle: zod.string().optional(),
+  debts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.enum(["credit_card", "loan", "collections"]),
+        balance: zod
+          .number()
+          .describe("Current balance owed (positive number)"),
+        interestRate: zod
+          .number()
+          .nullish()
+          .describe("APR percentage (optional)"),
+        minimumPayment: zod
+          .number()
+          .describe("Minimum monthly\/weekly payment amount (positive number)"),
+        originalAmount: zod
+          .number()
+          .nullish()
+          .describe(
+            "Original amount borrowed or charged (optional, for tracking payoff progress)",
+          ),
+      }),
+    )
+    .optional(),
 });
 
 export const ExcelWriteResponse = zod.object({
@@ -878,6 +953,31 @@ export const ExcelCreateAndWriteBody = zod.object({
     }),
   ),
   includeRemainingAcct: zod.boolean().optional(),
+  debts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.enum(["credit_card", "loan", "collections"]),
+        balance: zod
+          .number()
+          .describe("Current balance owed (positive number)"),
+        interestRate: zod
+          .number()
+          .nullish()
+          .describe("APR percentage (optional)"),
+        minimumPayment: zod
+          .number()
+          .describe("Minimum monthly\/weekly payment amount (positive number)"),
+        originalAmount: zod
+          .number()
+          .nullish()
+          .describe(
+            "Original amount borrowed or charged (optional, for tracking payoff progress)",
+          ),
+      }),
+    )
+    .optional(),
 });
 
 export const ExcelCreateAndWriteResponse = zod.object({

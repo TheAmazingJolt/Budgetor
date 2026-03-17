@@ -1,5 +1,5 @@
 import XLSX from 'xlsx-js-style';
-import type { WeeklyBudget } from '@workspace/api-client-react';
+import type { WeeklyBudget, Debt } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 
@@ -522,15 +522,77 @@ function applySheetView(
   }];
 }
 
+// ── Debt section writer ──────────────────────────────────────────────────────
+
+function writeDebtsSection(
+  sheet: XLSX.WorkSheet,
+  debts: Debt[],
+  startRow: number,
+) {
+  if (!debts || debts.length === 0) return startRow;
+
+  const headerRow = startRow + 1;
+
+  const headerStyle = {
+    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: '9C2727' } },
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FDE8E8' }, bgColor: { rgb: 'FDE8E8' } },
+    alignment: { horizontal: 'left' as const },
+  };
+  set(sheet, headerRow, 0, makeCell('Debts', headerStyle));
+  set(sheet, headerRow, 1, makeCell('', headerStyle));
+  set(sheet, headerRow, 2, makeCell('', headerStyle));
+  set(sheet, headerRow, 3, makeCell('', headerStyle));
+  addMerge(sheet, headerRow, 0, headerRow, 3);
+
+  const colHeaderRow = headerRow + 1;
+  const colHeaderStyle = {
+    font: { bold: true, sz: 10, name: 'Arial' },
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FDE8E8' }, bgColor: { rgb: 'FDE8E8' } },
+  };
+  set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
+  set(sheet, colHeaderRow, 1, makeCell('Balance', colHeaderStyle));
+  set(sheet, colHeaderRow, 2, makeCell('APR %', colHeaderStyle));
+  set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
+
+  const bodyFont = { sz: 10, name: 'Arial' };
+  const rowFill = { patternType: 'solid' as const, fgColor: { rgb: 'FEF2F2' }, bgColor: { rgb: 'FEF2F2' } };
+
+  let currentRow = colHeaderRow + 1;
+  for (const debt of debts) {
+    const style = { font: bodyFont, fill: rowFill };
+    set(sheet, currentRow, 0, makeCell(debt.name, style));
+    set(sheet, currentRow, 1, makeCell(debt.balance, style));
+    set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', style));
+    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, style));
+    currentRow++;
+  }
+
+  const existingRef = sheet['!ref'];
+  const existingRange = existingRef
+    ? XLSX.utils.decode_range(existingRef)
+    : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  if (currentRow - 1 > existingRange.e.r) existingRange.e.r = currentRow - 1;
+  if (3 > existingRange.e.c) existingRange.e.c = 3;
+  sheet['!ref'] = XLSX.utils.encode_range(existingRange);
+
+  if (!sheet['!cols']) sheet['!cols'] = [];
+  while (sheet['!cols']!.length <= 3) sheet['!cols']!.push({});
+  if ((sheet['!cols']![0] as any)?.wch == null || (sheet['!cols']![0] as any).wch < 20) {
+    sheet['!cols']![0] = { wch: 20 };
+  }
+
+  return currentRow;
+}
+
 // ── Public exports ───────────────────────────────────────────────────────────
 
 export function appendBudgetWeeks(
-  /** Raw bytes of the original .xlsx file — re-read with xlsx-js-style for full style fidelity */
   rawBytes: Uint8Array,
   weekBudgets: WeeklyBudget[],
   firstStartCol: number,
   includeRemainingAcct = true,
   style?: SheetStyle | null,
+  debts?: Debt[] | null,
 ): Blob {
   // Re-read the original using xlsx-js-style so every cell's style object is in
   // the format that xlsx-js-style expects when writing — standard xlsx only
@@ -597,6 +659,12 @@ export function appendBudgetWeeks(
   const lastNewWeekStartCol = firstStartCol + (weekBudgets.length - 1) * 2;
   applySheetView(clonedSheet, billsFreezeCount, lastNewWeekStartCol);
 
+  if (debts && debts.length > 0) {
+    const sheetRef = clonedSheet['!ref'];
+    const lastRow = sheetRef ? XLSX.utils.decode_range(sheetRef).e.r : 0;
+    writeDebtsSection(clonedSheet, debts, lastRow);
+  }
+
   const clonedWb: XLSX.WorkBook = {
     ...workbook,
     Sheets: { ...workbook.Sheets, [sheetName]: clonedSheet },
@@ -611,13 +679,11 @@ export function appendBudgetWeeks(
 export function createBlankBudget(
   weekBudgets: WeeklyBudget[],
   includeRemainingAcct = true,
-  /** Pass the raw snapshot from parsedWorkbook to copy the original verbatim */
   rawBillsSection?: RawBillsSection | null,
-  /** Fallback generated bills list used only when no rawBillsSection is available */
   fallbackBills?: Bill[],
   style?: SheetStyle | null,
-  /** Raw bytes of the uploaded workbook — used to carry over any extra sheets */
   rawBytes?: Uint8Array | null,
+  debts?: Debt[] | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
@@ -645,7 +711,12 @@ export function createBlankBudget(
 
   writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
-  // Freeze the bills pane and jump view to the last budget week.
+  if (debts && debts.length > 0) {
+    const sheetRef = ws['!ref'];
+    const lastRow = sheetRef ? XLSX.utils.decode_range(sheetRef).e.r : 0;
+    writeDebtsSection(ws, debts, lastRow);
+  }
+
   const lastWeekCol = budgetStartCol + (weekBudgets.length - 1) * 2;
   applySheetView(ws, budgetStartCol, lastWeekCol);
 

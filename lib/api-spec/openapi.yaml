@@ -1174,6 +1174,10 @@ components:
           type: number
         includeRemainingAcct:
           type: boolean
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
       required:
         - weeks
         - startCol
@@ -1199,6 +1203,10 @@ components:
             $ref: "#/components/schemas/WeeklyBudget"
         includeRemainingAcct:
           type: boolean
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
       required:
         - title
         - weeks
@@ -1295,6 +1303,10 @@ components:
           type: boolean
         sheetTitle:
           type: string
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
       required:
         - weeks
         - startCol
@@ -1321,6 +1333,10 @@ components:
             $ref: "#/components/schemas/WeeklyBudget"
         includeRemainingAcct:
           type: boolean
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Debt"
       required:
         - title
         - weeks

@@ -260,6 +260,7 @@ export function BudgetWizard({
     parsedWorkbook,
     blankMode,
     includeBillsSummary,
+    includeDebtsInSpreadsheet,
     sheetStyle,
     bills,
     newWeekStartDate,
@@ -272,6 +273,7 @@ export function BudgetWizard({
     setParsedWorkbook,
     setBlankMode,
     setIncludeBillsSummary,
+    setIncludeDebtsInSpreadsheet,
     setBills,
     debts,
     setDebts,
@@ -749,6 +751,7 @@ export function BudgetWizard({
           startCol,
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: excelSheetTitle,
+          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
         },
       });
       setExcelWriteSuccess(true);
@@ -1187,14 +1190,17 @@ export function BudgetWizard({
                 ? (parsedWorkbook?.rawBillsSection ?? null)
                 : null;
               const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
-              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes);
+              const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
+              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport);
             } else {
+              const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
               blob = appendBudgetWeeks(
                 parsedWorkbook!.rawBytes,
                 data.weeks,
                 parsedWorkbook!.nextWeekStartCol,
                 !zeroOpeningBalance,
                 sheetStyle,
+                debtsForExport,
               );
             }
             setGeneratedBlob(blob);
@@ -1290,6 +1296,7 @@ export function BudgetWizard({
           startCol,
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: googleSheetTitle,
+          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
         },
       });
       setSheetWriteSuccess(true);
@@ -1327,6 +1334,7 @@ export function BudgetWizard({
           title,
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
+          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
         },
       });
       setNewSheetSaveSuccess(true);
@@ -1362,6 +1370,7 @@ export function BudgetWizard({
           title,
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
+          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
         },
       });
       setNewExcelSaveSuccess(true);
@@ -2350,7 +2359,25 @@ export function BudgetWizard({
                       </p>
                     </div>
                   </label>
+
                 </div>
+              )}
+
+              {debts.length > 0 && (
+                <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 transition-all select-none">
+                  <Checkbox
+                    checked={includeDebtsInSpreadsheet}
+                    onCheckedChange={(v) => setIncludeDebtsInSpreadsheet(!!v)}
+                    id="include-debts"
+                    className="mt-0.5 rounded"
+                  />
+                  <div>
+                    <p className="font-semibold text-sm text-foreground">Include debts in spreadsheet</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Adds a debt summary section below the budget rows showing each debt's name, balance, APR, and minimum payment.
+                    </p>
+                  </div>
+                </label>
               )}
 
               <Card className="border-primary/20 bg-primary/5">
@@ -2751,59 +2778,6 @@ export function BudgetWizard({
                       </p>
                     </div>
 
-                    <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
-                      <CardContent className="p-6 space-y-4">
-                        <p className="font-semibold text-emerald-900 text-lg">
-                          {format(parseISO(newWeekStartDate), "MMM d")} –{" "}
-                          {format(parseISO(newWeekEndDate), "MMM d, yyyy")}
-                        </p>
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Opening</p>
-                            <p className="text-xl font-bold text-emerald-900">${(zeroOpeningBalance ? 0 : openingBalance).toFixed(2)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Paycheck</p>
-                            <p className="text-xl font-bold text-emerald-900">${paycheckAmount.toFixed(2)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Bills</p>
-                            <p className="text-xl font-bold text-emerald-900">
-                              {bills.length} items
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {debts.length > 0 && (
-                      <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
-                        <CardContent className="p-5">
-                          <div className="flex items-center gap-3 mb-2">
-                            <DollarSign className="w-5 h-5 text-red-600" />
-                            <p className="font-semibold text-red-900 text-lg">
-                              Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                          <p className="text-sm text-red-700 mb-3">
-                            across {debts.length} account{debts.length !== 1 ? "s" : ""} — ${totalMinPayments.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo minimum payments
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {debts.map(debt => (
-                              <div key={debt.id} className="flex items-center gap-2 rounded-lg bg-white/60 px-3 py-2 border border-red-100">
-                                <DebtTypeIcon type={debt.type} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-foreground truncate">{debt.name}</p>
-                                  <p className="text-[10px] text-muted-foreground">{DEBT_TYPE_LABELS[debt.type]}</p>
-                                </div>
-                                <p className="text-xs font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
                     {cloudOnlyWeeks.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -2963,6 +2937,56 @@ export function BudgetWizard({
                           <p className="text-xs text-muted-foreground px-1 mt-1">* Remaining is estimated from your edits. Exact balances recalculate when you save.</p>
                         )}
                       </div>
+                    )}
+
+                    <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
+                      <CardContent className="p-5">
+                        <div className="flex items-center gap-3 mb-2">
+                          <DollarSign className="w-5 h-5 text-emerald-600" />
+                          <p className="font-semibold text-emerald-900 text-lg">
+                            Total bills: ${Math.abs(bills.reduce((sum, b) => sum + b.amount, 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <p className="text-sm text-emerald-700 mb-3">
+                          {bills.length} line item{bills.length !== 1 ? "s" : ""}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {bills.map((bill, idx) => (
+                            <div key={idx} className="flex items-center justify-between rounded-lg bg-white/60 px-3 py-2 border border-emerald-100">
+                              <p className="text-xs font-medium text-foreground truncate">{bill.name}</p>
+                              <p className="text-xs font-semibold text-emerald-700 ml-2 shrink-0">${Math.abs(bill.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {debts.length > 0 && (
+                      <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
+                        <CardContent className="p-5">
+                          <div className="flex items-center gap-3 mb-2">
+                            <DollarSign className="w-5 h-5 text-red-600" />
+                            <p className="font-semibold text-red-900 text-lg">
+                              Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <p className="text-sm text-red-700 mb-3">
+                            across {debts.length} account{debts.length !== 1 ? "s" : ""} — ${totalMinPayments.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo minimum payments
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {debts.map(debt => (
+                              <div key={debt.id} className="flex items-center gap-2 rounded-lg bg-white/60 px-3 py-2 border border-red-100">
+                                <DebtTypeIcon type={debt.type} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-foreground truncate">{debt.name}</p>
+                                  <p className="text-[10px] text-muted-foreground">{DEBT_TYPE_LABELS[debt.type]}</p>
+                                </div>
+                                <p className="text-xs font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
                     )}
 
                     {editModeOn && selectedWeekIdx !== null && editDraft && (() => {

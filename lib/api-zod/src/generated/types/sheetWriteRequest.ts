@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Bill } from "./bill";
+import type { Debt } from "./debt";
 import type { WeeklyBudget } from "./weeklyBudget";
 
 export interface SheetWriteRequest {
@@ -14,4 +15,5 @@ export interface SheetWriteRequest {
   sheetTitle?: string;
   startCol: number;
   includeRemainingAcct?: boolean;
+  debts?: Debt[];
 }

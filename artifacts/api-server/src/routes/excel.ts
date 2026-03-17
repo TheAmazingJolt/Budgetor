@@ -326,6 +326,15 @@ router.post("/excel/read-url", async (req, res): Promise<void> => {
   }
 });
 
+interface DebtItem {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  interestRate?: number | null;
+  minimumPayment: number;
+}
+
 interface ExcelWriteRequest {
   weeks: Array<{
     weekLabel: string;
@@ -340,12 +349,71 @@ interface ExcelWriteRequest {
   startCol: number;
   includeRemainingAcct: boolean;
   sheetTitle?: string;
+  debts?: DebtItem[];
 }
 
 interface ExcelCreateAndWriteRequest {
   title: string;
   weeks: ExcelWriteRequest["weeks"];
   includeRemainingAcct?: boolean;
+  debts?: DebtItem[];
+}
+
+function buildExcelDebtGrid(debts: DebtItem[]): (string | number)[][] {
+  const rows: (string | number)[][] = [];
+  rows.push([]);
+  rows.push(["Debts", "", "", ""]);
+  rows.push(["Name", "Balance", "APR %", "Min Payment"]);
+  for (const debt of debts) {
+    rows.push([
+      debt.name,
+      debt.balance,
+      debt.interestRate != null ? `${debt.interestRate}%` : "",
+      debt.minimumPayment,
+    ]);
+  }
+  return rows;
+}
+
+async function writeExcelDebtRows(
+  token: string,
+  fileId: string,
+  sheetName: string,
+  startRow: number,
+  debts: DebtItem[],
+) {
+  const debtGrid = buildExcelDebtGrid(debts);
+  const debtStartAddr = `A${startRow + 1}`;
+  const debtEndAddr = `D${startRow + debtGrid.length}`;
+  const debtRange = `${debtStartAddr}:${debtEndAddr}`;
+
+  await graphPatch(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${debtRange}')`,
+    { values: debtGrid }
+  );
+
+  const headerRow = startRow + 1;
+  const headerRange = `A${headerRow + 1}:D${headerRow + 1}`;
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
+    { bold: true, name: "Arial", size: 11 }
+  );
+
+  const colHeaderRange = `A${headerRow + 2}:D${headerRow + 2}`;
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
+    { bold: true, name: "Arial", size: 10 }
+  );
+
+  const allDebtRange = `A${headerRow + 1}:D${startRow + debtGrid.length}`;
+  await graphPatch(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
+    { color: "#FEF2F2" }
+  );
 }
 
 router.post("/excel/create-and-write", async (req, res): Promise<void> => {
@@ -465,6 +533,10 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       { bold: true, name: "Arial", size: 10 }
     );
 
+    if (body.debts && body.debts.length > 0) {
+      await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
+    }
+
     res.json({ fileId, webUrl });
   } catch (err: any) {
     handleGraphError(err, req, res, "create Excel file");
@@ -568,6 +640,10 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRange}')/format/font`,
       { bold: false, name: "Arial", size: 10 }
     );
+
+    if (body.debts && body.debts.length > 0) {
+      await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
+    }
 
     res.json({
       ok: true,

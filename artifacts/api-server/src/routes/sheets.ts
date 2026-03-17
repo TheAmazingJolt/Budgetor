@@ -347,6 +347,15 @@ router.post("/sheets/read-url", async (req, res): Promise<void> => {
   }
 });
 
+interface DebtItem {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  interestRate?: number | null;
+  minimumPayment: number;
+}
+
 interface WriteRequest {
   weeks: Array<{
     weekLabel: string;
@@ -361,6 +370,7 @@ interface WriteRequest {
   startCol: number;
   includeRemainingAcct: boolean;
   sheetTitle?: string;
+  debts?: DebtItem[];
 }
 
 const CATEGORY_COLORS: Record<string, { red: number; green: number; blue: number }> = {
@@ -581,6 +591,123 @@ function buildBudgetWriteData(
   return { requests, widthRequests, paddedRows, totalRows, totalCols };
 }
 
+function buildDebtRows(
+  debts: DebtItem[],
+  budgetTotalRows: number,
+  sheetId: number,
+) {
+  if (!debts || debts.length === 0) return { debtRows: [], debtRequests: [], debtRowCount: 0 };
+
+  const gapRow = budgetTotalRows;
+  const headerRow = gapRow + 1;
+  const colHeaderRow = headerRow + 1;
+  const firstDataRow = colHeaderRow + 1;
+
+  const debtRows: any[][] = [];
+
+  debtRows.push([]);
+  debtRows.push(["Debts", "", "", ""]);
+  debtRows.push(["Name", "Balance", "APR %", "Min Payment"]);
+
+  for (const debt of debts) {
+    debtRows.push([
+      debt.name,
+      debt.balance,
+      debt.interestRate != null ? `${debt.interestRate}%` : "",
+      debt.minimumPayment,
+    ]);
+  }
+
+  const roseBg = { red: 0.99, green: 0.91, blue: 0.91 };
+  const headerBg = { red: 0.99, green: 0.91, blue: 0.91 };
+
+  const debtRequests: sheets_v4.Schema$Request[] = [];
+
+  debtRequests.push({
+    mergeCells: {
+      range: {
+        sheetId,
+        startRowIndex: headerRow,
+        endRowIndex: headerRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 4,
+      },
+      mergeType: "MERGE_ALL",
+    },
+  });
+
+  debtRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: headerRow,
+        endRowIndex: headerRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 4,
+      },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: headerBg,
+          textFormat: {
+            bold: true,
+            fontSize: 11,
+            fontFamily: "Arial",
+            foregroundColor: { red: 0.61, green: 0.15, blue: 0.15 },
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  debtRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: colHeaderRow,
+        endRowIndex: colHeaderRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 4,
+      },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: headerBg,
+          textFormat: {
+            bold: true,
+            fontSize: 10,
+            fontFamily: "Arial",
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  debtRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: firstDataRow,
+        endRowIndex: firstDataRow + debts.length,
+        startColumnIndex: 0,
+        endColumnIndex: 4,
+      },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: roseBg,
+          textFormat: {
+            fontSize: 10,
+            fontFamily: "Arial",
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  return { debtRows, debtRequests, debtRowCount: debtRows.length };
+}
+
 async function writeBudgetToSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
@@ -589,6 +716,7 @@ async function writeBudgetToSheet(
   weeks: WriteRequest["weeks"],
   startCol: number,
   includeRemainingAcct: boolean,
+  debts?: DebtItem[],
 ) {
   const { requests, widthRequests, paddedRows, totalRows, totalCols } =
     buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId);
@@ -647,12 +775,35 @@ async function writeBudgetToSheet(
       requestBody: { requests: widthRequests },
     });
   }
+
+  if (debts && debts.length > 0) {
+    const { debtRows, debtRequests } = buildDebtRows(debts, totalRows, sheetId);
+
+    const debtRangeStart = `A${totalRows + 1}`;
+    const debtRangeEnd = `D${totalRows + debtRows.length}`;
+    const debtRange = `'${escapedTitle}'!${debtRangeStart}:${debtRangeEnd}`;
+
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: debtRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: debtRows },
+    });
+
+    if (debtRequests.length > 0) {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: debtRequests },
+      });
+    }
+  }
 }
 
 interface CreateAndWriteRequest {
   title: string;
   weeks: WriteRequest["weeks"];
   includeRemainingAcct?: boolean;
+  debts?: DebtItem[];
 }
 
 router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
@@ -688,7 +839,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     const spreadsheetId = createResponse.data.spreadsheetId!;
     const spreadsheetUrl = createResponse.data.spreadsheetUrl!;
 
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts);
 
     res.json({ spreadsheetId, spreadsheetUrl });
   } catch (err: any) {
@@ -729,7 +880,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     const sheetId = sheet?.properties?.sheetId ?? 0;
     const sheetTitleStr = sheetTitle ?? "Budget";
 
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts);
 
     res.json({
       ok: true,

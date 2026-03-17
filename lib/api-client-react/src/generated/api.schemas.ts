@@ -232,6 +232,7 @@ export interface SheetWriteRequest {
   sheetTitle?: string;
   startCol: number;
   includeRemainingAcct?: boolean;
+  debts?: Debt[];
 }
 
 export interface SheetWriteResponse {
@@ -243,6 +244,7 @@ export interface SheetCreateAndWriteRequest {
   title: string;
   weeks: WeeklyBudget[];
   includeRemainingAcct?: boolean;
+  debts?: Debt[];
 }
 
 export interface SheetCreateAndWriteResponse {
@@ -283,6 +285,7 @@ export interface ExcelWriteRequest {
   startCol: number;
   includeRemainingAcct: boolean;
   sheetTitle?: string;
+  debts?: Debt[];
 }
 
 export interface ExcelWriteResponse {
@@ -294,6 +297,7 @@ export interface ExcelCreateAndWriteRequest {
   title: string;
   weeks: WeeklyBudget[];
   includeRemainingAcct?: boolean;
+  debts?: Debt[];
 }
 
 export interface ExcelCreateAndWriteResponse {

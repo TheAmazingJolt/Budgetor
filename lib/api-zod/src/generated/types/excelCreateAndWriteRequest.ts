@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Debt } from "./debt";
 import type { WeeklyBudget } from "./weeklyBudget";
 
 export interface ExcelCreateAndWriteRequest {
   title: string;
   weeks: WeeklyBudget[];
   includeRemainingAcct?: boolean;
+  debts?: Debt[];
 }
