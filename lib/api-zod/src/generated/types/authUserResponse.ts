@@ -9,4 +9,5 @@ import type { AuthUser } from "./authUser";
 
 export interface AuthUserResponse {
   user: AuthUser;
+  token?: string;
 }

@@ -122,6 +122,7 @@ export const AuthGuestLoginResponse = zod.object({
     provider: zod.string(),
     createdAt: zod.date(),
   }),
+  token: zod.string().optional(),
 });
 
 /**

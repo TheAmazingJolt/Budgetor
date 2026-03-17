@@ -115,6 +115,7 @@ export interface AuthMeResponse {
 
 export interface AuthUserResponse {
   user: AuthUser;
+  token?: string;
 }
 
 export interface AuthProviders {

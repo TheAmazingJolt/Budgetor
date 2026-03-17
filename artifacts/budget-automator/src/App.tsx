@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { BudgetWizard } from "@/pages/BudgetWizard";
 import { SignInPage } from "@/pages/SignInPage";
+import type { AuthUser } from "@workspace/api-client-react";
 import {
   useAuthMe,
   useAuthProviders,
@@ -12,6 +13,7 @@ import {
   authLoginGoogle,
   authLoginApple,
   getAuthMeQueryKey,
+  getAuthProvidersQueryKey,
 } from "@workspace/api-client-react";
 import { DollarSign, Loader2 } from "lucide-react";
 
@@ -29,15 +31,16 @@ function SplashScreen() {
 }
 
 function AppRouting() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   const { toast } = useToast();
 
-  const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } as any });
-  const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } as any });
+  const authQuery = useAuthMe({ query: { queryKey: getAuthMeQueryKey(), retry: false, staleTime: 30000 } });
+  const providersQuery = useAuthProviders({ query: { queryKey: getAuthProvidersQueryKey(), retry: false, staleTime: 60000 } });
   const guestLoginMutation = useAuthGuestLogin();
 
-  const currentUser = authQuery.data?.user ?? null;
+  const currentUser: AuthUser | null = authQuery.data?.user ?? null;
   const isSignedIn = !!currentUser;
+  const isGuest = currentUser?.provider === "guest";
   const googleLoginAvailable = providersQuery.data?.google ?? false;
   const appleLoginAvailable = providersQuery.data?.apple ?? false;
 
@@ -49,7 +52,7 @@ function AppRouting() {
     const newSearch = params.toString();
     const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
     window.history.replaceState({}, "", newUrl);
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined ?? "").replace(/\/+$/, "");
+    const apiBase = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/+$/, "");
     fetch(`${apiBase}/api/auth/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -57,13 +60,13 @@ function AppRouting() {
       body: JSON.stringify({ code: authCode }),
     })
       .then((r) => r.json())
-      .then((data: { user?: unknown; token?: string }) => {
+      .then((data: { user?: AuthUser; token?: string }) => {
         if (data.token) {
           localStorage.setItem("auth_token", data.token);
         }
         if (data.user) {
-          queryClient.setQueryData(getAuthMeQueryKey(), { user: data.user });
-          queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+          qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+          qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
         }
       })
       .catch(() => {
@@ -103,11 +106,10 @@ function AppRouting() {
   const handleGuestLogin = () => {
     guestLoginMutation.mutate(undefined, {
       onSuccess: (data) => {
-        const d = data as { user?: unknown; token?: string };
-        if (d.token) {
-          localStorage.setItem("auth_token", d.token);
+        if (data.token) {
+          localStorage.setItem("auth_token", data.token);
         }
-        queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
+        qc.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         toast({ title: "Signed in as guest" });
       },
     });
@@ -132,7 +134,13 @@ function AppRouting() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <BudgetWizard />
+      <BudgetWizard
+        currentUser={currentUser}
+        isSignedIn={isSignedIn}
+        isGuest={isGuest}
+        googleLoginAvailable={googleLoginAvailable}
+        appleLoginAvailable={appleLoginAvailable}
+      />
     </div>
   );
 }

@@ -52,8 +52,6 @@ import {
   useExcelReadByUrl,
   getMicrosoftAuthUrl,
   microsoftDisconnect,
-  useAuthMe,
-  useAuthProviders,
   useAuthGuestLogin,
   useAuthLogout,
   useSavedBudgetList,
@@ -199,7 +197,21 @@ function parseLabelDates(label: string): { start: Date; end: Date } | null {
   };
 }
 
-export function BudgetWizard() {
+interface BudgetWizardProps {
+  currentUser: import("@workspace/api-client-react").AuthUser;
+  isSignedIn: boolean;
+  isGuest: boolean;
+  googleLoginAvailable: boolean;
+  appleLoginAvailable: boolean;
+}
+
+export function BudgetWizard({
+  currentUser,
+  isSignedIn,
+  isGuest,
+  googleLoginAvailable,
+  appleLoginAvailable,
+}: BudgetWizardProps) {
   const [step, setStep] = useState(0);
   const [isParsing, setIsParsing] = useState(false);
   const [isBillDialogOpen, setIsBillDialogOpen] = useState(false);
@@ -326,17 +338,6 @@ export function BudgetWizard() {
     setAutoGenerateTick(n => n + 1);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const authQuery = useAuthMe({ query: { retry: false, staleTime: 30000 } as any });
-  const currentUser = authQuery.data?.user ?? null;
-  const isSignedIn = !!currentUser;
-  const isGuest = currentUser?.provider === "guest";
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const providersQuery = useAuthProviders({ query: { retry: false, staleTime: 60000 } as any });
-  const googleLoginAvailable = providersQuery.data?.google ?? false;
-  const appleLoginAvailable = providersQuery.data?.apple ?? false;
-
   const guestLoginMutation = useAuthGuestLogin();
   const logoutMutation = useAuthLogout();
   const saveBudgetMutation = useSavedBudgetCreate();
@@ -347,10 +348,10 @@ export function BudgetWizard() {
   const updateUserPrefsMutation = useUpdateUserPreferences();
 
   const userDebtsQuery = useGetUserDebts({
-    query: { enabled: isSignedIn, retry: false, staleTime: 30000 },
+    query: { queryKey: getGetUserDebtsQueryKey(), enabled: isSignedIn, retry: false, staleTime: 30000 },
   });
   const userPrefsQuery = useGetUserPreferences({
-    query: { enabled: isSignedIn, retry: false, staleTime: 30000 },
+    query: { queryKey: getGetUserPreferencesQueryKey(), enabled: isSignedIn, retry: false, staleTime: 30000 },
   });
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
@@ -787,9 +788,8 @@ export function BudgetWizard() {
   const handleGuestLogin = () => {
     guestLoginMutation.mutate(undefined, {
       onSuccess: (data) => {
-        const d = data as { user?: unknown; token?: string };
-        if (d.token) {
-          localStorage.setItem("auth_token", d.token);
+        if (data.token) {
+          localStorage.setItem("auth_token", data.token);
         }
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         toast({ title: "Signed in as guest" });

@@ -926,6 +926,8 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/AuthUser"
+        token:
+          type: string
       required:
         - user
 
