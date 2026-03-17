@@ -129,22 +129,32 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
 
   if (!foundBillsMarker) {
     // ── Fallback: check main sheet for ## BILLS ## marker (legacy) ──────
+    // Search all columns (not just col 0) so sheets with week data in col A/B
+    // are still found when the Bills header lives in a later column.
     let billsMetaStart = -1;
-    for (let i = 0; i < rows.length; i++) {
-      const val = rows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
-      if (val === "## BILLS ##" || val === "Bills") { billsMetaStart = i; break; }
+    let billsMetaCol = 0;
+    outer: for (let i = 0; i < rows.length; i++) {
+      const cells = rows[i]?.values ?? [];
+      for (let c = 0; c < cells.length; c++) {
+        const val = cells[c]?.formattedValue?.trim() ?? "";
+        if (val === "## BILLS ##" || val === "Bills") {
+          billsMetaStart = i;
+          billsMetaCol = c;
+          break outer;
+        }
+      }
     }
     if (billsMetaStart !== -1) {
       for (let i = billsMetaStart + 2; i < rows.length; i++) {
         const cells = rows[i]?.values ?? [];
-        const name = cells[0]?.formattedValue?.trim() ?? "";
+        const name = cells[billsMetaCol]?.formattedValue?.trim() ?? "";
         if (!name) break;
-        const rawAmt = cells[1]?.effectiveValue?.numberValue;
+        const rawAmt = cells[billsMetaCol + 1]?.effectiveValue?.numberValue;
         if (rawAmt == null) break;
         const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-        const type = cells[2]?.formattedValue?.trim() || "fixed";
-        const category = cells[3]?.formattedValue?.trim() || name;
-        const dayStr = cells[4]?.formattedValue?.trim() ?? "";
+        const type = cells[billsMetaCol + 2]?.formattedValue?.trim() || "fixed";
+        const category = cells[billsMetaCol + 3]?.formattedValue?.trim() || name;
+        const dayStr = cells[billsMetaCol + 4]?.formattedValue?.trim() ?? "";
         const dayOfMonth =
           dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
             ? parseInt(dayStr)
@@ -156,11 +166,47 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
 
   if (bills.length === 0) {
     // ── Fallback: keyword-based detection for sheets without metadata ──────
-    for (let i = 1; i < rows.length; i++) {
+    // Week-data stop keywords — these appear in the week summary section and
+    // must never be treated as bill names.
+    const WEEK_KEYWORDS = ["paycheck", "remaining", "partial"];
+
+    // When budget columns start at col 0 (A), rows 0-onward in col A/B contain
+    // week data. Skip past any week entries by finding a "Bills" header row,
+    // then also skip the "Name / Amount / Due Day" sub-header that follows it.
+    let heuristicStart = 1;
+    if (FIRST_BUDGET_COL === 0) {
+      let billsHeaderRow = -1;
+      outer2: for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i]?.values ?? [];
+        for (let c = 0; c < cells.length; c++) {
+          const val = cells[c]?.formattedValue?.trim() ?? "";
+          const lower = val.toLowerCase();
+          if (lower === "bills" || lower === "## bills ##") {
+            billsHeaderRow = i;
+            break outer2;
+          }
+        }
+      }
+      if (billsHeaderRow !== -1) {
+        // Skip the Bills header row and any immediately following Name/Amount/Due Day header row
+        let skipRow = billsHeaderRow + 1;
+        if (skipRow < rows.length) {
+          const nextCells = rows[skipRow]?.values ?? [];
+          const nextVal = nextCells[0]?.formattedValue?.trim()?.toLowerCase() ?? "";
+          if (nextVal === "name" || nextVal === "amount" || nextVal === "due day") {
+            skipRow += 1;
+          }
+        }
+        heuristicStart = skipRow;
+      }
+    }
+
+    for (let i = heuristicStart; i < rows.length; i++) {
       const cells = rows[i]?.values ?? [];
       const nameCell = cells[0]?.formattedValue?.trim() ?? "";
       if (!nameCell || nameCell.toLowerCase().startsWith("total")) break;
       if (["debts", "bills", "balance", "apr %", "min payment", "name", "due day"].includes(nameCell.toLowerCase())) break;
+      if (WEEK_KEYWORDS.some((kw) => nameCell.toLowerCase().includes(kw))) break;
 
       const rawAmt = cells[1]?.effectiveValue?.numberValue;
       if (rawAmt == null) continue;
