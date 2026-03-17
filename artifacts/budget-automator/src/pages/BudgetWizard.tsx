@@ -222,6 +222,10 @@ interface BudgetWizardProps {
   appleLoginAvailable: boolean;
 }
 
+function stripDebtMinPayments(bills: Bill[]): Bill[] {
+  return bills.filter(b => !b.name.endsWith(" (min payment)"));
+}
+
 export function BudgetWizard({
   currentUser,
   isSignedIn,
@@ -427,6 +431,7 @@ export function BudgetWizard({
     if (!isSignedIn || !currentUser) {
       if (billsLoadedForUserRef.current) {
         setBills([]);
+        setDebtBillImports(new Set());
         prevBillsRef.current = "";
         if (billsSaveTimerRef.current) {
           clearTimeout(billsSaveTimerRef.current);
@@ -442,6 +447,10 @@ export function BudgetWizard({
     setBills(serverBills);
     prevBillsRef.current = JSON.stringify(serverBills);
     billsLoadedForUserRef.current = currentUser.id;
+    const billedIds = new Set<string>(
+      serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
+    );
+    setDebtBillImports(billedIds);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userBillsQuery.data]);
 
@@ -521,8 +530,9 @@ export function BudgetWizard({
   useEffect(() => {
     if (sheetReadQuery.data && selectedSheetId) {
       const data = sheetReadQuery.data;
-      setBills(data.bills);
-      prevBillsRef.current = JSON.stringify(data.bills);
+      const sheetBills = stripDebtMinPayments(data.bills as Bill[]);
+      setBills(sheetBills);
+      prevBillsRef.current = JSON.stringify(sheetBills);
       setOpeningBalance(data.lastRemaining);
       setGoogleSheetTitle(data.sheetTitle);
       setGoogleNextCol(data.nextWeekStartCol);
@@ -570,8 +580,9 @@ export function BudgetWizard({
   useEffect(() => {
     if (excelReadQuery.data && selectedExcelFileId) {
       const data = excelReadQuery.data;
-      setBills(data.bills);
-      prevBillsRef.current = JSON.stringify(data.bills);
+      const excelBills = stripDebtMinPayments(data.bills as Bill[]);
+      setBills(excelBills);
+      prevBillsRef.current = JSON.stringify(excelBills);
       setOpeningBalance(data.lastRemaining);
       setExcelSheetTitle(data.sheetTitle);
       setExcelNextCol(data.nextWeekStartCol);
@@ -615,8 +626,9 @@ export function BudgetWizard({
         setUploadedFile(file);
         setParsedWorkbook(parsed);
         setInputMode("upload");
-        setBills(parsed.bills);
-        prevBillsRef.current = JSON.stringify(parsed.bills);
+        const uploadBills = stripDebtMinPayments(parsed.bills);
+        setBills(uploadBills);
+        prevBillsRef.current = JSON.stringify(uploadBills);
         let effectiveStartDate = newWeekStartDate;
         let effectiveOpeningBalance = openingBalance;
         const lastWeek = parsed.existingWeeks.at(-1);
@@ -735,8 +747,9 @@ export function BudgetWizard({
       { data: { url: pastedExcelUrl.trim() } },
       {
         onSuccess: (data) => {
-          setBills(data.bills);
-          prevBillsRef.current = JSON.stringify(data.bills);
+          const excelUrlBills = stripDebtMinPayments(data.bills as Bill[]);
+          setBills(excelUrlBills);
+          prevBillsRef.current = JSON.stringify(excelUrlBills);
           setOpeningBalance(data.lastRemaining);
           setExcelSheetTitle(data.sheetTitle);
           setExcelNextCol(data.nextWeekStartCol);
@@ -1162,8 +1175,9 @@ export function BudgetWizard({
       { data: { url: pastedUrl.trim() } },
       {
         onSuccess: (data) => {
-          setBills(data.bills);
-          prevBillsRef.current = JSON.stringify(data.bills);
+          const sheetUrlBills = stripDebtMinPayments(data.bills as Bill[]);
+          setBills(sheetUrlBills);
+          prevBillsRef.current = JSON.stringify(sheetUrlBills);
           setOpeningBalance(data.lastRemaining);
           setGoogleSheetTitle(data.sheetTitle);
           setGoogleNextCol(data.nextWeekStartCol);
