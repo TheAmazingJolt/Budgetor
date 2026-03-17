@@ -3417,7 +3417,35 @@ export function BudgetWizard({
                             )}
                           </div>
                         </div>
-                        {debt.originalAmount != null && debt.originalAmount > debt.balance && (() => {
+                        {debt.type === "credit_card" && debt.originalAmount != null && debt.originalAmount > 0 ? (() => {
+                          const limit = debt.originalAmount;
+                          const used = debt.balance;
+                          const overLimit = used > limit;
+                          const pct = Math.min(100, Math.round((used / limit) * 100));
+                          const barColor = overLimit
+                            ? "bg-red-600"
+                            : pct >= 90 ? "bg-gradient-to-r from-red-500 to-rose-600"
+                            : pct >= 70 ? "bg-gradient-to-r from-amber-500 to-orange-500"
+                            : "bg-gradient-to-r from-amber-400 to-yellow-500";
+                          return (
+                            <div className="mt-2.5 space-y-1">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className={`font-medium ${overLimit ? "text-red-600" : "text-amber-600"}`}>
+                                  ${used.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} used
+                                </span>
+                                <span className={`font-medium ${overLimit ? "text-red-600" : "text-muted-foreground"}`}>
+                                  {overLimit ? "Over limit" : `${pct}% utilized`}
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })() : debt.originalAmount != null && debt.originalAmount > debt.balance && (() => {
                           const paidOff = debt.originalAmount - debt.balance;
                           const pct = Math.min(100, Math.round((paidOff / debt.originalAmount) * 100));
                           return (
@@ -3427,7 +3455,7 @@ export function BudgetWizard({
                                   ${paidOff.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} paid
                                 </span>
                                 <span className="text-muted-foreground">
-                                  {pct}%
+                                  {pct}% paid off
                                 </span>
                               </div>
                               <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
