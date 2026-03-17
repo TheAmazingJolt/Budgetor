@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import crypto from "crypto";
 import { db } from "@workspace/db";
 import { usersTable, savedBudgetsTable, type User } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { google } from "googleapis";
 import { createRemoteJWKSet, jwtVerify, SignJWT, importPKCS8 } from "jose";
 
@@ -159,15 +159,9 @@ router.post("/auth/exchange", async (req: Request, res: Response): Promise<void>
 
 router.post("/auth/guest", async (req: Request, res: Response): Promise<void> => {
   try {
-    const existingUserId = req.session?.userId;
-    if (existingUserId) {
-      const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, existingUserId)).limit(1);
-      if (existing) {
-        const token = await signUserJwt(existing.id);
-        res.json({ user: serializeUser(existing), token });
-        return;
-      }
-    }
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => (err ? reject(err) : resolve()));
+    });
 
     const [user] = await db
       .insert(usersTable)
@@ -178,6 +172,19 @@ router.post("/auth/guest", async (req: Request, res: Response): Promise<void> =>
     await saveSession(req);
     const token = await signUserJwt(user.id);
     res.json({ user: serializeUser(user), token });
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    db.delete(usersTable)
+      .where(
+        and(
+          eq(usersTable.provider, "guest"),
+          lt(usersTable.createdAt, sevenDaysAgo),
+        ),
+      )
+      .execute()
+      .catch((err: unknown) => {
+        console.warn("[guest-cleanup] failed to remove stale guest users:", err);
+      });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to create guest account: " + message });
