@@ -4,7 +4,15 @@ import { generateWeeklyBudgets } from "../lib/budget.js";
 
 const router: IRouter = Router();
 
+const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
+
 router.post("/budget/generate", async (req, res): Promise<void> => {
+  if (req.body?.bills && Array.isArray(req.body.bills)) {
+    req.body.bills = req.body.bills.map((b: any) => ({
+      ...b,
+      type: VALID_BILL_TYPES.has(b?.type) ? b.type : "fixed",
+    }));
+  }
   const parsed = GenerateBudgetBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

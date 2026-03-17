@@ -106,6 +106,7 @@ function parseBillMetaRows(
   markerValues: string[],
 ): any[] {
   const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
+  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
   const bills: any[] = [];
   let startIdx = -1;
   for (let i = 0; i < rows.length; i++) {
@@ -120,9 +121,23 @@ function parseBillMetaRows(
     const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
     if (isNaN(rawAmt)) break;
     const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-    const type = String(cells[2] ?? "").trim() || "fixed";
-    const category = String(cells[3] ?? "").trim() || name;
-    const dayStr = String(cells[4] ?? "").trim();
+    const col2Val = String(cells[2] ?? "").trim();
+    let type: string;
+    let category: string;
+    let dayStr: string;
+    if (VALID_BILL_TYPES.has(col2Val)) {
+      type = col2Val;
+      category = String(cells[3] ?? "").trim() || name;
+      dayStr = String(cells[4] ?? "").trim();
+    } else {
+      dayStr = col2Val;
+      category = String(cells[3] ?? "").trim() || name;
+      const lower = name.toLowerCase();
+      if (lower.includes("rent") || lower.includes("mortgage")) type = "balanced";
+      else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) type = "balanced";
+      else if (lower.includes("car")) type = "balanced";
+      else type = "fixed";
+    }
     const dayOfMonth =
       dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
         ? parseInt(dayStr)
@@ -507,18 +522,20 @@ async function writeExcelBillRows(
 
   const rows: (string | number | null)[][] = [];
   rows.push([]);
-  rows.push(["Bills", "", ""]);
-  rows.push(["Name", "Amount", "Due Day"]);
+  rows.push(["Bills", "", "", "", ""]);
+  rows.push(["Name", "Amount", "Type", "Category", "Due Day"]);
   for (const bill of bills) {
     rows.push([
       bill.name,
       Math.abs(bill.amount),
+      bill.type ?? "fixed",
+      bill.category ?? bill.name,
       bill.dayOfMonth != null ? bill.dayOfMonth : "",
     ]);
   }
 
   const rangeStart = `A${startRow + 1}`;
-  const rangeEnd = `C${startRow + rows.length}`;
+  const rangeEnd = `E${startRow + rows.length}`;
   const range = `${rangeStart}:${rangeEnd}`;
 
   await graphPatch(

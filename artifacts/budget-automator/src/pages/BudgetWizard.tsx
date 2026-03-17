@@ -30,6 +30,8 @@ import {
   Pencil,
   X,
   HelpCircle,
+  Bug,
+  ClipboardCopy,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -360,6 +362,19 @@ export function BudgetWizard({
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
+  const [errorLog, setErrorLog] = useState<Array<{ time: string; label: string; detail: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem("moneypal_error_log") ?? "[]"); } catch { return []; }
+  });
+
+  const addToErrorLog = (label: string, detail: string) => {
+    const entry = { time: new Date().toLocaleString(), label, detail };
+    setErrorLog(prev => {
+      const next = [entry, ...prev].slice(0, 50);
+      try { localStorage.setItem("moneypal_error_log", JSON.stringify(next)); } catch { }
+      return next;
+    });
+  };
   const [billsCardCollapsed, setBillsCardCollapsed] = useState(false);
   const [debtCardCollapsed, setDebtCardCollapsed] = useState(false);
 
@@ -1310,9 +1325,11 @@ export function BudgetWizard({
           setStep(2);
         },
         onError: (err) => {
+          const detail = err instanceof Error ? err.message : String(err);
+          addToErrorLog("Budget generation failed", detail);
           toast({
-            title: "Generation failed",
-            description: err instanceof Error ? err.message : "An error occurred",
+            title: "Budget generation failed",
+            description: "There was a problem generating your budget. Tap the bug icon for details.",
             variant: "destructive",
           });
         },
@@ -1690,6 +1707,19 @@ export function BudgetWizard({
                 </div>
               ))}
             </div>
+
+            {errorLog.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-xl w-8 h-8 text-amber-500 hover:text-amber-600 relative"
+                onClick={() => setIsErrorLogOpen(true)}
+                title="Error log"
+              >
+                <Bug className="w-4.5 h-4.5" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500" />
+              </Button>
+            )}
 
             <Button
               variant="ghost"
@@ -3878,6 +3908,64 @@ export function BudgetWizard({
       </AlertDialog>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      <Dialog open={isErrorLogOpen} onOpenChange={setIsErrorLogOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bug className="w-4 h-4 text-amber-500" />
+              Error Log
+              {errorLog.length > 0 && (
+                <span className="ml-1 text-xs font-normal text-muted-foreground">({errorLog.length} entries)</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-2 py-2 min-h-0">
+            {errorLog.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No errors recorded.</p>
+            ) : (
+              errorLog.map((e, i) => (
+                <div key={i} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-amber-800">{e.label}</span>
+                    <span className="text-amber-600 shrink-0">{e.time}</span>
+                  </div>
+                  <p className="text-amber-900 break-all whitespace-pre-wrap font-mono">{e.detail}</p>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="flex gap-2 pt-2 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2"
+              onClick={() => {
+                const text = errorLog.map(e => `[${e.time}] ${e.label}\n${e.detail}`).join("\n\n---\n\n");
+                navigator.clipboard.writeText(text).then(() => {
+                  toast({ title: "Copied to clipboard" });
+                });
+              }}
+              disabled={errorLog.length === 0}
+            >
+              <ClipboardCopy className="w-3.5 h-3.5" />
+              Copy all
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1 text-muted-foreground"
+              onClick={() => {
+                setErrorLog([]);
+                localStorage.removeItem("moneypal_error_log");
+              }}
+              disabled={errorLog.length === 0}
+            >
+              Clear log
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

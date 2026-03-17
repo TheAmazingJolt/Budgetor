@@ -105,6 +105,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
   const metaSheet = sheetsData.find((s) => s.properties?.title === "_MoneyPalData");
   const metaRows = metaSheet?.data?.[0]?.rowData ?? [];
   let foundBillsMarker = false;
+  const VALID_META_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
   for (let i = 0; i < metaRows.length; i++) {
     const val = metaRows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
     if (val === "Bills") { foundBillsMarker = true; }
@@ -117,9 +118,23 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     const rawAmt = cells[1]?.effectiveValue?.numberValue;
     if (rawAmt == null) break;
     const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-    const type = cells[2]?.formattedValue?.trim() || "fixed";
-    const category = cells[3]?.formattedValue?.trim() || name;
-    const dayStr = cells[4]?.formattedValue?.trim() ?? "";
+    const col2Val = cells[2]?.formattedValue?.trim() ?? "";
+    let type: string;
+    let category: string;
+    let dayStr: string;
+    if (VALID_META_BILL_TYPES.has(col2Val)) {
+      type = col2Val;
+      category = cells[3]?.formattedValue?.trim() || name;
+      dayStr = cells[4]?.formattedValue?.trim() ?? "";
+    } else {
+      dayStr = col2Val;
+      category = cells[3]?.formattedValue?.trim() || name;
+      const lower = name.toLowerCase();
+      if (lower.includes("rent") || lower.includes("mortgage")) type = "balanced";
+      else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) type = "balanced";
+      else if (lower.includes("car")) type = "balanced";
+      else type = "fixed";
+    }
     const dayOfMonth =
       dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
         ? parseInt(dayStr)
@@ -145,6 +160,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       }
     }
     if (billsMetaStart !== -1) {
+      const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
       for (let i = billsMetaStart + 2; i < rows.length; i++) {
         const cells = rows[i]?.values ?? [];
         const name = cells[billsMetaCol]?.formattedValue?.trim() ?? "";
@@ -152,9 +168,23 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         const rawAmt = cells[billsMetaCol + 1]?.effectiveValue?.numberValue;
         if (rawAmt == null) break;
         const amount = rawAmt > 0 ? -rawAmt : rawAmt;
-        const type = cells[billsMetaCol + 2]?.formattedValue?.trim() || "fixed";
-        const category = cells[billsMetaCol + 3]?.formattedValue?.trim() || name;
-        const dayStr = cells[billsMetaCol + 4]?.formattedValue?.trim() ?? "";
+        const col2Val = cells[billsMetaCol + 2]?.formattedValue?.trim() ?? "";
+        let type: string;
+        let category: string;
+        let dayStr: string;
+        if (VALID_BILL_TYPES.has(col2Val)) {
+          type = col2Val;
+          category = cells[billsMetaCol + 3]?.formattedValue?.trim() || name;
+          dayStr = cells[billsMetaCol + 4]?.formattedValue?.trim() ?? "";
+        } else {
+          dayStr = col2Val;
+          category = cells[billsMetaCol + 3]?.formattedValue?.trim() || name;
+          const lower = name.toLowerCase();
+          if (lower.includes("rent") || lower.includes("mortgage")) type = "balanced";
+          else if (lower.includes("util") || lower.includes("electric") || lower.includes("water")) type = "balanced";
+          else if (lower.includes("car")) type = "balanced";
+          else type = "fixed";
+        }
         const dayOfMonth =
           dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
             ? parseInt(dayStr)
@@ -899,12 +929,14 @@ function buildBillRows(
 
   const billRows: any[][] = [];
   billRows.push([]);
-  billRows.push(["Bills", "", ""]);
-  billRows.push(["Name", "Amount", "Due Day"]);
+  billRows.push(["Bills", "", "", "", ""]);
+  billRows.push(["Name", "Amount", "Type", "Category", "Due Day"]);
   for (const bill of bills) {
     billRows.push([
       bill.name,
       Math.abs(bill.amount),
+      bill.type ?? "fixed",
+      bill.category ?? bill.name,
       bill.dayOfMonth != null ? bill.dayOfMonth : "",
     ]);
   }
@@ -920,7 +952,7 @@ function buildBillRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 3,
+        endColumnIndex: 5,
       },
     },
   });
@@ -931,7 +963,7 @@ function buildBillRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 3,
+        endColumnIndex: 5,
       },
       mergeType: "MERGE_ALL",
     },
@@ -944,7 +976,7 @@ function buildBillRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 3,
+        endColumnIndex: 5,
       },
       cell: {
         userEnteredFormat: {
@@ -968,7 +1000,7 @@ function buildBillRows(
         startRowIndex: colHeaderRow,
         endRowIndex: colHeaderRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 3,
+        endColumnIndex: 5,
       },
       cell: {
         userEnteredFormat: {
@@ -991,7 +1023,7 @@ function buildBillRows(
         startRowIndex: firstDataRow,
         endRowIndex: firstDataRow + bills.length,
         startColumnIndex: 0,
-        endColumnIndex: 3,
+        endColumnIndex: 5,
       },
       cell: {
         userEnteredFormat: {
