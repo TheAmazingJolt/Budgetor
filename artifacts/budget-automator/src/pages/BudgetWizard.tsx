@@ -670,6 +670,9 @@ export function BudgetWizard({
 
   const handleStartFromScratch = () => {
     reset();
+    setBills([]);
+    setDebts([]);
+    setDebtBillImports(new Set());
     setInputMode("scratch");
     setBlankMode(true);
     setIncludeBillsSummary(true);
