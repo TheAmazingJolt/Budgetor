@@ -682,6 +682,7 @@ export const SheetWriteBody = zod.object({
       }),
     )
     .optional(),
+  existingLastCol: zod.number().optional(),
 });
 
 export const SheetWriteResponse = zod.object({

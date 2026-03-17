@@ -792,7 +792,16 @@ export function BudgetWizard({
 
     const fullOverwrite = hasHistoricalEdits();
     const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek.weeks;
-    const startCol = fullOverwrite ? excelFirstBudgetCol : excelNextCol;
+    const existingWeeks = getExistingWeeks();
+
+    let startCol: number;
+    if (fullOverwrite) {
+      startCol = excelFirstBudgetCol;
+    } else {
+      const firstLabel = weeksToWrite[0]?.weekLabel ?? "";
+      const matchingExisting = existingWeeks.find((w: any) => w.label === firstLabel);
+      startCol = matchingExisting ? matchingExisting.startCol : excelNextCol;
+    }
 
     try {
       await excelWriteMutation.mutateAsync({
@@ -1339,7 +1348,19 @@ export function BudgetWizard({
 
     const fullOverwrite = hasHistoricalEdits();
     const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek.weeks;
-    const startCol = fullOverwrite ? googleFirstBudgetCol : googleNextCol;
+    const existingWeeks = getExistingWeeks();
+    const existingLastCol = existingWeeks.length > 0
+      ? (existingWeeks.at(-1) as any).startCol + 1
+      : undefined;
+
+    let startCol: number;
+    if (fullOverwrite) {
+      startCol = googleFirstBudgetCol;
+    } else {
+      const firstLabel = weeksToWrite[0]?.weekLabel ?? "";
+      const matchingExisting = existingWeeks.find((w: any) => w.label === firstLabel);
+      startCol = matchingExisting ? matchingExisting.startCol : googleNextCol;
+    }
 
     try {
       await sheetWriteMutation.mutateAsync({
@@ -1349,6 +1370,7 @@ export function BudgetWizard({
           startCol,
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: googleSheetTitle,
+          ...(existingLastCol != null ? { existingLastCol } : {}),
           ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
         },
       });

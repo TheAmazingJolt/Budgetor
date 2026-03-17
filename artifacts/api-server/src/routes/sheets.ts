@@ -371,6 +371,7 @@ interface WriteRequest {
   includeRemainingAcct: boolean;
   sheetTitle?: string;
   debts?: DebtItem[];
+  existingLastCol?: number;
 }
 
 const CATEGORY_COLORS: Record<string, { red: number; green: number; blue: number }> = {
@@ -384,6 +385,7 @@ function buildBudgetWriteData(
   startCol: number,
   includeRemainingAcct: boolean,
   sheetId: number,
+  sheetColumnCount: number = 1000,
 ) {
   const maxBills = Math.max(...weeks.map((w) => w.bills.length));
   const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
@@ -717,17 +719,39 @@ async function writeBudgetToSheet(
   startCol: number,
   includeRemainingAcct: boolean,
   debts?: DebtItem[],
+  sheetColumnCount: number = 1000,
+  existingLastCol?: number,
 ) {
   const { requests, widthRequests, paddedRows, totalRows, totalCols } =
-    buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId);
+    buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId, sheetColumnCount);
+
+  // Expand sheet columns if the new budget weeks need more than currently exist
+  if (totalCols > sheetColumnCount) {
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          appendDimension: {
+            sheetId,
+            dimension: "COLUMNS",
+            length: totalCols - sheetColumnCount + 10,
+          },
+        }],
+      },
+    });
+    sheetColumnCount = totalCols + 10;
+  }
 
   const rangeStart = `${columnToLetter(startCol)}1`;
   const rangeEnd = `${columnToLetter(totalCols - 1)}${totalRows}`;
   const escapedTitle = sheetTitleStr.replace(/'/g, "''");
   const range = `'${escapedTitle}'!${rangeStart}:${rangeEnd}`;
 
-  const CLEAR_WIDTH_BUFFER = 200;
-  const clearEndColIdx = Math.max(totalCols - 1, startCol + CLEAR_WIDTH_BUFFER);
+  // Clear from startCol to the rightmost previously-used column (capped to sheet size)
+  const rawClearEnd = existingLastCol != null
+    ? Math.max(totalCols - 1, existingLastCol + 1)
+    : totalCols - 1;
+  const clearEndColIdx = Math.min(rawClearEnd, sheetColumnCount - 1);
   const clearEndCol = columnToLetter(clearEndColIdx);
   const clearRange = `'${escapedTitle}'!${rangeStart}:${clearEndCol}`;
 
@@ -863,7 +887,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
 
   const spreadsheetId = req.params["id"];
   const body = req.body as WriteRequest;
-  const { weeks, startCol, includeRemainingAcct, sheetTitle } = body;
+  const { weeks, startCol, includeRemainingAcct, sheetTitle, existingLastCol } = body;
 
   if (!weeks?.length) {
     res.status(400).json({ error: "No weeks to write" });
@@ -879,8 +903,9 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
       meta.data.sheets?.[0];
     const sheetId = sheet?.properties?.sheetId ?? 0;
     const sheetTitleStr = sheetTitle ?? "Budget";
+    const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol);
 
     res.json({
       ok: true,

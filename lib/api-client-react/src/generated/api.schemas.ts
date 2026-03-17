@@ -239,6 +239,7 @@ export interface SheetWriteRequest {
   startCol: number;
   includeRemainingAcct?: boolean;
   debts?: Debt[];
+  existingLastCol?: number;
 }
 
 export interface SheetWriteResponse {
