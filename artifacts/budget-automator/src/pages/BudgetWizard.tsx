@@ -338,6 +338,8 @@ export function BudgetWizard({
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [billsCardCollapsed, setBillsCardCollapsed] = useState(false);
+  const [debtCardCollapsed, setDebtCardCollapsed] = useState(false);
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
@@ -1513,7 +1515,7 @@ export function BudgetWizard({
             amount: -Math.abs(debt.minimumPayment),
             dayOfMonth: debt.dueDay ?? 1,
             category: "Debt Payment",
-            type: "balanced",
+            type: "fixed",
             color: "red",
             sourceDebtId: debtId,
           });
@@ -2986,50 +2988,68 @@ export function BudgetWizard({
 
                     <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
                       <CardContent className="p-5">
-                        <div className="flex items-center gap-3 mb-2">
-                          <DollarSign className="w-5 h-5 text-emerald-600" />
-                          <p className="font-semibold text-emerald-900 text-lg">
-                            Total bills: ${Math.abs(bills.reduce((sum, b) => sum + b.amount, 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                        <p className="text-sm text-emerald-700 mb-3">
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between gap-3 text-left"
+                          onClick={() => setBillsCardCollapsed(c => !c)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <DollarSign className="w-5 h-5 text-emerald-600 shrink-0" />
+                            <p className="font-semibold text-emerald-900 text-lg">
+                              Total bills: ${Math.abs(bills.reduce((sum, b) => sum + b.amount, 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <ChevronDown className={`w-4 h-4 text-emerald-600 shrink-0 transition-transform duration-200 ${billsCardCollapsed ? "-rotate-90" : ""}`} />
+                        </button>
+                        <p className="text-sm text-emerald-700 mt-2">
                           {bills.length} line item{bills.length !== 1 ? "s" : ""}
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {bills.map((bill, idx) => (
-                            <div key={idx} className="flex items-center justify-between rounded-lg bg-white/60 px-3 py-2 border border-emerald-100">
-                              <p className="text-xs font-medium text-foreground truncate">{bill.name}</p>
-                              <p className="text-xs font-semibold text-emerald-700 ml-2 shrink-0">${Math.abs(bill.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                            </div>
-                          ))}
-                        </div>
+                        {!billsCardCollapsed && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3">
+                            {bills.map((bill, idx) => (
+                              <div key={idx} className="flex items-center justify-between rounded-lg bg-white/60 px-3 py-2 border border-emerald-100">
+                                <p className="text-xs font-medium text-foreground truncate">{bill.name}</p>
+                                <p className="text-xs font-semibold text-emerald-700 ml-2 shrink-0">${Math.abs(bill.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 
                     {debts.length > 0 && (
                       <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
                         <CardContent className="p-5">
-                          <div className="flex items-center gap-3 mb-2">
-                            <DollarSign className="w-5 h-5 text-red-600" />
-                            <p className="font-semibold text-red-900 text-lg">
-                              Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                          <p className="text-sm text-red-700 mb-3">
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between gap-3 text-left"
+                            onClick={() => setDebtCardCollapsed(c => !c)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <DollarSign className="w-5 h-5 text-red-600 shrink-0" />
+                              <p className="font-semibold text-red-900 text-lg">
+                                Total debt: ${totalDebtBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 text-red-600 shrink-0 transition-transform duration-200 ${debtCardCollapsed ? "-rotate-90" : ""}`} />
+                          </button>
+                          <p className="text-sm text-red-700 mt-2">
                             across {debts.length} account{debts.length !== 1 ? "s" : ""} — ${totalMinPayments.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo minimum payments
                           </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {debts.map(debt => (
-                              <div key={debt.id} className="flex items-center gap-2 rounded-lg bg-white/60 px-3 py-2 border border-red-100">
-                                <DebtTypeIcon type={debt.type} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-foreground truncate">{debt.name}</p>
-                                  <p className="text-[10px] text-muted-foreground">{DEBT_TYPE_LABELS[debt.type]}</p>
+                          {!debtCardCollapsed && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3">
+                              {debts.map(debt => (
+                                <div key={debt.id} className="flex items-center gap-2 rounded-lg bg-white/60 px-3 py-2 border border-red-100">
+                                  <DebtTypeIcon type={debt.type} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-foreground truncate">{debt.name}</p>
+                                    <p className="text-[10px] text-muted-foreground">{DEBT_TYPE_LABELS[debt.type]}</p>
+                                  </div>
+                                  <p className="text-xs font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                                 </div>
-                                <p className="text-xs font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     )}
