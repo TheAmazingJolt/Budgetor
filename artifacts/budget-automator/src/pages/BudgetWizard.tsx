@@ -581,12 +581,16 @@ export function BudgetWizard({
         title: "Sheet loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      scheduleAutoGenerate({
-        inputMode: "google",
-        bills: sheetBills,
-        openingBalance: data.lastRemaining,
-        startDate: nextStart ?? newWeekStartDate,
-      });
+      if (data.existingWeeks.length > 0) {
+        setStep(2);
+      } else {
+        scheduleAutoGenerate({
+          inputMode: "google",
+          bills: sheetBills,
+          openingBalance: data.lastRemaining,
+          startDate: nextStart ?? newWeekStartDate,
+        });
+      }
     }
   }, [sheetReadQuery.data, selectedSheetId]);
 
@@ -625,12 +629,16 @@ export function BudgetWizard({
         title: "Excel file loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      scheduleAutoGenerate({
-        inputMode: "excel",
-        bills: excelBills,
-        openingBalance: data.lastRemaining,
-        startDate: nextStartExcel ?? newWeekStartDate,
-      });
+      if (data.existingWeeks.length > 0) {
+        setStep(2);
+      } else {
+        scheduleAutoGenerate({
+          inputMode: "excel",
+          bills: excelBills,
+          openingBalance: data.lastRemaining,
+          startDate: nextStartExcel ?? newWeekStartDate,
+        });
+      }
     }
   }, [excelReadQuery.data, selectedExcelFileId]);
 
@@ -663,12 +671,16 @@ export function BudgetWizard({
           title: "Spreadsheet loaded",
           description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
         });
-        scheduleAutoGenerate({
-          inputMode: "upload",
-          bills: uploadBills,
-          openingBalance: uploadOpeningBalance,
-          startDate: uploadNextStart ?? newWeekStartDate,
-        });
+        if (parsed.existingWeeks.length > 0) {
+          setStep(2);
+        } else {
+          scheduleAutoGenerate({
+            inputMode: "upload",
+            bills: uploadBills,
+            openingBalance: uploadOpeningBalance,
+            startDate: uploadNextStart ?? newWeekStartDate,
+          });
+        }
       } catch (err) {
         toast({
           title: "Failed to read file",
@@ -793,12 +805,16 @@ export function BudgetWizard({
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Connect Microsoft to write back." : ""}`,
           });
           setIsLoadingExcelUrl(false);
-          scheduleAutoGenerate({
-            inputMode: canWriteBack ? "excel" : "scratch",
-            bills: excelUrlBills,
-            openingBalance: data.lastRemaining,
-            startDate: excelUrlNextStart ?? newWeekStartDate,
-          });
+          if (data.existingWeeks.length > 0) {
+            setStep(2);
+          } else {
+            scheduleAutoGenerate({
+              inputMode: canWriteBack ? "excel" : "scratch",
+              bills: excelUrlBills,
+              openingBalance: data.lastRemaining,
+              startDate: excelUrlNextStart ?? newWeekStartDate,
+            });
+          }
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that file. Make sure the link is correct and you are signed in with Microsoft.";
@@ -814,12 +830,12 @@ export function BudgetWizard({
   };
 
   const handleWriteToExcel = async () => {
-    if (!generatedWeek || !selectedExcelFileId) return;
+    if (!selectedExcelFileId) return;
     setIsWritingToExcel(true);
     setExcelWriteSuccess(false);
 
-    const fullOverwrite = hasHistoricalEdits();
-    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek.weeks;
+    const fullOverwrite = !generatedWeek || hasHistoricalEdits();
+    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek!.weeks;
     const existingWeeks = getExistingWeeks();
 
     let startCol: number;
@@ -847,9 +863,7 @@ export function BudgetWizard({
       setWeekEdits({});
       toast({
         title: "Written to Excel Online",
-        description: fullOverwrite
-          ? `All ${weeksToWrite.length} budget weeks written to "${selectedExcelFileName}".`
-          : `${generatedWeek.weeks.length} budget weeks written to "${selectedExcelFileName}".`,
+        description: `${weeksToWrite.length} budget weeks written to "${selectedExcelFileName}".`,
       });
     } catch (err) {
       toast({
@@ -1078,16 +1092,20 @@ export function BudgetWizard({
       }
     }
     toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${billsToSet.length} bills.` });
-    setStep(1);
-    scheduleAutoGenerate({
-      bills: billsToSet,
-      openingBalance: effectiveOpeningBalance,
-      paycheckAmount: s?.paycheckAmount ?? 0,
-      startDate: effectiveStartDate,
-      endDate: s?.newWeekEndDate,
-      weekCount: s?.weekCount,
-      inputMode: "cloud",
-    });
+    if (restoredWeeks.length > 0) {
+      setStep(2);
+    } else {
+      setStep(1);
+      scheduleAutoGenerate({
+        bills: billsToSet,
+        openingBalance: effectiveOpeningBalance,
+        paycheckAmount: s?.paycheckAmount ?? 0,
+        startDate: effectiveStartDate,
+        endDate: s?.newWeekEndDate,
+        weekCount: s?.weekCount,
+        inputMode: "cloud",
+      });
+    }
   };
 
   const handleDeleteSavedBudget = (id: string, name: string) => {
@@ -1243,12 +1261,16 @@ export function BudgetWizard({
             description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Download as .xlsx (sign in with Google to write back)." : ""}`,
           });
           setIsLoadingUrl(false);
-          scheduleAutoGenerate({
-            inputMode: canWriteBack ? "google" : "scratch",
-            bills: sheetUrlBills,
-            openingBalance: data.lastRemaining,
-            startDate: sheetsUrlNextStart ?? newWeekStartDate,
-          });
+          if (data.existingWeeks.length > 0) {
+            setStep(2);
+          } else {
+            scheduleAutoGenerate({
+              inputMode: canWriteBack ? "google" : "scratch",
+              bills: sheetUrlBills,
+              openingBalance: data.lastRemaining,
+              startDate: sheetsUrlNextStart ?? newWeekStartDate,
+            });
+          }
         },
         onError: (err: unknown) => {
           const message = err instanceof Error ? err.message : "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.";
@@ -1399,12 +1421,12 @@ export function BudgetWizard({
   };
 
   const handleWriteToGoogleSheets = async () => {
-    if (!generatedWeek || !selectedSheetId) return;
+    if (!selectedSheetId) return;
     setIsWritingToSheet(true);
     setSheetWriteSuccess(false);
 
-    const fullOverwrite = hasHistoricalEdits();
-    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek.weeks;
+    const fullOverwrite = !generatedWeek || hasHistoricalEdits();
+    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek!.weeks;
     const existingWeeks = getExistingWeeks();
     const existingLastCol = existingWeeks.length > 0
       ? (existingWeeks.at(-1) as any).startCol + 1
@@ -1436,9 +1458,7 @@ export function BudgetWizard({
       setWeekEdits({});
       toast({
         title: "Written to Google Sheets",
-        description: fullOverwrite
-          ? `All ${weeksToWrite.length} budget weeks written to "${selectedSheetName}".`
-          : `${generatedWeek.weeks.length} budget weeks written to "${selectedSheetName}".`,
+        description: `${weeksToWrite.length} budget weeks written to "${selectedSheetName}".`,
       });
     } catch (err) {
       toast({
@@ -3288,11 +3308,28 @@ export function BudgetWizard({
                         </Dialog>
                       );
                     })()}
+
+                    {!generatedWeek && hasHistory && (
+                      <div className="flex justify-center pt-2">
+                        <Button
+                          size="lg"
+                          onClick={() => handleGenerate()}
+                          disabled={!canGenerate}
+                          className="rounded-2xl px-8 bg-gradient-to-r from-primary to-emerald-600 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                        >
+                          {generateMutation.isPending ? (
+                            <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Generating…</>
+                          ) : (
+                            <><Plus className="w-5 h-5 mr-2" /> Generate next week</>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </>
                 );
               })()}
 
-              {(generatedWeek?.weeks?.length ?? 0) > 0 && (
+              {((generatedWeek?.weeks?.length ?? 0) > 0 || hasHistoricalEdits()) && (
               <div className="flex flex-col sm:flex-row gap-4">
                 {inputMode === "google" && selectedSheetId && (
                   <div className="flex flex-col gap-2 flex-1">
