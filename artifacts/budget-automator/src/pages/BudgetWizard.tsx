@@ -138,6 +138,7 @@ interface GenerateOverrides {
   startDate?: string;
   endDate?: string;
   weekCount?: number;
+  inputMode?: InputMode;
 }
 
 type WeekEdit = {
@@ -1023,6 +1024,7 @@ export function BudgetWizard({
       }
     }
     toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${b.length} bills.` });
+    setStep(1);
     scheduleAutoGenerate({
       bills: b,
       openingBalance: effectiveOpeningBalance,
@@ -1030,6 +1032,7 @@ export function BudgetWizard({
       startDate: effectiveStartDate,
       endDate: s?.newWeekEndDate,
       weekCount: s?.weekCount,
+      inputMode: "cloud",
     });
   };
 
@@ -1211,7 +1214,8 @@ export function BudgetWizard({
   };
 
   const handleGenerate = (overrides?: GenerateOverrides) => {
-    if (inputMode === "upload" && !parsedWorkbook) return;
+    const effectiveInputMode = overrides?.inputMode ?? inputMode;
+    if (effectiveInputMode === "upload" && !parsedWorkbook) return;
     if (step === 1) setVisitedStep1(true);
     setEditModeOn(false);
     setSelectedWeekIdx(null);
@@ -1243,11 +1247,11 @@ export function BudgetWizard({
           setNewExcelSaveSuccess(false);
           setNewExcelUrl(null);
 
-          if (inputMode === "google" || inputMode === "excel") {
+          if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
             setGeneratedBlob(null);
           } else {
             let blob: Blob;
-            if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
+            if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
               const rawBills = includeBillsSummary
                 ? (parsedWorkbook?.rawBillsSection ?? null)
                 : null;
