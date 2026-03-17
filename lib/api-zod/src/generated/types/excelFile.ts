@@ -10,4 +10,5 @@ export interface ExcelFile {
   id: string;
   name: string;
   modifiedTime?: string;
+  webUrl?: string;
 }

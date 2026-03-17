@@ -276,7 +276,7 @@ router.get("/excel/list", async (req, res): Promise<void> => {
   try {
     const data = await graphGet(
       token,
-      "/me/drive/root/search(q='.xlsx')?$select=id,name,lastModifiedDateTime&$orderby=lastModifiedDateTime desc&$top=50"
+      "/me/drive/root/search(q='.xlsx')?$select=id,name,lastModifiedDateTime,webUrl&$orderby=lastModifiedDateTime desc&$top=50"
     );
 
     const xlsxFiles = (data.value ?? []).filter((f: any) =>
@@ -288,6 +288,7 @@ router.get("/excel/list", async (req, res): Promise<void> => {
         id: f.id,
         name: f.name,
         modifiedTime: f.lastModifiedDateTime,
+        webUrl: f.webUrl ?? undefined,
       })),
     });
   } catch (err: any) {
@@ -495,6 +496,60 @@ async function writeExcelDebtRows(
   );
 }
 
+async function writeExcelBillRows(
+  token: string,
+  fileId: string,
+  sheetName: string,
+  startRow: number,
+  bills: BillMeta[],
+) {
+  if (!bills || bills.length === 0) return;
+
+  const rows: (string | number | null)[][] = [];
+  rows.push([]);
+  rows.push(["Bills", "", ""]);
+  rows.push(["Name", "Amount", "Due Day"]);
+  for (const bill of bills) {
+    rows.push([
+      bill.name,
+      Math.abs(bill.amount),
+      bill.dayOfMonth != null ? bill.dayOfMonth : "",
+    ]);
+  }
+
+  const rangeStart = `A${startRow + 1}`;
+  const rangeEnd = `C${startRow + rows.length}`;
+  const range = `${rangeStart}:${rangeEnd}`;
+
+  await graphPatch(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${range}')`,
+    { values: rows }
+  );
+
+  const headerRow = startRow + 1;
+  const headerRange = `A${headerRow + 1}:C${headerRow + 1}`;
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
+    { bold: true, name: "Arial", size: 11 }
+  );
+
+  const colHeaderRange = `A${headerRow + 2}:C${headerRow + 2}`;
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
+    { bold: true, name: "Arial", size: 10 }
+  );
+
+  const allBillsRange = `A${headerRow + 1}:C${startRow + rows.length}`;
+  await graphPatch(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
+    { color: "#E8F5E9" }
+  );
+}
+
 async function writeHiddenExcelBillsSheet(
   token: string,
   fileId: string,
@@ -668,11 +723,14 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       { bold: true, name: "Arial", size: 10 }
     );
 
+    let afterSectionsRow = totalRows;
     if (body.debts && body.debts.length > 0) {
       await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
+      afterSectionsRow += buildExcelDebtGrid(body.debts).length;
     }
     if (body.bills && body.bills.length > 0) {
-      await writeHiddenExcelBillsSheet(token, fileId, body.bills);
+      await writeExcelBillRows(token, fileId, sheetName, afterSectionsRow, body.bills);
+      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills); } catch { }
     }
 
     res.json({ fileId, webUrl });
@@ -779,11 +837,14 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       { bold: false, name: "Arial", size: 10 }
     );
 
+    let afterSectionsRowWrite = totalRows;
     if (body.debts && body.debts.length > 0) {
       await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
+      afterSectionsRowWrite += buildExcelDebtGrid(body.debts).length;
     }
     if (body.bills && body.bills.length > 0) {
-      await writeHiddenExcelBillsSheet(token, fileId, body.bills);
+      await writeExcelBillRows(token, fileId, sheetName, afterSectionsRowWrite, body.bills);
+      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills); } catch { }
     }
 
     res.json({

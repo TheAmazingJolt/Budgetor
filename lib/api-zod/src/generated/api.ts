@@ -840,6 +840,7 @@ export const ExcelListResponse = zod.object({
       id: zod.string(),
       name: zod.string(),
       modifiedTime: zod.string().optional(),
+      webUrl: zod.string().optional(),
     }),
   ),
 });

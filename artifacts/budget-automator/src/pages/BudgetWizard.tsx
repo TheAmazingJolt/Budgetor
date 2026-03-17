@@ -255,6 +255,7 @@ export function BudgetWizard({
 
   const [selectedExcelFileId, setSelectedExcelFileId] = useState<string | null>(null);
   const [selectedExcelFileName, setSelectedExcelFileName] = useState<string | null>(null);
+  const [selectedExcelFileUrl, setSelectedExcelFileUrl] = useState<string | null>(null);
   const [excelSheetTitle, setExcelSheetTitle] = useState<string>("Budget");
   const [excelNextCol, setExcelNextCol] = useState(2);
   const [isWritingToExcel, setIsWritingToExcel] = useState(false);
@@ -733,9 +734,10 @@ export function BudgetWizard({
     } catch {}
   };
 
-  const handleSelectExcelFile = (id: string, name: string) => {
+  const handleSelectExcelFile = (id: string, name: string, webUrl?: string) => {
     setSelectedExcelFileId(id);
     setSelectedExcelFileName(name);
+    setSelectedExcelFileUrl(webUrl ?? null);
     setInputMode("excel");
   };
 
@@ -1942,7 +1944,7 @@ export function BudgetWizard({
                                 <button
                                   key={f.id}
                                   type="button"
-                                  onClick={() => handleSelectExcelFile(f.id, f.name)}
+                                  onClick={() => handleSelectExcelFile(f.id, f.name, f.webUrl ?? undefined)}
                                   disabled={excelReadQuery.isLoading}
                                   className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
                                     selectedExcelFileId === f.id && excelReadQuery.isLoading
@@ -2586,7 +2588,7 @@ export function BudgetWizard({
                             </div>
                             <div className="flex items-center justify-between mt-3">
                               <span className="text-xs text-muted-foreground">
-                                {bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Weekly"}
+                                {bill.type === "weekly" ? "Weekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                               </span>
                               <div className="flex gap-1">
                                 <Button
@@ -3236,45 +3238,69 @@ export function BudgetWizard({
               {(generatedWeek?.weeks?.length ?? 0) > 0 && (
               <div className="flex flex-col sm:flex-row gap-4">
                 {inputMode === "google" && selectedSheetId && (
-                  <Button
-                    size="lg"
-                    onClick={handleWriteToGoogleSheets}
-                    disabled={isWritingToSheet || sheetWriteSuccess}
-                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
-                      sheetWriteSuccess
-                        ? "bg-emerald-600"
-                        : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
-                    }`}
-                  >
-                    {isWritingToSheet ? (
-                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Google Sheets…</>
-                    ) : sheetWriteSuccess ? (
-                      <><Check className="w-5 h-5 mr-2" /> Written to Google Sheets</>
-                    ) : (
-                      <><CloudUpload className="w-5 h-5 mr-2" /> Write to Google Sheets</>
+                  <div className="flex flex-col gap-2 flex-1">
+                    <Button
+                      size="lg"
+                      onClick={handleWriteToGoogleSheets}
+                      disabled={isWritingToSheet || sheetWriteSuccess}
+                      className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                        sheetWriteSuccess
+                          ? "bg-emerald-600"
+                          : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
+                      }`}
+                    >
+                      {isWritingToSheet ? (
+                        <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Google Sheets…</>
+                      ) : sheetWriteSuccess ? (
+                        <><Check className="w-5 h-5 mr-2" /> Written to Google Sheets</>
+                      ) : (
+                        <><CloudUpload className="w-5 h-5 mr-2" /> Write to Google Sheets</>
+                      )}
+                    </Button>
+                    {sheetWriteSuccess && (
+                      <a
+                        href={`https://docs.google.com/spreadsheets/d/${selectedSheetId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700 underline text-center"
+                      >
+                        Open in Google Sheets →
+                      </a>
                     )}
-                  </Button>
+                  </div>
                 )}
 
                 {inputMode === "excel" && selectedExcelFileId && (
-                  <Button
-                    size="lg"
-                    onClick={handleWriteToExcel}
-                    disabled={isWritingToExcel || excelWriteSuccess}
-                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
-                      excelWriteSuccess
-                        ? "bg-emerald-600"
-                        : "bg-gradient-to-r from-blue-700 to-blue-600 shadow-blue-600/25 hover:shadow-blue-600/30"
-                    }`}
-                  >
-                    {isWritingToExcel ? (
-                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Excel Online…</>
-                    ) : excelWriteSuccess ? (
-                      <><Check className="w-5 h-5 mr-2" /> Written to Excel Online</>
-                    ) : (
-                      <><CloudUpload className="w-5 h-5 mr-2" /> Write to Excel Online</>
+                  <div className="flex flex-col gap-2 flex-1">
+                    <Button
+                      size="lg"
+                      onClick={handleWriteToExcel}
+                      disabled={isWritingToExcel || excelWriteSuccess}
+                      className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
+                        excelWriteSuccess
+                          ? "bg-emerald-600"
+                          : "bg-gradient-to-r from-blue-700 to-blue-600 shadow-blue-600/25 hover:shadow-blue-600/30"
+                      }`}
+                    >
+                      {isWritingToExcel ? (
+                        <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Excel Online…</>
+                      ) : excelWriteSuccess ? (
+                        <><Check className="w-5 h-5 mr-2" /> Written to Excel Online</>
+                      ) : (
+                        <><CloudUpload className="w-5 h-5 mr-2" /> Write to Excel Online</>
+                      )}
+                    </Button>
+                    {excelWriteSuccess && selectedExcelFileUrl && (
+                      <a
+                        href={selectedExcelFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-teal-600 hover:text-teal-700 underline text-center"
+                      >
+                        Open in OneDrive →
+                      </a>
                     )}
-                  </Button>
+                  </div>
                 )}
 
                 {inputMode === "cloud" && activeCloudBudgetId && (
