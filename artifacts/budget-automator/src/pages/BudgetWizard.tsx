@@ -707,10 +707,39 @@ export function BudgetWizard({
 
   const handleStartFromScratch = () => {
     reset();
+    prevBillsRef.current = "[]";
+    prevDebtsRef.current = "[]";
     setBills([]);
     setDebts([]);
-    setDebtBillImports(new Set());
     setScratchExistingWeeks([]);
+    setDebtBillImports(new Set());
+    if (isSignedIn && currentUser) {
+      if (userBillsQuery.data) {
+        const cachedBills = (userBillsQuery.data.bills ?? []) as Bill[];
+        setBills(cachedBills);
+        prevBillsRef.current = JSON.stringify(cachedBills);
+        billsLoadedForUserRef.current = currentUser.id;
+        const billedIds = new Set<string>(
+          cachedBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
+        );
+        setDebtBillImports(billedIds);
+      } else {
+        billsLoadedForUserRef.current = null;
+        userBillsQuery.refetch();
+      }
+      if (userDebtsQuery.data) {
+        const cachedDebts = (userDebtsQuery.data.debts ?? []) as Debt[];
+        setDebts(cachedDebts);
+        prevDebtsRef.current = JSON.stringify(cachedDebts);
+        debtsLoadedForUserRef.current = currentUser.id;
+      } else {
+        debtsLoadedForUserRef.current = null;
+        userDebtsQuery.refetch();
+      }
+    } else {
+      billsLoadedForUserRef.current = null;
+      debtsLoadedForUserRef.current = null;
+    }
     setInputMode("scratch");
     setBlankMode(true);
     setIncludeBillsSummary(true);
