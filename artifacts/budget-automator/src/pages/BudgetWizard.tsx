@@ -1037,9 +1037,15 @@ export function BudgetWizard({
     setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
-    if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
-    if (s?.newWeekStartDate) setStartDate(s.newWeekStartDate);
-    if (s?.newWeekEndDate) setEndDate(s.newWeekEndDate);
+    if (s?.newWeekStartDate && s?.newWeekEndDate) {
+      setStartDate(s.newWeekStartDate);
+      setEndDate(s.newWeekEndDate);
+    } else if (s?.newWeekStartDate) {
+      if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
+      setStartDatePreserveCount(s.newWeekStartDate);
+    } else if (s?.weekCount !== undefined) {
+      setWeekCount(s.weekCount);
+    }
     if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
