@@ -14,6 +14,25 @@ export const BILL_COLOR_PALETTE = [
   { key: "cyan",   swatch: "bg-cyan-500",   badge: "bg-cyan-100 text-cyan-800 border-cyan-200",   leftBar: "bg-cyan-400" },
 ] as const;
 
+/**
+ * Hex text colors for each BillColorKey — used when writing spreadsheet cells.
+ * "none" is intentionally absent; callers should treat a missing entry as unstyled.
+ */
+export const BILL_COLOR_HEX: Readonly<Record<string, string>> = {
+  blue:   '1D4ED8',
+  green:  '15803D',
+  orange: 'C2410C',
+  purple: '7E22CE',
+  red:    'B91C1C',
+  slate:  '475569',
+  amber:  'B45309',
+  teal:   '0F766E',
+  rose:   'BE123C',
+  indigo: '4338CA',
+  yellow: '854D0E',
+  cyan:   '0E7490',
+} as const;
+
 export type BillColorKey = typeof BILL_COLOR_PALETTE[number]["key"];
 
 export function getBillColorEntry(key?: string | null) {

@@ -2,6 +2,7 @@ import XLSX from 'xlsx-js-style';
 import type { WeeklyBudget, Debt } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
+import { BILL_COLOR_HEX } from './billColors';
 
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
@@ -11,25 +12,24 @@ const DEFAULT_STYLE: SheetStyle = {
 
 // ── Cell style constants ────────────────────────────────────────────────────
 
-const BUDGET_ROW_STYLES: Record<string, any> = {
-  'Partial Rent': {
-    fill: { patternType: 'solid', fgColor: { rgb: 'FF9900' }, bgColor: { rgb: 'FF9900' } },
-  },
-  'Partial Utilities': {
-    fill: { patternType: 'solid', fgColor: { rgb: '9900FF' }, bgColor: { rgb: '9900FF' } },
-  },
-  'Partial Car': {
-    fill: { patternType: 'solid', fgColor: { rgb: '00FF00' }, bgColor: { rgb: '00FF00' } },
-  },
-};
+// Light green background applied to every colored bill row.
+const BILL_ROW_BG = 'D6F5D6';
+// Slightly deeper green for category label rows.
+const BILL_CAT_BG = 'A8DDA8';
 
-const BILLS_SECTION_STYLES: Record<string, any> = {
-  rent:      { fill: { patternType: 'solid', fgColor: { rgb: 'FF9900' }, bgColor: { rgb: 'FF9900' } } },
-  utilities: { fill: { patternType: 'solid', fgColor: { rgb: '9900FF' }, bgColor: { rgb: '9900FF' } } },
-  car:       { fill: { patternType: 'solid', fgColor: { rgb: '00FF00' }, bgColor: { rgb: '00FF00' } } },
-  fixed:     { fill: { patternType: 'solid', fgColor: { rgb: 'B0C4DE' }, bgColor: { rgb: 'B0C4DE' } } },
-  weekly:    { fill: { patternType: 'solid', fgColor: { rgb: '90EE90' }, bgColor: { rgb: '90EE90' } } },
-};
+/**
+ * Returns fill + font color style objects for a bill row based on its color key.
+ * Bills with color = "none" (or missing) get no special styling (plain/white).
+ */
+function billColorStyle(colorKey?: string | null): { fill: any; fontColor: string | null } {
+  if (!colorKey || colorKey === 'none' || !BILL_COLOR_HEX[colorKey]) {
+    return { fill: null, fontColor: null };
+  }
+  return {
+    fill: { patternType: 'solid', fgColor: { rgb: BILL_ROW_BG }, bgColor: { rgb: BILL_ROW_BG } },
+    fontColor: BILL_COLOR_HEX[colorKey],
+  };
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -95,36 +95,55 @@ function writeBillsSection(
 
   const CATEGORY_ORDER: Bill['category'][] = ['rent', 'utilities', 'car', 'fixed', 'weekly'];
 
+  // Determine the dominant color for a category (first bill with a real color).
+  // Used to tint the category label row.
+  function catDominantColor(catBills: Bill[]): string | null {
+    for (const b of catBills) {
+      if (b.color && b.color !== 'none' && BILL_COLOR_HEX[b.color]) return b.color;
+    }
+    return null;
+  }
+
   let row = 2;
   for (const cat of CATEGORY_ORDER) {
     const catBills = bills.filter(b => b.category === cat);
     if (catBills.length === 0) continue;
 
-    // Category label row
-    const catStyle = {
-      ...BILLS_SECTION_STYLES[cat],
-      font: { bold: true, sz: 10, name: 'Arial' },
-      alignment: { horizontal: 'center' },
-    };
+    // Category label row — green bg only when at least one bill has a real color;
+    // plain/unstyled when all bills in the category are "none".
+    const domColor = catDominantColor(catBills);
+    const catFontBase: any = { bold: true, sz: 10, name: 'Arial' };
+    const catStyle: any = { font: catFontBase, alignment: { horizontal: 'center' } };
+    if (domColor) {
+      catStyle.fill = { patternType: 'solid', fgColor: { rgb: BILL_CAT_BG }, bgColor: { rgb: BILL_CAT_BG } };
+      catFontBase.color = { rgb: BILL_COLOR_HEX[domColor] };
+    }
     const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     set(sheet, row, startCol,     makeCell(catLabel, catStyle));
     set(sheet, row, startCol + 1, makeCell('', catStyle));
     addMerge(sheet, row, startCol, row, startCol + 1);
     row++;
 
-    // Individual bills
+    // Individual bills — per-bill color styling.
     for (const bill of catBills) {
-      const billStyle = {
-        ...BILLS_SECTION_STYLES[cat],
+      const { fill, fontColor } = billColorStyle(bill.color);
+      const billStyle: any = {
         font: { sz: 10, name: 'Arial' },
         alignment: { horizontal: 'left' },
       };
-      const amtStyle = {
-        ...BILLS_SECTION_STYLES[cat],
+      const amtStyle: any = {
         font: { sz: 10, name: 'Arial' },
         alignment: { horizontal: 'right' },
         numFmt: '#,##0.00',
       };
+      if (fill) {
+        billStyle.fill = fill;
+        amtStyle.fill = fill;
+      }
+      if (fontColor) {
+        billStyle.font.color = { rgb: fontColor };
+        amtStyle.font.color = { rgb: fontColor };
+      }
       set(sheet, row, startCol,     makeCell(bill.name,   billStyle));
       set(sheet, row, startCol + 1, makeCell(bill.amount, amtStyle));
       row++;
@@ -145,6 +164,7 @@ function writeWeeksToSheet(
   startCol: number,
   includeRemainingAcct: boolean,
   style: SheetStyle = DEFAULT_STYLE,
+  billColorMap: Map<string, string> = new Map(),
 ) {
   const { labelColWidth, valueColWidth } = style;
   const totalNewCols = weekBudgets.length * 2;
@@ -192,14 +212,18 @@ function writeWeeksToSheet(
     set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont }));
     nextRow++;
 
-    // Bill line items
+    // Bill line items — apply per-bill color styling when a color map is provided.
     for (const bill of week.bills) {
-      const baseStyle = BUDGET_ROW_STYLES[bill.name] ?? null;
-      const cellStyle = baseStyle
-        ? { ...baseStyle, font: { sz: 10, name: 'Arial' } }
-        : { font: bodyFont };
+      // Look up by exact name, then by stripping "Partial " prefix.
+      const colorKey = billColorMap.get(bill.name)
+        ?? billColorMap.get(bill.name.replace(/^Partial\s+/, ''))
+        ?? null;
+      const { fill, fontColor } = billColorStyle(colorKey);
+      const cellStyle: any = { font: { sz: 10, name: 'Arial' } };
+      if (fill) cellStyle.fill = fill;
+      if (fontColor) cellStyle.font.color = { rgb: fontColor };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   cellStyle));
-      set(sheet, nextRow, valCol,   makeCell(bill.amount, cellStyle));
+      set(sheet, nextRow, valCol,   makeCell(bill.amount, { ...cellStyle }));
       nextRow++;
     }
 
@@ -586,6 +610,22 @@ function writeDebtsSection(
 
 // ── Public exports ───────────────────────────────────────────────────────────
 
+/**
+ * Build a Map<billName, colorKey> from the full Bill[] list so that
+ * writeWeeksToSheet can look up colors for weekly bill rows by name.
+ * Both the original name and "Partial {name}" variants are registered.
+ */
+function buildBillColorMap(bills: Bill[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const bill of bills) {
+    if (bill.color && bill.color !== 'none') {
+      map.set(bill.name, bill.color);
+      map.set(`Partial ${bill.name}`, bill.color);
+    }
+  }
+  return map;
+}
+
 export function appendBudgetWeeks(
   rawBytes: Uint8Array,
   weekBudgets: WeeklyBudget[],
@@ -593,6 +633,7 @@ export function appendBudgetWeeks(
   includeRemainingAcct = true,
   style?: SheetStyle | null,
   debts?: Debt[] | null,
+  bills?: Bill[] | null,
 ): Blob {
   // Re-read the original using xlsx-js-style so every cell's style object is in
   // the format that xlsx-js-style expects when writing — standard xlsx only
@@ -642,7 +683,8 @@ export function appendBudgetWeeks(
 
   // The original bills section and existing budget columns are already in the
   // cloned sheet — never overwrite them. Just append new week columns.
-  writeWeeksToSheet(clonedSheet, weekBudgets, firstStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
+  const colorMap = bills ? buildBillColorMap(bills) : new Map<string, string>();
+  writeWeeksToSheet(clonedSheet, weekBudgets, firstStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMap);
 
   // Auto-detect where the bills section ends (= where the first budget week was)
   // so we know how many columns to freeze.
@@ -684,6 +726,7 @@ export function createBlankBudget(
   style?: SheetStyle | null,
   rawBytes?: Uint8Array | null,
   debts?: Debt[] | null,
+  bills?: Bill[] | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
@@ -709,7 +752,8 @@ export function createBlankBudget(
     ws['!ref'] = `A1:B${billsRows}`;
   }
 
-  writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE);
+  const colorMapBlank = (bills ?? fallbackBills) ? buildBillColorMap(bills ?? fallbackBills ?? []) : new Map<string, string>();
+  writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMapBlank);
 
   if (debts && debts.length > 0) {
     const sheetRef = ws['!ref'];

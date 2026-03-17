@@ -1296,7 +1296,7 @@ export function BudgetWizard({
                 : null;
               const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
               const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
-              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport);
+              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
             } else {
               const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
               blob = appendBudgetWeeks(
@@ -1306,6 +1306,7 @@ export function BudgetWizard({
                 !zeroOpeningBalance,
                 sheetStyle,
                 debtsForExport,
+                bills,
               );
             }
             setGeneratedBlob(blob);
