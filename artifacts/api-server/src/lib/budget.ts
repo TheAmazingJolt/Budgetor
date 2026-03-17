@@ -143,17 +143,12 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Balance "varies" bills so every week ends at the same remaining ─────
+  // ── Spread "varies" balanced bills evenly across all weeks in the month ──
   //
-  // Per month with N weeks:
-  //   F_i = sum of fixed+weekly bills for week i (negative)
-  //   totalLargeNeg = -(alwaysTotal) for this month
-  //   target K = opening + paycheck + (totalLargeNeg + sumF) / N
-  //   largeAmount_i = K - opening - paycheck - F_i  (always ≤ 0)
-  //
-  // We clamp largeAmount to 0 so balanced bills never appear as income.
-  // A week that is already overloaded with fixed expenses just gets 0
-  // balanced allocation; the other weeks are equalized to week-0's closing.
+  // Each week gets exactly (alwaysTotal / N) of balanced bill expense,
+  // split proportionally among the individual bills by their ratio.
+  // This is independent of other bills in the week so that a week with
+  // heavy debt payments does not receive a disproportionately large share.
 
   for (const mk of monthsInRange) {
     const monthWeekIndices = weeks
@@ -161,60 +156,30 @@ export function generateWeeklyBudgets(
       .filter((i) => i >= 0);
     const N = monthWeekIndices.length;
 
-    const totalLargeNeg = -alwaysTotal;
-
-    const F = monthWeekIndices.map((idx) =>
-      weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0)
-    );
-    const sumF = F.reduce((s, v) => s + v, 0);
-
-    const K = openingBalance + paycheckAmount + (totalLargeNeg + sumF) / N;
+    const perWeekTotal = N > 0 ? -alwaysTotal / N : 0;
 
     for (let j = 0; j < monthWeekIndices.length; j++) {
       const idx = monthWeekIndices[j];
-      // Clamp to 0: balanced partial amounts must always be expenses (≤ 0).
-      const rawLargeAmount = K - openingBalance - paycheckAmount - F[j];
-      const largeAmount = Math.min(0, rawLargeAmount);
-
       const items: WeeklyBill[] = [];
-      // Only distribute if there is actually a negative amount to allocate.
-      if (alwaysTotal > 0 && largeAmount < 0) {
+      if (alwaysTotal > 0 && perWeekTotal < 0) {
         const parts = alwaysBills
           .filter((b) => Math.abs(b.amount) > 0)
           .map((b) => ({
             name: `Partial ${b.name}`,
             ratio: Math.abs(b.amount) / alwaysTotal,
           }));
-
         let allocated = 0;
         for (let p = 0; p < parts.length; p++) {
           if (p === parts.length - 1) {
-            items.push({ name: parts[p].name, amount: Math.round((largeAmount - allocated) * 100) / 100 });
+            items.push({ name: parts[p].name, amount: Math.round((perWeekTotal - allocated) * 100) / 100 });
           } else {
-            const val = Math.round(largeAmount * parts[p].ratio * 100) / 100;
+            const val = Math.round(perWeekTotal * parts[p].ratio * 100) / 100;
             items.push({ name: parts[p].name, amount: val });
             allocated += val;
           }
         }
       }
       weeks[idx].largeBills = items;
-    }
-
-    // Equalize closing balances across weeks (weeks with large bills only)
-    const closings = monthWeekIndices.map((idx) => {
-      const fw = weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0);
-      const lg = weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0);
-      return Math.round((openingBalance + paycheckAmount + fw + lg) * 100) / 100;
-    });
-    const targetClosing = closings[0];
-    for (let j = 1; j < monthWeekIndices.length; j++) {
-      const diff = Math.round((closings[j] - targetClosing) * 100) / 100;
-      if (diff !== 0 && weeks[monthWeekIndices[j]].largeBills.length > 0) {
-        const last = weeks[monthWeekIndices[j]].largeBills;
-        const adjusted = Math.round((last[last.length - 1].amount - diff) * 100) / 100;
-        // Keep the adjustment clamped so it never flips positive
-        last[last.length - 1].amount = Math.min(0, adjusted);
-      }
     }
 
     // ── Spread timed balanced bills across weeks preceding their due day ──

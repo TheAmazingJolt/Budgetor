@@ -804,6 +804,118 @@ function buildDebtRows(
   return { debtRows, debtRequests, debtRowCount: debtRows.length };
 }
 
+function buildBillRows(
+  bills: BillMeta[],
+  afterRow: number,
+  sheetId: number,
+) {
+  if (!bills || bills.length === 0) return { billRows: [], billRequests: [], billRowCount: 0 };
+
+  const headerRow = afterRow + 1;
+  const colHeaderRow = headerRow + 1;
+  const firstDataRow = colHeaderRow + 1;
+
+  const billRows: any[][] = [];
+  billRows.push([]);
+  billRows.push(["Bills", "", ""]);
+  billRows.push(["Name", "Amount", "Due Day"]);
+  for (const bill of bills) {
+    billRows.push([
+      bill.name,
+      Math.abs(bill.amount),
+      bill.dayOfMonth != null ? bill.dayOfMonth : "",
+    ]);
+  }
+
+  const billBg = { red: 0.91, green: 0.97, blue: 0.93 };
+
+  const billRequests: sheets_v4.Schema$Request[] = [];
+
+  billRequests.push({
+    mergeCells: {
+      range: {
+        sheetId,
+        startRowIndex: headerRow,
+        endRowIndex: headerRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
+      },
+      mergeType: "MERGE_ALL",
+    },
+  });
+
+  billRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: headerRow,
+        endRowIndex: headerRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
+      },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: billBg,
+          textFormat: {
+            bold: true,
+            fontSize: 11,
+            fontFamily: "Arial",
+            foregroundColor: { red: 0.11, green: 0.37, blue: 0.18 },
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  billRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: colHeaderRow,
+        endRowIndex: colHeaderRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
+      },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: billBg,
+          textFormat: {
+            bold: true,
+            fontSize: 10,
+            fontFamily: "Arial",
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  billRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: firstDataRow,
+        endRowIndex: firstDataRow + bills.length,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
+      },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: billBg,
+          textFormat: {
+            fontSize: 10,
+            fontFamily: "Arial",
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  return { billRows, billRequests, billRowCount: billRows.length };
+}
+
 async function writeBudgetToSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
@@ -919,6 +1031,29 @@ async function writeBudgetToSheet(
     }
   }
 
+  if (bills && bills.length > 0) {
+    const billsStartRow = totalRows + debtRowCount;
+    const { billRows, billRequests } = buildBillRows(bills, billsStartRow, sheetId);
+
+    const billRangeStart = `A${billsStartRow + 1}`;
+    const billRangeEnd = `C${billsStartRow + billRows.length}`;
+    const billRange = `'${escapedTitle}'!${billRangeStart}:${billRangeEnd}`;
+
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: billRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: billRows },
+    });
+
+    if (billRequests.length > 0) {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: billRequests },
+      });
+    }
+  }
+
 }
 
 async function writeHiddenBillsSheet(
@@ -942,9 +1077,16 @@ async function writeHiddenBillsSheet(
       },
     });
   } else {
+    const addResult = await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: "_MoneyPalData" } } }] },
+    });
+    const newSheetId = addResult.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
     await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
-      requestBody: { requests: [{ addSheet: { properties: { title: "_MoneyPalData", hidden: true } } }] },
+      requestBody: {
+        requests: [{ updateSheetProperties: { properties: { sheetId: newSheetId, hidden: true }, fields: "hidden" } }],
+      },
     });
   }
 
@@ -1002,7 +1144,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
     if (body.bills && body.bills.length > 0) {
-      await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills);
+      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -1047,7 +1189,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
     if (body.bills && body.bills.length > 0) {
-      await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills);
+      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills); } catch { }
     }
 
     res.json({
