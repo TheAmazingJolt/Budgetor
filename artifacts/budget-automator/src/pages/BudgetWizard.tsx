@@ -110,7 +110,7 @@ import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
-import { CreditCard, Landmark, AlertTriangle, DollarSign } from "lucide-react";
+import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
 
@@ -157,25 +157,38 @@ const STEPS = ["Upload", "Configure", "Download"];
 
 const DEBT_TYPE_LABELS: Record<string, string> = {
   credit_card: "Credit Card",
-  loan: "Loan",
+  personal_loan: "Personal Loan",
+  student_loan: "Student Loan",
+  car_loan: "Car Loan",
+  installment: "Installments",
   collections: "Collections",
+  loan: "Loan",
 };
 
 function DebtTypeIcon({ type }: { type: string }) {
   if (type === "credit_card") return <CreditCard className="w-4 h-4 text-blue-600" />;
-  if (type === "loan") return <Landmark className="w-4 h-4 text-purple-600" />;
+  if (type === "personal_loan" || type === "loan") return <Landmark className="w-4 h-4 text-purple-600" />;
+  if (type === "student_loan") return <GraduationCap className="w-4 h-4 text-sky-600" />;
+  if (type === "car_loan") return <Car className="w-4 h-4 text-amber-600" />;
+  if (type === "installment") return <Receipt className="w-4 h-4 text-teal-600" />;
   return <AlertTriangle className="w-4 h-4 text-amber-600" />;
 }
 
 function debtTypeBadgeClass(type: string): string {
   if (type === "credit_card") return "bg-blue-100 text-blue-700 border-blue-200";
-  if (type === "loan") return "bg-purple-100 text-purple-700 border-purple-200";
+  if (type === "personal_loan" || type === "loan") return "bg-purple-100 text-purple-700 border-purple-200";
+  if (type === "student_loan") return "bg-sky-100 text-sky-700 border-sky-200";
+  if (type === "car_loan") return "bg-amber-100 text-amber-700 border-amber-200";
+  if (type === "installment") return "bg-teal-100 text-teal-700 border-teal-200";
   return "bg-amber-100 text-amber-700 border-amber-200";
 }
 
 function debtTypeLeftBar(type: string): string {
   if (type === "credit_card") return "bg-blue-500";
-  if (type === "loan") return "bg-purple-500";
+  if (type === "personal_loan" || type === "loan") return "bg-purple-500";
+  if (type === "student_loan") return "bg-sky-500";
+  if (type === "car_loan") return "bg-amber-500";
+  if (type === "installment") return "bg-teal-500";
   return "bg-amber-500";
 }
 
@@ -2015,7 +2028,7 @@ export function BudgetWizard({
                     <div className="flex-1">
                       <p className="font-semibold text-sm text-foreground">Manage Debts</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Track credit cards, loans, and collections.
+                        Track credit cards, loans, and more.
                         {debts.length > 0 && (
                           <span className="ml-1 font-medium text-red-600">
                             {debts.length} {debts.length === 1 ? "account" : "accounts"} &middot; ${debts.reduce((s, d) => s + d.balance, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} total
@@ -2381,7 +2394,7 @@ export function BudgetWizard({
                   <div>
                     <h3 className="text-xl font-semibold text-foreground">Bills</h3>
                     <p className="text-sm text-muted-foreground">
-                      Rent, utilities, and car payments are balanced so every week ends with the same amount.
+                      Rent, utilities, and subscriptions are balanced so every week ends with the same amount.
                     </p>
                   </div>
                   <Button
@@ -2459,7 +2472,7 @@ export function BudgetWizard({
                       <DollarSign className="w-5 h-5" /> Debts
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Track credit cards, loans, and collections. Optionally include minimum payments as bills.
+                      Track credit cards, loans, and more. Optionally include minimum payments as bills.
                     </p>
                   </div>
                   <Button

@@ -15,15 +15,21 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Debt } from "@workspace/api-client-react";
 
+const DEBT_TYPES = ["credit_card", "personal_loan", "student_loan", "car_loan", "installment", "collections"] as const;
+
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
-  type: z.enum(["credit_card", "loan", "collections"]),
+  type: z.enum(DEBT_TYPES),
   balance: z.coerce.number().min(0.01, "Balance must be greater than 0"),
   interestRate: z.coerce.number().min(0).max(100).nullable().optional(),
   minimumPayment: z.coerce.number().min(0.01, "Minimum payment is required"),
   originalAmount: z.coerce.number().min(0).nullable().optional(),
 }).refine(
-  (data) => data.originalAmount == null || data.originalAmount >= data.balance,
+  (data) => {
+    if (data.originalAmount == null) return true;
+    if (data.type === "credit_card") return true;
+    return data.originalAmount >= data.balance;
+  },
   { message: "Original amount must be greater than or equal to the current balance", path: ["originalAmount"] }
 );
 
@@ -39,7 +45,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
     defaultValues: initialData
       ? {
           name: initialData.name ?? "",
-          type: initialData.type ?? "credit_card",
+          type: (DEBT_TYPES as readonly string[]).includes(initialData.type) ? initialData.type as typeof DEBT_TYPES[number] : "personal_loan",
           balance: initialData.balance ?? 0,
           interestRate: initialData.interestRate ?? null,
           minimumPayment: initialData.minimumPayment ?? 0,
@@ -56,6 +62,8 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
   });
 
   const debtType = form.watch("type");
+  const isCreditCard = debtType === "credit_card";
+  const isLoanType = debtType === "personal_loan" || debtType === "student_loan" || debtType === "car_loan";
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
     onSubmit({
@@ -79,7 +87,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             <FormItem>
               <FormLabel>Debt Name</FormLabel>
               <FormControl>
-                <Input placeholder="e.g. Chase Visa, Car loan" {...field} className="focus:ring-primary/20 focus:border-primary" />
+                <Input placeholder={isCreditCard ? "e.g. Chase Visa" : isLoanType ? "e.g. Auto Loan, Sallie Mae" : "e.g. Medical bill"} {...field} className="focus:ring-primary/20 focus:border-primary" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -100,7 +108,10 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="credit_card">Credit Card</SelectItem>
-                  <SelectItem value="loan">Loan</SelectItem>
+                  <SelectItem value="personal_loan">Personal Loan</SelectItem>
+                  <SelectItem value="student_loan">Student Loan</SelectItem>
+                  <SelectItem value="car_loan">Car Loan</SelectItem>
+                  <SelectItem value="installment">Installments</SelectItem>
                   <SelectItem value="collections">Collections</SelectItem>
                 </SelectContent>
               </Select>
@@ -113,8 +124,17 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           {debtType === "credit_card" && (
             <p><span className="font-semibold text-foreground">Credit Card:</span> Revolving credit with a variable balance and minimum payment due each month.</p>
           )}
-          {debtType === "loan" && (
-            <p><span className="font-semibold text-foreground">Loan:</span> Installment debt like auto loans, student loans, or personal loans with fixed payments. Enter your current payoff or remaining principal balance — interest is calculated separately using the APR field.</p>
+          {debtType === "personal_loan" && (
+            <p><span className="font-semibold text-foreground">Personal Loan:</span> Unsecured borrowing with fixed monthly payments. Enter your current payoff or remaining principal balance.</p>
+          )}
+          {debtType === "student_loan" && (
+            <p><span className="font-semibold text-foreground">Student Loan:</span> Education debt with fixed monthly payments. Federal and private loans both work here.</p>
+          )}
+          {debtType === "car_loan" && (
+            <p><span className="font-semibold text-foreground">Car Loan:</span> Auto financing with fixed monthly payments. Enter your remaining payoff balance.</p>
+          )}
+          {debtType === "installment" && (
+            <p><span className="font-semibold text-foreground">Installments:</span> Buy-now-pay-later plans, retail financing, or any fixed payment schedule with a set end date.</p>
           )}
           {debtType === "collections" && (
             <p><span className="font-semibold text-foreground">Collections:</span> Debt that has been sent to a collection agency. May have a negotiated payment plan.</p>
@@ -134,7 +154,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                     <Input type="number" step="0.01" placeholder="0.00" {...field} className="pl-7 focus:ring-primary/20 focus:border-primary" />
                   </div>
                 </FormControl>
-                {debtType === "loan" && (
+                {isLoanType && (
                   <FormDescription>Enter your remaining principal — do not include future interest.</FormDescription>
                 )}
                 <FormMessage />
@@ -154,7 +174,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                     <Input type="number" step="0.01" placeholder="0.00" {...field} className="pl-7 focus:ring-primary/20 focus:border-primary" />
                   </div>
                 </FormControl>
-                {debtType === "loan" && (
+                {isLoanType && (
                   <FormDescription>Your regular monthly installment amount.</FormDescription>
                 )}
                 <FormMessage />
@@ -192,7 +212,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           name="originalAmount"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Original Amount<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+              <FormLabel>{isCreditCard ? "Credit Limit" : "Original Amount"}<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
               <FormControl>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -206,7 +226,11 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   />
                 </div>
               </FormControl>
-              <p className="text-xs text-muted-foreground">The total amount you originally borrowed or charged. Used to track payoff progress.</p>
+              <p className="text-xs text-muted-foreground">
+                {isCreditCard
+                  ? "Your total credit line. Used to calculate utilization."
+                  : "The total amount you originally borrowed or charged. Used to track payoff progress."}
+              </p>
               <FormMessage />
             </FormItem>
           )}

@@ -127,7 +127,10 @@ export type DebtType = (typeof DebtType)[keyof typeof DebtType];
 
 export const DebtType = {
   credit_card: "credit_card",
-  loan: "loan",
+  personal_loan: "personal_loan",
+  student_loan: "student_loan",
+  car_loan: "car_loan",
+  installment: "installment",
   collections: "collections",
 } as const;
 

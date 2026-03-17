@@ -946,7 +946,10 @@ components:
       type: string
       enum:
         - credit_card
-        - loan
+        - personal_loan
+        - student_loan
+        - car_loan
+        - installment
         - collections
 
     Debt:

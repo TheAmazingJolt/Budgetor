@@ -181,7 +181,14 @@ export const SavedBudgetListResponse = zod.object({
           zod.object({
             id: zod.string(),
             name: zod.string(),
-            type: zod.enum(["credit_card", "loan", "collections"]),
+            type: zod.enum([
+              "credit_card",
+              "personal_loan",
+              "student_loan",
+              "car_loan",
+              "installment",
+              "collections",
+            ]),
             balance: zod
               .number()
               .describe("Current balance owed (positive number)"),
@@ -221,7 +228,14 @@ export const SavedBudgetCreateBody = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        type: zod.enum(["credit_card", "loan", "collections"]),
+        type: zod.enum([
+          "credit_card",
+          "personal_loan",
+          "student_loan",
+          "car_loan",
+          "installment",
+          "collections",
+        ]),
         balance: zod
           .number()
           .describe("Current balance owed (positive number)"),
@@ -255,7 +269,14 @@ export const SavedBudgetCreateResponse = zod.object({
         zod.object({
           id: zod.string(),
           name: zod.string(),
-          type: zod.enum(["credit_card", "loan", "collections"]),
+          type: zod.enum([
+            "credit_card",
+            "personal_loan",
+            "student_loan",
+            "car_loan",
+            "installment",
+            "collections",
+          ]),
           balance: zod
             .number()
             .describe("Current balance owed (positive number)"),
@@ -298,7 +319,14 @@ export const SavedBudgetUpdateBody = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        type: zod.enum(["credit_card", "loan", "collections"]),
+        type: zod.enum([
+          "credit_card",
+          "personal_loan",
+          "student_loan",
+          "car_loan",
+          "installment",
+          "collections",
+        ]),
         balance: zod
           .number()
           .describe("Current balance owed (positive number)"),
@@ -332,7 +360,14 @@ export const SavedBudgetUpdateResponse = zod.object({
         zod.object({
           id: zod.string(),
           name: zod.string(),
-          type: zod.enum(["credit_card", "loan", "collections"]),
+          type: zod.enum([
+            "credit_card",
+            "personal_loan",
+            "student_loan",
+            "car_loan",
+            "installment",
+            "collections",
+          ]),
           balance: zod
             .number()
             .describe("Current balance owed (positive number)"),
@@ -859,7 +894,14 @@ export const GetUserDebtsResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      type: zod.enum(["credit_card", "loan", "collections"]),
+      type: zod.enum([
+        "credit_card",
+        "personal_loan",
+        "student_loan",
+        "car_loan",
+        "installment",
+        "collections",
+      ]),
       balance: zod.number().describe("Current balance owed (positive number)"),
       interestRate: zod
         .number()
@@ -887,7 +929,14 @@ export const UpdateUserDebtsBody = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      type: zod.enum(["credit_card", "loan", "collections"]),
+      type: zod.enum([
+        "credit_card",
+        "personal_loan",
+        "student_loan",
+        "car_loan",
+        "installment",
+        "collections",
+      ]),
       balance: zod.number().describe("Current balance owed (positive number)"),
       interestRate: zod
         .number()
@@ -911,7 +960,14 @@ export const UpdateUserDebtsResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      type: zod.enum(["credit_card", "loan", "collections"]),
+      type: zod.enum([
+        "credit_card",
+        "personal_loan",
+        "student_loan",
+        "car_loan",
+        "installment",
+        "collections",
+      ]),
       balance: zod.number().describe("Current balance owed (positive number)"),
       interestRate: zod
         .number()
