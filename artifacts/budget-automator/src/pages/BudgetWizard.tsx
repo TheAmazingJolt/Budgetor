@@ -279,6 +279,7 @@ export function BudgetWizard({
   const [pastedExcelUrl, setPastedExcelUrl] = useState("");
   const [isLoadingExcelUrl, setIsLoadingExcelUrl] = useState(false);
   const [showUrlInputs, setShowUrlInputs] = useState(false);
+  const [scratchExistingWeeks, setScratchExistingWeeks] = useState<any[]>([]);
 
   const {
     uploadedFile,
@@ -709,6 +710,7 @@ export function BudgetWizard({
     setBills([]);
     setDebts([]);
     setDebtBillImports(new Set());
+    setScratchExistingWeeks([]);
     setInputMode("scratch");
     setBlankMode(true);
     setIncludeBillsSummary(true);
@@ -794,6 +796,7 @@ export function BudgetWizard({
           if (!canWriteBack) {
             setBlankMode(true);
             setIncludeBillsSummary(true);
+            setScratchExistingWeeks(data.existingWeeks);
           }
 
           const lastWeekExcelUrl = data.existingWeeks.at(-1) as any;
@@ -960,6 +963,7 @@ export function BudgetWizard({
     if (inputMode === "excel") return excelReadQuery.data?.existingWeeks ?? [];
     if (inputMode === "cloud") return cloudExistingWeeks;
     if (inputMode === "upload") return parsedWorkbook?.existingWeeks ?? [];
+    if (inputMode === "scratch") return scratchExistingWeeks;
     return [];
   };
 
@@ -1250,6 +1254,7 @@ export function BudgetWizard({
           if (!canWriteBack) {
             setBlankMode(true);
             setIncludeBillsSummary(true);
+            setScratchExistingWeeks(data.existingWeeks);
           }
 
           const lastWeekSheetsUrl = data.existingWeeks.at(-1);
@@ -1780,7 +1785,7 @@ export function BudgetWizard({
                   <DropdownMenuSeparator />
                   {!isGuest && (
                     <>
-                      <DropdownMenuItem onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}>
+                      <DropdownMenuItem onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}>
                         <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -2299,7 +2304,7 @@ export function BudgetWizard({
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -3505,7 +3510,7 @@ export function BudgetWizard({
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
                   className="sm:w-auto h-14 rounded-2xl border-border/60"
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Back to menu
