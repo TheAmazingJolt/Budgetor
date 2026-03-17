@@ -217,6 +217,17 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     }
   }
 
+  const SECTION_HEADERS = new Set([
+    "debts",
+    "bills",
+    "name",
+    "apr %",
+    "min payment",
+    "## bills ##",
+    "amount",
+    "due day",
+  ]);
+
   let col = FIRST_BUDGET_COL;
   while (col < headerRow.length) {
     const label = headerRow[col]?.formattedValue?.trim() ?? "";
@@ -236,12 +247,14 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       const num = cells[col + 1]?.effectiveValue?.numberValue;
 
       if (!key && num === undefined) continue;
+      if (SECTION_HEADERS.has(key.toLowerCase())) continue;
       if (key.toLowerCase().includes("remaining acct")) {
         openingBalance = num ?? 0;
       } else if (key.toLowerCase() === "paycheck") {
         paycheck = num ?? 0;
       } else if (key.toLowerCase() === "remaining") {
         remaining = num ?? 0;
+        break;
       } else if (key && num !== undefined) {
         items.push({ name: key, amount: num });
       }
