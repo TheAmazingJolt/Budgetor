@@ -1264,11 +1264,9 @@ export function BudgetWizard({
           setNewExcelSaveSuccess(false);
           setNewExcelUrl(null);
 
-          if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
-            setGeneratedBlob(null);
-          } else {
+          {
             let blob: Blob;
-            if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
+            if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud" || effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const rawBills = includeBillsSummary
                 ? (parsedWorkbook?.rawBillsSection ?? null)
                 : null;
@@ -2835,7 +2833,9 @@ export function BudgetWizard({
                   };
                 };
 
-                const allWeeks = [...rawHistoryWeeks, ...rawNewWeeks]
+                const newWeekLabels = new Set(rawNewWeeks.map(w => w.label));
+                const filteredHistoryWeeks = rawHistoryWeeks.filter(w => !newWeekLabels.has(w.label));
+                const allWeeks = [...filteredHistoryWeeks, ...rawNewWeeks]
                   .map(applyEdit)
                   .filter(Boolean) as UnifiedWeek[];
                 const hasHistory = rawHistoryWeeks.length > 0 || cloudOnlyWeeks.length > 0;
@@ -3396,11 +3396,11 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {(inputMode !== "google" && inputMode !== "excel" || generatedBlob) && (
+                {generatedBlob && (
                   <Button
                     size="lg"
                     onClick={handleDownload}
-                    disabled={!generatedBlob && inputMode !== "google" && inputMode !== "excel"}
+                    disabled={!generatedBlob}
                     className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
                       inputMode === "google" || inputMode === "excel" || inputMode === "cloud" || googleAuthenticated ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
                     }`}

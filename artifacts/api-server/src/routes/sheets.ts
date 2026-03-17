@@ -515,6 +515,17 @@ function buildBudgetWriteData(
     valueRows[nextRow][valCol] = "";
 
     requests.push({
+      unmergeCells: {
+        range: {
+          sheetId,
+          startRowIndex: nextRow,
+          endRowIndex: nextRow + 1,
+          startColumnIndex: labelCol,
+          endColumnIndex: valCol + 1,
+        },
+      },
+    });
+    requests.push({
       mergeCells: {
         range: {
           sheetId,
@@ -733,6 +744,17 @@ function buildDebtRows(
   const debtRequests: sheets_v4.Schema$Request[] = [];
 
   debtRequests.push({
+    unmergeCells: {
+      range: {
+        sheetId,
+        startRowIndex: headerRow,
+        endRowIndex: headerRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 4,
+      },
+    },
+  });
+  debtRequests.push({
     mergeCells: {
       range: {
         sheetId,
@@ -844,6 +866,17 @@ function buildBillRows(
 
   const billRequests: sheets_v4.Schema$Request[] = [];
 
+  billRequests.push({
+    unmergeCells: {
+      range: {
+        sheetId,
+        startRowIndex: headerRow,
+        endRowIndex: headerRow + 1,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
+      },
+    },
+  });
   billRequests.push({
     mergeCells: {
       range: {
