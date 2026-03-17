@@ -724,13 +724,13 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
     );
 
     let afterSectionsRow = totalRows;
-    if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
-      afterSectionsRow += buildExcelDebtGrid(body.debts).length;
-    }
     if (body.bills && body.bills.length > 0) {
-      await writeExcelBillRows(token, fileId, sheetName, afterSectionsRow, body.bills);
+      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills);
+      afterSectionsRow += body.bills.length + 3;
       try { await writeHiddenExcelBillsSheet(token, fileId, body.bills); } catch { }
+    }
+    if (body.debts && body.debts.length > 0) {
+      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRow, body.debts);
     }
 
     res.json({ fileId, webUrl });
@@ -838,13 +838,13 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     );
 
     let afterSectionsRowWrite = totalRows;
-    if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, totalRows, body.debts);
-      afterSectionsRowWrite += buildExcelDebtGrid(body.debts).length;
-    }
     if (body.bills && body.bills.length > 0) {
-      await writeExcelBillRows(token, fileId, sheetName, afterSectionsRowWrite, body.bills);
+      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills);
+      afterSectionsRowWrite += body.bills.length + 3;
       try { await writeHiddenExcelBillsSheet(token, fileId, body.bills); } catch { }
+    }
+    if (body.debts && body.debts.length > 0) {
+      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts);
     }
 
     res.json({

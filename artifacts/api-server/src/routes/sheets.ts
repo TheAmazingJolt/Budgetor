@@ -1007,36 +1007,13 @@ async function writeBudgetToSheet(
     });
   }
 
-  let debtRowCount = 0;
-  if (debts && debts.length > 0) {
-    const { debtRows, debtRequests } = buildDebtRows(debts, totalRows, sheetId);
-    debtRowCount = debtRows.length;
-
-    const debtRangeStart = `A${totalRows + 1}`;
-    const debtRangeEnd = `D${totalRows + debtRows.length}`;
-    const debtRange = `'${escapedTitle}'!${debtRangeStart}:${debtRangeEnd}`;
-
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId,
-      range: debtRange,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: debtRows },
-    });
-
-    if (debtRequests.length > 0) {
-      await sheetsApi.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests: debtRequests },
-      });
-    }
-  }
-
+  let billRowCount = 0;
   if (bills && bills.length > 0) {
-    const billsStartRow = totalRows + debtRowCount;
-    const { billRows, billRequests } = buildBillRows(bills, billsStartRow, sheetId);
+    const { billRows, billRequests } = buildBillRows(bills, totalRows, sheetId);
+    billRowCount = billRows.length;
 
-    const billRangeStart = `A${billsStartRow + 1}`;
-    const billRangeEnd = `C${billsStartRow + billRows.length}`;
+    const billRangeStart = `A${totalRows + 1}`;
+    const billRangeEnd = `C${totalRows + billRows.length}`;
     const billRange = `'${escapedTitle}'!${billRangeStart}:${billRangeEnd}`;
 
     await sheetsApi.spreadsheets.values.update({
@@ -1050,6 +1027,29 @@ async function writeBudgetToSheet(
       await sheetsApi.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: { requests: billRequests },
+      });
+    }
+  }
+
+  if (debts && debts.length > 0) {
+    const debtsStartRow = totalRows + billRowCount;
+    const { debtRows, debtRequests } = buildDebtRows(debts, debtsStartRow, sheetId);
+
+    const debtRangeStart = `A${debtsStartRow + 1}`;
+    const debtRangeEnd = `D${debtsStartRow + debtRows.length}`;
+    const debtRange = `'${escapedTitle}'!${debtRangeStart}:${debtRangeEnd}`;
+
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: debtRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: debtRows },
+    });
+
+    if (debtRequests.length > 0) {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: debtRequests },
       });
     }
   }
