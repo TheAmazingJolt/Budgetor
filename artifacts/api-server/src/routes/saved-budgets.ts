@@ -50,8 +50,8 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
 
     res.status(201).json({ budget });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: "Failed to save budget: " + message });
+    console.error("[POST /budgets] Failed to save budget:", err);
+    res.status(500).json({ error: "Failed to save budget. Please try again." });
   }
 });
 
@@ -80,8 +80,8 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
 
     res.json({ budget });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: "Failed to update budget: " + message });
+    console.error("[PUT /budgets/:id] Failed to update budget:", err);
+    res.status(500).json({ error: "Failed to update budget. Please try again." });
   }
 });
 

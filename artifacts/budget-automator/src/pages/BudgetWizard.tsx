@@ -1040,10 +1040,12 @@ export function BudgetWizard({
             setSaveBudgetName("");
           },
           onError: (err: unknown) => {
-            const message = err instanceof Error ? err.message : "Unknown error";
+            const apiErr = err as { data?: { error?: string } };
+            const detail = apiErr?.data?.error ?? (err instanceof Error ? err.message : "Unknown error");
+            const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
             toast({
               title: "Failed to save",
-              description: message,
+              description,
               variant: "destructive",
             });
           },
@@ -1164,8 +1166,10 @@ export function BudgetWizard({
           setRenameBudgetValue("");
         },
         onError: (err: unknown) => {
-          const message = err instanceof Error ? err.message : "Unknown error";
-          toast({ title: "Failed to rename", description: message, variant: "destructive" });
+          const apiErr = err as { data?: { error?: string } };
+          const detail = apiErr?.data?.error ?? (err instanceof Error ? err.message : "Unknown error");
+          const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
+          toast({ title: "Failed to rename", description, variant: "destructive" });
         },
       }
     );
@@ -1238,10 +1242,12 @@ export function BudgetWizard({
           });
         },
         onError: (err: unknown) => {
-          const message = err instanceof Error ? err.message : "Unknown error";
+          const apiErr = err as { data?: { error?: string } };
+          const detail = apiErr?.data?.error ?? (err instanceof Error ? err.message : "Unknown error");
+          const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
           toast({
             title: "Failed to save to cloud",
-            description: message,
+            description,
             variant: "destructive",
           });
         },
