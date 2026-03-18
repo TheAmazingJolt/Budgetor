@@ -93,7 +93,24 @@ function writeBillsSection(
   set(sheet, 1, startCol,     makeCell('Bill Name', subHeaderStyle));
   set(sheet, 1, startCol + 1, makeCell('Amount', { ...subHeaderStyle, alignment: { horizontal: 'right' } }));
 
-  const CATEGORY_ORDER: Bill['category'][] = ['rent', 'utilities', 'car', 'fixed', 'weekly'];
+  const PRIORITY_CATEGORIES = ['rent', 'utilities', 'car', 'fixed', 'weekly'];
+
+  // Build ordered list of categories: priority ones first, then any extras found in bills.
+  const seenLower = new Set<string>();
+  const orderedCategories: string[] = [];
+  for (const cat of PRIORITY_CATEGORIES) {
+    if (bills.some(b => b.category.toLowerCase() === cat)) {
+      orderedCategories.push(cat);
+      seenLower.add(cat);
+    }
+  }
+  for (const bill of bills) {
+    const lower = bill.category.toLowerCase();
+    if (!seenLower.has(lower)) {
+      orderedCategories.push(bill.category);
+      seenLower.add(lower);
+    }
+  }
 
   // Determine the dominant color for a category (first bill with a real color).
   // Used to tint the category label row.
@@ -105,8 +122,9 @@ function writeBillsSection(
   }
 
   let row = 2;
-  for (const cat of CATEGORY_ORDER) {
-    const catBills = bills.filter(b => b.category === cat);
+  for (const cat of orderedCategories) {
+    const catLower = cat.toLowerCase();
+    const catBills = bills.filter(b => b.category.toLowerCase() === catLower);
     if (catBills.length === 0) continue;
 
     // Category label row — green bg only when at least one bill has a real color;
