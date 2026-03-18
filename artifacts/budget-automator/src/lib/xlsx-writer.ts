@@ -406,21 +406,41 @@ function normalizeFlatStyle(s: any): any {
 }
 
 /**
- * Scans the sub-header row (row 1) of the sheet for column labels that are
- * "Category" or "Type" (case-insensitive) and marks those columns hidden.
- * The data is preserved in _BillsData so hiding has no effect on parsing.
- * Used by writeBillsVerbatim; can also be called after writeBillsSection if
- * Category/Type columns are ever added there.
+ * Marks columns whose header label is "Category" or "Type" as hidden.
+ *
+ * When `cellsOverride` is supplied (verbatim-copy path) every cell in the map
+ * is scanned regardless of row, so the function works whether the Bills
+ * sub-header sits at row 1 or row 13 (or anywhere else).
+ *
+ * Without `cellsOverride` (fresh-generate path) the function falls back to
+ * scanning row 1, which is where `writeBillsSection` always places its header.
  */
-function hideCategoryTypeColumns(sheet: XLSX.WorkSheet, colCount: number): void {
+function hideCategoryTypeColumns(
+  sheet: XLSX.WorkSheet,
+  colCount: number,
+  cellsOverride?: Record<string, any>,
+): void {
   if (!sheet['!cols']) sheet['!cols'] = [];
   while ((sheet['!cols'] as any[]).length < colCount) (sheet['!cols'] as any[]).push({});
-  for (let c = 0; c < colCount; c++) {
-    const addr = XLSX.utils.encode_cell({ r: 1, c });
-    const cell = sheet[addr];
-    const label = String(cell?.v ?? '').trim().toLowerCase();
-    if (label === 'category' || label === 'type') {
-      (sheet['!cols'] as any[])[c] = { ...(sheet['!cols'] as any[])[c], hidden: true };
+
+  if (cellsOverride) {
+    for (const [addr, cell] of Object.entries(cellsOverride)) {
+      const label = String(cell?.v ?? '').trim().toLowerCase();
+      if (label === 'category' || label === 'type') {
+        const { c } = XLSX.utils.decode_cell(addr);
+        if (c < colCount) {
+          (sheet['!cols'] as any[])[c] = { ...(sheet['!cols'] as any[])[c], hidden: true };
+        }
+      }
+    }
+  } else {
+    for (let c = 0; c < colCount; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 1, c });
+      const cell = sheet[addr];
+      const label = String(cell?.v ?? '').trim().toLowerCase();
+      if (label === 'category' || label === 'type') {
+        (sheet['!cols'] as any[])[c] = { ...(sheet['!cols'] as any[])[c], hidden: true };
+      }
     }
   }
 }
@@ -484,8 +504,8 @@ function writeBillsVerbatim(
   autoFitColumns(sheet, 0, raw.colCount - 1);
 
   // Hide Category/Type columns AFTER autoFit so the hidden flag is not lost.
-  // The data is preserved in _BillsData; hiding only affects Excel display.
-  hideCategoryTypeColumns(sheet, raw.colCount);
+  // Pass raw.cells so the scan covers every row, not just the hardcoded row 1.
+  hideCategoryTypeColumns(sheet, raw.colCount, raw.cells);
 }
 
 // ── Auto-fit column widths ────────────────────────────────────────────────────
