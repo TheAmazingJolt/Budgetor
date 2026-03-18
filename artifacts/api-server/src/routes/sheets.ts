@@ -1138,7 +1138,7 @@ async function writeBudgetToSheet(
     billRowCount = billRows.length;
 
     const billRangeStart = `A${totalRows + 1}`;
-    const billRangeEnd = `C${totalRows + billRows.length}`;
+    const billRangeEnd = `E${totalRows + billRows.length}`;
     const billRange = `'${escapedTitle}'!${billRangeStart}:${billRangeEnd}`;
 
     await sheetsApi.spreadsheets.values.update({
