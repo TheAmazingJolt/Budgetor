@@ -20,6 +20,9 @@ const BILLS_SECTION_HEADER_FG  = '1C5E2E';
 const DEBTS_SECTION_HEADER_BG  = 'FCE8E8';
 const DEBTS_SECTION_HEADER_FG  = '9C2626';
 
+// Currency number format applied to all monetary value cells.
+const MONEY_FMT = '"$"#,##0.00';
+
 /**
  * Per-color background hex values for bill rows, derived from the exact
  * Google Sheets COLOR_KEY_TO_RGB values (converted from 0-1 floats to hex).
@@ -135,10 +138,20 @@ function writeBillsSectionBelow(
 
   let row = firstDataRow;
   for (const bill of filteredBills) {
-    // Bills section rows are plain (no colored fill) — same as Google Sheets.
+    const { fill, fontColor } = billColorStyle(bill.color);
     const nameStyle: any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'right' }, numFmt: '#,##0.##' };
+    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
     const dayStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'center' } };
+    if (fill) {
+      nameStyle.fill = fill;
+      amtStyle.fill  = fill;
+      dayStyle.fill  = fill;
+    }
+    if (fontColor) {
+      nameStyle.font.color = { rgb: fontColor };
+      amtStyle.font.color  = { rgb: fontColor };
+      dayStyle.font.color  = { rgb: fontColor };
+    }
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
@@ -210,13 +223,13 @@ function writeWeeksToSheet(
     // Remaining Acct (optional)
     if (includeRemainingAcct) {
       set(sheet, nextRow, labelCol, makeCell('Remaining Acct', { font: bodyFont }));
-      set(sheet, nextRow, valCol,   makeCell(week.openingBalance, { font: bodyFont }));
+      set(sheet, nextRow, valCol,   makeCell(week.openingBalance, { font: bodyFont, numFmt: MONEY_FMT }));
       nextRow++;
     }
 
     // Paycheck
     set(sheet, nextRow, labelCol, makeCell('Paycheck', { font: bodyFont }));
-    set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont }));
+    set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont, numFmt: MONEY_FMT }));
     nextRow++;
 
     // Bill line items — apply per-bill color styling when a color map is provided.
@@ -226,11 +239,12 @@ function writeWeeksToSheet(
         ?? billColorMap.get(bill.name.replace(/^Partial\s+/, ''))
         ?? null;
       const { fill, fontColor } = billColorStyle(colorKey);
-      const cellStyle: any = { font: { sz: 10, name: 'Arial' } };
-      if (fill) cellStyle.fill = fill;
-      if (fontColor) cellStyle.font.color = { rgb: fontColor };
-      set(sheet, nextRow, labelCol, makeCell(bill.name,   cellStyle));
-      set(sheet, nextRow, valCol,   makeCell(bill.amount, { ...cellStyle }));
+      const labelStyle: any = { font: { sz: 10, name: 'Arial' } };
+      const valStyle:   any = { font: { sz: 10, name: 'Arial' }, numFmt: MONEY_FMT };
+      if (fill)      { labelStyle.fill = fill; valStyle.fill = fill; }
+      if (fontColor) { labelStyle.font.color = { rgb: fontColor }; valStyle.font.color = { rgb: fontColor }; }
+      set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
+      set(sheet, nextRow, valCol,   makeCell(bill.amount, valStyle));
       nextRow++;
     }
 
@@ -250,7 +264,7 @@ function writeWeeksToSheet(
     set(sheet, remainingRowIdx, valCol,   {
       ...makeSumFormula(valLetter, sumStartRow + 1, remainingRowIdx),
       v: week.closingBalance,
-      s: remainingStyle,
+      s: { ...remainingStyle, numFmt: MONEY_FMT },
     });
   }
 
@@ -635,15 +649,17 @@ function writeDebtsSection(
   set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
 
   const bodyFont = { sz: 10, name: 'Arial' };
-  // Debt data rows are plain (no colored fill) — same as Google Sheets.
-  const bodyStyle = { font: bodyFont };
+  const rowFill  = debtFill;
+  const nameStyle   = { font: bodyFont, fill: rowFill };
+  const moneyStyle  = { font: bodyFont, fill: rowFill, numFmt: MONEY_FMT };
+  const aprStyle    = { font: bodyFont, fill: rowFill };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
-    set(sheet, currentRow, 0, makeCell(debt.name, bodyStyle));
-    set(sheet, currentRow, 1, makeCell(debt.balance, bodyStyle));
-    set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', bodyStyle));
-    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, bodyStyle));
+    set(sheet, currentRow, 0, makeCell(debt.name, nameStyle));
+    set(sheet, currentRow, 1, makeCell(debt.balance, moneyStyle));
+    set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', aprStyle));
+    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, moneyStyle));
     currentRow++;
   }
 

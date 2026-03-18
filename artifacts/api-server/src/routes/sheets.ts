@@ -721,6 +721,25 @@ function buildBudgetWriteData(
         fields: "userEnteredFormat(textFormat,borders)",
       },
     });
+
+    // Currency format for the entire value column (rows sumStartRow through remainingRowIdx)
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: sumStartRow,
+          endRowIndex: remainingRowIdx + 1,
+          startColumnIndex: valCol,
+          endColumnIndex: valCol + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' },
+          },
+        },
+        fields: "userEnteredFormat(numberFormat)",
+      },
+    });
   }
 
   requests.push({
@@ -913,6 +932,27 @@ function buildDebtRows(
     },
   });
 
+  // Currency format for Balance (col 1) and Min Payment (col 3) in debt data rows.
+  for (const moneyCol of [1, 3]) {
+    debtRequests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: firstDataRow,
+          endRowIndex: firstDataRow + debts.length,
+          startColumnIndex: moneyCol,
+          endColumnIndex: moneyCol + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' },
+          },
+        },
+        fields: "userEnteredFormat(numberFormat)",
+      },
+    });
+  }
+
   return { debtRows, debtRequests, debtRowCount: debtRows.length };
 }
 
@@ -1014,25 +1054,49 @@ function buildBillRows(
     },
   });
 
+  // Per-bill row background color (each bill uses its assigned color).
+  for (let i = 0; i < bills.length; i++) {
+    const bill = bills[i];
+    const colorKey = bill.color && bill.color !== "none" ? bill.color : null;
+    const bgColor = colorKey && COLOR_KEY_TO_RGB[colorKey]
+      ? COLOR_KEY_TO_RGB[colorKey]
+      : billBg; // fallback to section green for uncolored bills
+    billRequests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: firstDataRow + i,
+          endRowIndex: firstDataRow + i + 1,
+          startColumnIndex: 0,
+          endColumnIndex: 3,
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: bgColor,
+            textFormat: { fontSize: 10, fontFamily: "Arial" },
+          },
+        },
+        fields: "userEnteredFormat(backgroundColor,textFormat)",
+      },
+    });
+  }
+
+  // Currency format for the Amount column in bill data rows.
   billRequests.push({
     repeatCell: {
       range: {
         sheetId,
         startRowIndex: firstDataRow,
         endRowIndex: firstDataRow + bills.length,
-        startColumnIndex: 0,
-        endColumnIndex: 3,
+        startColumnIndex: 1,
+        endColumnIndex: 2,
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: billBg,
-          textFormat: {
-            fontSize: 10,
-            fontFamily: "Arial",
-          },
+          numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(numberFormat)",
     },
   });
 
