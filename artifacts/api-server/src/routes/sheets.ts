@@ -100,7 +100,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
 
   // ── Try _BudgifyData hidden sheet first (written by app), fall back to legacy _MoneyPalData ──
   const bills: any[] = [];
-  const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
+  const colorMap: Record<string, string> = {};
 
   const metaSheet =
     sheetsData.find((s) => s.properties?.title === "_BudgifyData") ??

@@ -474,7 +474,28 @@ export function BudgetWizard({
     }
     if (billsLoadedForUserRef.current === currentUser.id) return;
     if (!userBillsQuery.data) return;
-    const serverBills = (userBillsQuery.data.bills ?? []) as Bill[];
+    let serverBills = (userBillsQuery.data.bills ?? []) as Bill[];
+
+    // One-time migration: strip old heuristic-assigned colors ("blue"/"orange"/"purple"
+    // for balanced bills, "slate" for fixed bills) that were set automatically on import,
+    // not by explicit user choice.
+    const MIGRATION_KEY = `budgify_color_migration_v1_${currentUser.id}`;
+    if (!localStorage.getItem(MIGRATION_KEY)) {
+      const OLD_HEURISTIC: Record<string, string[]> = {
+        balanced: ["blue", "orange", "purple"],
+        fixed: ["slate"],
+        weekly: ["green"],
+      };
+      serverBills = serverBills.map((b) => {
+        const heuristicColors = OLD_HEURISTIC[b.type ?? "fixed"] ?? [];
+        if (b.color && heuristicColors.includes(b.color)) {
+          return { ...b, color: "none" as any };
+        }
+        return b;
+      });
+      localStorage.setItem(MIGRATION_KEY, "1");
+    }
+
     setBills(serverBills);
     prevBillsRef.current = JSON.stringify(serverBills);
     billsLoadedForUserRef.current = currentUser.id;
@@ -1641,10 +1662,9 @@ export function BudgetWizard({
   const migrateLegacyBill = (bill: any): Bill => {
     if (bill.type) return bill as Bill;
     const legacyTypeMap: Record<string, string> = { rent: "balanced", utilities: "balanced", car: "balanced", fixed: "fixed", weekly: "weekly" };
-    const legacyColorMap: Record<string, string> = { rent: "blue", utilities: "orange", car: "purple", fixed: "slate", weekly: "green" };
     const legacyCategoryMap: Record<string, string> = { rent: "Rent", utilities: "Utilities", car: "Car", fixed: "Fixed", weekly: "Weekly" };
     const cat = bill.category ?? "fixed";
-    return { ...bill, type: legacyTypeMap[cat] ?? "fixed", color: legacyColorMap[cat] ?? "slate", category: legacyCategoryMap[cat] ?? bill.category } as Bill;
+    return { ...bill, type: legacyTypeMap[cat] ?? "fixed", color: bill.color ?? "none", category: legacyCategoryMap[cat] ?? bill.category } as Bill;
   };
 
   const preserveScroll = (fn: () => void) => {

@@ -105,7 +105,7 @@ function parseBillMetaRows(
   rows: (string | number | boolean | null)[][],
   markerValues: string[],
 ): any[] {
-  const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
+  const colorMap: Record<string, string> = {};
   const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
   const bills: any[] = [];
   let startIdx = -1;

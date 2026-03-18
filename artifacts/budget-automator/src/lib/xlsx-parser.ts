@@ -110,16 +110,16 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
                 : null;
 
             let type: Bill['type'] = 'fixed';
-            let color = 'slate';
+            const color = 'none';
             const lower = name.toLowerCase();
-            if (lower.includes('rent')) { type = 'balanced'; color = 'blue'; }
+            if (lower.includes('rent') || lower.includes('mortgage')) { type = 'balanced'; }
             else if (
               lower.includes('util') ||
               lower.includes('electric') ||
               lower.includes('water') ||
               lower === 'utilities'
-            ) { type = 'balanced'; color = 'orange'; }
-            else if (lower.includes('car')) { type = 'balanced'; color = 'purple'; }
+            ) { type = 'balanced'; }
+            else if (lower.includes('car')) { type = 'balanced'; }
 
             bills.push({
               name,
