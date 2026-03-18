@@ -112,6 +112,13 @@ function AppRouting() {
         qc.invalidateQueries({ queryKey: getAuthMeQueryKey() });
         toast({ title: "Signed in as guest" });
       },
+      onError: (err) => {
+        toast({
+          title: "Could not sign in as guest",
+          description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+          variant: "destructive",
+        });
+      },
     });
   };
 
