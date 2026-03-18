@@ -42,7 +42,7 @@ export function SignInPage({
         </div>
 
         <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">
-          MoneyPal
+          Budgify
         </h1>
         <p className="text-muted-foreground text-center mb-10">
           Your personal budget, always in sync

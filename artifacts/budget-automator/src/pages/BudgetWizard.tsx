@@ -363,14 +363,14 @@ export function BudgetWizard({
   const [helpOpen, setHelpOpen] = useState(false);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const [errorLog, setErrorLog] = useState<Array<{ time: string; label: string; detail: string }>>(() => {
-    try { return JSON.parse(localStorage.getItem("moneypal_error_log") ?? "[]"); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem("budgify_error_log") ?? "[]"); } catch { return []; }
   });
 
   const addToErrorLog = (label: string, detail: string) => {
     const entry = { time: new Date().toLocaleString(), label, detail };
     setErrorLog(prev => {
       const next = [entry, ...prev].slice(0, 50);
-      try { localStorage.setItem("moneypal_error_log", JSON.stringify(next)); } catch { }
+      try { localStorage.setItem("budgify_error_log", JSON.stringify(next)); } catch { }
       return next;
     });
   };
@@ -500,7 +500,7 @@ export function BudgetWizard({
 
   useEffect(() => {
     if (!currentUser?.id) return;
-    const key = `moneypal_welcome_seen_${currentUser.id}`;
+    const key = `budgify_welcome_seen_${currentUser.id}`;
     if (!localStorage.getItem(key)) {
       setHelpOpen(true);
       localStorage.setItem(key, "1");
@@ -1721,7 +1721,7 @@ export function BudgetWizard({
               <FileSpreadsheet className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg leading-none text-foreground">MoneyPal</h1>
+              <h1 className="font-bold text-lg leading-none text-foreground">Budgify</h1>
               <p className="text-xs text-muted-foreground">Your personal budget companion</p>
             </div>
           </div>
@@ -4016,7 +4016,7 @@ export function BudgetWizard({
               className="flex-1 text-muted-foreground"
               onClick={() => {
                 setErrorLog([]);
-                localStorage.removeItem("moneypal_error_log");
+                localStorage.removeItem("budgify_error_log");
               }}
               disabled={errorLog.length === 0}
             >

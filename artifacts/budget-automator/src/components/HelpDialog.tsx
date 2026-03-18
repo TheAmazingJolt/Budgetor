@@ -24,7 +24,7 @@ const sections = [
     title: "Creating a budget",
     color: "text-emerald-600 bg-emerald-50",
     content:
-      "Upload an existing .xlsx file, start from scratch, connect a Google Sheet or Excel Online workbook, or reload a saved cloud budget. MoneyPal figures out your bills and generates weekly (or biweekly/monthly) budget periods automatically.",
+      "Upload an existing .xlsx file, start from scratch, connect a Google Sheet or Excel Online workbook, or reload a saved cloud budget. Budgify figures out your bills and generates weekly (or biweekly/monthly) budget periods automatically.",
   },
   {
     icon: DollarSign,
@@ -38,7 +38,7 @@ const sections = [
     title: "Pay periods",
     color: "text-violet-600 bg-violet-50",
     content:
-      "Choose weekly, biweekly, or monthly pay periods. Set your paycheck amount and MoneyPal calculates what you have left after each period's bills. Adjust the start date to match your actual pay schedule.",
+      "Choose weekly, biweekly, or monthly pay periods. Set your paycheck amount and Budgify calculates what you have left after each period's bills. Adjust the start date to match your actual pay schedule.",
   },
   {
     icon: CloudUpload,
@@ -59,7 +59,7 @@ const sections = [
     title: "Google Sheets & Excel Online",
     color: "text-green-600 bg-green-50",
     content:
-      "Connect your Google or Microsoft account to read bills from an existing spreadsheet and write new budget weeks back — no downloads needed. You can also create a brand-new spreadsheet directly from MoneyPal.",
+      "Connect your Google or Microsoft account to read bills from an existing spreadsheet and write new budget weeks back — no downloads needed. You can also create a brand-new spreadsheet directly from Budgify.",
   },
 ];
 
@@ -68,7 +68,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">How MoneyPal works</DialogTitle>
+          <DialogTitle className="text-xl">How Budgify works</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           {sections.map((s) => (
