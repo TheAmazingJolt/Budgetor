@@ -907,7 +907,7 @@ export function BudgetWizard({
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: excelSheetTitle,
           ...(debts.length > 0 ? { debts } : {}),
-          ...(bills.length > 0 ? { bills } : {}),
+          ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
         },
       });
       setExcelWriteSuccess(true);
@@ -1510,7 +1510,7 @@ export function BudgetWizard({
           sheetTitle: googleSheetTitle,
           ...(existingLastCol != null ? { existingLastCol } : {}),
           ...(debts.length > 0 ? { debts } : {}),
-          ...(bills.length > 0 ? { bills } : {}),
+          ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
         },
       });
       setSheetWriteSuccess(true);
@@ -1547,7 +1547,7 @@ export function BudgetWizard({
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
           ...(debts.length > 0 ? { debts } : {}),
-          ...(bills.length > 0 ? { bills } : {}),
+          ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
         },
       });
       setNewSheetSaveSuccess(true);
@@ -1584,7 +1584,7 @@ export function BudgetWizard({
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
           ...(debts.length > 0 ? { debts } : {}),
-          ...(bills.length > 0 ? { bills } : {}),
+          ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
         },
       });
       setNewExcelSaveSuccess(true);
