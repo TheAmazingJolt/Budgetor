@@ -929,14 +929,12 @@ function buildBillRows(
 
   const billRows: any[][] = [];
   billRows.push([]);
-  billRows.push(["Bills", "", "", "", ""]);
-  billRows.push(["Name", "Amount", "Type", "Category", "Due Day"]);
+  billRows.push(["Bills", "", ""]);
+  billRows.push(["Name", "Amount", "Due Day"]);
   for (const bill of bills) {
     billRows.push([
       bill.name,
       Math.abs(bill.amount),
-      bill.type ?? "fixed",
-      bill.category ?? bill.name,
       bill.dayOfMonth != null ? bill.dayOfMonth : "",
     ]);
   }
@@ -952,7 +950,7 @@ function buildBillRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 5,
+        endColumnIndex: 3,
       },
     },
   });
@@ -963,7 +961,7 @@ function buildBillRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 5,
+        endColumnIndex: 3,
       },
       mergeType: "MERGE_ALL",
     },
@@ -976,7 +974,7 @@ function buildBillRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 5,
+        endColumnIndex: 3,
       },
       cell: {
         userEnteredFormat: {
@@ -1000,7 +998,7 @@ function buildBillRows(
         startRowIndex: colHeaderRow,
         endRowIndex: colHeaderRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 5,
+        endColumnIndex: 3,
       },
       cell: {
         userEnteredFormat: {
@@ -1023,7 +1021,7 @@ function buildBillRows(
         startRowIndex: firstDataRow,
         endRowIndex: firstDataRow + bills.length,
         startColumnIndex: 0,
-        endColumnIndex: 5,
+        endColumnIndex: 3,
       },
       cell: {
         userEnteredFormat: {

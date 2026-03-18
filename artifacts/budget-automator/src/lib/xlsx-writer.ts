@@ -14,8 +14,6 @@ const DEFAULT_STYLE: SheetStyle = {
 
 // Light green background applied to every colored bill row.
 const BILL_ROW_BG = 'D6F5D6';
-// Slightly deeper green for category label rows.
-const BILL_CAT_BG = 'A8DDA8';
 
 /**
  * Returns fill + font color style objects for a bill row based on its color key.
@@ -95,86 +93,41 @@ function writeBillsSection(
   set(sheet, 1, startCol + 1, makeCell('Amount', { ...subHeaderStyle, alignment: { horizontal: 'right' } }));
   set(sheet, 1, startCol + 2, makeCell('Day of Pay', { ...subHeaderStyle, alignment: { horizontal: 'center' } }));
 
-  const PRIORITY_CATEGORIES = ['rent', 'utilities', 'car', 'fixed', 'weekly'];
-
-  const seenLower = new Set<string>();
-  const orderedCategories: string[] = [];
-  for (const cat of PRIORITY_CATEGORIES) {
-    if (filteredBills.some(b => b.category.toLowerCase() === cat)) {
-      orderedCategories.push(cat);
-      seenLower.add(cat);
-    }
-  }
-  for (const bill of filteredBills) {
-    const lower = bill.category.toLowerCase();
-    if (!seenLower.has(lower)) {
-      orderedCategories.push(bill.category);
-      seenLower.add(lower);
-    }
-  }
-
-  function catDominantColor(catBills: Bill[]): string | null {
-    for (const b of catBills) {
-      if (b.color && b.color !== 'none' && BILL_COLOR_HEX[b.color]) return b.color;
-    }
-    return null;
-  }
-
   let row = 2;
-  for (const cat of orderedCategories) {
-    const catLower = cat.toLowerCase();
-    const catBills = filteredBills.filter(b => b.category.toLowerCase() === catLower);
-    if (catBills.length === 0) continue;
-
-    const domColor = catDominantColor(catBills);
-    const catFontBase: any = { bold: true, sz: 10, name: 'Arial' };
-    const catStyle: any = { font: catFontBase, alignment: { horizontal: 'center' } };
-    if (domColor) {
-      catStyle.fill = { patternType: 'solid', fgColor: { rgb: BILL_CAT_BG }, bgColor: { rgb: BILL_CAT_BG } };
-      catFontBase.color = { rgb: BILL_COLOR_HEX[domColor] };
+  for (const bill of filteredBills) {
+    const { fill, fontColor } = billColorStyle(bill.color);
+    const billStyle: any = {
+      font: { sz: 10, name: 'Arial' },
+      alignment: { horizontal: 'left' },
+    };
+    const amtStyle: any = {
+      font: { sz: 10, name: 'Arial' },
+      alignment: { horizontal: 'right' },
+      numFmt: '#,##0.00',
+    };
+    const dayStyle: any = {
+      font: { sz: 10, name: 'Arial' },
+      alignment: { horizontal: 'center' },
+    };
+    if (fill) {
+      billStyle.fill = fill;
+      amtStyle.fill = fill;
+      dayStyle.fill = fill;
     }
-    const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
-    set(sheet, row, startCol,     makeCell(catLabel, catStyle));
-    set(sheet, row, startCol + 1, makeCell('', catStyle));
-    set(sheet, row, startCol + 2, makeCell('', catStyle));
-    addMerge(sheet, row, startCol, row, startCol + 2);
+    if (fontColor) {
+      billStyle.font.color = { rgb: fontColor };
+      amtStyle.font.color = { rgb: fontColor };
+      dayStyle.font.color = { rgb: fontColor };
+    }
+    const dayValue = bill.type === 'weekly'
+      ? 'Weekly'
+      : bill.dayOfMonth != null
+        ? bill.dayOfMonth
+        : 'Varies';
+    set(sheet, row, startCol,     makeCell(bill.name,   billStyle));
+    set(sheet, row, startCol + 1, makeCell(bill.amount, amtStyle));
+    set(sheet, row, startCol + 2, makeCell(dayValue,    dayStyle));
     row++;
-
-    for (const bill of catBills) {
-      const { fill, fontColor } = billColorStyle(bill.color);
-      const billStyle: any = {
-        font: { sz: 10, name: 'Arial' },
-        alignment: { horizontal: 'left' },
-      };
-      const amtStyle: any = {
-        font: { sz: 10, name: 'Arial' },
-        alignment: { horizontal: 'right' },
-        numFmt: '#,##0.00',
-      };
-      const dayStyle: any = {
-        font: { sz: 10, name: 'Arial' },
-        alignment: { horizontal: 'center' },
-      };
-      if (fill) {
-        billStyle.fill = fill;
-        amtStyle.fill = fill;
-        dayStyle.fill = fill;
-      }
-      if (fontColor) {
-        billStyle.font.color = { rgb: fontColor };
-        amtStyle.font.color = { rgb: fontColor };
-        dayStyle.font.color = { rgb: fontColor };
-      }
-      const dayValue = bill.type === 'weekly'
-        ? 'Weekly'
-        : bill.dayOfMonth != null
-          ? bill.dayOfMonth
-          : 'Varies';
-      set(sheet, row, startCol,     makeCell(bill.name,   billStyle));
-      set(sheet, row, startCol + 1, makeCell(bill.amount, amtStyle));
-      set(sheet, row, startCol + 2, makeCell(dayValue,    dayStyle));
-      row++;
-    }
   }
 
   autoFitColumns(sheet, startCol, startCol + 2);
