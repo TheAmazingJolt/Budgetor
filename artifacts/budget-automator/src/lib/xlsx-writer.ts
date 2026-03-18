@@ -179,6 +179,9 @@ function writeBillsSection(
 
   autoFitColumns(sheet, startCol, startCol + 2);
 
+  // Hide any Category/Type columns (safe no-op today; future-proofing).
+  hideCategoryTypeColumns(sheet, startCol + 3);
+
   return row;
 }
 
@@ -268,6 +271,7 @@ function writeWeeksToSheet(
     set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
     set(sheet, remainingRowIdx, valCol,   {
       ...makeSumFormula(valLetter, sumStartRow + 1, remainingRowIdx),
+      v: week.closingBalance,
       s: remainingStyle,
     });
   }
@@ -401,6 +405,26 @@ function normalizeFlatStyle(s: any): any {
   return normalized;
 }
 
+/**
+ * Scans the sub-header row (row 1) of the sheet for column labels that are
+ * "Category" or "Type" (case-insensitive) and marks those columns hidden.
+ * The data is preserved in _BillsData so hiding has no effect on parsing.
+ * Used by writeBillsVerbatim; can also be called after writeBillsSection if
+ * Category/Type columns are ever added there.
+ */
+function hideCategoryTypeColumns(sheet: XLSX.WorkSheet, colCount: number): void {
+  if (!sheet['!cols']) sheet['!cols'] = [];
+  while ((sheet['!cols'] as any[]).length < colCount) (sheet['!cols'] as any[]).push({});
+  for (let c = 0; c < colCount; c++) {
+    const addr = XLSX.utils.encode_cell({ r: 1, c });
+    const cell = sheet[addr];
+    const label = String(cell?.v ?? '').trim().toLowerCase();
+    if (label === 'category' || label === 'type') {
+      (sheet['!cols'] as any[])[c] = { ...(sheet['!cols'] as any[])[c], hidden: true };
+    }
+  }
+}
+
 function writeBillsVerbatim(
   sheet: XLSX.WorkSheet,
   raw: RawBillsSection,
@@ -458,6 +482,10 @@ function writeBillsVerbatim(
 
   // Expand any column that has content wider than the explicit minimum.
   autoFitColumns(sheet, 0, raw.colCount - 1);
+
+  // Hide Category/Type columns AFTER autoFit so the hidden flag is not lost.
+  // The data is preserved in _BillsData; hiding only affects Excel display.
+  hideCategoryTypeColumns(sheet, raw.colCount);
 }
 
 // ── Auto-fit column widths ────────────────────────────────────────────────────
@@ -535,9 +563,10 @@ function autoFitColumns(
     const needed = Math.min(maxLen + 2, 60);
 
     while (sheet['!cols']!.length <= c) (sheet['!cols'] as any[]).push({});
-    const current = ((sheet['!cols'] as any[])[c]?.wch as number | undefined) ?? 0;
+    const existing = (sheet['!cols'] as any[])[c] ?? {};
+    const current = (existing.wch as number | undefined) ?? 0;
     if (needed > current) {
-      (sheet['!cols'] as any[])[c] = { wch: needed };
+      (sheet['!cols'] as any[])[c] = { ...existing, wch: needed };
     }
   }
 }
