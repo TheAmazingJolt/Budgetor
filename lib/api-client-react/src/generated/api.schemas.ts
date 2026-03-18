@@ -153,6 +153,8 @@ export interface Debt {
    * @maximum 31
    */
   dueDay?: number | null;
+  /** When true, the auto-generated linked bill uses "Balanced" type (spread evenly across weeks) */
+  billAsBalanced?: boolean | null;
 }
 
 export type SavedBudgetSettings = { [key: string]: unknown };

@@ -115,7 +115,8 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     if (val === "Bills" || val.toLowerCase() === "name") continue;
     if (!val) break;
     const cells = metaRows[i]?.values ?? [];
-    const name = cells[0]?.formattedValue?.trim() ?? "";
+    const rawName = cells[0]?.formattedValue?.trim() ?? "";
+    const name = rawName.replace(/\s+\(B\)$/, "");
     if (!name) break;
     const rawAmt = cells[1]?.effectiveValue?.numberValue;
     if (rawAmt == null) break;
@@ -170,7 +171,8 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
       for (let i = billsMetaStart + 2; i < rows.length; i++) {
         const cells = rows[i]?.values ?? [];
-        const name = cells[billsMetaCol]?.formattedValue?.trim() ?? "";
+        const rawName = cells[billsMetaCol]?.formattedValue?.trim() ?? "";
+        const name = rawName.replace(/\s+\(B\)$/, "");
         if (!name) break;
         const rawAmt = cells[billsMetaCol + 1]?.effectiveValue?.numberValue;
         if (rawAmt == null) break;
@@ -969,8 +971,8 @@ function buildBillRows(
   afterRow: number,
   sheetId: number,
 ) {
-  // Exclude debt-linked min-payment bills — they already appear in the Debts section.
-  const filteredBills = bills.filter((b) => !b.sourceDebtId);
+  // Exclude debt-linked fixed bills — balanced debt bills appear in the Bills section with "(B)".
+  const filteredBills = bills.filter((b) => !b.sourceDebtId || b.type === "balanced");
   if (!filteredBills || filteredBills.length === 0) return { billRows: [], billRequests: [], billRowCount: 0 };
 
   const headerRow = afterRow + 1;
@@ -985,8 +987,11 @@ function buildBillRows(
     const dueDay = bill.dayOfMonth != null
       ? bill.dayOfMonth
       : bill.type === "weekly" ? "weekly" : "varies";
+    const billDisplayName = bill.sourceDebtId && bill.type === "balanced"
+      ? `${bill.name} (B)`
+      : bill.name;
     billRows.push([
-      bill.name,
+      billDisplayName,
       Math.abs(bill.amount),
       dueDay,
     ]);

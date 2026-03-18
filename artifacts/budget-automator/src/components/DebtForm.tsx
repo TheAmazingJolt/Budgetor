@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import type { Debt } from "@workspace/api-client-react";
 
 const DEBT_TYPES = ["credit_card", "personal_loan", "student_loan", "car_loan", "installment", "collections"] as const;
@@ -25,6 +26,7 @@ const formSchema = z.object({
   minimumPayment: z.coerce.number().min(0.01, "Minimum payment is required"),
   dueDay: z.coerce.number().int().min(1, "Must be 1–31").max(31, "Must be 1–31").nullable().optional(),
   originalAmount: z.coerce.number().min(0).nullable().optional(),
+  billAsBalanced: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.originalAmount == null) return true;
@@ -52,6 +54,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           minimumPayment: initialData.minimumPayment ?? 0,
           dueDay: initialData.dueDay ?? null,
           originalAmount: initialData.originalAmount ?? null,
+          billAsBalanced: initialData.billAsBalanced ?? false,
         }
       : {
           name: "",
@@ -61,6 +64,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           minimumPayment: 0,
           dueDay: null,
           originalAmount: null,
+          billAsBalanced: false,
         },
   });
 
@@ -78,6 +82,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       minimumPayment: values.minimumPayment,
       dueDay: values.dueDay ?? undefined,
       originalAmount: values.originalAmount ?? undefined,
+      billAsBalanced: values.billAsBalanced ?? false,
     });
   };
 
@@ -260,6 +265,27 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   : "The total amount you originally borrowed or charged. Used to track payoff progress."}
               </p>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="billAsBalanced"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-xl border border-border/40 bg-muted/30 p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-sm font-medium">Spread as balanced bill</FormLabel>
+                <FormDescription className="text-xs">
+                  Distributes this payment evenly across all weeks instead of appearing only on its due-date week.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value ?? false}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
             </FormItem>
           )}
         />

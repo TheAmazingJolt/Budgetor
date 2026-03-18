@@ -491,7 +491,7 @@ export function BudgetWizard({
           amount: -Math.abs(d.minimumPayment),
           dayOfMonth: d.dueDay ?? 1,
           category: "Debt Payment",
-          type: "fixed" as const,
+          type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
           color: "red",
           sourceDebtId: d.id,
         }))];
@@ -557,7 +557,7 @@ export function BudgetWizard({
           amount: -Math.abs(d.minimumPayment),
           dayOfMonth: d.dueDay ?? 1,
           category: "Debt Payment",
-          type: "fixed" as const,
+          type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
           color: "red",
           sourceDebtId: d.id,
         }));
@@ -749,7 +749,7 @@ export function BudgetWizard({
               amount: -Math.abs(d.minimumPayment),
               dayOfMonth: d.dueDay ?? 1,
               category: "Debt Payment",
-              type: "fixed" as const,
+              type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
               color: "red",
               sourceDebtId: d.id,
             }));
@@ -1780,7 +1780,7 @@ export function BudgetWizard({
           amount: -Math.abs(debt.minimumPayment),
           dayOfMonth: debt.dueDay ?? 1,
           category: "Debt Payment",
-          type: "fixed",
+          type: debt.billAsBalanced ? "balanced" : "fixed",
           color: "red",
           sourceDebtId: debtId,
         });
@@ -1804,7 +1804,7 @@ export function BudgetWizard({
           amount: -Math.abs(d.minimumPayment),
           dayOfMonth: d.dueDay ?? 1,
           category: "Debt Payment",
-          type: "fixed" as const,
+          type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
           color: "red",
           sourceDebtId: d.id,
         }));
@@ -3705,6 +3705,13 @@ export function BudgetWizard({
             onSubmit={(data: Debt) => {
               if (editingDebtIndex !== null) {
                 updateDebt(editingDebtIndex, data);
+                const linkedBillIdx = bills.findIndex(b => b.sourceDebtId === data.id);
+                if (linkedBillIdx >= 0) {
+                  updateBill(linkedBillIdx, {
+                    ...bills[linkedBillIdx],
+                    type: data.billAsBalanced ? "balanced" : "fixed",
+                  });
+                }
               } else {
                 addDebt(data);
                 setDebtBillImports(prev => {
@@ -3719,7 +3726,7 @@ export function BudgetWizard({
                     amount: -Math.abs(data.minimumPayment),
                     dayOfMonth: data.dueDay ?? 1,
                     category: "Debt Payment",
-                    type: "fixed",
+                    type: data.billAsBalanced ? "balanced" : "fixed",
                     color: "red",
                     sourceDebtId: data.id,
                   });

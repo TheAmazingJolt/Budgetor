@@ -106,7 +106,7 @@ function writeBillsSectionBelow(
   bills: Bill[],
   startRow: number,
 ): number {
-  const filteredBills = bills.filter(b => !b.sourceDebtId);
+  const filteredBills = bills.filter(b => !b.sourceDebtId || (b.type === "balanced"));
   if (filteredBills.length === 0) return startRow;
 
   const gapRow     = startRow + 1;
@@ -155,7 +155,10 @@ function writeBillsSectionBelow(
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
-    set(sheet, row, 0, makeCell(bill.name,             nameStyle));
+    const billDisplayName = bill.sourceDebtId && bill.type === "balanced"
+      ? `${bill.name} (B)`
+      : bill.name;
+    set(sheet, row, 0, makeCell(billDisplayName,       nameStyle));
     set(sheet, row, 1, makeCell(Math.abs(bill.amount), amtStyle));
     set(sheet, row, 2, makeCell(dayValue,              dayStyle));
     row++;

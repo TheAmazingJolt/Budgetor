@@ -116,7 +116,8 @@ function parseBillMetaRows(
   if (startIdx === -1) return bills;
   for (let i = startIdx + 2; i < rows.length; i++) {
     const cells = rows[i] ?? [];
-    const name = String(cells[0] ?? "").trim();
+    const rawName = String(cells[0] ?? "").trim();
+    const name = rawName.replace(/\s+\(B\)$/, "");
     if (!name) break;
     const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
     if (isNaN(rawAmt)) break;
@@ -524,8 +525,8 @@ async function writeExcelBillRows(
   startRow: number,
   bills: BillMeta[],
 ) {
-  // Exclude debt-linked min-payment bills — they already appear in the Debts section.
-  const filteredBills = bills.filter((b) => !b.sourceDebtId);
+  // Exclude debt-linked fixed bills — balanced debt bills appear in the Bills section with "(B)".
+  const filteredBills = bills.filter((b) => !b.sourceDebtId || b.type === "balanced");
   if (!filteredBills || filteredBills.length === 0) return;
 
   const rows: (string | number | null)[][] = [];
@@ -536,8 +537,11 @@ async function writeExcelBillRows(
     const dueDay = bill.dayOfMonth != null
       ? bill.dayOfMonth
       : bill.type === "weekly" ? "weekly" : "varies";
+    const billDisplayName = bill.sourceDebtId && bill.type === "balanced"
+      ? `${bill.name} (B)`
+      : bill.name;
     rows.push([
-      bill.name,
+      billDisplayName,
       Math.abs(bill.amount),
       bill.type ?? "fixed",
       bill.category ?? bill.name,
