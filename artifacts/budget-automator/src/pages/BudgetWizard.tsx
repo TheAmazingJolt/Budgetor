@@ -436,6 +436,7 @@ export function BudgetWizard({
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevDebtsRef = useRef<string>("");
+  const debtAutoAddDoneRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isSignedIn || !currentUser) {
       if (debtsLoadedForUserRef.current) {
@@ -447,6 +448,7 @@ export function BudgetWizard({
         }
       }
       debtsLoadedForUserRef.current = null;
+      debtAutoAddDoneRef.current = null;
       return;
     }
     if (debtsLoadedForUserRef.current === currentUser.id) return;
@@ -455,6 +457,25 @@ export function BudgetWizard({
     setDebts(serverDebts);
     prevDebtsRef.current = JSON.stringify(serverDebts);
     debtsLoadedForUserRef.current = currentUser.id;
+    // If bills are already loaded, auto-add bills for any debt that doesn't have one yet
+    if (billsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
+      debtAutoAddDoneRef.current = currentUser.id;
+      setBills(prev => {
+        const existingDebtIds = new Set(prev.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
+        const missing = serverDebts.filter(d => !existingDebtIds.has(d.id));
+        if (missing.length === 0) return prev;
+        return [...prev, ...missing.map(d => ({
+          name: `${d.name} (min payment)`,
+          amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: d.dueDay ?? 1,
+          category: "Debt Payment",
+          type: "fixed" as const,
+          color: "red",
+          sourceDebtId: d.id,
+        }))];
+      });
+      setDebtBillImports(new Set(serverDebts.map(d => d.id)));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userDebtsQuery.data]);
 
@@ -503,6 +524,25 @@ export function BudgetWizard({
       serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
     );
     setDebtBillImports(billedIds);
+    // If debts are already loaded, auto-add bills for any debt that doesn't have one yet
+    if (debtsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
+      debtAutoAddDoneRef.current = currentUser.id;
+      const existingDebtIds = new Set(serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
+      const missing = debts.filter(d => !existingDebtIds.has(d.id));
+      if (missing.length > 0) {
+        const newDebtBills = missing.map(d => ({
+          name: `${d.name} (min payment)`,
+          amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: d.dueDay ?? 1,
+          category: "Debt Payment",
+          type: "fixed" as const,
+          color: "red",
+          sourceDebtId: d.id,
+        }));
+        setBills([...serverBills, ...newDebtBills]);
+      }
+      setDebtBillImports(new Set(debts.map(d => d.id)));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userBillsQuery.data]);
 
@@ -677,10 +717,28 @@ export function BudgetWizard({
         setParsedWorkbook(parsed);
         setInputMode("upload");
         const uploadBills = stripHeuristicColors(stripDebtMinPayments(parsed.bills));
-        setBills(uploadBills);
-        prevBillsRef.current = JSON.stringify(uploadBills);
-        if (isGuest) {
+        if (isGuest && parsed.debts.length > 0) {
           setDebts(parsed.debts);
+          const existingDebtIds = new Set(uploadBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
+          const debtBillsFromFile = parsed.debts
+            .filter(d => !existingDebtIds.has(d.id))
+            .map(d => ({
+              name: `${d.name} (min payment)`,
+              amount: -Math.abs(d.minimumPayment),
+              dayOfMonth: d.dueDay ?? 1,
+              category: "Debt Payment",
+              type: "fixed" as const,
+              color: "red",
+              sourceDebtId: d.id,
+            }));
+          const allUploadBills = [...uploadBills, ...debtBillsFromFile];
+          setBills(allUploadBills);
+          prevBillsRef.current = JSON.stringify(allUploadBills);
+          setDebtBillImports(new Set(parsed.debts.map(d => d.id)));
+        } else {
+          if (isGuest) setDebts([]);
+          setBills(uploadBills);
+          prevBillsRef.current = JSON.stringify(uploadBills);
         }
         const lastWeek = parsed.existingWeeks.at(-1);
         const uploadNextStart = lastWeek ? nextStartAfterLabel(lastWeek.label ?? "") : null;
