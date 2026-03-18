@@ -2620,7 +2620,7 @@ export function BudgetWizard({
                       disabled={bills.length === 0}
                       className="shrink-0 rounded-xl"
                     >
-                      <Save className="w-4 h-4 mr-1" /> Save
+                      <Save className="w-4 h-4 mr-1" /> Save to Cloud
                     </Button>
                     <Button
                       size="default"
