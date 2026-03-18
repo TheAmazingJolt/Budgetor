@@ -234,8 +234,9 @@ function writeWeeksToSheet(
 
     // Bill line items — apply per-bill color styling when a color map is provided.
     for (const bill of week.bills) {
-      // Look up by exact name, then by stripping "Partial " prefix.
-      const colorKey = billColorMap.get(bill.name)
+      // Use color carried on the bill object directly; fall back to name-based map lookup.
+      const colorKey = bill.color
+        ?? billColorMap.get(bill.name)
         ?? billColorMap.get(bill.name.replace(/^Partial\s+/, ''))
         ?? null;
       const { fill, fontColor } = billColorStyle(colorKey);

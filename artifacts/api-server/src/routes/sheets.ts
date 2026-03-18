@@ -528,7 +528,7 @@ interface WriteRequest {
     endDate: string;
     openingBalance: number;
     paycheck: number;
-    bills: Array<{ name: string; amount: number }>;
+    bills: Array<{ name: string; amount: number; color?: string }>;
     totalBills: number;
     closingBalance: number;
   }>;
@@ -663,7 +663,8 @@ function buildBudgetWriteData(
       valueRows[nextRow][labelCol] = bill.name;
       valueRows[nextRow][valCol] = bill.amount;
 
-      const colorKey = billColorByName[bill.name];
+      const colorKey = bill.color ?? billColorByName[bill.name]
+        ?? billColorByName[bill.name.replace(/^Partial\s+/, '')];
       const bgColor = colorKey ? COLOR_KEY_TO_RGB[colorKey] : undefined;
       if (bgColor) {
         requests.push({

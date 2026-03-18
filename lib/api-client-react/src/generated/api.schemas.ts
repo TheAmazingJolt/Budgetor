@@ -46,6 +46,7 @@ export interface Bill {
 export interface WeeklyBill {
   name: string;
   amount: number;
+  color?: string;
 }
 
 export interface WeeklyBudget {

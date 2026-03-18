@@ -839,6 +839,8 @@ components:
           type: string
         amount:
           type: number
+        color:
+          type: string
       required:
         - name
         - amount

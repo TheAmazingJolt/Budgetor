@@ -9,4 +9,5 @@
 export interface WeeklyBill {
   name: string;
   amount: number;
+  color?: string;
 }

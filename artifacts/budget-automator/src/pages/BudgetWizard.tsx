@@ -245,6 +245,28 @@ function stripHeuristicColors(bills: Bill[]): Bill[] {
   });
 }
 
+function buildBillColorLookup(bills: Bill[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const b of bills) {
+    if (b.color && b.color !== "none") {
+      map.set(b.name, b.color);
+    }
+  }
+  return map;
+}
+
+function injectBillColors<T extends { name: string; amount: number }>(
+  items: T[],
+  colorLookup: Map<string, string>,
+): (T & { color?: string })[] {
+  return items.map((item) => {
+    const color =
+      colorLookup.get(item.name) ??
+      colorLookup.get(item.name.replace(/^Partial\s+/, ""));
+    return color ? { ...item, color } : item;
+  });
+}
+
 function parsedWeekToWeeklyBudget(w: ParsedWeek): WeeklyBudget {
   return {
     weekLabel: w.label,
@@ -1493,11 +1515,12 @@ export function BudgetWizard({
   }, [weekEdits]);
 
   const buildAllWriteWeeks = () => {
+    const colorLookup = buildBillColorLookup(stripHeuristicColors(bills));
     const source = getExistingWeeks()
       .filter((w: any) => (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
       .map((w: any) => {
         const e = weekEdits[w.label];
-        const items = e?.items ?? w.items ?? [];
+        const items = injectBillColors(e?.items ?? w.items ?? [], colorLookup);
         const paycheck = e?.paycheck ?? w.paycheck ?? 0;
         const ob = e?.openingBalance ?? w.openingBalance ?? 0;
         const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
@@ -1518,7 +1541,7 @@ export function BudgetWizard({
       .filter((w) => !weekEdits[w.weekLabel]?.deleted)
       .map((w) => {
         const e = weekEdits[w.weekLabel];
-        const items = e?.items ?? w.bills;
+        const items = injectBillColors(e?.items ?? w.bills, colorLookup);
         const paycheck = e?.paycheck ?? w.paycheck;
         const ob = e?.openingBalance ?? w.openingBalance;
         const totalBills = items.reduce((s, b) => s + b.amount, 0);
@@ -1543,7 +1566,13 @@ export function BudgetWizard({
     setSheetWriteSuccess(false);
 
     const fullOverwrite = !generatedWeek || hasHistoricalEdits();
-    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek!.weeks;
+    const colorLookup = buildBillColorLookup(stripHeuristicColors(bills));
+    const weeksToWrite = fullOverwrite
+      ? buildAllWriteWeeks()
+      : generatedWeek!.weeks.map((w) => ({
+          ...w,
+          bills: injectBillColors(w.bills, colorLookup),
+        }));
     const existingWeeks = getExistingWeeks();
     const existingLastCol = existingWeeks.length > 0
       ? (existingWeeks.at(-1) as any).startCol + 1
@@ -1599,10 +1628,14 @@ export function BudgetWizard({
       const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
       const title = `Budget ${startLabel} – ${endLabel}`;
 
+      const colorLookup = buildBillColorLookup(stripHeuristicColors(bills));
       const result = await sheetCreateAndWriteMutation.mutateAsync({
         data: {
           title,
-          weeks: generatedWeek.weeks,
+          weeks: generatedWeek.weeks.map((w) => ({
+            ...w,
+            bills: injectBillColors(w.bills, colorLookup),
+          })),
           includeRemainingAcct: !zeroOpeningBalance,
           ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
