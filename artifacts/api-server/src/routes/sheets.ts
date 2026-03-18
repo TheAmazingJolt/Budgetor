@@ -981,10 +981,13 @@ function buildBillRows(
   billRows.push(["Bills", "", ""]);
   billRows.push(["Name", "Amount", "Due Day"]);
   for (const bill of filteredBills) {
+    const dueDay = bill.dayOfMonth != null
+      ? bill.dayOfMonth
+      : bill.type === "weekly" ? "weekly" : "varies";
     billRows.push([
       bill.name,
       Math.abs(bill.amount),
-      bill.dayOfMonth != null ? bill.dayOfMonth : "",
+      dueDay,
     ]);
   }
 

@@ -533,12 +533,15 @@ async function writeExcelBillRows(
   rows.push(["Bills", "", "", "", ""]);
   rows.push(["Name", "Amount", "Type", "Category", "Due Day"]);
   for (const bill of filteredBills) {
+    const dueDay = bill.dayOfMonth != null
+      ? bill.dayOfMonth
+      : bill.type === "weekly" ? "weekly" : "varies";
     rows.push([
       bill.name,
       Math.abs(bill.amount),
       bill.type ?? "fixed",
       bill.category ?? bill.name,
-      bill.dayOfMonth != null ? bill.dayOfMonth : "",
+      dueDay,
     ]);
   }
 
