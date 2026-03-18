@@ -55,6 +55,8 @@ export async function initDb(): Promise<void> {
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS debts JSONB DEFAULT '[]'::jsonb;
+
       CREATE TABLE IF NOT EXISTS user_sessions (
         sid VARCHAR NOT NULL PRIMARY KEY,
         sess JSON NOT NULL,
