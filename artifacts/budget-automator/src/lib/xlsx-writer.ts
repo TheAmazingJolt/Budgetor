@@ -12,20 +12,46 @@ const DEFAULT_STYLE: SheetStyle = {
 
 // ── Cell style constants ────────────────────────────────────────────────────
 
-// Light green background applied to every colored bill row.
-const BILL_ROW_BG = 'D6F5D6';
+// Bills section header — matches Google Sheets green section style.
+const BILLS_SECTION_HEADER_BG  = 'E8F7ED';
+const BILLS_SECTION_HEADER_FG  = '1C5E2E';
+
+// Debts section header — matches Google Sheets red/pink section style.
+const DEBTS_SECTION_HEADER_BG  = 'FCE8E8';
+const DEBTS_SECTION_HEADER_FG  = '9C2626';
+
+/**
+ * Per-color background hex values for bill rows, derived from the exact
+ * Google Sheets COLOR_KEY_TO_RGB values (converted from 0-1 floats to hex).
+ */
+const BILL_BG_HEX: Readonly<Record<string, string>> = {
+  blue:   'ADCCF7',
+  green:  'B5EBB8',
+  orange: 'FFD4A1',
+  purple: 'D6BAF7',
+  red:    'FFB5B5',
+  slate:  'D6DEE6',
+  amber:  'FFE68C',
+  teal:   'B3EBE6',
+  rose:   'FFBDCC',
+  indigo: 'BDBFF7',
+  yellow: 'FFF599',
+  cyan:   'ABEBF7',
+};
 
 /**
  * Returns fill + font color style objects for a bill row based on its color key.
+ * Each color key maps to its own background (matching Google Sheets).
  * Bills with color = "none" (or missing) get no special styling (plain/white).
  */
 function billColorStyle(colorKey?: string | null): { fill: any; fontColor: string | null } {
-  if (!colorKey || colorKey === 'none' || !BILL_COLOR_HEX[colorKey]) {
+  if (!colorKey || colorKey === 'none' || !BILL_BG_HEX[colorKey]) {
     return { fill: null, fontColor: null };
   }
+  const bg = BILL_BG_HEX[colorKey];
   return {
-    fill: { patternType: 'solid', fgColor: { rgb: BILL_ROW_BG }, bgColor: { rgb: BILL_ROW_BG } },
-    fontColor: BILL_COLOR_HEX[colorKey],
+    fill: { patternType: 'solid', fgColor: { rgb: bg }, bgColor: { rgb: bg } },
+    fontColor: BILL_COLOR_HEX[colorKey] ?? null,
   };
 }
 
@@ -134,6 +160,89 @@ function writeBillsSection(
 
   // Hide any Category/Type columns (safe no-op today; future-proofing).
   hideCategoryTypeColumns(sheet, startCol + 3);
+
+  return row;
+}
+
+// ── Bills section below weeks (matches Google Sheets layout) ─────────────────
+
+/**
+ * Writes the Bills section starting at `startRow`, stacked below the budget
+ * weeks.  Layout matches Google Sheets exactly:
+ *   - gap row
+ *   - "Bills" merged header (green bg/text)
+ *   - "Name | Amount | Due Day" column headers (same green bg, bold)
+ *   - one row per bill, with per-color backgrounds matching Google Sheets
+ *
+ * Returns the row index after the last written row.
+ */
+function writeBillsSectionBelow(
+  sheet: XLSX.WorkSheet,
+  bills: Bill[],
+  startRow: number,
+): number {
+  const filteredBills = bills.filter(b => !b.sourceDebtId);
+  if (filteredBills.length === 0) return startRow;
+
+  const gapRow     = startRow + 1;
+  const headerRow  = gapRow + 1;
+  const colHdrRow  = headerRow + 1;
+  const firstDataRow = colHdrRow + 1;
+
+  // Green header fill shared by header and column-header rows.
+  const greenFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_HEADER_BG }, bgColor: { rgb: BILLS_SECTION_HEADER_BG } };
+
+  const sectionHeaderStyle = {
+    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: BILLS_SECTION_HEADER_FG } },
+    fill: greenFill,
+    alignment: { horizontal: 'left' as const },
+  };
+  set(sheet, headerRow, 0, makeCell('Bills', sectionHeaderStyle));
+  set(sheet, headerRow, 1, makeCell('', sectionHeaderStyle));
+  set(sheet, headerRow, 2, makeCell('', sectionHeaderStyle));
+  addMerge(sheet, headerRow, 0, headerRow, 2);
+
+  const colHdrStyle = {
+    font: { bold: true, sz: 10, name: 'Arial' },
+    fill: greenFill,
+    alignment: { horizontal: 'left' as const },
+  };
+  set(sheet, colHdrRow, 0, makeCell('Name',    colHdrStyle));
+  set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'right' as const } }));
+  set(sheet, colHdrRow, 2, makeCell('Due Day', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
+
+  let row = firstDataRow;
+  for (const bill of filteredBills) {
+    const { fill, fontColor } = billColorStyle(bill.color);
+    const rowFill = fill ?? { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_HEADER_BG }, bgColor: { rgb: BILLS_SECTION_HEADER_BG } };
+    const nameStyle: any = { font: { sz: 10, name: 'Arial' }, fill: rowFill, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, fill: rowFill, alignment: { horizontal: 'right' }, numFmt: '#,##0.00' };
+    const dayStyle:  any = { font: { sz: 10, name: 'Arial' }, fill: rowFill, alignment: { horizontal: 'center' } };
+    if (fontColor) {
+      nameStyle.font.color = { rgb: fontColor };
+      amtStyle.font.color  = { rgb: fontColor };
+      dayStyle.font.color  = { rgb: fontColor };
+    }
+    const dayValue = bill.type === 'weekly'
+      ? 'Weekly'
+      : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
+    set(sheet, row, 0, makeCell(bill.name,          nameStyle));
+    set(sheet, row, 1, makeCell(Math.abs(bill.amount), amtStyle));
+    set(sheet, row, 2, makeCell(dayValue,            dayStyle));
+    row++;
+  }
+
+  // Extend !ref
+  const existingRef = sheet['!ref'];
+  const range = existingRef
+    ? XLSX.utils.decode_range(existingRef)
+    : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  if (row - 1 > range.e.r) range.e.r = row - 1;
+  if (2 > range.e.c) range.e.c = 2;
+  sheet['!ref'] = XLSX.utils.encode_range(range);
+
+  // Auto-fit the three bills columns.
+  autoFitColumns(sheet, 0, 2);
 
   return row;
 }
@@ -583,11 +692,14 @@ function writeDebtsSection(
 ) {
   if (!debts || debts.length === 0) return startRow;
 
-  const headerRow = startRow + 1;
+  const gapRow    = startRow + 1;
+  const headerRow = gapRow + 1;
+
+  const debtFill = { patternType: 'solid' as const, fgColor: { rgb: DEBTS_SECTION_HEADER_BG }, bgColor: { rgb: DEBTS_SECTION_HEADER_BG } };
 
   const headerStyle = {
-    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: '9C2727' } },
-    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FDE8E8' }, bgColor: { rgb: 'FDE8E8' } },
+    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: DEBTS_SECTION_HEADER_FG } },
+    fill: debtFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, headerRow, 0, makeCell('Debts', headerStyle));
@@ -599,7 +711,7 @@ function writeDebtsSection(
   const colHeaderRow = headerRow + 1;
   const colHeaderStyle = {
     font: { bold: true, sz: 10, name: 'Arial' },
-    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FDE8E8' }, bgColor: { rgb: 'FDE8E8' } },
+    fill: debtFill,
   };
   set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
   set(sheet, colHeaderRow, 1, makeCell('Balance', colHeaderStyle));
@@ -607,7 +719,7 @@ function writeDebtsSection(
   set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
 
   const bodyFont = { sz: 10, name: 'Arial' };
-  const rowFill = { patternType: 'solid' as const, fgColor: { rgb: 'FEF2F2' }, bgColor: { rgb: 'FEF2F2' } };
+  const rowFill = debtFill;
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
@@ -678,7 +790,7 @@ function buildBillColorMap(bills: Bill[]): Map<string, string> {
 export function appendBudgetWeeks(
   rawBytes: Uint8Array,
   weekBudgets: WeeklyBudget[],
-  firstStartCol: number,
+  _firstStartCol: number,
   includeRemainingAcct = true,
   style?: SheetStyle | null,
   debts?: Debt[] | null,
@@ -707,54 +819,25 @@ export function appendBudgetWeeks(
   const fillStyleMap = buildFillColorStyleMap(workbook);
   normalizeSheetCellStyles(clonedSheet, fillStyleMap);
 
-  // Widen bills columns so long bill names and formatted dates/amounts
-  // are never clipped, even when the original file had narrow columns.
-  autoFitColumns(clonedSheet, 0, firstStartCol - 1);
-
-  // Center every cell in the Day-of-Pay, End Date, and Balance columns
-  // (cols 2 onward, same as writeBillsVerbatim does in blank mode).
-  {
-    const billsRef = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']) : null;
-    const maxR = billsRef?.e.r ?? 0;
-    for (let r = 0; r <= maxR; r++) {
-      for (let c = 2; c < firstStartCol; c++) {
-        const addr = XLSX.utils.encode_cell({ r, c });
-        const cell = (clonedSheet as any)[addr];
-        if (cell) {
-          (clonedSheet as any)[addr] = {
-            ...cell,
-            s: { ...(cell.s ?? {}), alignment: { horizontal: 'center', vertical: 'center' } },
-          };
-        }
-      }
-    }
-  }
-
-  // The original bills section and existing budget columns are already in the
-  // cloned sheet — never overwrite them. Just append new week columns.
+  // Weeks always start at column A in the new layout.
   const colorMap = bills ? buildBillColorMap(bills) : new Map<string, string>();
-  writeWeeksToSheet(clonedSheet, weekBudgets, firstStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMap);
+  writeWeeksToSheet(clonedSheet, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMap);
 
-  // Auto-detect where the bills section ends (= where the first budget week was)
-  // so we know how many columns to freeze.
-  const headerRowData: any[][] = XLSX.utils.sheet_to_json(clonedSheet, { header: 1, defval: '' });
-  const hdr = (headerRowData[0] ?? []) as any[];
-  let billsFreezeCount = firstStartCol; // sensible default
-  for (let c = 0; c < hdr.length; c++) {
-    if (String(hdr[c] ?? '').trim().toLowerCase().startsWith('budget')) {
-      billsFreezeCount = c;
-      break;
-    }
+  // Write Bills section below the weeks.
+  if (bills && bills.length > 0) {
+    const lastRow = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']).e.r : 0;
+    writeBillsSectionBelow(clonedSheet, bills, lastRow);
   }
 
-  const lastNewWeekStartCol = firstStartCol + (weekBudgets.length - 1) * 2;
-  applySheetView(clonedSheet, billsFreezeCount, lastNewWeekStartCol);
-
+  // Write Debts section below the Bills section.
   if (debts && debts.length > 0) {
-    const sheetRef = clonedSheet['!ref'];
-    const lastRow = sheetRef ? XLSX.utils.decode_range(sheetRef).e.r : 0;
+    const lastRow = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']).e.r : 0;
     writeDebtsSection(clonedSheet, debts, lastRow);
   }
+
+  // No frozen columns — weeks start at col A.
+  const lastNewWeekStartCol = (weekBudgets.length - 1) * 2;
+  applySheetView(clonedSheet, 0, lastNewWeekStartCol);
 
   const clonedSheets = { ...workbook.Sheets, [sheetName]: clonedSheet };
   delete clonedSheets['_BillsData'];
@@ -778,7 +861,7 @@ export function appendBudgetWeeks(
 export function createBlankBudget(
   weekBudgets: WeeklyBudget[],
   includeRemainingAcct = true,
-  rawBillsSection?: RawBillsSection | null,
+  _rawBillsSection?: RawBillsSection | null,
   fallbackBills?: Bill[],
   style?: SheetStyle | null,
   rawBytes?: Uint8Array | null,
@@ -789,46 +872,27 @@ export function createBlankBudget(
   const ws: XLSX.WorkSheet = {};
   ws['!ref'] = 'A1:A1';
 
-  let budgetStartCol = 0;
+  // Budget weeks always start at column A — no left-side bills panel.
+  const allBillsForColor = bills ?? fallbackBills;
+  const colorMapBlank = allBillsForColor ? buildBillColorMap(allBillsForColor) : new Map<string, string>();
+  writeWeeksToSheet(ws, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMapBlank);
 
-  const hasDebtBills = bills && bills.some(b => b.sourceDebtId);
-  if (bills && bills.length > 0 && hasDebtBills) {
-    writeBillsSection(ws, bills, 0);
-    budgetStartCol = 3;
-    if (!ws['!cols']) ws['!cols'] = [];
-    (ws['!cols'] as any[])[0] = { wch: 22 };
-    (ws['!cols'] as any[])[1] = { wch: 12 };
-    (ws['!cols'] as any[])[2] = { wch: 12 };
-    const nonDebtBills = bills.filter(b => !b.sourceDebtId);
-    const billsRows = 2 + nonDebtBills.length + 5;
-    ws['!ref'] = `A1:C${billsRows}`;
-  } else if (rawBillsSection) {
-    writeBillsVerbatim(ws, rawBillsSection);
-    budgetStartCol = rawBillsSection.colCount;
-  } else if (fallbackBills && fallbackBills.length > 0) {
-    writeBillsSection(ws, fallbackBills, 0);
-    budgetStartCol = 3;
-
-    if (!ws['!cols']) ws['!cols'] = [];
-    (ws['!cols'] as any[])[0] = { wch: 22 };
-    (ws['!cols'] as any[])[1] = { wch: 12 };
-    (ws['!cols'] as any[])[2] = { wch: 12 };
-
-    const billsRows = 2 + fallbackBills.length + 5;
-    ws['!ref'] = `A1:C${billsRows}`;
+  // Write Bills section below the weeks.
+  const allBillsForBelow = bills ?? fallbackBills;
+  if (allBillsForBelow && allBillsForBelow.length > 0) {
+    const lastRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).e.r : 0;
+    writeBillsSectionBelow(ws, allBillsForBelow, lastRow);
   }
 
-  const colorMapBlank = (bills ?? fallbackBills) ? buildBillColorMap(bills ?? fallbackBills ?? []) : new Map<string, string>();
-  writeWeeksToSheet(ws, weekBudgets, budgetStartCol, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMapBlank);
-
+  // Write Debts section below the Bills section.
   if (debts && debts.length > 0) {
-    const sheetRef = ws['!ref'];
-    const lastRow = sheetRef ? XLSX.utils.decode_range(sheetRef).e.r : 0;
+    const lastRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).e.r : 0;
     writeDebtsSection(ws, debts, lastRow);
   }
 
-  const lastWeekCol = budgetStartCol + (weekBudgets.length - 1) * 2;
-  applySheetView(ws, budgetStartCol, lastWeekCol);
+  // No frozen columns — weeks start at col A.
+  const lastWeekCol = (weekBudgets.length - 1) * 2;
+  applySheetView(ws, 0, lastWeekCol);
 
   XLSX.utils.book_append_sheet(wb, ws, 'Budget');
 
