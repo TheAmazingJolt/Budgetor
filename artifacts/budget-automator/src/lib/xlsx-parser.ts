@@ -67,49 +67,69 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
           defval: '',
         });
 
-        // ── Parse bills from columns A-B (rows 1 to ~19) ──────────────────
         const bills: Bill[] = [];
 
-        const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day', 'paycheck', 'remaining', 'partial']);
-        const BILL_WEEK_KEYWORDS = ['paycheck', 'remaining', 'partial'];
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || !row[0]) continue;
-          const name = String(row[0]).trim();
-          if (!name) break;
-          if (BILL_STOP_MARKERS.has(name.toLowerCase())) break;
-          if (BILL_WEEK_KEYWORDS.some(kw => name.toLowerCase().startsWith(kw))) break;
-          if (name.toLowerCase().startsWith('total')) break;
+        const billsDataSheet = workbook.Sheets['_BillsData'];
+        if (billsDataSheet) {
+          const bdRows: any[][] = XLSX.utils.sheet_to_json(billsDataSheet, { header: 1, defval: '' });
+          for (let i = 1; i < bdRows.length; i++) {
+            const r = bdRows[i];
+            if (!r || !String(r[0] ?? '').trim()) break;
+            const dayRaw = r[2];
+            const dayParsed = typeof dayRaw === 'number' ? dayRaw : parseInt(String(dayRaw ?? ''), 10);
+            const sourceDebt = String(r[6] ?? '').trim();
+            bills.push({
+              name: String(r[0]).trim(),
+              amount: typeof r[1] === 'number' ? r[1] : parseFloat(String(r[1] ?? '0')),
+              dayOfMonth: !isNaN(dayParsed) && dayParsed >= 1 && dayParsed <= 31 ? dayParsed : null,
+              category: String(r[3] ?? '').trim() || String(r[0]).trim(),
+              type: (String(r[4] ?? '').trim() || 'fixed') as Bill['type'],
+              color: String(r[5] ?? '').trim() || 'slate',
+              ...(sourceDebt ? { sourceDebtId: sourceDebt } : {}),
+            });
+          }
+        } else {
+          const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day', 'paycheck', 'remaining', 'partial']);
+          const BILL_WEEK_KEYWORDS = ['paycheck', 'remaining', 'partial'];
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || !row[0]) continue;
+            const name = String(row[0]).trim();
+            if (!name) break;
+            if (BILL_STOP_MARKERS.has(name.toLowerCase())) break;
+            if (BILL_WEEK_KEYWORDS.some(kw => name.toLowerCase().startsWith(kw))) break;
+            if (name.toLowerCase().startsWith('total')) break;
 
-          const amount = parseFloat(String(row[1]));
-          if (isNaN(amount)) continue;
+            const amount = parseFloat(String(row[1]));
+            if (isNaN(amount)) continue;
 
-          const dayStr = String(row[2] ?? '');
-          const dayOfMonth =
-            dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
-              ? parseInt(dayStr)
-              : null;
+            const dayStr = String(row[2] ?? '');
+            const dayOfMonth =
+              dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
+                ? parseInt(dayStr)
+                : null;
 
-          let type: Bill['type'] = 'fixed';
-          let color = 'slate';
-          const lower = name.toLowerCase();
-          if (lower.includes('rent')) { type = 'balanced'; color = 'blue'; }
-          else if (
-            lower.includes('util') ||
-            lower.includes('electric') ||
-            lower.includes('water') ||
-            lower === 'utilities'
-          ) { type = 'balanced'; color = 'orange'; }
-          else if (lower.includes('car')) { type = 'balanced'; color = 'purple'; }
+            let type: Bill['type'] = 'fixed';
+            let color = 'slate';
+            const lower = name.toLowerCase();
+            if (lower.includes('rent')) { type = 'balanced'; color = 'blue'; }
+            else if (
+              lower.includes('util') ||
+              lower.includes('electric') ||
+              lower.includes('water') ||
+              lower === 'utilities'
+            ) { type = 'balanced'; color = 'orange'; }
+            else if (lower.includes('car')) { type = 'balanced'; color = 'purple'; }
 
-          bills.push({
-            name,
-            amount: amount > 0 ? -amount : amount,
-            dayOfMonth,
-            category: name,
-            type,
-            color,
-          });
+            bills.push({
+              name,
+              amount: amount > 0 ? -amount : amount,
+              dayOfMonth,
+              category: name,
+              type,
+              color,
+            });
+          }
         }
 
         // ── Parse debts section ────────────────────────────────────────────
@@ -153,30 +173,31 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
           }
         }
 
-        // Find weekly bills section
-        let weeklyStart = -1;
-        for (let i = 15; i < Math.min(30, rows.length); i++) {
-          if (String(rows[i]?.[0] ?? '').toLowerCase().includes('weekly')) {
-            weeklyStart = i + 1;
-            break;
+        if (!billsDataSheet) {
+          let weeklyStart = -1;
+          for (let i = 15; i < Math.min(30, rows.length); i++) {
+            if (String(rows[i]?.[0] ?? '').toLowerCase().includes('weekly')) {
+              weeklyStart = i + 1;
+              break;
+            }
           }
-        }
-        if (weeklyStart !== -1) {
-          for (let i = weeklyStart; i < Math.min(weeklyStart + 10, rows.length); i++) {
-            const row = rows[i];
-            if (!row || !row[0]) break;
-            const name = String(row[0]).trim();
-            if (!name || name.toLowerCase().includes('yearly')) break;
-            const amount = parseFloat(String(row[1]));
-            if (isNaN(amount)) continue;
-            bills.push({
-              name,
-              amount: amount > 0 ? -amount : amount,
-              dayOfMonth: null,
-              category: name,
-              type: 'weekly',
-              color: 'green',
-            });
+          if (weeklyStart !== -1) {
+            for (let i = weeklyStart; i < Math.min(weeklyStart + 10, rows.length); i++) {
+              const row = rows[i];
+              if (!row || !row[0]) break;
+              const name = String(row[0]).trim();
+              if (!name || name.toLowerCase().includes('yearly')) break;
+              const amount = parseFloat(String(row[1]));
+              if (isNaN(amount)) continue;
+              bills.push({
+                name,
+                amount: amount > 0 ? -amount : amount,
+                dayOfMonth: null,
+                category: name,
+                type: 'weekly',
+                color: 'green',
+              });
+            }
           }
         }
 

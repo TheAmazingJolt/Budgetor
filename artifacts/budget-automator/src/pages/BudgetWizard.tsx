@@ -286,7 +286,6 @@ export function BudgetWizard({
     parsedWorkbook,
     blankMode,
     includeBillsSummary,
-    includeDebtsInSpreadsheet,
     sheetStyle,
     bills,
     newWeekStartDate,
@@ -299,7 +298,6 @@ export function BudgetWizard({
     setParsedWorkbook,
     setBlankMode,
     setIncludeBillsSummary,
-    setIncludeDebtsInSpreadsheet,
     setBills,
     debts,
     setDebts,
@@ -887,7 +885,7 @@ export function BudgetWizard({
           startCol,
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: excelSheetTitle,
-          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills } : {}),
         },
       });
@@ -1359,7 +1357,7 @@ export function BudgetWizard({
               ? (parsedWorkbook?.rawBillsSection ?? null)
               : null;
             const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
-            const debtsForExport = includeDebtsInSpreadsheet && debts.length > 0 ? debts : undefined;
+            const debtsForExport = debts.length > 0 ? debts : undefined;
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
               blob = createBlankBudget([...existingConverted, ...data.weeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
@@ -1484,7 +1482,7 @@ export function BudgetWizard({
           includeRemainingAcct: !zeroOpeningBalance,
           sheetTitle: googleSheetTitle,
           ...(existingLastCol != null ? { existingLastCol } : {}),
-          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills } : {}),
         },
       });
@@ -1521,7 +1519,7 @@ export function BudgetWizard({
           title,
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
-          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills } : {}),
         },
       });
@@ -1558,7 +1556,7 @@ export function BudgetWizard({
           title,
           weeks: generatedWeek.weeks,
           includeRemainingAcct: !zeroOpeningBalance,
-          ...(includeDebtsInSpreadsheet && debts.length > 0 ? { debts } : {}),
+          ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills } : {}),
         },
       });
@@ -2597,22 +2595,6 @@ export function BudgetWizard({
                 </div>
               )}
 
-              {debts.length > 0 && (
-                <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 transition-all select-none">
-                  <Checkbox
-                    checked={includeDebtsInSpreadsheet}
-                    onCheckedChange={(v) => setIncludeDebtsInSpreadsheet(!!v)}
-                    id="include-debts"
-                    className="mt-0.5 rounded"
-                  />
-                  <div>
-                    <p className="font-semibold text-sm text-foreground">Include debts in spreadsheet</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Adds a debt summary section below the budget rows showing each debt's name, balance, APR, and minimum payment.
-                    </p>
-                  </div>
-                </label>
-              )}
 
               <Card className="border-primary/20 bg-primary/5">
                 <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">

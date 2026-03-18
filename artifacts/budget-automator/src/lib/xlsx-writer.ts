@@ -69,7 +69,8 @@ function writeBillsSection(
   bills: Bill[],
   startCol: number,
 ): number {
-  // Header: "Bills" merged across 2 cols, centered, bold
+  const filteredBills = bills.filter(b => !b.sourceDebtId);
+
   const headerStyle = {
     font: { bold: true, sz: 10, name: 'Arial' },
     alignment: { horizontal: 'center', vertical: 'center' },
@@ -81,9 +82,9 @@ function writeBillsSection(
   const headerLabelStyle = { ...headerStyle, font: { ...headerStyle.font, color: { rgb: 'FFFFFF' } } };
   set(sheet, 0, startCol,     makeCell('Bills', headerLabelStyle));
   set(sheet, 0, startCol + 1, makeCell('', headerLabelStyle));
-  addMerge(sheet, 0, startCol, 0, startCol + 1);
+  set(sheet, 0, startCol + 2, makeCell('', headerLabelStyle));
+  addMerge(sheet, 0, startCol, 0, startCol + 2);
 
-  // "Amount" sub-header
   const subHeaderStyle = {
     font: { bold: true, sz: 10, name: 'Arial' },
     alignment: { horizontal: 'center' },
@@ -92,19 +93,19 @@ function writeBillsSection(
   };
   set(sheet, 1, startCol,     makeCell('Bill Name', subHeaderStyle));
   set(sheet, 1, startCol + 1, makeCell('Amount', { ...subHeaderStyle, alignment: { horizontal: 'right' } }));
+  set(sheet, 1, startCol + 2, makeCell('Day of Pay', { ...subHeaderStyle, alignment: { horizontal: 'center' } }));
 
   const PRIORITY_CATEGORIES = ['rent', 'utilities', 'car', 'fixed', 'weekly'];
 
-  // Build ordered list of categories: priority ones first, then any extras found in bills.
   const seenLower = new Set<string>();
   const orderedCategories: string[] = [];
   for (const cat of PRIORITY_CATEGORIES) {
-    if (bills.some(b => b.category.toLowerCase() === cat)) {
+    if (filteredBills.some(b => b.category.toLowerCase() === cat)) {
       orderedCategories.push(cat);
       seenLower.add(cat);
     }
   }
-  for (const bill of bills) {
+  for (const bill of filteredBills) {
     const lower = bill.category.toLowerCase();
     if (!seenLower.has(lower)) {
       orderedCategories.push(bill.category);
@@ -112,8 +113,6 @@ function writeBillsSection(
     }
   }
 
-  // Determine the dominant color for a category (first bill with a real color).
-  // Used to tint the category label row.
   function catDominantColor(catBills: Bill[]): string | null {
     for (const b of catBills) {
       if (b.color && b.color !== 'none' && BILL_COLOR_HEX[b.color]) return b.color;
@@ -124,11 +123,9 @@ function writeBillsSection(
   let row = 2;
   for (const cat of orderedCategories) {
     const catLower = cat.toLowerCase();
-    const catBills = bills.filter(b => b.category.toLowerCase() === catLower);
+    const catBills = filteredBills.filter(b => b.category.toLowerCase() === catLower);
     if (catBills.length === 0) continue;
 
-    // Category label row — green bg only when at least one bill has a real color;
-    // plain/unstyled when all bills in the category are "none".
     const domColor = catDominantColor(catBills);
     const catFontBase: any = { bold: true, sz: 10, name: 'Arial' };
     const catStyle: any = { font: catFontBase, alignment: { horizontal: 'center' } };
@@ -139,10 +136,10 @@ function writeBillsSection(
     const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     set(sheet, row, startCol,     makeCell(catLabel, catStyle));
     set(sheet, row, startCol + 1, makeCell('', catStyle));
-    addMerge(sheet, row, startCol, row, startCol + 1);
+    set(sheet, row, startCol + 2, makeCell('', catStyle));
+    addMerge(sheet, row, startCol, row, startCol + 2);
     row++;
 
-    // Individual bills — per-bill color styling.
     for (const bill of catBills) {
       const { fill, fontColor } = billColorStyle(bill.color);
       const billStyle: any = {
@@ -154,24 +151,35 @@ function writeBillsSection(
         alignment: { horizontal: 'right' },
         numFmt: '#,##0.00',
       };
+      const dayStyle: any = {
+        font: { sz: 10, name: 'Arial' },
+        alignment: { horizontal: 'center' },
+      };
       if (fill) {
         billStyle.fill = fill;
         amtStyle.fill = fill;
+        dayStyle.fill = fill;
       }
       if (fontColor) {
         billStyle.font.color = { rgb: fontColor };
         amtStyle.font.color = { rgb: fontColor };
+        dayStyle.font.color = { rgb: fontColor };
       }
+      const dayValue = bill.type === 'weekly'
+        ? 'Weekly'
+        : bill.dayOfMonth != null
+          ? bill.dayOfMonth
+          : 'Varies';
       set(sheet, row, startCol,     makeCell(bill.name,   billStyle));
       set(sheet, row, startCol + 1, makeCell(bill.amount, amtStyle));
+      set(sheet, row, startCol + 2, makeCell(dayValue,    dayStyle));
       row++;
     }
   }
 
-  // Expand the bills label column if any name is wider than the default.
-  autoFitColumns(sheet, startCol, startCol + 1);
+  autoFitColumns(sheet, startCol, startCol + 2);
 
-  return row; // next available row
+  return row;
 }
 
 // ── Budget weeks ─────────────────────────────────────────────────────────────
@@ -628,11 +636,32 @@ function writeDebtsSection(
 
 // ── Public exports ───────────────────────────────────────────────────────────
 
-/**
- * Build a Map<billName, colorKey> from the full Bill[] list so that
- * writeWeeksToSheet can look up colors for weekly bill rows by name.
- * Both the original name and "Partial {name}" variants are registered.
- */
+function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[]): void {
+  const ds: XLSX.WorkSheet = {};
+  const headers = ['name', 'amount', 'dayOfMonth', 'category', 'type', 'color', 'sourceDebtId'];
+  for (let c = 0; c < headers.length; c++) {
+    ds[XLSX.utils.encode_cell({ r: 0, c })] = { v: headers[c], t: 's' };
+  }
+  for (let i = 0; i < bills.length; i++) {
+    const b = bills[i];
+    const r = i + 1;
+    ds[XLSX.utils.encode_cell({ r, c: 0 })] = { v: b.name ?? '', t: 's' };
+    ds[XLSX.utils.encode_cell({ r, c: 1 })] = { v: b.amount ?? 0, t: 'n' };
+    ds[XLSX.utils.encode_cell({ r, c: 2 })] = { v: b.dayOfMonth != null ? b.dayOfMonth : '', t: b.dayOfMonth != null ? 'n' : 's' };
+    ds[XLSX.utils.encode_cell({ r, c: 3 })] = { v: b.category ?? '', t: 's' };
+    ds[XLSX.utils.encode_cell({ r, c: 4 })] = { v: b.type ?? '', t: 's' };
+    ds[XLSX.utils.encode_cell({ r, c: 5 })] = { v: b.color ?? '', t: 's' };
+    ds[XLSX.utils.encode_cell({ r, c: 6 })] = { v: b.sourceDebtId ?? '', t: 's' };
+  }
+  ds['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: bills.length, c: headers.length - 1 } });
+  XLSX.utils.book_append_sheet(wb, ds, '_BillsData');
+  if (!wb.Workbook) wb.Workbook = {};
+  if (!wb.Workbook.Sheets) wb.Workbook.Sheets = [];
+  const idx = wb.SheetNames.indexOf('_BillsData');
+  while (wb.Workbook.Sheets.length <= idx) wb.Workbook.Sheets.push({});
+  wb.Workbook.Sheets[idx].Hidden = 1;
+}
+
 function buildBillColorMap(bills: Bill[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const bill of bills) {
@@ -725,10 +754,18 @@ export function appendBudgetWeeks(
     writeDebtsSection(clonedSheet, debts, lastRow);
   }
 
+  const clonedSheets = { ...workbook.Sheets, [sheetName]: clonedSheet };
+  delete clonedSheets['_BillsData'];
+  const clonedNames = workbook.SheetNames.filter(n => n !== '_BillsData');
   const clonedWb: XLSX.WorkBook = {
     ...workbook,
-    Sheets: { ...workbook.Sheets, [sheetName]: clonedSheet },
+    SheetNames: clonedNames,
+    Sheets: clonedSheets,
   };
+
+  if (bills && bills.length > 0) {
+    writeBillsDataSheet(clonedWb, bills);
+  }
 
   const wbOut = XLSX.write(clonedWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {
@@ -752,22 +789,31 @@ export function createBlankBudget(
 
   let budgetStartCol = 0;
 
-  if (rawBillsSection) {
-    // Preferred path: copy the original bills section cells verbatim
+  const hasDebtBills = bills && bills.some(b => b.sourceDebtId);
+  if (bills && bills.length > 0 && hasDebtBills) {
+    writeBillsSection(ws, bills, 0);
+    budgetStartCol = 3;
+    if (!ws['!cols']) ws['!cols'] = [];
+    (ws['!cols'] as any[])[0] = { wch: 22 };
+    (ws['!cols'] as any[])[1] = { wch: 12 };
+    (ws['!cols'] as any[])[2] = { wch: 12 };
+    const nonDebtBills = bills.filter(b => !b.sourceDebtId);
+    const billsRows = 2 + nonDebtBills.length + 5;
+    ws['!ref'] = `A1:C${billsRows}`;
+  } else if (rawBillsSection) {
     writeBillsVerbatim(ws, rawBillsSection);
-    // Budget must start AFTER all bills columns (colCount is the exact width)
     budgetStartCol = rawBillsSection.colCount;
   } else if (fallbackBills && fallbackBills.length > 0) {
-    // Fallback: generate a styled bills section when no original is available
     writeBillsSection(ws, fallbackBills, 0);
-    budgetStartCol = 2;
+    budgetStartCol = 3;
 
     if (!ws['!cols']) ws['!cols'] = [];
     (ws['!cols'] as any[])[0] = { wch: 22 };
     (ws['!cols'] as any[])[1] = { wch: 12 };
+    (ws['!cols'] as any[])[2] = { wch: 12 };
 
     const billsRows = 2 + fallbackBills.length + 5;
-    ws['!ref'] = `A1:B${billsRows}`;
+    ws['!ref'] = `A1:C${billsRows}`;
   }
 
   const colorMapBlank = (bills ?? fallbackBills) ? buildBillColorMap(bills ?? fallbackBills ?? []) : new Map<string, string>();
@@ -784,15 +830,18 @@ export function createBlankBudget(
 
   XLSX.utils.book_append_sheet(wb, ws, 'Budget');
 
-  // Carry over any extra tabs from the original workbook.
-  // The Budget sheet is skipped (we just generated a fresh one).
   if (rawBytes) {
     const originalWb = XLSX.read(rawBytes, { type: 'array', cellStyles: true });
     for (const sheetName of originalWb.SheetNames) {
-      if (sheetName === 'Budget') continue;
+      if (sheetName === 'Budget' || sheetName === '_BillsData') continue;
       if (wb.SheetNames.includes(sheetName)) continue;
       XLSX.utils.book_append_sheet(wb, originalWb.Sheets[sheetName], sheetName);
     }
+  }
+
+  const allBills = bills ?? fallbackBills;
+  if (allBills && allBills.length > 0) {
+    writeBillsDataSheet(wb, allBills);
   }
 
   const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });

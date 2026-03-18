@@ -35,7 +35,6 @@ interface BudgetState {
   parsedWorkbook: ParsedWorkbook | null;
   blankMode: boolean;
   includeBillsSummary: boolean;
-  includeDebtsInSpreadsheet: boolean;
   sheetStyle: SheetStyle | null;
 
   bills: Bill[];
@@ -54,7 +53,6 @@ interface BudgetState {
   setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
   setBlankMode: (val: boolean) => void;
   setIncludeBillsSummary: (val: boolean) => void;
-  setIncludeDebtsInSpreadsheet: (val: boolean) => void;
   setBills: (bills: Bill[]) => void;
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
@@ -91,7 +89,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   parsedWorkbook: null,
   blankMode: false,
   includeBillsSummary: false,
-  includeDebtsInSpreadsheet: false,
   sheetStyle: null,
   bills: [],
   debts: [],
@@ -114,7 +111,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
     })),
   setBlankMode: (val) => set({ blankMode: val }),
   setIncludeBillsSummary: (val) => set({ includeBillsSummary: val }),
-  setIncludeDebtsInSpreadsheet: (val) => set({ includeDebtsInSpreadsheet: val }),
   setBills: (bills) => set({ bills }),
   addBill: (bill) => set((state) => ({ bills: [...state.bills, bill] })),
   updateBill: (index, bill) =>
@@ -242,7 +238,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       uploadedFile: null,
       parsedWorkbook: null,
       blankMode: false,
-      includeDebtsInSpreadsheet: false,
       sheetStyle: null,
       generatedWeek: null,
       openingBalance: 0,
