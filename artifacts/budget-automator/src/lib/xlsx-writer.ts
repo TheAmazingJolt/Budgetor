@@ -26,11 +26,11 @@ const DEBTS_SECTION_HEADER_FG  = '9C2626';
  */
 const BILL_BG_HEX: Readonly<Record<string, string>> = {
   blue:   'ADCCF7',
-  green:  'B5EBB8',
+  green:  'B5EAB8',
   orange: 'FFD4A1',
   purple: 'D6BAF7',
   red:    'FFB5B5',
-  slate:  'D6DEE6',
+  slate:  'D6DDE5',
   amber:  'FFE68C',
   teal:   'B3EBE6',
   rose:   'FFBDCC',
@@ -796,63 +796,57 @@ export function appendBudgetWeeks(
   debts?: Debt[] | null,
   bills?: Bill[] | null,
 ): Blob {
-  // Re-read the original using xlsx-js-style so every cell's style object is in
-  // the format that xlsx-js-style expects when writing — standard xlsx only
-  // preserves partial fill info, causing all other styles to silently disappear.
+  // Re-read the original workbook to preserve any extra sheets (e.g. custom
+  // tabs the user may have added), but we rebuild the Budget sheet from scratch
+  // so no legacy left-panel or stale week columns contaminate the new layout.
   const workbook = XLSX.read(rawBytes, { type: 'array', cellStyles: true });
 
-  const sheetName = workbook.SheetNames.includes('Budget')
+  const budgetSheetName = workbook.SheetNames.includes('Budget')
     ? 'Budget'
     : workbook.SheetNames[0];
 
-  const existingSheet = workbook.Sheets[sheetName];
-  const clonedSheet: XLSX.WorkSheet = { ...existingSheet };
-  if (existingSheet['!merges']) {
-    clonedSheet['!merges'] = [...existingSheet['!merges']];
-  }
-  if (existingSheet['!cols']) {
-    clonedSheet['!cols'] = [...existingSheet['!cols']];
-  }
-
-  // Normalize existing cell styles from the flat read format to the format
-  // xlsx-js-style expects when writing, so fills/fonts/alignment are preserved.
-  const fillStyleMap = buildFillColorStyleMap(workbook);
-  normalizeSheetCellStyles(clonedSheet, fillStyleMap);
+  // Fresh Budget sheet — no legacy data carried over.
+  const freshSheet: XLSX.WorkSheet = {};
+  freshSheet['!ref'] = 'A1:A1';
 
   // Weeks always start at column A in the new layout.
   const colorMap = bills ? buildBillColorMap(bills) : new Map<string, string>();
-  writeWeeksToSheet(clonedSheet, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMap);
+  writeWeeksToSheet(freshSheet, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMap);
 
   // Write Bills section below the weeks.
   if (bills && bills.length > 0) {
-    const lastRow = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']).e.r : 0;
-    writeBillsSectionBelow(clonedSheet, bills, lastRow);
+    const lastRow = freshSheet['!ref'] ? XLSX.utils.decode_range(freshSheet['!ref']).e.r : 0;
+    writeBillsSectionBelow(freshSheet, bills, lastRow);
   }
 
   // Write Debts section below the Bills section.
   if (debts && debts.length > 0) {
-    const lastRow = clonedSheet['!ref'] ? XLSX.utils.decode_range(clonedSheet['!ref']).e.r : 0;
-    writeDebtsSection(clonedSheet, debts, lastRow);
+    const lastRow = freshSheet['!ref'] ? XLSX.utils.decode_range(freshSheet['!ref']).e.r : 0;
+    writeDebtsSection(freshSheet, debts, lastRow);
   }
 
   // No frozen columns — weeks start at col A.
   const lastNewWeekStartCol = (weekBudgets.length - 1) * 2;
-  applySheetView(clonedSheet, 0, lastNewWeekStartCol);
+  applySheetView(freshSheet, 0, lastNewWeekStartCol);
 
-  const clonedSheets = { ...workbook.Sheets, [sheetName]: clonedSheet };
-  delete clonedSheets['_BillsData'];
-  const clonedNames = workbook.SheetNames.filter(n => n !== '_BillsData');
-  const clonedWb: XLSX.WorkBook = {
-    ...workbook,
-    SheetNames: clonedNames,
-    Sheets: clonedSheets,
-  };
+  // Rebuild the workbook: replace the Budget sheet and drop legacy data sheets.
+  const newSheets: Record<string, XLSX.WorkSheet> = {};
+  const newSheetNames: string[] = [];
+  for (const name of workbook.SheetNames) {
+    if (name === '_BillsData' || name === budgetSheetName) continue;
+    newSheets[name] = workbook.Sheets[name];
+    newSheetNames.push(name);
+  }
+  newSheets[budgetSheetName] = freshSheet;
+  newSheetNames.unshift(budgetSheetName);
+
+  const newWb: XLSX.WorkBook = { ...workbook, SheetNames: newSheetNames, Sheets: newSheets };
 
   if (bills && bills.length > 0) {
-    writeBillsDataSheet(clonedWb, bills);
+    writeBillsDataSheet(newWb, bills);
   }
 
-  const wbOut = XLSX.write(clonedWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+  const wbOut = XLSX.write(newWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
