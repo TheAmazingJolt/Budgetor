@@ -142,7 +142,13 @@ function parseBillMetaRows(
       dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
         ? parseInt(dayStr)
         : null;
-    bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+    // Use stored color (col 5) if present, otherwise fall back to type-based default.
+    const storedColor = String(cells[5] ?? "").trim();
+    const color = storedColor || colorMap[type] || "slate";
+    // Use stored sourceDebtId (col 6) if present.
+    const storedSourceDebtId = String(cells[6] ?? "").trim();
+    const sourceDebtId = storedSourceDebtId || undefined;
+    bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId });
   }
   return bills;
 }
@@ -518,13 +524,15 @@ async function writeExcelBillRows(
   startRow: number,
   bills: BillMeta[],
 ) {
-  if (!bills || bills.length === 0) return;
+  // Exclude debt-linked min-payment bills — they already appear in the Debts section.
+  const filteredBills = bills.filter((b) => !b.sourceDebtId);
+  if (!filteredBills || filteredBills.length === 0) return;
 
   const rows: (string | number | null)[][] = [];
   rows.push([]);
   rows.push(["Bills", "", "", "", ""]);
   rows.push(["Name", "Amount", "Type", "Category", "Due Day"]);
-  for (const bill of bills) {
+  for (const bill of filteredBills) {
     rows.push([
       bill.name,
       Math.abs(bill.amount),
@@ -593,11 +601,11 @@ async function writeHiddenExcelBillsSheet(
   if (existing) {
     metaSheetName = encodeURIComponent(META_SHEET);
     const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`);
-    const endAddr = usedRange.address?.split("!")?.[1] ?? "E100";
+    const endAddr = usedRange.address?.split("!")?.[1] ?? "G100";
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endAddr}')`,
-      { values: Array.from({ length: 50 }, () => Array(5).fill("")) }
+      { values: Array.from({ length: 50 }, () => Array(7).fill("")) }
     );
   } else {
     const added = await graphPost(
@@ -616,19 +624,21 @@ async function writeHiddenExcelBillsSheet(
 
   const grid: (string | number)[][] = [
     ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day"],
+    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId"],
     ...bills.map((b) => [
       b.name,
       Math.abs(b.amount),
       b.type ?? "fixed",
       b.category ?? b.name,
       b.dayOfMonth != null ? b.dayOfMonth : "varies",
+      b.color ?? "",
+      b.sourceDebtId ?? "",
     ]),
   ];
   const endRow = grid.length;
   await graphPatch(
     token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:E${endRow}')`,
+    `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:G${endRow}')`,
     { values: grid }
   );
 }

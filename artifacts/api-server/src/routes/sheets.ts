@@ -141,7 +141,12 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
         ? parseInt(dayStr)
         : null;
-    bills.push({ name, amount, dayOfMonth, category, type, color: colorMap[type] ?? "slate" });
+    // Use stored color (col 5) if present, otherwise fall back to type-based default.
+    const storedColor = cells[5]?.formattedValue?.trim() ?? "";
+    const color = storedColor || colorMap[type] || "slate";
+    // Use stored sourceDebtId (col 6) if present.
+    const sourceDebtId = cells[6]?.formattedValue?.trim() || undefined;
+    bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId });
   }
 
   if (!foundBillsMarker) {
@@ -963,7 +968,9 @@ function buildBillRows(
   afterRow: number,
   sheetId: number,
 ) {
-  if (!bills || bills.length === 0) return { billRows: [], billRequests: [], billRowCount: 0 };
+  // Exclude debt-linked min-payment bills — they already appear in the Debts section.
+  const filteredBills = bills.filter((b) => !b.sourceDebtId);
+  if (!filteredBills || filteredBills.length === 0) return { billRows: [], billRequests: [], billRowCount: 0 };
 
   const headerRow = afterRow + 1;
   const colHeaderRow = headerRow + 1;
@@ -973,7 +980,7 @@ function buildBillRows(
   billRows.push([]);
   billRows.push(["Bills", "", ""]);
   billRows.push(["Name", "Amount", "Due Day"]);
-  for (const bill of bills) {
+  for (const bill of filteredBills) {
     billRows.push([
       bill.name,
       Math.abs(bill.amount),
@@ -1057,8 +1064,8 @@ function buildBillRows(
   });
 
   // Per-bill row background color (each bill uses its assigned color).
-  for (let i = 0; i < bills.length; i++) {
-    const bill = bills[i];
+  for (let i = 0; i < filteredBills.length; i++) {
+    const bill = filteredBills[i];
     const colorKey = bill.color && bill.color !== "none" ? bill.color : null;
     const bgColor = colorKey && COLOR_KEY_TO_RGB[colorKey]
       ? COLOR_KEY_TO_RGB[colorKey]
@@ -1089,7 +1096,7 @@ function buildBillRows(
       range: {
         sheetId,
         startRowIndex: firstDataRow,
-        endRowIndex: firstDataRow + bills.length,
+        endRowIndex: firstDataRow + filteredBills.length,
         startColumnIndex: 1,
         endColumnIndex: 2,
       },
@@ -1296,18 +1303,20 @@ async function writeHiddenBillsSheet(
 
   const grid: (string | number)[][] = [
     ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day"],
+    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId"],
     ...bills.map((b) => [
       b.name,
       Math.abs(b.amount),
       b.type ?? "fixed",
       b.category ?? b.name,
       b.dayOfMonth != null ? b.dayOfMonth : "varies",
+      b.color ?? "",
+      b.sourceDebtId ?? "",
     ]),
   ];
   await sheetsApi.spreadsheets.values.update({
     spreadsheetId,
-    range: `_BudgifyData!A1:E${grid.length}`,
+    range: `_BudgifyData!A1:G${grid.length}`,
     valueInputOption: "RAW",
     requestBody: { values: grid },
   });
