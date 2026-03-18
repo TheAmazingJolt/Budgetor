@@ -229,6 +229,22 @@ function stripDebtMinPayments(bills: Bill[]): Bill[] {
   return bills.filter(b => !b.name.endsWith(" (min payment)"));
 }
 
+const OLD_HEURISTIC_COLORS: Record<string, string[]> = {
+  balanced: ["blue", "orange", "purple"],
+  fixed: ["slate"],
+  weekly: ["green"],
+};
+
+function stripHeuristicColors(bills: Bill[]): Bill[] {
+  return bills.map((b) => {
+    const stale = OLD_HEURISTIC_COLORS[b.type ?? "fixed"] ?? [];
+    if (b.color && stale.includes(b.color)) {
+      return { ...b, color: "none" as any };
+    }
+    return b;
+  });
+}
+
 function parsedWeekToWeeklyBudget(w: ParsedWeek): WeeklyBudget {
   return {
     weekLabel: w.label,
@@ -474,30 +490,14 @@ export function BudgetWizard({
     }
     if (billsLoadedForUserRef.current === currentUser.id) return;
     if (!userBillsQuery.data) return;
-    let serverBills = (userBillsQuery.data.bills ?? []) as Bill[];
-
-    // One-time migration: strip old heuristic-assigned colors ("blue"/"orange"/"purple"
-    // for balanced bills, "slate" for fixed bills) that were set automatically on import,
-    // not by explicit user choice.
-    const MIGRATION_KEY = `budgify_color_migration_v1_${currentUser.id}`;
-    if (!localStorage.getItem(MIGRATION_KEY)) {
-      const OLD_HEURISTIC: Record<string, string[]> = {
-        balanced: ["blue", "orange", "purple"],
-        fixed: ["slate"],
-        weekly: ["green"],
-      };
-      serverBills = serverBills.map((b) => {
-        const heuristicColors = OLD_HEURISTIC[b.type ?? "fixed"] ?? [];
-        if (b.color && heuristicColors.includes(b.color)) {
-          return { ...b, color: "none" as any };
-        }
-        return b;
-      });
-      localStorage.setItem(MIGRATION_KEY, "1");
-    }
+    const rawServerBills = (userBillsQuery.data.bills ?? []) as Bill[];
+    // Always strip any lingering heuristic colors — ensures bills loaded from server
+    // never carry the old auto-assigned "blue"/"slate"/"orange" colors.
+    const serverBills = stripHeuristicColors(rawServerBills);
 
     setBills(serverBills);
-    prevBillsRef.current = JSON.stringify(serverBills);
+    // Use the raw (pre-strip) serialization so the save effect fires if we changed anything.
+    prevBillsRef.current = JSON.stringify(rawServerBills);
     billsLoadedForUserRef.current = currentUser.id;
     const billedIds = new Set<string>(
       serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
@@ -584,7 +584,7 @@ export function BudgetWizard({
   useEffect(() => {
     if (sheetReadQuery.data && selectedSheetId) {
       const data = sheetReadQuery.data;
-      const sheetBills = stripDebtMinPayments(data.bills as Bill[]);
+      const sheetBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
       setBills(sheetBills);
       prevBillsRef.current = JSON.stringify(sheetBills);
       setOpeningBalance(data.lastRemaining);
@@ -632,7 +632,7 @@ export function BudgetWizard({
   useEffect(() => {
     if (excelReadQuery.data && selectedExcelFileId) {
       const data = excelReadQuery.data;
-      const excelBills = stripDebtMinPayments(data.bills as Bill[]);
+      const excelBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
       setBills(excelBills);
       prevBillsRef.current = JSON.stringify(excelBills);
       setOpeningBalance(data.lastRemaining);
@@ -676,7 +676,7 @@ export function BudgetWizard({
         setUploadedFile(file);
         setParsedWorkbook(parsed);
         setInputMode("upload");
-        const uploadBills = stripDebtMinPayments(parsed.bills);
+        const uploadBills = stripHeuristicColors(stripDebtMinPayments(parsed.bills));
         setBills(uploadBills);
         prevBillsRef.current = JSON.stringify(uploadBills);
         if (isGuest) {
@@ -829,7 +829,7 @@ export function BudgetWizard({
       { data: { url: pastedExcelUrl.trim() } },
       {
         onSuccess: (data) => {
-          const excelUrlBills = stripDebtMinPayments(data.bills as Bill[]);
+          const excelUrlBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
           setBills(excelUrlBills);
           prevBillsRef.current = JSON.stringify(excelUrlBills);
           setOpeningBalance(data.lastRemaining);

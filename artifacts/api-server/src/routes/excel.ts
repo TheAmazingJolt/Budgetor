@@ -142,9 +142,9 @@ function parseBillMetaRows(
       dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
         ? parseInt(dayStr)
         : null;
-    // Use stored color (col 5) if present, otherwise fall back to type-based default.
+    // Use stored color (col 5) if present and not a legacy heuristic value.
     const storedColor = String(cells[5] ?? "").trim();
-    const color = storedColor || colorMap[type] || "slate";
+    const color = storedColor || "none";
     // Use stored sourceDebtId (col 6) if present.
     const storedSourceDebtId = String(cells[6] ?? "").trim();
     const sourceDebtId = storedSourceDebtId || undefined;

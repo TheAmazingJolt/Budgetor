@@ -141,9 +141,9 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       dayStr && dayStr !== "varies" && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31
         ? parseInt(dayStr)
         : null;
-    // Use stored color (col 5) if present, otherwise fall back to type-based default.
+    // Use stored color (col 5) if present and not a legacy heuristic value.
     const storedColor = cells[5]?.formattedValue?.trim() ?? "";
-    const color = storedColor || colorMap[type] || "slate";
+    const color = storedColor || "none";
     // Use stored sourceDebtId (col 6) if present.
     const sourceDebtId = cells[6]?.formattedValue?.trim() || undefined;
     bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId });
