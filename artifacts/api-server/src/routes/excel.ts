@@ -175,7 +175,7 @@ function parseExcelData(
   }
   if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
 
-  // ── Try _MoneyPalData hidden sheet first (written by app) ───────────────
+  // ── Try _BudgifyData hidden sheet first (written by app), fall back to legacy _MoneyPalData ──
   let bills: any[] = [];
   if (metaRows && metaRows.length > 0) {
     bills = parseBillMetaRows(metaRows, ["Bills"]);
