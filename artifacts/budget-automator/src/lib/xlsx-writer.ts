@@ -135,26 +135,16 @@ function writeBillsSectionBelow(
 
   let row = firstDataRow;
   for (const bill of filteredBills) {
-    const { fill, fontColor } = billColorStyle(bill.color);
+    // Bills section rows are plain (no colored fill) — same as Google Sheets.
     const nameStyle: any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'right' }, numFmt: '#,##0.00' };
+    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'right' }, numFmt: '#,##0.##' };
     const dayStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'center' } };
-    if (fill) {
-      nameStyle.fill = fill;
-      amtStyle.fill  = fill;
-      dayStyle.fill  = fill;
-    }
-    if (fontColor) {
-      nameStyle.font.color = { rgb: fontColor };
-      amtStyle.font.color  = { rgb: fontColor };
-      dayStyle.font.color  = { rgb: fontColor };
-    }
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
-    set(sheet, row, 0, makeCell(bill.name,          nameStyle));
+    set(sheet, row, 0, makeCell(bill.name,             nameStyle));
     set(sheet, row, 1, makeCell(Math.abs(bill.amount), amtStyle));
-    set(sheet, row, 2, makeCell(dayValue,            dayStyle));
+    set(sheet, row, 2, makeCell(dayValue,              dayStyle));
     row++;
   }
 
@@ -645,15 +635,15 @@ function writeDebtsSection(
   set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
 
   const bodyFont = { sz: 10, name: 'Arial' };
-  const rowFill = debtFill;
+  // Debt data rows are plain (no colored fill) — same as Google Sheets.
+  const bodyStyle = { font: bodyFont };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
-    const style = { font: bodyFont, fill: rowFill };
-    set(sheet, currentRow, 0, makeCell(debt.name, style));
-    set(sheet, currentRow, 1, makeCell(debt.balance, style));
-    set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', style));
-    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, style));
+    set(sheet, currentRow, 0, makeCell(debt.name, bodyStyle));
+    set(sheet, currentRow, 1, makeCell(debt.balance, bodyStyle));
+    set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', bodyStyle));
+    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, bodyStyle));
     currentRow++;
   }
 
