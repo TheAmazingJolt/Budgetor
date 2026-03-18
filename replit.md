@@ -49,7 +49,7 @@ Features:
 Key files:
 - `artifacts/budget-automator/src/App.tsx` — auth routing: splash → sign-in landing page → BudgetWizard; handles auth_code exchange
 - `artifacts/budget-automator/src/pages/SignInPage.tsx` — branded sign-in/landing page (Google, Apple, guest)
-- `artifacts/budget-automator/src/components/HelpDialog.tsx` — "How MoneyPal works" help modal
+- `artifacts/budget-automator/src/components/HelpDialog.tsx` — "How Budgify works" help modal
 - `artifacts/budget-automator/src/lib/xlsx-parser.ts` — reads workbook: extracts bills and existing budget weeks
 - `artifacts/budget-automator/src/lib/xlsx-writer.ts` — writes budget columns with styles + SUM formulas (uses `xlsx-js-style`)
 - `artifacts/budget-automator/src/pages/BudgetWizard.tsx` — main 3-step wizard UI

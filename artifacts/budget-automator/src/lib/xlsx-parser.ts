@@ -69,7 +69,7 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
 
         const bills: Bill[] = [];
 
-        const billsDataSheet = workbook.Sheets['_BillsData'];
+        const billsDataSheet = workbook.Sheets['_BudgifyData'] ?? workbook.Sheets['_BillsData'];
         if (billsDataSheet) {
           const bdRows: any[][] = XLSX.utils.sheet_to_json(billsDataSheet, { header: 1, defval: '' });
           for (let i = 1; i < bdRows.length; i++) {

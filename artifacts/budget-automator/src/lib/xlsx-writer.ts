@@ -700,10 +700,10 @@ function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[]): void {
     ds[XLSX.utils.encode_cell({ r, c: 6 })] = { v: b.sourceDebtId ?? '', t: 's' };
   }
   ds['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: bills.length, c: headers.length - 1 } });
-  XLSX.utils.book_append_sheet(wb, ds, '_BillsData');
+  XLSX.utils.book_append_sheet(wb, ds, '_BudgifyData');
   if (!wb.Workbook) wb.Workbook = {};
   if (!wb.Workbook.Sheets) wb.Workbook.Sheets = [];
-  const idx = wb.SheetNames.indexOf('_BillsData');
+  const idx = wb.SheetNames.indexOf('_BudgifyData');
   while (wb.Workbook.Sheets.length <= idx) wb.Workbook.Sheets.push({});
   wb.Workbook.Sheets[idx].Hidden = 1;
 }
@@ -765,7 +765,7 @@ export function appendBudgetWeeks(
   const newSheets: Record<string, XLSX.WorkSheet> = {};
   const newSheetNames: string[] = [];
   for (const name of workbook.SheetNames) {
-    if (name === '_BillsData' || name === budgetSheetName) continue;
+    if (name === '_BudgifyData' || name === '_BillsData' || name === budgetSheetName) continue;
     newSheets[name] = workbook.Sheets[name];
     newSheetNames.push(name);
   }
@@ -825,7 +825,7 @@ export function createBlankBudget(
   if (rawBytes) {
     const originalWb = XLSX.read(rawBytes, { type: 'array', cellStyles: true });
     for (const sheetName of originalWb.SheetNames) {
-      if (sheetName === 'Budget' || sheetName === '_BillsData') continue;
+      if (sheetName === 'Budget' || sheetName === '_BudgifyData' || sheetName === '_BillsData') continue;
       if (wb.SheetNames.includes(sheetName)) continue;
       XLSX.utils.book_append_sheet(wb, originalWb.Sheets[sheetName], sheetName);
     }

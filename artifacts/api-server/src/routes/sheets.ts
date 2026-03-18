@@ -98,11 +98,13 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
   }
   if (FIRST_BUDGET_COL === -1) FIRST_BUDGET_COL = 2;
 
-  // ── Try _MoneyPalData hidden sheet first (written by app) ──────────────
+  // ── Try _BudgifyData hidden sheet first (written by app), fall back to legacy _MoneyPalData ──
   const bills: any[] = [];
   const colorMap: Record<string, string> = { balanced: "blue", weekly: "green", fixed: "slate" };
 
-  const metaSheet = sheetsData.find((s) => s.properties?.title === "_MoneyPalData");
+  const metaSheet =
+    sheetsData.find((s) => s.properties?.title === "_BudgifyData") ??
+    sheetsData.find((s) => s.properties?.title === "_MoneyPalData");
   const metaRows = metaSheet?.data?.[0]?.rowData ?? [];
   let foundBillsMarker = false;
   const VALID_META_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
@@ -1252,11 +1254,26 @@ async function writeHiddenBillsSheet(
 
   const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
   const sheets = meta.data.sheets ?? [];
-  const existing = sheets.find((s) => s.properties?.title === "_MoneyPalData");
+
+  // Prefer _BudgifyData; also handle legacy _MoneyPalData sheets by renaming them.
+  const legacySheet = sheets.find((s) => s.properties?.title === "_MoneyPalData");
+  let existing = sheets.find((s) => s.properties?.title === "_BudgifyData");
+
+  // Rename legacy _MoneyPalData → _BudgifyData if present and _BudgifyData doesn't exist yet.
+  if (legacySheet && !existing) {
+    const legacySheetId = legacySheet.properties?.sheetId ?? 0;
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ updateSheetProperties: { properties: { sheetId: legacySheetId, title: "_BudgifyData", hidden: true }, fields: "title,hidden" } }],
+      },
+    });
+    existing = legacySheet; // now renamed
+  }
 
   if (existing) {
     const sheetId = existing.properties?.sheetId ?? 0;
-    await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: "_MoneyPalData" });
+    await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: "_BudgifyData" });
     await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
@@ -1266,7 +1283,7 @@ async function writeHiddenBillsSheet(
   } else {
     const addResult = await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
-      requestBody: { requests: [{ addSheet: { properties: { title: "_MoneyPalData" } } }] },
+      requestBody: { requests: [{ addSheet: { properties: { title: "_BudgifyData" } } }] },
     });
     const newSheetId = addResult.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
     await sheetsApi.spreadsheets.batchUpdate({
@@ -1290,7 +1307,7 @@ async function writeHiddenBillsSheet(
   ];
   await sheetsApi.spreadsheets.values.update({
     spreadsheetId,
-    range: `_MoneyPalData!A1:E${grid.length}`,
+    range: `_BudgifyData!A1:E${grid.length}`,
     valueInputOption: "RAW",
     requestBody: { values: grid },
   });

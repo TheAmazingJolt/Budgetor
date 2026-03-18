@@ -335,7 +335,7 @@ router.get("/excel/:id/read", async (req, res): Promise<void> => {
     const rows: any[][] = rangeData.values ?? [];
 
     let metaRows: any[][] | undefined;
-    const metaSheet = sheets.find((s: any) => s.name === "_MoneyPalData");
+    const metaSheet = sheets.find((s: any) => s.name === "_BudgifyData") ?? sheets.find((s: any) => s.name === "_MoneyPalData");
     if (metaSheet) {
       const metaSheetName = encodeURIComponent(metaSheet.name);
       try {
@@ -387,7 +387,7 @@ router.post("/excel/read-url", async (req, res): Promise<void> => {
     const rows: any[][] = rangeData.values ?? [];
 
     let metaRows: any[][] | undefined;
-    const metaSheet = sheets.find((s: any) => s.name === "_MoneyPalData");
+    const metaSheet = sheets.find((s: any) => s.name === "_BudgifyData") ?? sheets.find((s: any) => s.name === "_MoneyPalData");
     if (metaSheet) {
       const metaSheetName = encodeURIComponent(metaSheet.name);
       try {
@@ -573,15 +573,25 @@ async function writeHiddenExcelBillsSheet(
   bills: BillMeta[],
 ) {
   if (!bills || bills.length === 0) return;
-  const META_SHEET = "_MoneyPalData";
+  const META_SHEET = "_BudgifyData";
+  const LEGACY_SHEET = "_MoneyPalData";
 
   const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
   const allSheets: any[] = sheetsData.value ?? [];
-  const existing = allSheets.find((s: any) => s.name === META_SHEET);
+
+  // Prefer _BudgifyData; rename legacy _MoneyPalData if found and _BudgifyData doesn't exist.
+  let existing = allSheets.find((s: any) => s.name === META_SHEET);
+  const legacyExisting = allSheets.find((s: any) => s.name === LEGACY_SHEET);
+
+  if (legacyExisting && !existing) {
+    const legacyEncoded = encodeURIComponent(legacyExisting.name);
+    await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${legacyEncoded}`, { name: META_SHEET });
+    existing = legacyExisting;
+  }
 
   let metaSheetName: string;
   if (existing) {
-    metaSheetName = encodeURIComponent(existing.name);
+    metaSheetName = encodeURIComponent(META_SHEET);
     const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`);
     const endAddr = usedRange.address?.split("!")?.[1] ?? "E100";
     await graphPatch(
