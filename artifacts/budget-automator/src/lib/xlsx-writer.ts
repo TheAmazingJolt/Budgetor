@@ -86,84 +86,6 @@ function addMerge(sheet: XLSX.WorkSheet, r1: number, c1: number, r2: number, c2:
   sheet['!merges'].push({ s: { r: r1, c: c1 }, e: { r: r2, c: c2 } });
 }
 
-// ── Bills summary section (columns billsStartCol .. billsStartCol+1) ────────
-
-function writeBillsSection(
-  sheet: XLSX.WorkSheet,
-  bills: Bill[],
-  startCol: number,
-): number {
-  const filteredBills = bills.filter(b => !b.sourceDebtId);
-
-  const headerStyle = {
-    font: { bold: true, sz: 10, name: 'Arial' },
-    alignment: { horizontal: 'center', vertical: 'center' },
-    fill: { patternType: 'solid', fgColor: { rgb: '4472C4' }, bgColor: { rgb: '4472C4' } },
-    border: {
-      bottom: { style: 'thin', color: { rgb: '000000' } },
-    },
-  };
-  const headerLabelStyle = { ...headerStyle, font: { ...headerStyle.font, color: { rgb: 'FFFFFF' } } };
-  set(sheet, 0, startCol,     makeCell('Bills', headerLabelStyle));
-  set(sheet, 0, startCol + 1, makeCell('', headerLabelStyle));
-  set(sheet, 0, startCol + 2, makeCell('', headerLabelStyle));
-  addMerge(sheet, 0, startCol, 0, startCol + 2);
-
-  const subHeaderStyle = {
-    font: { bold: true, sz: 10, name: 'Arial' },
-    alignment: { horizontal: 'center' },
-    fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' }, bgColor: { rgb: 'D9E1F2' } },
-    border: { bottom: { style: 'thin', color: { rgb: 'AAAAAA' } } },
-  };
-  set(sheet, 1, startCol,     makeCell('Bill Name', subHeaderStyle));
-  set(sheet, 1, startCol + 1, makeCell('Amount', { ...subHeaderStyle, alignment: { horizontal: 'right' } }));
-  set(sheet, 1, startCol + 2, makeCell('Day of Pay', { ...subHeaderStyle, alignment: { horizontal: 'center' } }));
-
-  let row = 2;
-  for (const bill of filteredBills) {
-    const { fill, fontColor } = billColorStyle(bill.color);
-    const billStyle: any = {
-      font: { sz: 10, name: 'Arial' },
-      alignment: { horizontal: 'left' },
-    };
-    const amtStyle: any = {
-      font: { sz: 10, name: 'Arial' },
-      alignment: { horizontal: 'right' },
-      numFmt: '#,##0.00',
-    };
-    const dayStyle: any = {
-      font: { sz: 10, name: 'Arial' },
-      alignment: { horizontal: 'center' },
-    };
-    if (fill) {
-      billStyle.fill = fill;
-      amtStyle.fill = fill;
-      dayStyle.fill = fill;
-    }
-    if (fontColor) {
-      billStyle.font.color = { rgb: fontColor };
-      amtStyle.font.color = { rgb: fontColor };
-      dayStyle.font.color = { rgb: fontColor };
-    }
-    const dayValue = bill.type === 'weekly'
-      ? 'Weekly'
-      : bill.dayOfMonth != null
-        ? bill.dayOfMonth
-        : 'Varies';
-    set(sheet, row, startCol,     makeCell(bill.name,   billStyle));
-    set(sheet, row, startCol + 1, makeCell(bill.amount, amtStyle));
-    set(sheet, row, startCol + 2, makeCell(dayValue,    dayStyle));
-    row++;
-  }
-
-  autoFitColumns(sheet, startCol, startCol + 2);
-
-  // Hide any Category/Type columns (safe no-op today; future-proofing).
-  hideCategoryTypeColumns(sheet, startCol + 3);
-
-  return row;
-}
-
 // ── Bills section below weeks (matches Google Sheets layout) ─────────────────
 
 /**
@@ -214,10 +136,14 @@ function writeBillsSectionBelow(
   let row = firstDataRow;
   for (const bill of filteredBills) {
     const { fill, fontColor } = billColorStyle(bill.color);
-    const rowFill = fill ?? { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_HEADER_BG }, bgColor: { rgb: BILLS_SECTION_HEADER_BG } };
-    const nameStyle: any = { font: { sz: 10, name: 'Arial' }, fill: rowFill, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, fill: rowFill, alignment: { horizontal: 'right' }, numFmt: '#,##0.00' };
-    const dayStyle:  any = { font: { sz: 10, name: 'Arial' }, fill: rowFill, alignment: { horizontal: 'center' } };
+    const nameStyle: any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'right' }, numFmt: '#,##0.00' };
+    const dayStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'center' } };
+    if (fill) {
+      nameStyle.fill = fill;
+      amtStyle.fill  = fill;
+      dayStyle.fill  = fill;
+    }
     if (fontColor) {
       nameStyle.font.color = { rgb: fontColor };
       amtStyle.font.color  = { rgb: fontColor };
