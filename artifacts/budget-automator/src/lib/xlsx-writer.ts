@@ -595,7 +595,7 @@ function writeDebtsSection(
   set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
   set(sheet, colHeaderRow, 1, makeCell('Balance',     { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
   set(sheet, colHeaderRow, 2, makeCell('APR %',       { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
-  set(sheet, colHeaderRow, 3, makeCell('Min Payment', { ...colHeaderStyle, alignment: { horizontal: 'right' as const } }));
+  set(sheet, colHeaderRow, 3, makeCell('Payment', { ...colHeaderStyle, alignment: { horizontal: 'right' as const } }));
 
   const bodyFont = { sz: 10, name: 'Arial' };
   const nameStyle    = { font: bodyFont, fill: debtFill };
