@@ -1490,7 +1490,7 @@ export function BudgetWizard({
             const effectiveBills = overrides?.bills ?? bills;
             const fallbackBills = includeBillsSummary && !rawBills ? effectiveBills : undefined;
             const debtsForExport = debts.length > 0 ? debts : undefined;
-            const xlsxColorLookup = buildBillColorLookup(stripHeuristicColors(effectiveBills));
+            const xlsxColorLookup = buildBillColorLookup(effectiveBills);
             const coloredWeeks = data.weeks.map(w => ({
               ...w,
               bills: injectBillColors(w.bills, xlsxColorLookup),
@@ -1545,7 +1545,7 @@ export function BudgetWizard({
   }, [weekEdits]);
 
   const buildAllWriteWeeks = () => {
-    const colorLookup = buildBillColorLookup(stripHeuristicColors(bills));
+    const colorLookup = buildBillColorLookup(bills);
     const source = getExistingWeeks()
       .filter((w: any) => (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
       .map((w: any) => {
@@ -1596,7 +1596,7 @@ export function BudgetWizard({
     setSheetWriteSuccess(false);
 
     const fullOverwrite = !generatedWeek || hasHistoricalEdits();
-    const colorLookup = buildBillColorLookup(stripHeuristicColors(bills));
+    const colorLookup = buildBillColorLookup(bills);
     const weeksToWrite = fullOverwrite
       ? buildAllWriteWeeks()
       : generatedWeek!.weeks.map((w) => ({
@@ -1658,7 +1658,7 @@ export function BudgetWizard({
       const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
       const title = `Budget ${startLabel} – ${endLabel}`;
 
-      const colorLookup = buildBillColorLookup(stripHeuristicColors(bills));
+      const colorLookup = buildBillColorLookup(bills);
       const result = await sheetCreateAndWriteMutation.mutateAsync({
         data: {
           title,
