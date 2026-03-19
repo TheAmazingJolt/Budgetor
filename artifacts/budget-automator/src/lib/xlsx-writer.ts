@@ -118,7 +118,7 @@ function writeBillsSectionBelow(
   const greenFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_HEADER_BG }, bgColor: { rgb: BILLS_SECTION_HEADER_BG } };
 
   const sectionHeaderStyle = {
-    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: BILLS_SECTION_HEADER_FG } },
+    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: 'FFFFFF' } },
     fill: greenFill,
     alignment: { horizontal: 'left' as const },
   };
@@ -128,7 +128,7 @@ function writeBillsSectionBelow(
   addMerge(sheet, headerRow, 0, headerRow, 2);
 
   const colHdrStyle = {
-    font: { bold: true, sz: 10, name: 'Arial' },
+    font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
     fill: greenFill,
     alignment: { horizontal: 'left' as const },
   };
@@ -136,22 +136,15 @@ function writeBillsSectionBelow(
   set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'right' as const } }));
   set(sheet, colHdrRow, 2, makeCell('Due Day', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
 
+  // All bill rows use the same green background with white font — no per-bill colors.
+  const billRowFill = greenFill;
+  const billRowFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
+
   let row = firstDataRow;
   for (const bill of filteredBills) {
-    const { fill, fontColor } = billColorStyle(bill.color);
-    const nameStyle: any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
-    const dayStyle:  any = { font: { sz: 10, name: 'Arial' }, alignment: { horizontal: 'center' } };
-    if (fill) {
-      nameStyle.fill = fill;
-      amtStyle.fill  = fill;
-      dayStyle.fill  = fill;
-    }
-    if (fontColor) {
-      nameStyle.font.color = { rgb: fontColor };
-      amtStyle.font.color  = { rgb: fontColor };
-      dayStyle.font.color  = { rgb: fontColor };
-    }
+    const nameStyle: any = { font: { ...billRowFont }, fill: billRowFill, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { ...billRowFont }, fill: billRowFill, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
+    const dayStyle:  any = { font: { ...billRowFont }, fill: billRowFill, alignment: { horizontal: 'center' } };
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
