@@ -52,7 +52,7 @@ function billColorStyle(colorKey?: string | null): { fill: any; fontColor: strin
   }
   const bg = BILL_BG_HEX[colorKey];
   return {
-    fill: { patternType: 'solid', fgColor: { rgb: bg }, bgColor: { rgb: bg } },
+    fill: { patternType: 'solid', fgColor: { rgb: bg } },
     fontColor: BILL_COLOR_HEX[colorKey] ?? null,
   };
 }
@@ -115,7 +115,7 @@ function writeBillsSectionBelow(
   const firstDataRow = colHdrRow + 1;
 
   // Single dark-green fill used for every row in the Bills section.
-  const billsFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_BG }, bgColor: { rgb: BILLS_SECTION_BG } };
+  const billsFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_BG } };
   const whiteFont = { color: { rgb: 'FFFFFF' } };
 
   const sectionHeaderStyle = {
@@ -201,7 +201,7 @@ function writeWeeksToSheet(
     const headerStyle = {
       font: { bold: true, sz: 10, name: 'Arial' },
       alignment: { horizontal: 'center' },
-      fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' }, bgColor: { rgb: 'D9E1F2' } },
+      fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' } },
     };
     set(sheet, nextRow, labelCol, makeCell(week.weekLabel, headerStyle));
     set(sheet, nextRow, valCol,   makeCell('', headerStyle));
@@ -624,7 +624,7 @@ function writeDebtsSection(
   const gapRow    = startRow + 1;
   const headerRow = gapRow + 1;
 
-  const debtFill = { patternType: 'solid' as const, fgColor: { rgb: DEBTS_SECTION_HEADER_BG }, bgColor: { rgb: DEBTS_SECTION_HEADER_BG } };
+  const debtFill = { patternType: 'solid' as const, fgColor: { rgb: DEBTS_SECTION_HEADER_BG } };
 
   const headerStyle = {
     font: { bold: true, sz: 11, name: 'Arial', color: { rgb: DEBTS_SECTION_HEADER_FG } },
