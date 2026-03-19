@@ -163,28 +163,34 @@ function writeWeeksToSheet(
     // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
-    // Body cell base style — Arial 10pt, black text (white only when a fill is applied)
-    const bodyFont = { sz: 10, name: 'Arial' };
+    // Body cell base style — Arial 10pt, white text, explicit "none" fill so
+    // xlsx-js-style does NOT bake in a white solid fill (which would make text
+    // invisible in both dark and light mode by fixing the background to white).
+    const noFill = { patternType: 'none' as const };
+    const bodyFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
+    const bodyStyle    = { font: bodyFont, fill: noFill };
+    const bodyValStyle = { font: bodyFont, fill: noFill, numFmt: MONEY_FMT };
 
     // Remaining Acct (optional)
     if (includeRemainingAcct) {
-      set(sheet, nextRow, labelCol, makeCell('Remaining Acct', { font: bodyFont }));
-      set(sheet, nextRow, valCol,   makeCell(week.openingBalance, { font: bodyFont, numFmt: MONEY_FMT }));
+      set(sheet, nextRow, labelCol, makeCell('Remaining Acct', bodyStyle));
+      set(sheet, nextRow, valCol,   makeCell(week.openingBalance, bodyValStyle));
       nextRow++;
     }
 
     // Paycheck
-    set(sheet, nextRow, labelCol, makeCell('Paycheck', { font: bodyFont }));
-    set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont, numFmt: MONEY_FMT }));
+    set(sheet, nextRow, labelCol, makeCell('Paycheck', bodyStyle));
+    set(sheet, nextRow, valCol,   makeCell(week.paycheck, bodyValStyle));
     nextRow++;
 
-    // Bill line items — colored fill gets white text; no-fill gets default (black) text.
+    // Bill line items — colored fill keeps white text; no-fill uses "none" fill
+    // so the app can render text correctly in dark and light mode.
     for (const bill of week.bills) {
       const billHex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
-      const billFill = billHex ? { patternType: 'solid', fgColor: { rgb: billHex } } : undefined;
-      const billFont = billFill ? { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } } : bodyFont;
-      const labelStyle: any = { font: billFont, ...(billFill ? { fill: billFill } : {}) };
-      const valStyle:   any = { font: billFont, numFmt: MONEY_FMT, ...(billFill ? { fill: billFill } : {}) };
+      const billFill = billHex ? { patternType: 'solid' as const, fgColor: { rgb: billHex } } : noFill;
+      const billFont = billHex ? { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } } : bodyFont;
+      const labelStyle: any = { font: billFont, fill: billFill };
+      const valStyle:   any = { font: billFont, fill: billFill, numFmt: MONEY_FMT };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
       set(sheet, nextRow, valCol,   makeCell(bill.amount, valStyle));
       nextRow++;
@@ -200,6 +206,7 @@ function writeWeeksToSheet(
     // Remaining row → =SUM() formula spanning ALL value rows above
     const remainingStyle = {
       font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
+      fill: noFill,
       border: { top: { style: 'thin', color: { rgb: 'FFFFFF' } } },
     };
     set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
