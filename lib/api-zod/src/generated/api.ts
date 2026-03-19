@@ -79,6 +79,7 @@ export const GenerateBudgetResponse = zod.object({
         zod.object({
           name: zod.string(),
           amount: zod.number(),
+          color: zod.string().optional(),
         }),
       ),
       totalBills: zod
