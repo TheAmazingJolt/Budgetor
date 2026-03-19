@@ -248,6 +248,7 @@ function stripHeuristicColors(bills: Bill[]): Bill[] {
 function buildBillColorLookup(bills: Bill[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const b of bills) {
+    if (b.sourceDebtId && b.type !== "balanced") continue;
     if (b.color && b.color !== "none") {
       map.set(b.name, b.color);
     }
