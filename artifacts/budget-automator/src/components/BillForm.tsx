@@ -116,9 +116,18 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
   const billType = form.watch("type");
   const selectedColor = form.watch("color");
 
+  function handleSubmit(values: z.infer<typeof formSchema>) {
+    const result: Bill = {
+      ...(initialData ?? {}),
+      ...values,
+      userColor: values.color !== "none",
+    };
+    onSubmit(result);
+  }
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-5">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
 
         <FormField
           control={form.control}

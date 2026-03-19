@@ -22,6 +22,8 @@ export interface Bill {
   type: BillType;
   /** Color key for UI display, e.g. blue, green, orange */
   color?: string;
+  /** True when the user explicitly chose this color (not auto-assigned by a heuristic) */
+  userColor?: boolean;
   /** ID of the debt this bill was imported from (if any) */
   sourceDebtId?: string;
 }

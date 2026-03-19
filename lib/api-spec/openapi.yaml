@@ -823,6 +823,9 @@ components:
         color:
           type: string
           description: Color key for UI display, e.g. blue, green, orange
+        userColor:
+          type: boolean
+          description: True when the user explicitly chose this color (not auto-assigned by a heuristic)
         sourceDebtId:
           type: string
           description: ID of the debt this bill was imported from (if any)

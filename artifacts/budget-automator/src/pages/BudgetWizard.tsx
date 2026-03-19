@@ -237,9 +237,10 @@ const OLD_HEURISTIC_COLORS: Record<string, string[]> = {
 
 function stripHeuristicColors(bills: Bill[]): Bill[] {
   return bills.map((b) => {
+    if (b.userColor) return b;
     const stale = OLD_HEURISTIC_COLORS[b.type ?? "fixed"] ?? [];
     if (b.color && stale.includes(b.color)) {
-      return { ...b, color: "none" as any };
+      return { ...b, color: "none" };
     }
     return b;
   });
@@ -541,8 +542,8 @@ export function BudgetWizard({
     const serverBills = stripHeuristicColors(rawServerBills);
 
     setBills(serverBills);
-    // Use the raw (pre-strip) serialization so the save effect fires if we changed anything.
-    prevBillsRef.current = JSON.stringify(rawServerBills);
+    // Use the stripped result so the save effect doesn't immediately re-save and overwrite the user's data.
+    prevBillsRef.current = JSON.stringify(serverBills);
     billsLoadedForUserRef.current = currentUser.id;
     const billedIds = new Set<string>(
       serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
