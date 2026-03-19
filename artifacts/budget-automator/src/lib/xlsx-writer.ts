@@ -163,11 +163,11 @@ function writeWeeksToSheet(
     // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
-    // Body cell base style — Arial 10pt, white text, explicit "none" fill so
+    // Body cell base style — Arial 10pt, black text, explicit "none" fill so
     // xlsx-js-style does NOT bake in a white solid fill (which would make text
     // invisible in both dark and light mode by fixing the background to white).
     const noFill = { patternType: 'none' as const };
-    const bodyFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
+    const bodyFont = { sz: 10, name: 'Arial', color: { rgb: '000000' } };
     const bodyStyle    = { font: bodyFont, fill: noFill };
     const bodyValStyle = { font: bodyFont, fill: noFill, numFmt: MONEY_FMT };
 
@@ -205,9 +205,9 @@ function writeWeeksToSheet(
 
     // Remaining row → =SUM() formula spanning ALL value rows above
     const remainingStyle = {
-      font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
+      font: { bold: true, sz: 10, name: 'Arial', color: { rgb: '000000' } },
       fill: noFill,
-      border: { top: { style: 'thin', color: { rgb: 'FFFFFF' } } },
+      border: { top: { style: 'thin', color: { rgb: '000000' } } },
     };
     set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
     set(sheet, remainingRowIdx, valCol,   {
