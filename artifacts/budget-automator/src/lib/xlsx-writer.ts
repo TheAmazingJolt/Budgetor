@@ -115,7 +115,7 @@ function writeBillsSectionBelow(
   const firstDataRow = colHdrRow + 1;
 
   // Single dark-green fill used for every row in the Bills section.
-  const billsFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_BG } };
+  const billsFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_BG }, bgColor: { rgb: BILLS_SECTION_BG } };
   const whiteFont = { color: { rgb: 'FFFFFF' } };
 
   const sectionHeaderStyle = {
