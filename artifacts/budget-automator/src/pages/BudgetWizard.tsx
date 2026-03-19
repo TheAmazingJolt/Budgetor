@@ -3672,7 +3672,7 @@ export function BudgetWizard({
       </main>
 
       <Dialog open={isBillDialogOpen} onOpenChange={setIsBillDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingBillIndex !== null ? "Edit Bill" : "Add Bill"}
@@ -3694,7 +3694,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isDebtDialogOpen} onOpenChange={setIsDebtDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingDebtIndex !== null ? "Edit Debt" : "Add Debt"}
