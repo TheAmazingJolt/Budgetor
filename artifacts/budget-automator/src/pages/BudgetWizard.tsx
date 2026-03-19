@@ -1885,6 +1885,31 @@ export function BudgetWizard({
               <HelpCircle className="w-4.5 h-4.5" />
             </Button>
 
+            {isSignedIn && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hidden sm:flex items-center gap-1.5 rounded-xl text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsBillsManagerOpen(true)}
+                  title="Manage Bills"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span className="text-xs font-medium">Bills</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hidden sm:flex items-center gap-1.5 rounded-xl text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsDebtManagerOpen(true)}
+                  title="Manage Debts"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  <span className="text-xs font-medium">Debts</span>
+                </Button>
+              </>
+            )}
+
             {isSignedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1920,15 +1945,6 @@ export function BudgetWizard({
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  <div className="px-2 py-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">My Data</p>
-                  </div>
-                  <DropdownMenuItem onClick={() => setIsBillsManagerOpen(true)}>
-                    <Receipt className="w-4 h-4 mr-2" /> Manage Bills
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsDebtManagerOpen(true)}>
-                    <DollarSign className="w-4 h-4 mr-2" /> Manage Debts
-                  </DropdownMenuItem>
                   {isGuest && (
                     <>
                       <DropdownMenuSeparator />
@@ -1983,7 +1999,7 @@ export function BudgetWizard({
         </div>
       </header>
 
-      <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
+      <main className={`flex-1 max-w-4xl mx-auto w-full px-6 py-10 ${isSignedIn ? "pb-24 sm:pb-10" : ""}`}>
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div
@@ -4271,6 +4287,36 @@ export function BudgetWizard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {isSignedIn && (
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-border/50 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] flex items-stretch h-16 safe-area-bottom">
+          <button
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+            onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+          >
+            <FolderOpen className="w-5 h-5" />
+            <span>Home</span>
+          </button>
+          {!isGuest && (
+            <>
+              <button
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => setIsBillsManagerOpen(true)}
+              >
+                <Receipt className="w-5 h-5" />
+                <span>Bills</span>
+              </button>
+              <button
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => setIsDebtManagerOpen(true)}
+              >
+                <DollarSign className="w-5 h-5" />
+                <span>Debts</span>
+              </button>
+            </>
+          )}
+        </nav>
+      )}
     </div>
   );
 }
