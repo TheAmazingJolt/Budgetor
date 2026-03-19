@@ -670,15 +670,16 @@ function buildBudgetWriteData(
         cell: {
           userEnteredFormat: {
             horizontalAlignment: "CENTER",
+            backgroundColor: { red: 1, green: 1, blue: 1 },
             textFormat: {
               bold: true,
               fontSize: 10,
               fontFamily: "Arial",
-              foregroundColor: { red: 1, green: 1, blue: 1 },
+              foregroundColorStyle: { rgbColor: { red: 1, green: 1, blue: 1 } },
             },
           },
         },
-        fields: "userEnteredFormat(horizontalAlignment,textFormat)",
+        fields: "userEnteredFormat(horizontalAlignment,backgroundColor,textFormat)",
       },
     });
     nextRow++;
@@ -710,14 +711,15 @@ function buildBudgetWriteData(
           },
           cell: {
             userEnteredFormat: {
+              backgroundColor: { red: 1, green: 1, blue: 1 },
               textFormat: {
                 fontSize: 10,
                 fontFamily: "Arial",
-                foregroundColor: { red: 1, green: 1, blue: 1 },
+                foregroundColorStyle: { rgbColor: { red: 1, green: 1, blue: 1 } },
               },
             },
           },
-          fields: "userEnteredFormat(textFormat)",
+          fields: "userEnteredFormat(backgroundColor,textFormat)",
         },
       });
       nextRow++;
@@ -744,11 +746,12 @@ function buildBudgetWriteData(
         },
         cell: {
           userEnteredFormat: {
+            backgroundColor: { red: 1, green: 1, blue: 1 },
             textFormat: {
               bold: true,
               fontSize: 10,
               fontFamily: "Arial",
-              foregroundColor: { red: 1, green: 1, blue: 1 },
+              foregroundColorStyle: { rgbColor: { red: 1, green: 1, blue: 1 } },
             },
             borders: {
               top: {
@@ -758,7 +761,7 @@ function buildBudgetWriteData(
             },
           },
         },
-        fields: "userEnteredFormat(textFormat,borders)",
+        fields: "userEnteredFormat(backgroundColor,textFormat,borders)",
       },
     });
 
