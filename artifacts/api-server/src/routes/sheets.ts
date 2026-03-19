@@ -1136,32 +1136,25 @@ function buildBillRows(
     },
   });
 
-  // Per-bill row background color (each bill uses its assigned color).
-  for (let i = 0; i < filteredBills.length; i++) {
-    const bill = filteredBills[i];
-    const colorKey = bill.color && bill.color !== "none" ? bill.color : null;
-    const bgColor = colorKey && COLOR_KEY_TO_RGB[colorKey]
-      ? COLOR_KEY_TO_RGB[colorKey]
-      : billBg; // fallback to section green for uncolored bills
-    billRequests.push({
-      repeatCell: {
-        range: {
-          sheetId,
-          startRowIndex: firstDataRow + i,
-          endRowIndex: firstDataRow + i + 1,
-          startColumnIndex: 0,
-          endColumnIndex: 3,
-        },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: bgColor,
-            textFormat: { fontSize: 10, fontFamily: "Arial", foregroundColor: billWhite },
-          },
-        },
-        fields: "userEnteredFormat(backgroundColor,textFormat)",
+  // All bill data rows: uniform dark green background + white text.
+  billRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: firstDataRow,
+        endRowIndex: firstDataRow + filteredBills.length,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
       },
-    });
-  }
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: billBg,
+          textFormat: { fontSize: 10, fontFamily: "Arial", foregroundColor: billWhite },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
 
   // Currency format for the Amount column in bill data rows.
   billRequests.push({
