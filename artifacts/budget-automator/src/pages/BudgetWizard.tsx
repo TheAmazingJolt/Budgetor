@@ -1490,15 +1490,20 @@ export function BudgetWizard({
             const effectiveBills = overrides?.bills ?? bills;
             const fallbackBills = includeBillsSummary && !rawBills ? effectiveBills : undefined;
             const debtsForExport = debts.length > 0 ? debts : undefined;
+            const xlsxColorLookup = buildBillColorLookup(stripHeuristicColors(effectiveBills));
+            const coloredWeeks = data.weeks.map(w => ({
+              ...w,
+              bills: injectBillColors(w.bills, xlsxColorLookup),
+            }));
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-              blob = createBlankBudget([...existingConverted, ...data.weeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
+              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
             } else if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
-              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
+              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
             } else {
               blob = appendBudgetWeeks(
                 parsedWorkbook!.rawBytes,
-                data.weeks,
+                coloredWeeks,
                 parsedWorkbook!.nextWeekStartCol,
                 !zeroOpeningBalance,
                 sheetStyle,
