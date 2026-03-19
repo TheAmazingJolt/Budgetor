@@ -86,7 +86,7 @@ function writeBillsSectionBelow(
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, colHdrRow, 0, makeCell('Name',    colHdrStyle));
-  set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'right' as const } }));
+  set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
   set(sheet, colHdrRow, 2, makeCell('Due Day', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
 
   const billRowFont = { sz: 10, name: 'Arial' };
@@ -94,7 +94,7 @@ function writeBillsSectionBelow(
   let row = firstDataRow;
   for (const bill of filteredBills) {
     const nameStyle: any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
+    const amtStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'center' }, numFmt: MONEY_FMT };
     const dayStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'center' } };
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
@@ -580,14 +580,14 @@ function writeDebtsSection(
     fill: debtFill,
   };
   set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
-  set(sheet, colHeaderRow, 1, makeCell('Balance', colHeaderStyle));
-  set(sheet, colHeaderRow, 2, makeCell('APR %', colHeaderStyle));
+  set(sheet, colHeaderRow, 1, makeCell('Balance',     { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
+  set(sheet, colHeaderRow, 2, makeCell('APR %',       { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
   set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
 
   const bodyFont = { sz: 10, name: 'Arial' };
   const nameStyle   = { font: bodyFont, fill: debtFill };
-  const moneyStyle  = { font: bodyFont, fill: debtFill, numFmt: MONEY_FMT };
-  const aprStyle    = { font: bodyFont, fill: debtFill };
+  const moneyStyle  = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const }, numFmt: MONEY_FMT };
+  const aprStyle    = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const } };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {

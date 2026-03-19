@@ -589,6 +589,14 @@ async function writeExcelDebtRows(
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
     { color: "#F9E9E9" }
   );
+
+  // Center Balance (B) and APR % (C) from column header row through data rows.
+  const debtCenterRange = `B${headerRow + 2}:C${startRow + debtGrid.length}`;
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${debtCenterRange}')/format`,
+    { horizontalAlignment: "Center" }
+  );
 }
 
 async function writeExcelBillRows(
@@ -650,6 +658,17 @@ async function writeExcelBillRows(
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
     { color: "#EBF6EE" }
   );
+
+  // Center Amount (B) and Due Day (E) from column header row through data rows.
+  const lastBillRow = startRow + rows.length;
+  const colHeaderRowNum = headerRow + 2;
+  for (const col of ["B", "E"]) {
+    await graphPost(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${col}${colHeaderRowNum}:${col}${lastBillRow}')/format`,
+      { horizontalAlignment: "Center" }
+    );
+  }
 }
 
 async function writeHiddenExcelBillsSheet(

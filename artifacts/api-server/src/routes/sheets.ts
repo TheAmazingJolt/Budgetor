@@ -998,6 +998,27 @@ function buildDebtRows(
     });
   }
 
+  // Center-align Balance (col 1) and APR % (col 2) from column header row through data rows.
+  for (const col of [1, 2]) {
+    debtRequests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: colHeaderRow,
+          endRowIndex: firstDataRow + debts.length,
+          startColumnIndex: col,
+          endColumnIndex: col + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            horizontalAlignment: "CENTER",
+          },
+        },
+        fields: "userEnteredFormat(horizontalAlignment)",
+      },
+    });
+  }
+
   return { debtRows, debtRequests, debtRowCount: debtRows.length };
 }
 
@@ -1141,6 +1162,27 @@ function buildBillRows(
       fields: "userEnteredFormat(numberFormat)",
     },
   });
+
+  // Center-align Amount (col 1) and Due Day (col 2) from column header row through data rows.
+  for (const col of [1, 2]) {
+    billRequests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: colHeaderRow,
+          endRowIndex: firstDataRow + filteredBills.length,
+          startColumnIndex: col,
+          endColumnIndex: col + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            horizontalAlignment: "CENTER",
+          },
+        },
+        fields: "userEnteredFormat(horizontalAlignment)",
+      },
+    });
+  }
 
   return { billRows, billRequests, billRowCount: billRows.length };
 }
