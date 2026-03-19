@@ -1318,8 +1318,11 @@ export function BudgetWizard({
       .filter((w) => !weekEdits[w.weekLabel]?.deleted)
       .map((w) => {
         const e = weekEdits[w.weekLabel];
-        const closing = e ? ((e.openingBalance ?? w.openingBalance) + (e.paycheck ?? w.paycheck) + (e.items ?? w.bills).reduce((s, b) => s + b.amount, 0)) : w.closingBalance;
-        return { label: w.weekLabel, remaining: closing };
+        const openingBalance = e?.openingBalance ?? w.openingBalance;
+        const paycheck = e?.paycheck ?? w.paycheck;
+        const items = e?.items ?? w.bills;
+        const closing = e ? (openingBalance + paycheck + items.reduce((s, b) => s + b.amount, 0)) : w.closingBalance;
+        return { label: w.weekLabel, remaining: closing, openingBalance, paycheck, items };
       });
     const existingLabels = new Set(editedCloudWeeks.map((w: any) => w.label));
     const deduped = newWeeks.filter((w) => !existingLabels.has(w.label));
