@@ -573,21 +573,21 @@ async function writeExcelDebtRows(
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
-    { bold: true, name: "Arial", size: 11, color: "#FFFFFF" }
+    { bold: true, name: "Arial", size: 11 }
   );
 
   const colHeaderRange = `A${headerRow + 2}:D${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
-    { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
+    { bold: true, name: "Arial", size: 10 }
   );
 
   const allDebtRange = `A${headerRow + 1}:D${startRow + debtGrid.length}`;
-  await graphPost(
+  await graphPatch(
     token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/font`,
-    { color: "#FFFFFF" }
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
+    { patternType: "none" }
   );
 }
 
@@ -634,21 +634,21 @@ async function writeExcelBillRows(
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
-    { bold: true, name: "Arial", size: 11, color: "#FFFFFF" }
+    { bold: true, name: "Arial", size: 11 }
   );
 
   const colHeaderRange = `A${headerRow + 2}:E${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
-    { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
+    { bold: true, name: "Arial", size: 10 }
   );
 
   const allBillsRange = `A${headerRow + 1}:E${startRow + rows.length}`;
-  await graphPost(
+  await graphPatch(
     token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/font`,
-    { color: "#FFFFFF" }
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
+    { patternType: "none" }
   );
 }
 
@@ -861,14 +861,21 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
+      { bold: true, name: "Arial", size: 10 }
     );
 
     const bodyRangeCreate = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRangeCreate}')/format/font`,
-      { bold: false, name: "Arial", size: 10, color: "#FFFFFF" }
+      { bold: false, name: "Arial", size: 10 }
+    );
+
+    const fullWeekRangeCreate = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}${totalRows}`;
+    await graphPatch(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeCreate}')/format/fill`,
+      { patternType: "none" }
     );
 
     let afterSectionsRow = totalRows;
@@ -977,14 +984,21 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
+      { bold: true, name: "Arial", size: 10 }
     );
 
     const bodyRange = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRange}')/format/font`,
-      { bold: false, name: "Arial", size: 10, color: "#FFFFFF" }
+      { bold: false, name: "Arial", size: 10 }
+    );
+
+    const fullWeekRangeWrite = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}${totalRows}`;
+    await graphPatch(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeWrite}')/format/fill`,
+      { patternType: "none" }
     );
 
     let afterSectionsRowWrite = totalRows;

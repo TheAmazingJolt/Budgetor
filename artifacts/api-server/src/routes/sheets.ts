@@ -670,12 +670,10 @@ function buildBudgetWriteData(
         cell: {
           userEnteredFormat: {
             horizontalAlignment: "CENTER",
-            backgroundColor: { red: 1, green: 1, blue: 1 },
             textFormat: {
               bold: true,
               fontSize: 10,
               fontFamily: "Arial",
-              foregroundColorStyle: { rgbColor: { red: 1, green: 1, blue: 1 } },
             },
           },
         },
@@ -711,11 +709,9 @@ function buildBudgetWriteData(
           },
           cell: {
             userEnteredFormat: {
-              backgroundColor: { red: 1, green: 1, blue: 1 },
               textFormat: {
                 fontSize: 10,
                 fontFamily: "Arial",
-                foregroundColorStyle: { rgbColor: { red: 1, green: 1, blue: 1 } },
               },
             },
           },
@@ -746,17 +742,15 @@ function buildBudgetWriteData(
         },
         cell: {
           userEnteredFormat: {
-            backgroundColor: { red: 1, green: 1, blue: 1 },
             textFormat: {
               bold: true,
               fontSize: 10,
               fontFamily: "Arial",
-              foregroundColorStyle: { rgbColor: { red: 1, green: 1, blue: 1 } },
             },
             borders: {
               top: {
                 style: "SOLID",
-                color: { red: 1, green: 1, blue: 1 },
+                color: { red: 0, green: 0, blue: 0 },
               },
             },
           },
@@ -799,11 +793,10 @@ function buildBudgetWriteData(
           textFormat: {
             fontSize: 10,
             fontFamily: "Arial",
-            foregroundColor: { red: 1, green: 1, blue: 1 },
           },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
@@ -888,8 +881,6 @@ function buildDebtRows(
     ]);
   }
 
-  const debtWhite = { red: 1, green: 1, blue: 1 };
-
   const debtRequests: sheets_v4.Schema$Request[] = [];
 
   debtRequests.push({
@@ -931,11 +922,10 @@ function buildDebtRows(
             bold: true,
             fontSize: 11,
             fontFamily: "Arial",
-            foregroundColor: debtWhite,
           },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
@@ -954,11 +944,10 @@ function buildDebtRows(
             bold: true,
             fontSize: 10,
             fontFamily: "Arial",
-            foregroundColor: debtWhite,
           },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
@@ -976,11 +965,10 @@ function buildDebtRows(
           textFormat: {
             fontSize: 10,
             fontFamily: "Arial",
-            foregroundColor: debtWhite,
           },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
@@ -1036,8 +1024,6 @@ function buildBillRows(
     ]);
   }
 
-  const billWhite = { red: 1, green: 1, blue: 1 };
-
   const billRequests: sheets_v4.Schema$Request[] = [];
 
   billRequests.push({
@@ -1079,11 +1065,10 @@ function buildBillRows(
             bold: true,
             fontSize: 11,
             fontFamily: "Arial",
-            foregroundColor: billWhite,
           },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
@@ -1102,15 +1087,14 @@ function buildBillRows(
             bold: true,
             fontSize: 10,
             fontFamily: "Arial",
-            foregroundColor: billWhite,
           },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
-  // All bill data rows: white text, no background.
+  // All bill data rows: default text color, clear background.
   billRequests.push({
     repeatCell: {
       range: {
@@ -1122,10 +1106,10 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
-          textFormat: { fontSize: 10, fontFamily: "Arial", foregroundColor: billWhite },
+          textFormat: { fontSize: 10, fontFamily: "Arial" },
         },
       },
-      fields: "userEnteredFormat(textFormat)",
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
     },
   });
 
