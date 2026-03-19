@@ -295,6 +295,9 @@ export function BudgetWizard({
   const [isDebtDialogOpen, setIsDebtDialogOpen] = useState(false);
   const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
   const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
+  const [isBillsManagerOpen, setIsBillsManagerOpen] = useState(false);
+  const [editingBillInManagerIndex, setEditingBillInManagerIndex] = useState<number | null>(null);
+  const [isBillManagerFormOpen, setIsBillManagerFormOpen] = useState(false);
   const [debtBillImports, setDebtBillImports] = useState<Set<string>>(new Set());
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>("upload");
@@ -1851,6 +1854,8 @@ export function BudgetWizard({
   const totalDebtBalance = debts.reduce((sum, d) => sum + d.balance, 0);
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
+  const totalAllBillsMonthly = Math.abs(bills.reduce((s, b) => s + b.amount, 0));
+
   const canGenerate = bills.length > 0 && !generateMutation.isPending;
 
   return (
@@ -2420,6 +2425,31 @@ export function BudgetWizard({
                         {debts.length > 0 && (
                           <span className="ml-1 font-medium text-red-600">
                             {debts.length} {debts.length === 1 ? "account" : "accounts"} &middot; ${debts.reduce((s, d) => s + d.balance, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} total
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
+                <button
+                  type="button"
+                  onClick={() => setIsBillsManagerOpen(true)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-emerald-100">
+                      <Receipt className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-foreground">Manage Bills</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        View and edit your recurring bills.
+                        {bills.length > 0 && (
+                          <span className="ml-1 font-medium text-emerald-700">
+                            {bills.length} {bills.length === 1 ? "bill" : "bills"} &middot; ${totalAllBillsMonthly.toLocaleString("en-US", { minimumFractionDigits: 2 })}/mo
                           </span>
                         )}
                       </p>
@@ -3943,6 +3973,134 @@ export function BudgetWizard({
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBillsManagerOpen} onOpenChange={setIsBillsManagerOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Receipt className="w-6 h-6 text-emerald-600" /> Your Bills
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                onClick={() => { setEditingBillInManagerIndex(null); setIsBillManagerFormOpen(true); }}
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add Bill
+              </Button>
+            </div>
+
+            {bills.length > 0 && (
+              <Card className="bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200/60">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-1">
+                    <Receipt className="w-5 h-5 text-emerald-600" />
+                    <p className="font-semibold text-emerald-900 text-lg">
+                      Total monthly bills: ${totalAllBillsMonthly.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <p className="text-sm text-emerald-700">
+                    across {bills.length} bill{bills.length !== 1 ? "s" : ""}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {bills.length === 0 ? (
+              <Card className="border-dashed border-2 p-10 text-center">
+                <p className="text-muted-foreground">No bills saved yet. Add a bill to get started.</p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {bills.map((bill, i) => {
+                  const isDebtLinked = !!bill.sourceDebtId;
+                  return (
+                    <motion.div
+                      key={`manager-bill-${i}`}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                    >
+                      <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                        <div className={`absolute top-0 left-0 w-1 h-full ${getBillColorEntry(bill.color).leftBar} transition-colors`} />
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="space-y-1 flex-1 mr-2">
+                              <p className="font-semibold text-sm text-foreground leading-tight">{bill.name}</p>
+                              <div className="flex flex-wrap gap-1">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs px-2 py-0.5 ${getBillColorEntry(bill.color).badge}`}
+                                >
+                                  {bill.category ?? ""}
+                                </Badge>
+                                {isDebtLinked && (
+                                  <Badge variant="outline" className="text-xs px-2 py-0.5 bg-slate-50 text-slate-500 border-slate-200">
+                                    from debt
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Currency value={bill.amount} className="text-sm font-semibold shrink-0" />
+                          </div>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-xs text-muted-foreground">
+                              {bill.type === "weekly" ? "Weekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                            </span>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                                onClick={() => { setEditingBillInManagerIndex(i); setIsBillManagerFormOpen(true); }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                                onClick={() => preserveScroll(() => removeBill(i))}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBillManagerFormOpen} onOpenChange={setIsBillManagerFormOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl font-bold">
+              {editingBillInManagerIndex !== null ? "Edit Bill" : "Add Bill"}
+            </DialogTitle>
+          </DialogHeader>
+          <BillForm
+            initialData={editingBillInManagerIndex !== null ? bills[editingBillInManagerIndex] : undefined}
+            onSubmit={(data: Bill) => {
+              if (editingBillInManagerIndex !== null) {
+                updateBill(editingBillInManagerIndex, data);
+              } else {
+                addBill(data);
+              }
+              setIsBillManagerFormOpen(false);
+            }}
+            onCancel={() => setIsBillManagerFormOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 
