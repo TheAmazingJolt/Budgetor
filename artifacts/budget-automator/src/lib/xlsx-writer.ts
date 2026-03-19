@@ -626,6 +626,10 @@ function writeDebtsSection(
     sheet['!cols']![0] = { wch: 20 };
   }
 
+  // Expand columns 1–3 to fit their widest cell (Balance, APR%, Min Payment).
+  // autoFitColumns only widens, so narrow weekly-budget columns can't shrink them.
+  autoFitColumns(sheet, 0, 3);
+
   return currentRow;
 }
 
