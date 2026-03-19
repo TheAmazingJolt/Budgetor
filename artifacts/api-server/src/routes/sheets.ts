@@ -1059,7 +1059,8 @@ function buildBillRows(
     ]);
   }
 
-  const billBg = { red: 0.91, green: 0.97, blue: 0.93 };
+  const billBg = { red: 0.110, green: 0.369, blue: 0.180 };
+  const billWhite = { red: 1, green: 1, blue: 1 };
 
   const billRequests: sheets_v4.Schema$Request[] = [];
 
@@ -1103,7 +1104,7 @@ function buildBillRows(
             bold: true,
             fontSize: 11,
             fontFamily: "Arial",
-            foregroundColor: { red: 0.11, green: 0.37, blue: 0.18 },
+            foregroundColor: billWhite,
           },
         },
       },
@@ -1127,6 +1128,7 @@ function buildBillRows(
             bold: true,
             fontSize: 10,
             fontFamily: "Arial",
+            foregroundColor: billWhite,
           },
         },
       },
@@ -1153,7 +1155,7 @@ function buildBillRows(
         cell: {
           userEnteredFormat: {
             backgroundColor: bgColor,
-            textFormat: { fontSize: 10, fontFamily: "Arial" },
+            textFormat: { fontSize: 10, fontFamily: "Arial", foregroundColor: billWhite },
           },
         },
         fields: "userEnteredFormat(backgroundColor,textFormat)",

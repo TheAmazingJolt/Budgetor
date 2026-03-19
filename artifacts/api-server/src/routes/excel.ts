@@ -630,25 +630,30 @@ async function writeExcelBillRows(
   );
 
   const headerRow = startRow + 1;
-  const headerRange = `A${headerRow + 1}:C${headerRow + 1}`;
+  const headerRange = `A${headerRow + 1}:E${headerRow + 1}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
-    { bold: true, name: "Arial", size: 11 }
+    { bold: true, name: "Arial", size: 11, color: "#FFFFFF" }
   );
 
-  const colHeaderRange = `A${headerRow + 2}:C${headerRow + 2}`;
+  const colHeaderRange = `A${headerRow + 2}:E${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
-    { bold: true, name: "Arial", size: 10 }
+    { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
   );
 
-  const allBillsRange = `A${headerRow + 1}:C${startRow + rows.length}`;
+  const allBillsRange = `A${headerRow + 1}:E${startRow + rows.length}`;
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
-    { color: "#E8F5E9" }
+    { color: "#1C5E2E" }
+  );
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/font`,
+    { color: "#FFFFFF" }
   );
 }
 
