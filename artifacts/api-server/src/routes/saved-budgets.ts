@@ -58,13 +58,24 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
 router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const userId = req.user!.id;
   const budgetId = req.params.id;
-  const { name, bills, settings, debts } = req.body as { name?: string; bills?: unknown[]; settings?: unknown; debts?: unknown[] };
+  const { name, bills, settings, debts, linkedSheetId, linkedSheetName, linkedSheetType } = req.body as {
+    name?: string;
+    bills?: unknown[];
+    settings?: unknown;
+    debts?: unknown[];
+    linkedSheetId?: string | null;
+    linkedSheetName?: string | null;
+    linkedSheetType?: string | null;
+  };
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (name !== undefined) updates.name = name.trim();
   if (bills !== undefined) updates.bills = bills;
   if (settings !== undefined) updates.settings = settings;
   if (debts !== undefined) updates.debts = debts;
+  if (linkedSheetId !== undefined) updates.linkedSheetId = linkedSheetId;
+  if (linkedSheetName !== undefined) updates.linkedSheetName = linkedSheetName;
+  if (linkedSheetType !== undefined) updates.linkedSheetType = linkedSheetType;
 
   try {
     const [budget] = await db

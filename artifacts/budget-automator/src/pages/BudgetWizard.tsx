@@ -78,6 +78,9 @@ import {
   getGetUserDebtsQueryKey,
   getGetUserBillsQueryKey,
   getGetUserPreferencesQueryKey,
+  generateBudget,
+  sheetWrite,
+  excelWrite,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -368,6 +371,10 @@ export function BudgetWizard({
   const [renameBudgetId, setRenameBudgetId] = useState<string | null>(null);
   const [renameBudgetValue, setRenameBudgetValue] = useState("");
 
+  const [pendingExportType, setPendingExportType] = useState<null | "xlsx" | "google" | "excel">(null);
+  const [exportNameInput, setExportNameInput] = useState("");
+  const [quickUpdateBudgetId, setQuickUpdateBudgetId] = useState<string | null>(null);
+
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
@@ -431,6 +438,7 @@ export function BudgetWizard({
   const saveBudgetMutation = useSavedBudgetCreate();
   const renameBudgetMutation = useSavedBudgetUpdate();
   const cloudSaveMutation = useSavedBudgetUpdate();
+  const linkSheetMutation = useSavedBudgetUpdate();
   const deleteBudgetMutation = useSavedBudgetDelete();
   const updateUserDebtsMutation = useUpdateUserDebts();
   const updateUserBillsMutation = useUpdateUserBills();
@@ -1512,16 +1520,20 @@ export function BudgetWizard({
     }
   };
 
-  const handleSaveToNewGoogleSheet = async () => {
+  const buildDefaultExportTitle = () => {
+    const startLabel = format(parseISO(newWeekStartDate), "MMM d");
+    const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
+    return `Budget ${startLabel} – ${endLabel}`;
+  };
+
+  const handleSaveToNewGoogleSheet = async (customTitle?: string) => {
     if (!generatedWeek) return;
     setIsSavingToNewSheet(true);
     setNewSheetSaveSuccess(false);
     setNewSheetUrl(null);
 
     try {
-      const startLabel = format(parseISO(newWeekStartDate), "MMM d");
-      const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
-      const title = `Budget ${startLabel} – ${endLabel}`;
+      const title = customTitle ?? buildDefaultExportTitle();
 
       const colorLookup = buildBillColorLookup(bills);
       const result = await sheetCreateAndWriteMutation.mutateAsync({
@@ -1538,6 +1550,14 @@ export function BudgetWizard({
       });
       setNewSheetSaveSuccess(true);
       setNewSheetUrl(result.spreadsheetUrl);
+      if (activeCloudBudgetId) {
+        linkSheetMutation.mutate({
+          id: activeCloudBudgetId,
+          data: { linkedSheetId: result.spreadsheetId, linkedSheetName: title, linkedSheetType: "google" },
+        }, {
+          onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }),
+        });
+      }
       toast({
         title: "Saved to Google Sheets",
         description: `Created "${title}" in your Google Drive.`,
@@ -1553,16 +1573,14 @@ export function BudgetWizard({
     }
   };
 
-  const handleSaveToNewExcelFile = async () => {
+  const handleSaveToNewExcelFile = async (customTitle?: string) => {
     if (!generatedWeek) return;
     setIsSavingToNewExcel(true);
     setNewExcelSaveSuccess(false);
     setNewExcelUrl(null);
 
     try {
-      const startLabel = format(parseISO(newWeekStartDate), "MMM d");
-      const endLabel = format(parseISO(newWeekEndDate), "MMM d, yyyy");
-      const title = `Budget ${startLabel} – ${endLabel}`;
+      const title = customTitle ?? buildDefaultExportTitle();
 
       const result = await excelCreateAndWriteMutation.mutateAsync({
         data: {
@@ -1575,6 +1593,14 @@ export function BudgetWizard({
       });
       setNewExcelSaveSuccess(true);
       setNewExcelUrl(result.webUrl);
+      if (activeCloudBudgetId) {
+        linkSheetMutation.mutate({
+          id: activeCloudBudgetId,
+          data: { linkedSheetId: result.fileId, linkedSheetName: title, linkedSheetType: "excel" },
+        }, {
+          onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }),
+        });
+      }
       toast({
         title: "Saved to OneDrive",
         description: `Created "${title}" in your OneDrive.`,
@@ -1590,17 +1616,78 @@ export function BudgetWizard({
     }
   };
 
-  const handleDownload = () => {
-    if (!generatedBlob) return;
-    let filename: string;
+  const handleQuickUpdateLinkedSheet = async (budget: SavedBudget) => {
+    if (!budget.linkedSheetId || !budget.linkedSheetType) return;
+    setQuickUpdateBudgetId(budget.id);
+    try {
+      const s = budget.settings as SavedBudgetSettings;
+      const budgetBills = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
+      const colorLookup = buildBillColorLookup(budgetBills);
+      const startDate = s.newWeekStartDate ?? new Date().toISOString().split("T")[0];
+      const weekCount = s.weekCount ?? 1;
+      const payPeriodDays = s.payPeriod === "biweekly" ? 14 : s.payPeriod === "monthly" ? 30 : 7;
+      const endDateObj = new Date(startDate);
+      endDateObj.setDate(endDateObj.getDate() + payPeriodDays * weekCount - 1);
+      const endDate = s.newWeekEndDate ?? endDateObj.toISOString().split("T")[0];
+
+      const generated = await generateBudget({
+        startDate,
+        endDate,
+        openingBalance: s.openingBalance ?? 0,
+        paycheckAmount: s.paycheckAmount ?? 0,
+        numberOfWeeks: weekCount,
+        payPeriod: s.payPeriod ?? "weekly",
+        bills: budgetBills,
+      });
+
+      const weeks = generated.weeks.map((w: any) => ({
+        ...w,
+        bills: injectBillColors(w.bills, colorLookup),
+      }));
+      const budgetDebts = Array.isArray(budget.debts) ? budget.debts : [];
+      const includeRemainingAcct = !(s.zeroOpeningBalance ?? false);
+      const writePayload = {
+        weeks,
+        startCol: 2,
+        includeRemainingAcct,
+        ...(budgetDebts.length > 0 ? { debts: budgetDebts } : {}),
+        ...(budgetBills.length > 0 ? { bills: stripHeuristicColors(budgetBills) } : {}),
+      };
+
+      if (budget.linkedSheetType === "google") {
+        await sheetWrite(budget.linkedSheetId, writePayload);
+      } else {
+        await excelWrite(budget.linkedSheetId, { ...writePayload, includeRemainingAcct });
+      }
+
+      toast({
+        title: "Sheet updated",
+        description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to "${budget.linkedSheetName}".`,
+      });
+    } catch (err) {
+      toast({
+        title: "Update failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setQuickUpdateBudgetId(null);
+    }
+  };
+
+  const buildDefaultXlsxFilename = () => {
     if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
       const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
-      filename = `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
+      return `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
     } else {
       const today = new Date().toISOString().split("T")[0].replace(/-/g, ".");
-      filename = `Budget_Updated_${today}.xlsx`;
+      return `Budget_Updated_${today}.xlsx`;
     }
-    downloadBlob(generatedBlob, filename);
+  };
+
+  const handleDownload = (customFilename?: string) => {
+    if (!generatedBlob) return;
+    downloadBlob(generatedBlob, customFilename ?? buildDefaultXlsxFilename());
   };
 
   const handleDeleteSpreadsheet = async () => {
@@ -2145,7 +2232,7 @@ export function BudgetWizard({
                       {savedBudgetsQuery.data.budgets.map((budget) => (
                         <Card
                           key={budget.id}
-                          className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl cursor-pointer border-border/40"
+                          className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl border-border/40"
                         >
                           <CardContent className="p-4">
                             <div className="flex items-start justify-between gap-2">
@@ -2196,6 +2283,36 @@ export function BudgetWizard({
                                 </Button>
                               </div>
                             </div>
+                            {budget.linkedSheetId && budget.linkedSheetType && (
+                              <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {budget.linkedSheetType === "google" ? (
+                                    <Sheet className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                  ) : (
+                                    <FileSpreadsheet className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                                  )}
+                                  <span className="text-xs text-muted-foreground truncate">
+                                    {budget.linkedSheetName ?? (budget.linkedSheetType === "google" ? "Google Sheet" : "Excel file")}
+                                  </span>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-xs px-2 gap-1 shrink-0"
+                                  disabled={quickUpdateBudgetId === budget.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQuickUpdateLinkedSheet(budget);
+                                  }}
+                                >
+                                  {quickUpdateBudgetId === budget.id ? (
+                                    <><RefreshCw className="w-3 h-3 animate-spin" /> Updating…</>
+                                  ) : (
+                                    <><CloudUpload className="w-3 h-3" /> Update Sheet</>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       ))}
@@ -3363,7 +3480,11 @@ export function BudgetWizard({
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
-                      onClick={handleSaveToNewGoogleSheet}
+                      onClick={() => {
+                        if (newSheetSaveSuccess) return;
+                        setExportNameInput(buildDefaultExportTitle());
+                        setPendingExportType("google");
+                      }}
                       disabled={isSavingToNewSheet || newSheetSaveSuccess}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
                         newSheetSaveSuccess
@@ -3396,7 +3517,11 @@ export function BudgetWizard({
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
-                      onClick={handleSaveToNewExcelFile}
+                      onClick={() => {
+                        if (newExcelSaveSuccess) return;
+                        setExportNameInput(buildDefaultExportTitle());
+                        setPendingExportType("excel");
+                      }}
                       disabled={isSavingToNewExcel || newExcelSaveSuccess}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
                         newExcelSaveSuccess
@@ -3428,7 +3553,10 @@ export function BudgetWizard({
                 {generatedBlob && (
                   <Button
                     size="lg"
-                    onClick={handleDownload}
+                    onClick={() => {
+                      setExportNameInput(buildDefaultXlsxFilename().replace(/\.xlsx$/, ""));
+                      setPendingExportType("xlsx");
+                    }}
                     disabled={!generatedBlob}
                     className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
                       inputMode === "google" || inputMode === "excel" || inputMode === "cloud" || googleAuthenticated ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
@@ -3919,6 +4047,75 @@ export function BudgetWizard({
                   <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Renaming…</>
                 ) : (
                   "Rename"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingExportType !== null} onOpenChange={(open) => { if (!open) setPendingExportType(null); }}>
+        <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl font-bold">
+              {pendingExportType === "google"
+                ? "Name your Google Sheet"
+                : pendingExportType === "excel"
+                ? "Name your Excel file"
+                : "Name your download"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                {pendingExportType === "xlsx" ? "File name" : "Spreadsheet name"}
+              </Label>
+              <Input
+                value={exportNameInput}
+                onChange={(e) => setExportNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && exportNameInput.trim()) {
+                    const name = exportNameInput.trim();
+                    setPendingExportType(null);
+                    if (pendingExportType === "google") handleSaveToNewGoogleSheet(name);
+                    else if (pendingExportType === "excel") handleSaveToNewExcelFile(name);
+                    else handleDownload(name.endsWith(".xlsx") ? name : `${name}.xlsx`);
+                  }
+                }}
+                className="rounded-xl"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPendingExportType(null)} className="rounded-xl">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={!exportNameInput.trim()}
+                className={`rounded-xl ${
+                  pendingExportType === "google"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500"
+                    : pendingExportType === "excel"
+                    ? "bg-gradient-to-r from-teal-600 to-teal-500"
+                    : "bg-gradient-to-r from-primary to-emerald-600"
+                }`}
+                onClick={() => {
+                  const name = exportNameInput.trim();
+                  if (!name) return;
+                  const type = pendingExportType;
+                  setPendingExportType(null);
+                  if (type === "google") handleSaveToNewGoogleSheet(name);
+                  else if (type === "excel") handleSaveToNewExcelFile(name);
+                  else handleDownload(name.endsWith(".xlsx") ? name : `${name}.xlsx`);
+                }}
+              >
+                {pendingExportType === "google" ? (
+                  <><Sheet className="w-4 h-4 mr-1" /> Save to Sheets</>
+                ) : pendingExportType === "excel" ? (
+                  <><FilePlus2 className="w-4 h-4 mr-1" /> Save to OneDrive</>
+                ) : (
+                  <><Download className="w-4 h-4 mr-1" /> Download</>
                 )}
               </Button>
             </div>

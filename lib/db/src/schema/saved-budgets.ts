@@ -8,6 +8,9 @@ export const savedBudgetsTable = pgTable("saved_budgets", {
   bills: jsonb("bills").notNull(),
   settings: jsonb("settings").notNull(),
   debts: jsonb("debts").default([]),
+  linkedSheetId: text("linked_sheet_id"),
+  linkedSheetName: text("linked_sheet_name"),
+  linkedSheetType: text("linked_sheet_type"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

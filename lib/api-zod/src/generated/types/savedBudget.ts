@@ -15,6 +15,9 @@ export interface SavedBudget {
   bills: unknown[];
   settings: SavedBudgetSettings;
   debts?: Debt[];
+  linkedSheetId?: string | null;
+  linkedSheetName?: string | null;
+  linkedSheetType?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

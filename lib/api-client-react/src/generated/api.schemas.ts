@@ -166,6 +166,9 @@ export interface SavedBudget {
   bills: unknown[];
   settings: SavedBudgetSettings;
   debts?: Debt[];
+  linkedSheetId?: string | null;
+  linkedSheetName?: string | null;
+  linkedSheetType?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -194,6 +197,9 @@ export interface SavedBudgetUpdateRequest {
   bills?: unknown[];
   settings?: SavedBudgetUpdateRequestSettings;
   debts?: Debt[];
+  linkedSheetId?: string | null;
+  linkedSheetName?: string | null;
+  linkedSheetType?: string | null;
 }
 
 export interface GoogleAuthStatus {
