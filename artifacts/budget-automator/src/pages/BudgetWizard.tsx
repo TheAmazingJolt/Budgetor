@@ -4291,31 +4291,42 @@ export function BudgetWizard({
 
       {isSignedIn && (
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-border/50 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] flex items-stretch h-16 safe-area-bottom">
-          <button
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
-            onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
-          >
-            <FolderOpen className="w-5 h-5" />
-            <span>Home</span>
-          </button>
-          {!isGuest && (
-            <>
-              <button
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
-                onClick={() => setIsBillsManagerOpen(true)}
-              >
-                <Receipt className="w-5 h-5" />
-                <span>Bills</span>
-              </button>
-              <button
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
-                onClick={() => setIsDebtManagerOpen(true)}
-              >
-                <DollarSign className="w-5 h-5" />
-                <span>Debts</span>
-              </button>
-            </>
-          )}
+          {(() => {
+            const homeActive = !isBillsManagerOpen && !isDebtManagerOpen;
+            const billsActive = isBillsManagerOpen;
+            const debtsActive = isDebtManagerOpen;
+            const activeClass = "text-emerald-600";
+            const inactiveClass = "text-muted-foreground hover:text-primary";
+            return (
+              <>
+                <button
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${homeActive ? activeClass : inactiveClass}`}
+                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+                >
+                  <FolderOpen className="w-5 h-5" />
+                  <span>Home</span>
+                </button>
+                {!isGuest && (
+                  <>
+                    <button
+                      className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${billsActive ? activeClass : inactiveClass}`}
+                      onClick={() => setIsBillsManagerOpen(true)}
+                    >
+                      <Receipt className="w-5 h-5" />
+                      <span>Bills</span>
+                    </button>
+                    <button
+                      className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${debtsActive ? activeClass : inactiveClass}`}
+                      onClick={() => setIsDebtManagerOpen(true)}
+                    >
+                      <DollarSign className="w-5 h-5" />
+                      <span>Debts</span>
+                    </button>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </nav>
       )}
     </div>
