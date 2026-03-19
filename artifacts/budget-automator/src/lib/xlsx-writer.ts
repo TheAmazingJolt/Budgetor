@@ -151,7 +151,7 @@ function writeWeeksToSheet(
 
     // Row 0: header label (merged + centered)
     const headerStyle = {
-      font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
+      font: { bold: true, sz: 10, name: 'Arial', color: { rgb: '000000' } },
       fill: { patternType: 'solid', fgColor: { rgb: 'BDD7EE' } },
       alignment: { horizontal: 'center' },
     };
