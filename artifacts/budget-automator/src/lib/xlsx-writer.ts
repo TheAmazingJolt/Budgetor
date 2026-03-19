@@ -12,9 +12,8 @@ const DEFAULT_STYLE: SheetStyle = {
 
 // ── Cell style constants ────────────────────────────────────────────────────
 
-// Bills section header — matches Google Sheets green section style.
-const BILLS_SECTION_HEADER_BG  = 'E8F7ED';
-const BILLS_SECTION_HEADER_FG  = '1C5E2E';
+// Bills section — dark green background with white text throughout.
+const BILLS_SECTION_BG = '1C5E2E';
 
 // Debts section header — matches Google Sheets red/pink section style.
 const DEBTS_SECTION_HEADER_BG  = 'FCE8E8';
@@ -106,7 +105,8 @@ function writeBillsSectionBelow(
   bills: Bill[],
   startRow: number,
 ): number {
-  const filteredBills = bills.filter(b => !b.sourceDebtId || (b.type === "balanced"));
+  // Debt-linked bills (min payments / balanced) never appear in the Bills section.
+  const filteredBills = bills.filter(b => !b.sourceDebtId);
   if (filteredBills.length === 0) return startRow;
 
   const gapRow     = startRow + 1;
@@ -114,12 +114,13 @@ function writeBillsSectionBelow(
   const colHdrRow  = headerRow + 1;
   const firstDataRow = colHdrRow + 1;
 
-  // Green header fill shared by header and column-header rows.
-  const greenFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_HEADER_BG }, bgColor: { rgb: BILLS_SECTION_HEADER_BG } };
+  // Single dark-green fill used for every row in the Bills section.
+  const billsFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_BG } };
+  const whiteFont = { color: { rgb: 'FFFFFF' } };
 
   const sectionHeaderStyle = {
-    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: 'FFFFFF' } },
-    fill: greenFill,
+    font: { bold: true, sz: 11, name: 'Arial', ...whiteFont },
+    fill: billsFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, headerRow, 0, makeCell('Bills', sectionHeaderStyle));
@@ -128,29 +129,26 @@ function writeBillsSectionBelow(
   addMerge(sheet, headerRow, 0, headerRow, 2);
 
   const colHdrStyle = {
-    font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
-    fill: greenFill,
+    font: { bold: true, sz: 10, name: 'Arial', ...whiteFont },
+    fill: billsFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, colHdrRow, 0, makeCell('Name',    colHdrStyle));
   set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'right' as const } }));
   set(sheet, colHdrRow, 2, makeCell('Due Day', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
 
-  // All bill rows use the same green background with white font — no per-bill colors.
-  const billRowFill = greenFill;
-  const billRowFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
+  // All bill rows: dark green background, white font.
+  const billRowFont = { sz: 10, name: 'Arial', ...whiteFont };
 
   let row = firstDataRow;
   for (const bill of filteredBills) {
-    const nameStyle: any = { font: { ...billRowFont }, fill: billRowFill, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { ...billRowFont }, fill: billRowFill, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
-    const dayStyle:  any = { font: { ...billRowFont }, fill: billRowFill, alignment: { horizontal: 'center' } };
+    const nameStyle: any = { font: { ...billRowFont }, fill: billsFill, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { ...billRowFont }, fill: billsFill, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
+    const dayStyle:  any = { font: { ...billRowFont }, fill: billsFill, alignment: { horizontal: 'center' } };
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
-    const billDisplayName = bill.sourceDebtId && bill.type === "balanced"
-      ? `${bill.name} (B)`
-      : bill.name;
+    const billDisplayName = bill.name;
     set(sheet, row, 0, makeCell(billDisplayName,       nameStyle));
     set(sheet, row, 1, makeCell(Math.abs(bill.amount), amtStyle));
     set(sheet, row, 2, makeCell(dayValue,              dayStyle));
@@ -235,11 +233,15 @@ function writeWeeksToSheet(
         ?? billColorMap.get(bill.name)
         ?? billColorMap.get(bill.name.replace(/^Partial\s+/, ''))
         ?? null;
-      const { fill, fontColor } = billColorStyle(colorKey);
+      const { fill } = billColorStyle(colorKey);
       const labelStyle: any = { font: { sz: 10, name: 'Arial' } };
       const valStyle:   any = { font: { sz: 10, name: 'Arial' }, numFmt: MONEY_FMT };
-      if (fill)      { labelStyle.fill = fill; valStyle.fill = fill; }
-      if (fontColor) { labelStyle.font.color = { rgb: fontColor }; valStyle.font.color = { rgb: fontColor }; }
+      if (fill) {
+        labelStyle.fill = fill; valStyle.fill = fill;
+        // White text on any colored background for legibility.
+        labelStyle.font.color = { rgb: 'FFFFFF' };
+        valStyle.font.color   = { rgb: 'FFFFFF' };
+      }
       set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
       set(sheet, nextRow, valCol,   makeCell(bill.amount, valStyle));
       nextRow++;
