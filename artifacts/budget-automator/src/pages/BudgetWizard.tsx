@@ -21,7 +21,6 @@ import {
   Sheet,
   LogOut,
   CloudUpload,
-  Link,
   User,
   Save,
   FolderOpen,
@@ -45,14 +44,12 @@ import {
   useSheetList,
   useSheetRead,
   useSheetWrite,
-  useSheetReadByUrl,
   getGoogleAuthUrl,
   googleDisconnect,
   useMicrosoftAuthStatus,
   useExcelList,
   useExcelRead,
   useExcelWrite,
-  useExcelReadByUrl,
   getMicrosoftAuthUrl,
   microsoftDisconnect,
   useAuthGuestLogin,
@@ -308,8 +305,6 @@ export function BudgetWizard({
   const [googleNextCol, setGoogleNextCol] = useState(2);
   const [isWritingToSheet, setIsWritingToSheet] = useState(false);
   const [sheetWriteSuccess, setSheetWriteSuccess] = useState(false);
-  const [pastedUrl, setPastedUrl] = useState("");
-  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
   const [selectedExcelFileId, setSelectedExcelFileId] = useState<string | null>(null);
   const [selectedExcelFileName, setSelectedExcelFileName] = useState<string | null>(null);
@@ -318,9 +313,6 @@ export function BudgetWizard({
   const [excelNextCol, setExcelNextCol] = useState(2);
   const [isWritingToExcel, setIsWritingToExcel] = useState(false);
   const [excelWriteSuccess, setExcelWriteSuccess] = useState(false);
-  const [pastedExcelUrl, setPastedExcelUrl] = useState("");
-  const [isLoadingExcelUrl, setIsLoadingExcelUrl] = useState(false);
-  const [showUrlInputs, setShowUrlInputs] = useState(false);
   const [scratchExistingWeeks, setScratchExistingWeeks] = useState<any[]>([]);
 
   const {
@@ -392,10 +384,8 @@ export function BudgetWizard({
   const generateMutation = useGenerateBudget();
   const sheetWriteMutation = useSheetWrite();
   const sheetCreateAndWriteMutation = useSheetCreateAndWrite();
-  const sheetReadByUrlMutation = useSheetReadByUrl();
   const excelWriteMutation = useExcelWrite();
   const excelCreateAndWriteMutation = useExcelCreateAndWrite();
-  const excelReadByUrlMutation = useExcelReadByUrl();
   const sheetDeleteMutation = useSheetDelete();
   const excelDeleteMutation = useExcelDelete();
 
@@ -915,70 +905,6 @@ export function BudgetWizard({
     setInputMode("excel");
   };
 
-  const handlePasteExcelUrl = () => {
-    if (!pastedExcelUrl.trim()) return;
-    setIsLoadingExcelUrl(true);
-
-    excelReadByUrlMutation.mutate(
-      { data: { url: pastedExcelUrl.trim() } },
-      {
-        onSuccess: (data) => {
-          const excelUrlBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
-          setBills(excelUrlBills);
-          prevBillsRef.current = JSON.stringify(excelUrlBills);
-          const excelUrlDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
-          if (excelUrlDebts.length > 0) {
-            setDebts(excelUrlDebts);
-            setDebtBillImports(new Set(excelUrlDebts.map((d: Debt) => d.id)));
-          }
-          setOpeningBalance(data.lastRemaining);
-          setExcelSheetTitle(data.sheetTitle);
-          setExcelNextCol(data.nextWeekStartCol);
-          if (data.existingWeeks.length > 0) setExcelFirstBudgetCol((data.existingWeeks[0] as any).startCol ?? 2);
-          setSelectedExcelFileId(data.fileId ?? null);
-          setSelectedExcelFileName(data.sheetTitle);
-
-          const canWriteBack = microsoftAuthenticated && !!data.fileId;
-          setInputMode(canWriteBack ? "excel" : "scratch");
-          if (!canWriteBack) {
-            setBlankMode(true);
-            setIncludeBillsSummary(true);
-            setScratchExistingWeeks(data.existingWeeks);
-          }
-
-          const lastWeekExcelUrl = data.existingWeeks.at(-1) as any;
-          const excelUrlNextStart = lastWeekExcelUrl ? nextStartAfterLabel(lastWeekExcelUrl.label ?? "") : null;
-          if (excelUrlNextStart) setStartDatePreserveCount(excelUrlNextStart);
-
-          toast({
-            title: "Excel file loaded from URL",
-            description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Connect Microsoft to write back." : ""}`,
-          });
-          setIsLoadingExcelUrl(false);
-          if (data.existingWeeks.length > 0) {
-            setStep(2);
-          } else {
-            scheduleAutoGenerate({
-              inputMode: canWriteBack ? "excel" : "scratch",
-              bills: excelUrlBills,
-              openingBalance: data.lastRemaining,
-              startDate: excelUrlNextStart ?? newWeekStartDate,
-            });
-          }
-        },
-        onError: (err: unknown) => {
-          const message = err instanceof Error ? err.message : "Could not read that file. Make sure the link is correct and you are signed in with Microsoft.";
-          toast({
-            title: "Failed to load Excel file",
-            description: message,
-            variant: "destructive",
-          });
-          setIsLoadingExcelUrl(false);
-        },
-      }
-    );
-  };
-
   const handleWriteToExcel = async () => {
     if (!selectedExcelFileId) return;
     setIsWritingToExcel(true);
@@ -1385,70 +1311,6 @@ export function BudgetWizard({
     setSelectedSheetId(id);
     setSelectedSheetName(name);
     setInputMode("google");
-  };
-
-  const handlePasteUrl = () => {
-    if (!pastedUrl.trim()) return;
-    setIsLoadingUrl(true);
-
-    sheetReadByUrlMutation.mutate(
-      { data: { url: pastedUrl.trim() } },
-      {
-        onSuccess: (data) => {
-          const sheetUrlBills = stripDebtMinPayments(data.bills as Bill[]);
-          setBills(sheetUrlBills);
-          prevBillsRef.current = JSON.stringify(sheetUrlBills);
-          const urlDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
-          if (urlDebts.length > 0) {
-            setDebts(urlDebts);
-            setDebtBillImports(new Set(urlDebts.map((d: Debt) => d.id)));
-          }
-          setOpeningBalance(data.lastRemaining);
-          setGoogleSheetTitle(data.sheetTitle);
-          setGoogleNextCol(data.nextWeekStartCol);
-          if (data.existingWeeks.length > 0) setGoogleFirstBudgetCol((data.existingWeeks[0] as any).startCol ?? 2);
-          setSelectedSheetId(data.spreadsheetId ?? null);
-          setSelectedSheetName(data.sheetTitle);
-
-          const canWriteBack = googleAuthenticated;
-          setInputMode(canWriteBack ? "google" : "scratch");
-          if (!canWriteBack) {
-            setBlankMode(true);
-            setIncludeBillsSummary(true);
-            setScratchExistingWeeks(data.existingWeeks);
-          }
-
-          const lastWeekSheetsUrl = data.existingWeeks.at(-1);
-          const sheetsUrlNextStart = lastWeekSheetsUrl ? nextStartAfterLabel(lastWeekSheetsUrl.label) : null;
-          if (sheetsUrlNextStart) setStartDatePreserveCount(sheetsUrlNextStart);
-
-          toast({
-            title: "Sheet loaded from URL",
-            description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.${!canWriteBack ? " Download as .xlsx (sign in with Google to write back)." : ""}`,
-          });
-          setIsLoadingUrl(false);
-          if (data.existingWeeks.length > 0) {
-            setStep(2);
-          } else {
-            scheduleAutoGenerate({
-              inputMode: canWriteBack ? "google" : "scratch",
-              bills: sheetUrlBills,
-              openingBalance: data.lastRemaining,
-              startDate: sheetsUrlNextStart ?? newWeekStartDate,
-            });
-          }
-        },
-        onError: (err: unknown) => {
-          const message = err instanceof Error ? err.message : "Could not read that spreadsheet. Make sure the link is correct and the sheet is shared.";
-          toast({
-            title: "Failed to load sheet",
-            description: message,
-            variant: "destructive",
-          });
-          setIsLoadingUrl(false);
-        },
-      }
-    );
   };
 
   const handleGenerate = (overrides?: GenerateOverrides) => {
@@ -1971,8 +1833,18 @@ export function BudgetWizard({
                       <DropdownMenuSeparator />
                     </>
                   )}
+                  <div className="px-2 py-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">My Data</p>
+                  </div>
+                  <DropdownMenuItem onClick={() => setIsBillsManagerOpen(true)}>
+                    <Receipt className="w-4 h-4 mr-2" /> Manage Bills
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsDebtManagerOpen(true)}>
+                    <DollarSign className="w-4 h-4 mr-2" /> Manage Debts
+                  </DropdownMenuItem>
                   {isGuest && (
                     <>
+                      <DropdownMenuSeparator />
                       {googleLoginAvailable && (
                         <DropdownMenuItem onClick={handleAccountGoogleLogin}>
                           <LogIn className="w-4 h-4 mr-2" /> Sign in with Google
@@ -1983,13 +1855,15 @@ export function BudgetWizard({
                           <LogIn className="w-4 h-4 mr-2" /> Sign in with Apple
                         </DropdownMenuItem>
                       )}
-                      {(googleLoginAvailable || appleLoginAvailable) && <DropdownMenuSeparator />}
                     </>
                   )}
                   {!isGuest && (
-                    <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
-                      <Settings2 className="w-4 h-4 mr-2" /> Preferences
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
+                        <Settings2 className="w-4 h-4 mr-2" /> Preferences
+                      </DropdownMenuItem>
+                    </>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
@@ -2083,83 +1957,6 @@ export function BudgetWizard({
                     </div>
                   </div>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowUrlInputs(!showUrlInputs)}
-                  className="sm:col-span-2 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-1 -mt-1"
-                >
-                  <Link className="w-4 h-4" />
-                  <span>Paste a spreadsheet URL</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showUrlInputs ? "rotate-180" : ""}`} />
-                </button>
-
-                <AnimatePresence>
-                  {showUrlInputs && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="sm:col-span-2 overflow-hidden"
-                    >
-                      <div className="space-y-3 rounded-2xl border-2 border-border/50 bg-white/60 p-5">
-                        <div>
-                          <p className="text-xs font-medium text-foreground mb-1.5">Google Sheets URL</p>
-                          <div className="flex gap-2">
-                            <Input
-                              type="url"
-                              placeholder="https://docs.google.com/spreadsheets/d/..."
-                              value={pastedUrl}
-                              onChange={(e) => setPastedUrl(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === "Enter") handlePasteUrl(); }}
-                              className="flex-1 text-sm"
-                              disabled={isLoadingUrl}
-                            />
-                            <Button
-                              size="sm"
-                              onClick={handlePasteUrl}
-                              disabled={!pastedUrl.trim() || isLoadingUrl}
-                              className="shrink-0"
-                            >
-                              {isLoadingUrl ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                "Load"
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-foreground mb-1.5">OneDrive / Excel Online URL</p>
-                          <div className="flex gap-2">
-                            <Input
-                              type="url"
-                              placeholder="https://1drv.ms/x/... or OneDrive share link"
-                              value={pastedExcelUrl}
-                              onChange={(e) => setPastedExcelUrl(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === "Enter") handlePasteExcelUrl(); }}
-                              className="flex-1 text-sm"
-                              disabled={isLoadingExcelUrl}
-                            />
-                            <Button
-                              size="sm"
-                              onClick={handlePasteExcelUrl}
-                              disabled={!pastedExcelUrl.trim() || isLoadingExcelUrl}
-                              className="shrink-0"
-                            >
-                              {isLoadingExcelUrl ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                "Load"
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
 
                 {microsoftConfigured && (
                   <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-blue-50/30 p-5 transition-all">
@@ -2408,59 +2205,6 @@ export function BudgetWizard({
                   )}
                 </div>
               )}
-
-              <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-red-300 hover:bg-red-50/30 p-5 transition-all">
-                <button
-                  type="button"
-                  onClick={() => setIsDebtManagerOpen(true)}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 p-2 rounded-xl bg-red-100">
-                      <DollarSign className="w-5 h-5 text-red-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-foreground">Manage Debts</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Track credit cards, loans, and more.
-                        {debts.length > 0 && (
-                          <span className="ml-1 font-medium text-red-600">
-                            {debts.length} {debts.length === 1 ? "account" : "accounts"} &middot; ${debts.reduce((s, d) => s + d.balance, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} total
-                            {debts.reduce((s, d) => s + (d.minimumPayment || 0), 0) > 0 && (
-                              <> &middot; ${debts.reduce((s, d) => s + (d.minimumPayment || 0), 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}/mo</>
-                            )}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-emerald-50/30 p-5 transition-all">
-                <button
-                  type="button"
-                  onClick={() => setIsBillsManagerOpen(true)}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 p-2 rounded-xl bg-emerald-100">
-                      <Receipt className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-foreground">Manage Bills</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        View and edit your recurring bills.
-                        {nonDebtBills.length > 0 && (
-                          <span className="ml-1 font-medium text-emerald-700">
-                            {nonDebtBills.length} {nonDebtBills.length === 1 ? "bill" : "bills"} &middot; ${totalAllBillsMonthly.toLocaleString("en-US", { minimumFractionDigits: 2 })}/mo
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              </div>
 
               {!isSignedIn && (
                 <div className="rounded-2xl border-2 border-dashed border-border/50 bg-white/40 p-5 text-center">
