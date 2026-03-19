@@ -167,16 +167,28 @@ export function generateWeeklyBudgets(
     // Ideal allocation: make each slot hit `target`
     const alloc = baseTotals.map((ft) => Math.min(0, target - ft));
 
-    // Redistribute any undistributed amount (when some slots were capped at 0)
-    let remaining = total - alloc.reduce((s, a) => s + a, 0);
+    // Reconcile: alloc sum must equal `total` exactly.
+    const allocSum = alloc.reduce((s, a) => s + a, 0);
+    let remaining = total - allocSum;
 
     if (remaining < -0.005) {
-      // Spread remainder across slots that already carry balanced bills,
-      // falling back to all slots if none do.
+      // Under-distributed: spread remainder across slots that already carry
+      // balanced bills, falling back to all slots if none do.
       const capable = alloc.map((a, i) => (a < 0 ? i : -1)).filter((i) => i >= 0);
       const targets = capable.length > 0 ? capable : alloc.map((_, i) => i);
       const share = remaining / targets.length;
       for (const i of targets) alloc[i] += share;
+    } else if (remaining > 0.005) {
+      // Over-distributed: one or more slots got more than the bill's monthly
+      // total (happens when heavy fixed bills in sibling weeks push the target
+      // below a slot's fixed total, causing over-compensation). Scale all
+      // non-zero allocations back so the sum equals `total` exactly.
+      if (allocSum < -0.005) {
+        const scale = total / allocSum;
+        for (let i = 0; i < alloc.length; i++) {
+          alloc[i] = alloc[i] * scale;
+        }
+      }
     }
 
     return alloc;
