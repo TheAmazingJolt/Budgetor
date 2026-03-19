@@ -1854,7 +1854,8 @@ export function BudgetWizard({
   const totalDebtBalance = debts.reduce((sum, d) => sum + d.balance, 0);
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
-  const totalAllBillsMonthly = Math.abs(bills.reduce((s, b) => s + b.amount, 0));
+  const nonDebtBills = bills.filter(b => !b.sourceDebtId);
+  const totalAllBillsMonthly = Math.abs(nonDebtBills.reduce((s, b) => s + b.amount, 0));
 
   const canGenerate = bills.length > 0 && !generateMutation.isPending;
 
@@ -2447,9 +2448,9 @@ export function BudgetWizard({
                       <p className="font-semibold text-sm text-foreground">Manage Bills</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         View and edit your recurring bills.
-                        {bills.length > 0 && (
+                        {nonDebtBills.length > 0 && (
                           <span className="ml-1 font-medium text-emerald-700">
-                            {bills.length} {bills.length === 1 ? "bill" : "bills"} &middot; ${totalAllBillsMonthly.toLocaleString("en-US", { minimumFractionDigits: 2 })}/mo
+                            {nonDebtBills.length} {nonDebtBills.length === 1 ? "bill" : "bills"} &middot; ${totalAllBillsMonthly.toLocaleString("en-US", { minimumFractionDigits: 2 })}/mo
                           </span>
                         )}
                       </p>
@@ -3995,7 +3996,7 @@ export function BudgetWizard({
               </Button>
             </div>
 
-            {bills.length > 0 && (
+            {nonDebtBills.length > 0 && (
               <Card className="bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200/60">
                 <CardContent className="p-5">
                   <div className="flex items-center gap-3 mb-1">
@@ -4005,23 +4006,24 @@ export function BudgetWizard({
                     </p>
                   </div>
                   <p className="text-sm text-emerald-700">
-                    across {bills.length} bill{bills.length !== 1 ? "s" : ""}
+                    across {nonDebtBills.length} bill{nonDebtBills.length !== 1 ? "s" : ""}
                   </p>
                 </CardContent>
               </Card>
             )}
 
-            {bills.length === 0 ? (
+            {nonDebtBills.length === 0 ? (
               <Card className="border-dashed border-2 p-10 text-center">
                 <p className="text-muted-foreground">No bills saved yet. Add a bill to get started.</p>
               </Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {bills.map((bill, i) => {
-                  const isDebtLinked = !!bill.sourceDebtId;
-                  return (
+                {bills
+                  .map((bill, originalIdx) => ({ bill, originalIdx }))
+                  .filter(({ bill }) => !bill.sourceDebtId)
+                  .map(({ bill, originalIdx }, i) => (
                     <motion.div
-                      key={`manager-bill-${i}`}
+                      key={`manager-bill-${originalIdx}`}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.03 }}
@@ -4039,11 +4041,6 @@ export function BudgetWizard({
                                 >
                                   {bill.category ?? ""}
                                 </Badge>
-                                {isDebtLinked && (
-                                  <Badge variant="outline" className="text-xs px-2 py-0.5 bg-slate-50 text-slate-500 border-slate-200">
-                                    from debt
-                                  </Badge>
-                                )}
                               </div>
                             </div>
                             <Currency value={bill.amount} className="text-sm font-semibold shrink-0" />
@@ -4057,7 +4054,7 @@ export function BudgetWizard({
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
-                                onClick={() => { setEditingBillInManagerIndex(i); setIsBillManagerFormOpen(true); }}
+                                onClick={() => { setEditingBillInManagerIndex(originalIdx); setIsBillManagerFormOpen(true); }}
                               >
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
@@ -4065,7 +4062,7 @@ export function BudgetWizard({
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
-                                onClick={() => preserveScroll(() => removeBill(i))}
+                                onClick={() => preserveScroll(() => removeBill(originalIdx))}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -4074,8 +4071,7 @@ export function BudgetWizard({
                         </CardContent>
                       </Card>
                     </motion.div>
-                  );
-                })}
+                  ))}
               </div>
             )}
           </div>
