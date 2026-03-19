@@ -143,12 +143,44 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Spread "varies" balanced bills evenly across all weeks in the month ──
+  // ── Equalize balanced bill amounts so total bills are equal across weeks ──
   //
-  // Each week gets exactly (alwaysTotal / N) of balanced bill expense,
-  // split proportionally among the individual bills by their ratio.
-  // This is independent of other bills in the week so that a week with
-  // heavy debt payments does not receive a disproportionately large share.
+  // Strategy (ignoring income and carryover — bills only):
+  //   1. Compute fixed_total[i] = sum of fixed + weekly bills in each week.
+  //   2. grand_total = sum(fixed_totals) + balanced_total for the month.
+  //   3. target = grand_total / N  →  each week aims for this bill total.
+  //   4. balanced[i] = min(0, target − fixed_total[i]).  Weeks already at or
+  //      below target get 0; excess is redistributed to capable weeks.
+  //   5. Timed bills (due day set) run the same logic but only across weeks
+  //      whose start date is ≤ the bill's due date.
+
+  /** Distribute `total` (≤ 0) across `slots` so total bills per slot equalise.
+   *  `baseTotals[i]` is the already-committed bill total for each slot.
+   *  Returns an array of amounts (≤ 0) that sum to `total`. */
+  function equalizeAcrossSlots(baseTotals: number[], total: number): number[] {
+    const N = baseTotals.length;
+    if (N === 0 || total >= -0.005) return baseTotals.map(() => 0);
+
+    const grandTotal = baseTotals.reduce((s, t) => s + t, 0) + total;
+    const target = grandTotal / N;
+
+    // Ideal allocation: make each slot hit `target`
+    const alloc = baseTotals.map((ft) => Math.min(0, target - ft));
+
+    // Redistribute any undistributed amount (when some slots were capped at 0)
+    let remaining = total - alloc.reduce((s, a) => s + a, 0);
+
+    if (remaining < -0.005) {
+      // Spread remainder across slots that already carry balanced bills,
+      // falling back to all slots if none do.
+      const capable = alloc.map((a, i) => (a < 0 ? i : -1)).filter((i) => i >= 0);
+      const targets = capable.length > 0 ? capable : alloc.map((_, i) => i);
+      const share = remaining / targets.length;
+      for (const i of targets) alloc[i] += share;
+    }
+
+    return alloc;
+  }
 
   for (const mk of monthsInRange) {
     const monthWeekIndices = weeks
@@ -156,40 +188,53 @@ export function generateWeeklyBudgets(
       .filter((i) => i >= 0);
     const N = monthWeekIndices.length;
 
-    const perWeekTotal = N > 0 ? -alwaysTotal / N : 0;
+    // ── "Varies" balanced bills (no due day) ─────────────────────────────
+    if (alwaysTotal > 0 && N > 0) {
+      const fixedTotals = monthWeekIndices.map((idx) =>
+        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0)
+      );
 
-    for (let j = 0; j < monthWeekIndices.length; j++) {
-      const idx = monthWeekIndices[j];
-      const items: WeeklyBill[] = [];
-      if (alwaysTotal > 0 && perWeekTotal < 0) {
-        const parts = alwaysBills
-          .filter((b) => Math.abs(b.amount) > 0)
-          .map((b) => ({
-            name: `Partial ${b.name}`,
-            ratio: Math.abs(b.amount) / alwaysTotal,
-          }));
-        let allocated = 0;
-        for (let p = 0; p < parts.length; p++) {
-          if (p === parts.length - 1) {
-            items.push({ name: parts[p].name, amount: Math.round((perWeekTotal - allocated) * 100) / 100 });
-          } else {
-            const val = Math.round(perWeekTotal * parts[p].ratio * 100) / 100;
-            items.push({ name: parts[p].name, amount: val });
-            allocated += val;
+      const weeklyAmounts = equalizeAcrossSlots(fixedTotals, -alwaysTotal);
+
+      const parts = alwaysBills
+        .filter((b) => Math.abs(b.amount) > 0)
+        .map((b) => ({
+          name: `Partial ${b.name}`,
+          ratio: Math.abs(b.amount) / alwaysTotal,
+          color: b.color,
+        }));
+
+      for (let j = 0; j < monthWeekIndices.length; j++) {
+        const idx = monthWeekIndices[j];
+        const weekTotal = Math.round(weeklyAmounts[j] * 100) / 100;
+        const items: WeeklyBill[] = [];
+
+        if (Math.abs(weekTotal) >= 0.005 && parts.length > 0) {
+          let allocated = 0;
+          for (let p = 0; p < parts.length; p++) {
+            if (p === parts.length - 1) {
+              items.push({ name: parts[p].name, amount: Math.round((weekTotal - allocated) * 100) / 100, color: parts[p].color });
+            } else {
+              const val = Math.round(weekTotal * parts[p].ratio * 100) / 100;
+              items.push({ name: parts[p].name, amount: val, color: parts[p].color });
+              allocated += val;
+            }
           }
         }
+
+        weeks[idx].largeBills = items;
       }
-      weeks[idx].largeBills = items;
+    } else {
+      // No always-bills — initialise largeBills to empty for each week
+      for (const idx of monthWeekIndices) weeks[idx].largeBills = [];
     }
 
-    // ── Spread timed balanced bills across weeks preceding their due day ──
+    // ── Timed balanced bills (due day set) ───────────────────────────────
     //
-    // "Balanced with a due day" means: split the bill evenly across every
-    // week whose START date is on or before the due date.
-    //
-    // If the due date falls BEFORE every week in the month (e.g. rent due
-    // on the 1st but the budget starts the 2nd), we fall back to spreading
-    // across ALL weeks in the month so the bill is never silently dropped.
+    // Each bill spreads only across weeks whose start ≤ its due date.
+    // If the due date falls before every week, fall back to all weeks.
+    // Base totals include fixed/weekly bills + any already-placed balanced
+    // amounts so equalization accounts for what's already committed.
 
     for (const bill of timedBills) {
       const day = bill.dayOfMonth!;
@@ -201,29 +246,25 @@ export function generateWeeklyBudgets(
       const dueDate = new Date(year, month, actualDay);
 
       let activeIndices = monthWeekIndices.filter((idx) => weeks[idx].start <= dueDate);
+      if (activeIndices.length === 0) activeIndices = [...monthWeekIndices];
 
-      if (activeIndices.length === 0) {
-        // Due date is before all weeks in this month — spread across all weeks
-        // so the bill is always represented and never silently dropped.
-        activeIndices = [...monthWeekIndices];
-      }
+      // Base totals for eligible weeks = fixed + weekly + already-placed balanced
+      const baseTotals = activeIndices.map((idx) =>
+        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+        weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
+      );
 
-      const perWeek = Math.round((bill.amount / activeIndices.length) * 100) / 100;
-      let allocated = 0;
+      const slotAmounts = equalizeAcrossSlots(baseTotals, bill.amount);
+
       for (let a = 0; a < activeIndices.length; a++) {
         const idx = activeIndices[a];
-        if (a === activeIndices.length - 1) {
-          weeks[idx].largeBills.push({
-            name: `Partial ${bill.name}`,
-            amount: Math.round((bill.amount - allocated) * 100) / 100,
-          });
-        } else {
-          weeks[idx].largeBills.push({
-            name: `Partial ${bill.name}`,
-            amount: perWeek,
-          });
-          allocated += perWeek;
-        }
+        const amt = Math.round(slotAmounts[a] * 100) / 100;
+        if (Math.abs(amt) < 0.005) continue;
+        weeks[idx].largeBills.push({
+          name: `Partial ${bill.name}`,
+          amount: amt,
+          color: bill.color,
+        });
       }
     }
   }
