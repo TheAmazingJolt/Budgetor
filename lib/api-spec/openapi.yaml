@@ -1052,6 +1052,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Debt"
+        linkedSheetId:
+          type: string
+          nullable: true
+          description: ID of the linked Google Sheet or Excel file (null if no link)
+        linkedSheetName:
+          type: string
+          nullable: true
+          description: Display name of the linked sheet/file
+        linkedSheetType:
+          type: string
+          nullable: true
+          enum: [google, excel]
+          description: Type of linked sheet ('google' or 'excel')
         createdAt:
           type: string
           format: date-time
@@ -1118,6 +1131,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Debt"
+        linkedSheetId:
+          type: string
+          nullable: true
+          description: ID of the linked Google Sheet or Excel file (null clears the link)
+        linkedSheetName:
+          type: string
+          nullable: true
+          description: Display name of the linked sheet/file
+        linkedSheetType:
+          type: string
+          nullable: true
+          enum: [google, excel]
+          description: Type of linked sheet ('google' or 'excel')
 
     GoogleAuthStatus:
       type: object

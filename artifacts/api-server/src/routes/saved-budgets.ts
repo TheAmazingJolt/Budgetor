@@ -75,7 +75,13 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
   if (debts !== undefined) updates.debts = debts;
   if (linkedSheetId !== undefined) updates.linkedSheetId = linkedSheetId;
   if (linkedSheetName !== undefined) updates.linkedSheetName = linkedSheetName;
-  if (linkedSheetType !== undefined) updates.linkedSheetType = linkedSheetType;
+  if (linkedSheetType !== undefined) {
+    if (linkedSheetType !== null && linkedSheetType !== "google" && linkedSheetType !== "excel") {
+      res.status(400).json({ error: "linkedSheetType must be 'google', 'excel', or null" });
+      return;
+    }
+    updates.linkedSheetType = linkedSheetType;
+  }
 
   try {
     const [budget] = await db
