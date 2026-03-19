@@ -1483,13 +1483,14 @@ export function BudgetWizard({
             const rawBills = includeBillsSummary
               ? (parsedWorkbook?.rawBillsSection ?? null)
               : null;
-            const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
+            const effectiveBills = overrides?.bills ?? bills;
+            const fallbackBills = includeBillsSummary && !rawBills ? effectiveBills : undefined;
             const debtsForExport = debts.length > 0 ? debts : undefined;
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-              blob = createBlankBudget([...existingConverted, ...data.weeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+              blob = createBlankBudget([...existingConverted, ...data.weeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
             } else if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
-              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+              blob = createBlankBudget(data.weeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
             } else {
               blob = appendBudgetWeeks(
                 parsedWorkbook!.rawBytes,
@@ -1498,7 +1499,7 @@ export function BudgetWizard({
                 !zeroOpeningBalance,
                 sheetStyle,
                 debtsForExport,
-                bills,
+                effectiveBills,
               );
             }
             setGeneratedBlob(blob);
