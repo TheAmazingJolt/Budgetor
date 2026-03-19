@@ -5,6 +5,20 @@ import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+const BILL_COLOR_HEX: Readonly<Record<string, string>> = {
+  blue:   '1D4ED8', green:  '15803D', orange: 'C2410C', purple: '7E22CE',
+  red:    'B91C1C', slate:  '475569', amber:  'B45309', teal:   '0F766E',
+  rose:   'BE123C', indigo: '4338CA', yellow: '854D0E', cyan:   '0E7490',
+};
+
+function hexToSheetsRgb(hex: string): { red: number; green: number; blue: number } {
+  return {
+    red:   parseInt(hex.slice(0, 2), 16) / 255,
+    green: parseInt(hex.slice(2, 4), 16) / 255,
+    blue:  parseInt(hex.slice(4, 6), 16) / 255,
+  };
+}
+
 function getAuthedClient(req: any) {
   const clientId = process.env["GOOGLE_CLIENT_ID"];
   const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
@@ -699,6 +713,10 @@ function buildBudgetWriteData(
       valueRows[nextRow][labelCol] = bill.name;
       valueRows[nextRow][valCol] = bill.amount;
 
+      const billColorHex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
+      const billFormat: any = { textFormat: { fontSize: 10, fontFamily: "Arial" } };
+      if (billColorHex) billFormat.backgroundColor = hexToSheetsRgb(billColorHex);
+
       requests.push({
         repeatCell: {
           range: {
@@ -708,14 +726,7 @@ function buildBudgetWriteData(
             startColumnIndex: labelCol,
             endColumnIndex: valCol + 1,
           },
-          cell: {
-            userEnteredFormat: {
-              textFormat: {
-                fontSize: 10,
-                fontFamily: "Arial",
-              },
-            },
-          },
+          cell: { userEnteredFormat: billFormat },
           fields: "userEnteredFormat(backgroundColor,textFormat)",
         },
       });

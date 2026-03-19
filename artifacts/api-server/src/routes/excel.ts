@@ -7,6 +7,12 @@ import { refreshMicrosoftToken } from "./microsoft-auth.js";
 const router: IRouter = Router();
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
+const BILL_COLOR_HEX: Readonly<Record<string, string>> = {
+  blue:   '1D4ED8', green:  '15803D', orange: 'C2410C', purple: '7E22CE',
+  red:    'B91C1C', slate:  '475569', amber:  'B45309', teal:   '0F766E',
+  rose:   'BE123C', indigo: '4338CA', yellow: '854D0E', cyan:   '0E7490',
+};
+
 async function graphGet(accessToken: string, path: string): Promise<any> {
   const res = await fetch(`${GRAPH}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -505,7 +511,7 @@ interface ExcelWriteRequest {
     endDate: string;
     openingBalance: number;
     paycheck: number;
-    bills: Array<{ name: string; amount: number }>;
+    bills: Array<{ name: string; amount: number; color?: string }>;
     totalBills: number;
     closingBalance: number;
   }>;
@@ -912,6 +918,24 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       { color: "#BDD7EE" }
     );
 
+    // Apply user-chosen fill colors to individual bill rows (run in parallel).
+    const billRowBaseCreate = 3 + (useRemainingAcct ? 1 : 0);
+    const billFillCreate: Promise<void>[] = [];
+    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+      const lc = startCol + wIdx * 2;
+      const vc = lc + 1;
+      weeks[wIdx].bills.forEach((bill, j) => {
+        const hex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
+        if (!hex) return;
+        const rowNum = billRowBaseCreate + j;
+        const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
+        billFillCreate.push(
+          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }).then(() => {})
+        );
+      });
+    }
+    await Promise.all(billFillCreate);
+
     let afterSectionsRow = totalRows;
     if (body.bills && body.bills.length > 0) {
       await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills);
@@ -1042,6 +1066,24 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRangeWrite}')/format/fill`,
       { color: "#BDD7EE" }
     );
+
+    // Apply user-chosen fill colors to individual bill rows (run in parallel).
+    const billRowBaseWrite = 3 + (includeRemainingAcct ? 1 : 0);
+    const billFillWrite: Promise<void>[] = [];
+    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+      const lc = startCol + wIdx * 2;
+      const vc = lc + 1;
+      weeks[wIdx].bills.forEach((bill, j) => {
+        const hex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
+        if (!hex) return;
+        const rowNum = billRowBaseWrite + j;
+        const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
+        billFillWrite.push(
+          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }).then(() => {})
+        );
+      });
+    }
+    await Promise.all(billFillWrite);
 
     let afterSectionsRowWrite = totalRows;
     if (body.bills && body.bills.length > 0) {

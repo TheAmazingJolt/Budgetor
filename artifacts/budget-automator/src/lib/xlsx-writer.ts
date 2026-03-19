@@ -2,6 +2,8 @@ import XLSX from 'xlsx-js-style';
 import type { WeeklyBudget, Debt } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
+import { BILL_COLOR_HEX } from './billColors';
+
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
   labelColWidth: 1,
@@ -176,10 +178,12 @@ function writeWeeksToSheet(
     set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont, numFmt: MONEY_FMT }));
     nextRow++;
 
-    // Bill line items — white text, no background fill.
+    // Bill line items — white text, fill with user-chosen color when set.
     for (const bill of week.bills) {
-      const labelStyle: any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } } };
-      const valStyle:   any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } }, numFmt: MONEY_FMT };
+      const billHex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
+      const billFill = billHex ? { patternType: 'solid', fgColor: { rgb: billHex } } : undefined;
+      const labelStyle: any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } }, ...(billFill ? { fill: billFill } : {}) };
+      const valStyle:   any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } }, numFmt: MONEY_FMT, ...(billFill ? { fill: billFill } : {}) };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
       set(sheet, nextRow, valCol,   makeCell(bill.amount, valStyle));
       nextRow++;

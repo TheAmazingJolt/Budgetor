@@ -116,7 +116,7 @@ export function generateWeeklyBudgets(
       for (let i = 0; i < weeks.length; i++) {
         const { start, end } = weeks[i];
         if (dueDate >= start && dueDate <= end) {
-          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount });
+          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
           break;
         }
       }
@@ -127,7 +127,7 @@ export function generateWeeklyBudgets(
   for (const bill of weeklyBills) {
     for (let i = 0; i < weeks.length; i++) {
       if (payPeriod === "weekly") {
-        weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount });
+        weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
       } else {
         const periodStart = weeks[i].start;
         const periodEnd = weeks[i].end;
@@ -137,6 +137,7 @@ export function generateWeeklyBudgets(
           weeks[i].fixedWeeklyBills.push({
             name: occurrences > 1 ? `${bill.name} (wk ${o + 1})` : bill.name,
             amount: bill.amount,
+            color: bill.sourceDebtId ? undefined : bill.color,
           });
         }
       }
@@ -213,7 +214,7 @@ export function generateWeeklyBudgets(
         .map((b) => ({
           name: `Partial ${b.name}`,
           ratio: Math.abs(b.amount) / alwaysTotal,
-          color: b.color,
+          color: b.sourceDebtId ? 'red' : b.color,
         }));
 
       for (let j = 0; j < monthWeekIndices.length; j++) {
@@ -275,7 +276,7 @@ export function generateWeeklyBudgets(
         weeks[idx].largeBills.push({
           name: `Partial ${bill.name}`,
           amount: amt,
-          color: bill.color,
+          color: bill.sourceDebtId ? 'red' : bill.color,
         });
       }
     }
