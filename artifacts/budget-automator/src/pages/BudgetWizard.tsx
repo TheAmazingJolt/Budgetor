@@ -2426,6 +2426,9 @@ export function BudgetWizard({
                         {debts.length > 0 && (
                           <span className="ml-1 font-medium text-red-600">
                             {debts.length} {debts.length === 1 ? "account" : "accounts"} &middot; ${debts.reduce((s, d) => s + d.balance, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} total
+                            {debts.reduce((s, d) => s + (d.minimumPayment || 0), 0) > 0 && (
+                              <> &middot; ${debts.reduce((s, d) => s + (d.minimumPayment || 0), 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}/mo</>
+                            )}
                           </span>
                         )}
                       </p>
