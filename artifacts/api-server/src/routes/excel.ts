@@ -611,6 +611,14 @@ async function writeExcelDebtRows(
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${minPayRange}')/format`,
     { horizontalAlignment: "Right" }
   );
+
+  // Set minimum column widths so headers are never clipped.
+  await Promise.all([
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='A1')/format`, { columnWidth: 160 }),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B1')/format`, { columnWidth: 90 }),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='C1')/format`, { columnWidth: 75 }),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='D1')/format`, { columnWidth: 100 }),
+  ]);
 }
 
 async function writeExcelBillRows(

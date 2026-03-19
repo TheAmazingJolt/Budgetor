@@ -638,6 +638,28 @@ function buildBudgetWriteData(
     valueRows.push([]);
   }
 
+  // Blanket reset — runs first so per-bill color requests below override it.
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: 1,
+        endRowIndex: totalRows - 1,
+        startColumnIndex: startCol,
+        endColumnIndex: startCol + weeks.length * 2,
+      },
+      cell: {
+        userEnteredFormat: {
+          textFormat: {
+            fontSize: 10,
+            fontFamily: "Arial",
+          },
+        },
+      },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const week = weeks[wIdx];
     const labelCol = startCol + wIdx * 2;
@@ -790,27 +812,6 @@ function buildBudgetWriteData(
       },
     });
   }
-
-  requests.push({
-    repeatCell: {
-      range: {
-        sheetId,
-        startRowIndex: 1,
-        endRowIndex: remainingRowIdx,
-        startColumnIndex: startCol,
-        endColumnIndex: startCol + weeks.length * 2,
-      },
-      cell: {
-        userEnteredFormat: {
-          textFormat: {
-            fontSize: 10,
-            fontFamily: "Arial",
-          },
-        },
-      },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
-    },
-  });
 
   const totalCols = startCol + weeks.length * 2;
 

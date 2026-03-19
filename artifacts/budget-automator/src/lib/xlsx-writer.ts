@@ -163,8 +163,8 @@ function writeWeeksToSheet(
     // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
-    // Body cell base style — Arial 10pt, white text
-    const bodyFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
+    // Body cell base style — Arial 10pt, black text (white only when a fill is applied)
+    const bodyFont = { sz: 10, name: 'Arial' };
 
     // Remaining Acct (optional)
     if (includeRemainingAcct) {
@@ -178,12 +178,13 @@ function writeWeeksToSheet(
     set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont, numFmt: MONEY_FMT }));
     nextRow++;
 
-    // Bill line items — white text, fill with user-chosen color when set.
+    // Bill line items — colored fill gets white text; no-fill gets default (black) text.
     for (const bill of week.bills) {
       const billHex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
       const billFill = billHex ? { patternType: 'solid', fgColor: { rgb: billHex } } : undefined;
-      const labelStyle: any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } }, ...(billFill ? { fill: billFill } : {}) };
-      const valStyle:   any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } }, numFmt: MONEY_FMT, ...(billFill ? { fill: billFill } : {}) };
+      const billFont = billFill ? { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } } : bodyFont;
+      const labelStyle: any = { font: billFont, ...(billFill ? { fill: billFill } : {}) };
+      const valStyle:   any = { font: billFont, numFmt: MONEY_FMT, ...(billFill ? { fill: billFill } : {}) };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
       set(sheet, nextRow, valCol,   makeCell(bill.amount, valStyle));
       nextRow++;
