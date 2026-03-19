@@ -176,7 +176,9 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         return n != null ? n : parseFloat(getStr(col));
       };
       const id = getStr("id") || `meta-${i}`;
-      const name = getStr("name");
+      const rawDebtName = getStr("name");
+      const hasBalancedSuffix = /\s+\(B\)$/.test(rawDebtName);
+      const name = rawDebtName.replace(/\s+\(B\)$/, "");
       if (!name) break;
       const type = getStr("type") || "credit_card";
       const balance = getNum("balance");
@@ -194,7 +196,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         minimumPayment: isNaN(minimumPayment) ? 0 : Math.abs(minimumPayment),
         dueDay: isNaN(dueDayRaw) || dueDayRaw < 1 || dueDayRaw > 31 ? null : dueDayRaw,
         originalAmount: isNaN(originalAmount) ? null : originalAmount,
-        billAsBalanced: billAsBalancedStr === "true",
+        billAsBalanced: billAsBalancedStr === "true" || hasBalancedSuffix,
       });
     }
   }
@@ -874,8 +876,17 @@ function buildDebtRows(
   debts: DebtItem[],
   budgetTotalRows: number,
   sheetId: number,
+  bills?: BillMeta[],
 ) {
   if (!debts || debts.length === 0) return { debtRows: [], debtRequests: [], debtRowCount: 0 };
+
+  // Build a set of debt IDs that have a balanced bill referencing them.
+  const balancedDebtIds = new Set<string>();
+  if (bills) {
+    for (const b of bills) {
+      if (b.sourceDebtId && b.type === "balanced") balancedDebtIds.add(b.sourceDebtId);
+    }
+  }
 
   const gapRow = budgetTotalRows;
   const headerRow = gapRow + 1;
@@ -889,8 +900,9 @@ function buildDebtRows(
   debtRows.push(["Name", "Balance", "APR %", "Min Payment"]);
 
   for (const debt of debts) {
+    const debtDisplayName = balancedDebtIds.has(debt.id) ? `${debt.name} (B)` : debt.name;
     debtRows.push([
-      debt.name,
+      debtDisplayName,
       debt.balance,
       debt.interestRate != null ? `${debt.interestRate}%` : "",
       debt.minimumPayment,
@@ -1024,8 +1036,8 @@ function buildBillRows(
   afterRow: number,
   sheetId: number,
 ) {
-  // Exclude debt-linked fixed bills — balanced debt bills appear in the Bills section with "(B)".
-  const filteredBills = bills.filter((b) => !b.sourceDebtId || b.type === "balanced");
+  // Exclude all debt-linked bills — balanced debt bills now appear in the Debts section with "(B)".
+  const filteredBills = bills.filter((b) => !b.sourceDebtId);
   if (!filteredBills || filteredBills.length === 0) return { billRows: [], billRequests: [], billRowCount: 0 };
 
   const headerRow = afterRow + 1;
@@ -1040,11 +1052,8 @@ function buildBillRows(
     const dueDay = bill.dayOfMonth != null
       ? bill.dayOfMonth
       : bill.type === "weekly" ? "weekly" : "varies";
-    const billDisplayName = bill.sourceDebtId && bill.type === "balanced"
-      ? `${bill.name} (B)`
-      : bill.name;
     billRows.push([
-      billDisplayName,
+      bill.name,
       Math.abs(bill.amount),
       dueDay,
     ]);
@@ -1291,7 +1300,7 @@ async function writeBudgetToSheet(
 
   if (debts && debts.length > 0) {
     const debtsStartRow = totalRows + billRowCount;
-    const { debtRows, debtRequests } = buildDebtRows(debts, debtsStartRow, sheetId);
+    const { debtRows, debtRequests } = buildDebtRows(debts, debtsStartRow, sheetId, bills);
 
     const debtRangeStart = `A${debtsStartRow + 1}`;
     const debtRangeEnd = `D${debtsStartRow + debtRows.length}`;

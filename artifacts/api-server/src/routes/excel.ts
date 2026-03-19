@@ -175,7 +175,9 @@ function parseDebtMetaRows(
   for (let i = startIdx + 2; i < rows.length; i++) {
     const cells = rows[i] ?? [];
     const id = String(cells[colMap["id"] ?? 0] ?? "").trim();
-    const name = String(cells[colMap["name"] ?? 1] ?? "").trim();
+    const rawDebtName = String(cells[colMap["name"] ?? 1] ?? "").trim();
+    const hasBalancedSuffix = /\s+\(B\)$/.test(rawDebtName);
+    const name = rawDebtName.replace(/\s+\(B\)$/, "");
     if (!name) break;
     const type = String(cells[colMap["type"] ?? 2] ?? "").trim() || "credit_card";
     const balance = typeof cells[colMap["balance"] ?? 3] === "number"
@@ -203,7 +205,7 @@ function parseDebtMetaRows(
       minimumPayment: isNaN(minimumPayment as number) ? 0 : Math.abs(minimumPayment as number),
       dueDay: isNaN(dueDayRaw as number) || (dueDayRaw as number) < 1 || (dueDayRaw as number) > 31 ? null : dueDayRaw,
       originalAmount: isNaN(originalAmount as number) ? null : originalAmount,
-      billAsBalanced: billAsBalancedStr === "true",
+      billAsBalanced: billAsBalancedStr === "true" || hasBalancedSuffix,
     });
   }
   return debts;
@@ -522,14 +524,23 @@ interface ExcelCreateAndWriteRequest {
   bills?: BillMeta[];
 }
 
-function buildExcelDebtGrid(debts: DebtItem[]): (string | number)[][] {
+function buildExcelDebtGrid(debts: DebtItem[], bills?: BillMeta[]): (string | number)[][] {
+  // Build a set of debt IDs that have a balanced bill referencing them.
+  const balancedDebtIds = new Set<string>();
+  if (bills) {
+    for (const b of bills) {
+      if (b.sourceDebtId && b.type === "balanced") balancedDebtIds.add(b.sourceDebtId);
+    }
+  }
+
   const rows: (string | number)[][] = [];
   rows.push([]);
   rows.push(["Debts", "", "", ""]);
   rows.push(["Name", "Balance", "APR %", "Min Payment"]);
   for (const debt of debts) {
+    const debtDisplayName = balancedDebtIds.has(debt.id) ? `${debt.name} (B)` : debt.name;
     rows.push([
-      debt.name,
+      debtDisplayName,
       debt.balance,
       debt.interestRate != null ? `${debt.interestRate}%` : "",
       debt.minimumPayment,
@@ -544,8 +555,9 @@ async function writeExcelDebtRows(
   sheetName: string,
   startRow: number,
   debts: DebtItem[],
+  bills?: BillMeta[],
 ) {
-  const debtGrid = buildExcelDebtGrid(debts);
+  const debtGrid = buildExcelDebtGrid(debts, bills);
   const debtStartAddr = `A${startRow + 1}`;
   const debtEndAddr = `D${startRow + debtGrid.length}`;
   const debtRange = `${debtStartAddr}:${debtEndAddr}`;
@@ -586,8 +598,8 @@ async function writeExcelBillRows(
   startRow: number,
   bills: BillMeta[],
 ) {
-  // Exclude debt-linked fixed bills — balanced debt bills appear in the Bills section with "(B)".
-  const filteredBills = bills.filter((b) => !b.sourceDebtId || b.type === "balanced");
+  // Exclude all debt-linked bills — balanced debt bills now appear in the Debts section with "(B)".
+  const filteredBills = bills.filter((b) => !b.sourceDebtId);
   if (!filteredBills || filteredBills.length === 0) return;
 
   const rows: (string | number | null)[][] = [];
@@ -598,11 +610,8 @@ async function writeExcelBillRows(
     const dueDay = bill.dayOfMonth != null
       ? bill.dayOfMonth
       : bill.type === "weekly" ? "weekly" : "varies";
-    const billDisplayName = bill.sourceDebtId && bill.type === "balanced"
-      ? `${bill.name} (B)`
-      : bill.name;
     rows.push([
-      billDisplayName,
+      bill.name,
       Math.abs(bill.amount),
       bill.type ?? "fixed",
       bill.category ?? bill.name,
@@ -864,7 +873,7 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts); } catch { }
     }
     if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRow, body.debts);
+      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRow, body.debts, body.bills);
     }
 
     res.json({ fileId, webUrl });
@@ -980,7 +989,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts); } catch { }
     }
     if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts);
+      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts, body.bills);
     }
 
     res.json({
