@@ -188,7 +188,7 @@ function writeWeeksToSheet(
     for (const bill of week.bills) {
       const billHex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
       const billFill = billHex ? { patternType: 'solid' as const, fgColor: { rgb: billHex } } : noFill;
-      const billFont = billHex ? { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } } : bodyFont;
+      const billFont = billHex ? { sz: 10, name: 'Arial', color: { rgb: '000000' } } : bodyFont;
       const labelStyle: any = { font: billFont, fill: billFill };
       const valStyle:   any = { font: billFont, fill: billFill, numFmt: MONEY_FMT };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
