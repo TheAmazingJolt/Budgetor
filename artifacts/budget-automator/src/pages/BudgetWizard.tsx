@@ -3020,7 +3020,7 @@ export function BudgetWizard({
                     label: w.label,
                     openingBalance: w.openingBalance as number | undefined,
                     paycheck: w.paycheck as number | undefined,
-                    items: (w.items ?? []) as { name: string; amount: number }[],
+                    items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
                     remaining: w.remaining as number,
                     isNew: false,
                   }));
