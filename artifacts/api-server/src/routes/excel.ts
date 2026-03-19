@@ -8,9 +8,9 @@ const router: IRouter = Router();
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
 const BILL_COLOR_HEX: Readonly<Record<string, string>> = {
-  blue:   '1D4ED8', green:  '15803D', orange: 'C2410C', purple: '7E22CE',
-  red:    'B91C1C', slate:  '475569', amber:  'B45309', teal:   '0F766E',
-  rose:   'BE123C', indigo: '4338CA', yellow: '854D0E', cyan:   '0E7490',
+  blue:   '93C5FD', green:  '86EFAC', orange: 'FDBA74', purple: 'D8B4FE',
+  red:    'FCA5A5', slate:  'CBD5E1', amber:  'FCD34D', teal:   '5EEAD4',
+  rose:   'FDA4AF', indigo: 'A5B4FC', yellow: 'FDE047', cyan:   '67E8F9',
 };
 
 async function graphGet(accessToken: string, path: string): Promise<any> {
