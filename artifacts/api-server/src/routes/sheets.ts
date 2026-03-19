@@ -150,6 +150,55 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId });
   }
 
+  // ── Parse Debts section from _BudgifyData ──
+  const debts: any[] = [];
+  if (metaSheet) {
+    let foundDebtsMarker = false;
+    let debtsColMap: Record<string, number> = {};
+    for (let i = 0; i < metaRows.length; i++) {
+      const val = metaRows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
+      if (val === "Debts") { foundDebtsMarker = true; continue; }
+      if (!foundDebtsMarker) continue;
+      const lower = val.toLowerCase();
+      if (lower === "id" || lower === "name") {
+        const cells = metaRows[i]?.values ?? [];
+        for (let c = 0; c < cells.length; c++) {
+          const h = cells[c]?.formattedValue?.trim()?.toLowerCase() ?? "";
+          if (h) debtsColMap[h] = c;
+        }
+        continue;
+      }
+      if (!val) break;
+      const cells = metaRows[i]?.values ?? [];
+      const getStr = (col: string) => cells[debtsColMap[col] ?? -1]?.formattedValue?.trim() ?? "";
+      const getNum = (col: string) => {
+        const n = cells[debtsColMap[col] ?? -1]?.effectiveValue?.numberValue;
+        return n != null ? n : parseFloat(getStr(col));
+      };
+      const id = getStr("id") || `meta-${i}`;
+      const name = getStr("name");
+      if (!name) break;
+      const type = getStr("type") || "credit_card";
+      const balance = getNum("balance");
+      const interestRate = getNum("interestrate");
+      const minimumPayment = getNum("minpayment");
+      const dueDayRaw = getNum("dueday");
+      const originalAmount = getNum("originalamount");
+      const billAsBalancedStr = getStr("billasbalanced");
+      debts.push({
+        id,
+        name,
+        type,
+        balance: isNaN(balance) ? 0 : Math.abs(balance),
+        interestRate: isNaN(interestRate) ? null : interestRate,
+        minimumPayment: isNaN(minimumPayment) ? 0 : Math.abs(minimumPayment),
+        dueDay: isNaN(dueDayRaw) || dueDayRaw < 1 || dueDayRaw > 31 ? null : dueDayRaw,
+        originalAmount: isNaN(originalAmount) ? null : originalAmount,
+        billAsBalanced: billAsBalancedStr === "true",
+      });
+    }
+  }
+
   if (!foundBillsMarker) {
     // ── Fallback: check main sheet for ## BILLS ## marker (legacy) ──────
     // Search all columns (not just col 0) so sheets with week data in col A/B
@@ -369,6 +418,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
 
   return {
     bills,
+    debts,
     existingWeeks,
     nextWeekStartCol,
     lastRemaining,
@@ -511,6 +561,9 @@ interface DebtItem {
   balance: number;
   interestRate?: number | null;
   minimumPayment: number;
+  dueDay?: number | null;
+  originalAmount?: number | null;
+  billAsBalanced?: boolean | null;
 }
 
 interface BillMeta {
@@ -1265,8 +1318,9 @@ async function writeHiddenBillsSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
   bills: BillMeta[],
+  debts?: DebtItem[],
 ) {
-  if (!bills || bills.length === 0) return;
+  if ((!bills || bills.length === 0) && (!debts || debts.length === 0)) return;
 
   const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
   const sheets = meta.data.sheets ?? [];
@@ -1313,7 +1367,7 @@ async function writeHiddenBillsSheet(
   const grid: (string | number)[][] = [
     ["Bills"],
     ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId"],
-    ...bills.map((b) => [
+    ...(bills ?? []).map((b) => [
       b.name,
       Math.abs(b.amount),
       b.type ?? "fixed",
@@ -1323,9 +1377,31 @@ async function writeHiddenBillsSheet(
       b.sourceDebtId ?? "",
     ]),
   ];
+
+  if (debts && debts.length > 0) {
+    grid.push([]);
+    grid.push(["Debts"]);
+    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced"]);
+    for (const d of debts) {
+      grid.push([
+        d.id,
+        d.name,
+        d.type ?? "credit_card",
+        d.balance ?? 0,
+        d.interestRate != null ? d.interestRate : "",
+        d.minimumPayment ?? 0,
+        d.dueDay != null ? d.dueDay : "",
+        d.originalAmount != null ? d.originalAmount : "",
+        d.billAsBalanced ? "true" : "false",
+      ]);
+    }
+  }
+
+  const maxCols = Math.max(...grid.map((r) => r.length));
+  const colLetter = String.fromCharCode(64 + maxCols);
   await sheetsApi.spreadsheets.values.update({
     spreadsheetId,
-    range: `_BudgifyData!A1:G${grid.length}`,
+    range: `_BudgifyData!A1:${colLetter}${grid.length}`,
     valueInputOption: "RAW",
     requestBody: { values: grid },
   });
@@ -1365,8 +1441,8 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     const spreadsheetUrl = createResponse.data.spreadsheetUrl!;
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
-    if (body.bills && body.bills.length > 0) {
-      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills); } catch { }
+    if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
+      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -1410,8 +1486,8 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
-    if (body.bills && body.bills.length > 0) {
-      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills); } catch { }
+    if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
+      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
     }
 
     res.json({

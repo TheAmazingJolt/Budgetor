@@ -68,25 +68,65 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
         });
 
         const bills: Bill[] = [];
+        const debts: Debt[] = [];
 
         const billsDataSheet = workbook.Sheets['_BudgifyData'] ?? workbook.Sheets['_BillsData'];
         if (billsDataSheet) {
           const bdRows: any[][] = XLSX.utils.sheet_to_json(billsDataSheet, { header: 1, defval: '' });
           for (let i = 1; i < bdRows.length; i++) {
             const r = bdRows[i];
-            if (!r || !String(r[0] ?? '').trim()) break;
+            const firstCell = String(r?.[0] ?? '').trim();
+            if (!firstCell || firstCell === 'Debts') break;
             const dayRaw = r[2];
             const dayParsed = typeof dayRaw === 'number' ? dayRaw : parseInt(String(dayRaw ?? ''), 10);
             const sourceDebt = String(r[6] ?? '').trim();
             bills.push({
-              name: String(r[0]).trim(),
+              name: firstCell,
               amount: typeof r[1] === 'number' ? r[1] : parseFloat(String(r[1] ?? '0')),
               dayOfMonth: !isNaN(dayParsed) && dayParsed >= 1 && dayParsed <= 31 ? dayParsed : null,
-              category: String(r[3] ?? '').trim() || String(r[0]).trim(),
+              category: String(r[3] ?? '').trim() || firstCell,
               type: (String(r[4] ?? '').trim() || 'fixed') as Bill['type'],
               color: String(r[5] ?? '').trim() || 'slate',
               ...(sourceDebt ? { sourceDebtId: sourceDebt } : {}),
             });
+          }
+
+          // ── Parse Debts section from _BudgifyData ──
+          let debtsStartRow = -1;
+          for (let i = 0; i < bdRows.length; i++) {
+            if (String(bdRows[i]?.[0] ?? '').trim() === 'Debts') { debtsStartRow = i; break; }
+          }
+          if (debtsStartRow !== -1) {
+            const dColHeaderRow = bdRows[debtsStartRow + 1] ?? [];
+            const dColMap: Record<string, number> = {};
+            for (let c = 0; c < dColHeaderRow.length; c++) {
+              const h = String(dColHeaderRow[c] ?? '').trim().toLowerCase();
+              if (h) dColMap[h] = c;
+            }
+            for (let i = debtsStartRow + 2; i < bdRows.length; i++) {
+              const dr = bdRows[i] ?? [];
+              const dName = String(dr[dColMap['name'] ?? 1] ?? '').trim();
+              if (!dName) break;
+              const dId = String(dr[dColMap['id'] ?? 0] ?? '').trim() || `meta-${i}`;
+              const dType = String(dr[dColMap['type'] ?? 2] ?? '').trim() || 'credit_card';
+              const dBalance = typeof dr[dColMap['balance'] ?? 3] === 'number' ? dr[dColMap['balance'] ?? 3] : parseFloat(String(dr[dColMap['balance'] ?? 3] ?? ''));
+              const dRate = typeof dr[dColMap['interestrate'] ?? 4] === 'number' ? dr[dColMap['interestrate'] ?? 4] : parseFloat(String(dr[dColMap['interestrate'] ?? 4] ?? ''));
+              const dMinPay = typeof dr[dColMap['minpayment'] ?? 5] === 'number' ? dr[dColMap['minpayment'] ?? 5] : parseFloat(String(dr[dColMap['minpayment'] ?? 5] ?? ''));
+              const dDueDay = typeof dr[dColMap['dueday'] ?? 6] === 'number' ? dr[dColMap['dueday'] ?? 6] : parseInt(String(dr[dColMap['dueday'] ?? 6] ?? ''), 10);
+              const dOrigAmt = typeof dr[dColMap['originalamount'] ?? 7] === 'number' ? dr[dColMap['originalamount'] ?? 7] : parseFloat(String(dr[dColMap['originalamount'] ?? 7] ?? ''));
+              const dBillAsBalanced = String(dr[dColMap['billasbalanced'] ?? 8] ?? '').trim().toLowerCase() === 'true';
+              debts.push({
+                id: dId,
+                name: dName,
+                type: dType as Debt['type'],
+                balance: isNaN(dBalance) ? 0 : Math.abs(dBalance),
+                interestRate: isNaN(dRate) ? null : dRate,
+                minimumPayment: isNaN(dMinPay) ? 0 : Math.abs(dMinPay),
+                dueDay: isNaN(dDueDay) || dDueDay < 1 || dDueDay > 31 ? null : dDueDay,
+                originalAmount: isNaN(dOrigAmt) ? null : dOrigAmt,
+                billAsBalanced: dBillAsBalanced,
+              } as Debt);
+            }
           }
         } else {
           const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day', 'paycheck', 'remaining', 'partial']);
@@ -132,9 +172,8 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
           }
         }
 
-        // ── Parse debts section ────────────────────────────────────────────
-        // Find the "Debts" header row, then read debt rows after the column headers.
-        const debts: Debt[] = [];
+        // ── Parse debts from visible section (fallback when _BudgifyData has none) ──
+        if (debts.length === 0) {
         let debtsHeaderRow = -1;
         for (let i = 1; i < rows.length; i++) {
           const cell = String(rows[i]?.[0] ?? '').trim().toLowerCase();
@@ -171,6 +210,7 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
               dueDay: isNaN(dueDayRaw) || dueDayRaw < 1 || dueDayRaw > 31 ? null : dueDayRaw,
             });
           }
+        }
         }
 
         if (!billsDataSheet) {

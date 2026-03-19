@@ -649,6 +649,11 @@ export function BudgetWizard({
       const sheetBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
       setBills(sheetBills);
       prevBillsRef.current = JSON.stringify(sheetBills);
+      const sheetDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
+      if (sheetDebts.length > 0) {
+        setDebts(sheetDebts);
+        setDebtBillImports(new Set(sheetDebts.map((d: Debt) => d.id)));
+      }
       setOpeningBalance(data.lastRemaining);
       setGoogleSheetTitle(data.sheetTitle);
       setGoogleNextCol(data.nextWeekStartCol);
@@ -697,6 +702,11 @@ export function BudgetWizard({
       const excelBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
       setBills(excelBills);
       prevBillsRef.current = JSON.stringify(excelBills);
+      const excelDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
+      if (excelDebts.length > 0) {
+        setDebts(excelDebts);
+        setDebtBillImports(new Set(excelDebts.map((d: Debt) => d.id)));
+      }
       setOpeningBalance(data.lastRemaining);
       setExcelSheetTitle(data.sheetTitle);
       setExcelNextCol(data.nextWeekStartCol);
@@ -912,6 +922,11 @@ export function BudgetWizard({
           const excelUrlBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
           setBills(excelUrlBills);
           prevBillsRef.current = JSON.stringify(excelUrlBills);
+          const excelUrlDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
+          if (excelUrlDebts.length > 0) {
+            setDebts(excelUrlDebts);
+            setDebtBillImports(new Set(excelUrlDebts.map((d: Debt) => d.id)));
+          }
           setOpeningBalance(data.lastRemaining);
           setExcelSheetTitle(data.sheetTitle);
           setExcelNextCol(data.nextWeekStartCol);
@@ -1376,6 +1391,11 @@ export function BudgetWizard({
           const sheetUrlBills = stripDebtMinPayments(data.bills as Bill[]);
           setBills(sheetUrlBills);
           prevBillsRef.current = JSON.stringify(sheetUrlBills);
+          const urlDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
+          if (urlDebts.length > 0) {
+            setDebts(urlDebts);
+            setDebtBillImports(new Set(urlDebts.map((d: Debt) => d.id)));
+          }
           setOpeningBalance(data.lastRemaining);
           setGoogleSheetTitle(data.sheetTitle);
           setGoogleNextCol(data.nextWeekStartCol);

@@ -681,7 +681,7 @@ function writeDebtsSection(
 
 // ── Public exports ───────────────────────────────────────────────────────────
 
-function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[]): void {
+function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[], debts?: Debt[] | null): void {
   const ds: XLSX.WorkSheet = {};
   const headers = ['name', 'amount', 'dayOfMonth', 'category', 'type', 'color', 'sourceDebtId'];
   for (let c = 0; c < headers.length; c++) {
@@ -698,7 +698,36 @@ function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[]): void {
     ds[XLSX.utils.encode_cell({ r, c: 5 })] = { v: b.color ?? '', t: 's' };
     ds[XLSX.utils.encode_cell({ r, c: 6 })] = { v: b.sourceDebtId ?? '', t: 's' };
   }
-  ds['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: bills.length, c: headers.length - 1 } });
+
+  let lastRow = bills.length;
+  if (debts && debts.length > 0) {
+    lastRow += 1;
+    const debtSectionStart = lastRow;
+    ds[XLSX.utils.encode_cell({ r: debtSectionStart, c: 0 })] = { v: 'Debts', t: 's' };
+    lastRow++;
+    const debtHeaders = ['Id', 'Name', 'Type', 'Balance', 'InterestRate', 'MinPayment', 'DueDay', 'OriginalAmount', 'BillAsBalanced'];
+    for (let c = 0; c < debtHeaders.length; c++) {
+      ds[XLSX.utils.encode_cell({ r: lastRow, c })] = { v: debtHeaders[c], t: 's' };
+    }
+    lastRow++;
+    for (let i = 0; i < debts.length; i++) {
+      const d = debts[i];
+      const r = lastRow + i;
+      ds[XLSX.utils.encode_cell({ r, c: 0 })] = { v: d.id, t: 's' };
+      ds[XLSX.utils.encode_cell({ r, c: 1 })] = { v: d.name, t: 's' };
+      ds[XLSX.utils.encode_cell({ r, c: 2 })] = { v: d.type ?? 'credit_card', t: 's' };
+      ds[XLSX.utils.encode_cell({ r, c: 3 })] = { v: d.balance ?? 0, t: 'n' };
+      ds[XLSX.utils.encode_cell({ r, c: 4 })] = { v: d.interestRate != null ? d.interestRate : '', t: d.interestRate != null ? 'n' : 's' };
+      ds[XLSX.utils.encode_cell({ r, c: 5 })] = { v: d.minimumPayment ?? 0, t: 'n' };
+      ds[XLSX.utils.encode_cell({ r, c: 6 })] = { v: d.dueDay != null ? d.dueDay : '', t: d.dueDay != null ? 'n' : 's' };
+      ds[XLSX.utils.encode_cell({ r, c: 7 })] = { v: d.originalAmount != null ? d.originalAmount : '', t: d.originalAmount != null ? 'n' : 's' };
+      ds[XLSX.utils.encode_cell({ r, c: 8 })] = { v: (d as any).billAsBalanced ? 'true' : 'false', t: 's' };
+    }
+    lastRow += debts.length;
+  }
+
+  const maxCols = debts && debts.length > 0 ? 8 : headers.length - 1;
+  ds['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: maxCols } });
   XLSX.utils.book_append_sheet(wb, ds, '_BudgifyData');
   if (!wb.Workbook) wb.Workbook = {};
   if (!wb.Workbook.Sheets) wb.Workbook.Sheets = [];
@@ -773,8 +802,8 @@ export function appendBudgetWeeks(
 
   const newWb: XLSX.WorkBook = { ...workbook, SheetNames: newSheetNames, Sheets: newSheets };
 
-  if (bills && bills.length > 0) {
-    writeBillsDataSheet(newWb, bills);
+  if ((bills && bills.length > 0) || (debts && debts.length > 0)) {
+    writeBillsDataSheet(newWb, bills ?? [], debts);
   }
 
   const wbOut = XLSX.write(newWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
@@ -831,8 +860,8 @@ export function createBlankBudget(
   }
 
   const allBills = bills ?? fallbackBills;
-  if (allBills && allBills.length > 0) {
-    writeBillsDataSheet(wb, allBills);
+  if ((allBills && allBills.length > 0) || (debts && debts.length > 0)) {
+    writeBillsDataSheet(wb, allBills ?? [], debts);
   }
 
   const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
