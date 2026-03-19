@@ -413,8 +413,8 @@ export function BudgetWizard({
       return next;
     });
   };
-  const [billsCardCollapsed, setBillsCardCollapsed] = useState(false);
-  const [debtCardCollapsed, setDebtCardCollapsed] = useState(false);
+  const [billsCardCollapsed, setBillsCardCollapsed] = useState(true);
+  const [debtCardCollapsed, setDebtCardCollapsed] = useState(true);
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
