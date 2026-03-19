@@ -43,6 +43,7 @@ Features:
 - **In-app preview**: download step shows a spreadsheet-like table with colored rows before downloading
 - **Quick generate button**: shown at top of configure step so user doesn't have to scroll past bills
 - **Cell styles**: Partial Rent = orange (FF9900), Partial Utilities = purple (9900FF), Partial Car = green (00FF00) — uses `xlsx-js-style`
+- **xlsx-js-style patch**: `patches/xlsx-js-style@1.2.0.patch` fixes `attr()` method bug in the library's XML builder that caused empty `<bgColor/>` elements instead of `<bgColor indexed="64"/>`. The patch reorders the null check and object-type check in `attr()` so single-object-argument calls work correctly. When upgrading xlsx-js-style, revalidate this patch — remove it if upstream fixes the `vu.prototype.attr` handling.
 - **Output modes**: "Append to my spreadsheet" or "New file — budget only"
 - **Zero opening balance**: checkbox omits the Remaining Acct row entirely
 
