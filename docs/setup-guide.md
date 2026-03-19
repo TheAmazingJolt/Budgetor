@@ -4,7 +4,7 @@ Complete step-by-step instructions for setting up all integrations on your Railw
 
 **Railway API Server URL:**
 ```
-https://workspaceapi-server-production-01e3.up.railway.app
+https://api.budgify.org
 ```
 
 > Replace this URL throughout this guide if your Railway deployment URL is different.
@@ -45,7 +45,7 @@ This lets users connect their Google account so the app can directly read their 
 2. Application type: **Web application**
 3. Add this to **Authorized redirect URIs:**
    ```
-   https://workspaceapi-server-production-01e3.up.railway.app/api/auth/google/callback
+   https://api.budgify.org/api/auth/google/callback
    ```
 4. Copy the **Client ID** and **Client Secret**
 
@@ -55,7 +55,7 @@ This lets users connect their Google account so the app can directly read their 
 |---|---|
 | `GOOGLE_CLIENT_ID` | Client ID from Step 2 |
 | `GOOGLE_CLIENT_SECRET` | Client Secret from Step 2 |
-| `GOOGLE_REDIRECT_URI` | `https://workspaceapi-server-production-01e3.up.railway.app/api/auth/google/callback` |
+| `GOOGLE_REDIRECT_URI` | `https://api.budgify.org/api/auth/google/callback` |
 
 ### Optional — Public Sheet Reading Without Sign-In
 
@@ -80,14 +80,14 @@ This lets users sign in to their Budget Automator account using their Google pro
 Go back to the same OAuth Client you created in Section 1, Step 2. Add a **second** Authorized redirect URI:
 
 ```
-https://workspaceapi-server-production-01e3.up.railway.app/api/auth/login/google/callback
+https://api.budgify.org/api/auth/login/google/callback
 ```
 
 ### Step 2 — Set Railway Environment Variable
 
 | Variable | Value |
 |---|---|
-| `GOOGLE_ACCOUNT_REDIRECT_URI` | `https://workspaceapi-server-production-01e3.up.railway.app/api/auth/login/google/callback` |
+| `GOOGLE_ACCOUNT_REDIRECT_URI` | `https://api.budgify.org/api/auth/login/google/callback` |
 
 No new Client ID or Client Secret is needed — the same `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from Section 1 are reused.
 
@@ -106,7 +106,7 @@ This lets users connect their Microsoft account so the app can list their OneDri
    - **Supported account types**: Select **"Accounts in any organizational directory and personal Microsoft accounts"** (the Multitenant + personal option — this covers Outlook.com, Hotmail, and work/school accounts)
    - **Redirect URI**: Select **Web**, then enter:
      ```
-     https://workspaceapi-server-production-01e3.up.railway.app/api/auth/microsoft/callback
+     https://api.budgify.org/api/auth/microsoft/callback
      ```
 4. Click **Register**
 
@@ -132,7 +132,7 @@ This lets users connect their Microsoft account so the app can list their OneDri
 |---|---|
 | `MICROSOFT_CLIENT_ID` | The **Application (client) ID** from the app's Overview page |
 | `MICROSOFT_CLIENT_SECRET` | The secret **Value** from Step 2 |
-| `MICROSOFT_REDIRECT_URI` | `https://workspaceapi-server-production-01e3.up.railway.app/api/auth/microsoft/callback` |
+| `MICROSOFT_REDIRECT_URI` | `https://api.budgify.org/api/auth/microsoft/callback` |
 
 ---
 
@@ -155,7 +155,7 @@ This lets users sign in to their Budget Automator account with their Apple ID. T
    - **Domains**: Your Railway frontend domain (e.g. `budget-automator.up.railway.app`)
    - **Return URL**:
      ```
-     https://workspaceapi-server-production-01e3.up.railway.app/api/auth/login/apple/callback
+     https://api.budgify.org/api/auth/login/apple/callback
      ```
 
 ### Step 3 — Create a Private Key
@@ -169,7 +169,7 @@ This lets users sign in to their Budget Automator account with their Apple ID. T
 | Variable | Value |
 |---|---|
 | `APPLE_CLIENT_ID` | The Services ID identifier from Step 2 (e.g. `com.yourcompany.budgetautomator.web`) |
-| `APPLE_REDIRECT_URI` | `https://workspaceapi-server-production-01e3.up.railway.app/api/auth/login/apple/callback` |
+| `APPLE_REDIRECT_URI` | `https://api.budgify.org/api/auth/login/apple/callback` |
 | `APPLE_TEAM_ID` | Your 10-character Team ID (visible in the top right on developer.apple.com) |
 | `APPLE_KEY_ID` | The Key ID from Step 3 |
 | `APPLE_PRIVATE_KEY` | The entire contents of the `.p8` file, with actual newlines replaced by `\n` so it fits on one line |
