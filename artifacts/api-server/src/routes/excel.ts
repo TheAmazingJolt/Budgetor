@@ -573,21 +573,21 @@ async function writeExcelDebtRows(
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
-    { bold: true, name: "Arial", size: 11 }
+    { bold: true, name: "Arial", size: 11, color: "#FFFFFF" }
   );
 
   const colHeaderRange = `A${headerRow + 2}:D${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
-    { bold: true, name: "Arial", size: 10 }
+    { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
   );
 
   const allDebtRange = `A${headerRow + 1}:D${startRow + debtGrid.length}`;
-  await graphPatch(
+  await graphPost(
     token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
-    { color: "#FEF2F2" }
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/font`,
+    { color: "#FFFFFF" }
   );
 }
 
@@ -645,11 +645,6 @@ async function writeExcelBillRows(
   );
 
   const allBillsRange = `A${headerRow + 1}:E${startRow + rows.length}`;
-  await graphPatch(
-    token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
-    { color: "#1C5E2E" }
-  );
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/font`,
@@ -866,7 +861,14 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 }
+      { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
+    );
+
+    const bodyRangeCreate = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
+    await graphPost(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRangeCreate}')/format/font`,
+      { bold: false, name: "Arial", size: 10, color: "#FFFFFF" }
     );
 
     let afterSectionsRow = totalRows;
@@ -975,14 +977,14 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 }
+      { bold: true, name: "Arial", size: 10, color: "#FFFFFF" }
     );
 
     const bodyRange = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRange}')/format/font`,
-      { bold: false, name: "Arial", size: 10 }
+      { bold: false, name: "Arial", size: 10, color: "#FFFFFF" }
     );
 
     let afterSectionsRowWrite = totalRows;

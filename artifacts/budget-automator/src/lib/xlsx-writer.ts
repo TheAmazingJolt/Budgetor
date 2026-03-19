@@ -2,60 +2,14 @@ import XLSX from 'xlsx-js-style';
 import type { WeeklyBudget, Debt } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
-import { BILL_COLOR_HEX } from './billColors';
-
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
   labelColWidth: 1,
   valueColWidth: 1,
 };
 
-// ── Cell style constants ────────────────────────────────────────────────────
-
-// Bills section — dark green background with white text throughout.
-const BILLS_SECTION_BG = '1C5E2E';
-
-// Debts section header — matches Google Sheets red/pink section style.
-const DEBTS_SECTION_HEADER_BG  = 'FCE8E8';
-const DEBTS_SECTION_HEADER_FG  = '9C2626';
-
 // Currency number format applied to all monetary value cells.
 const MONEY_FMT = '"$"#,##0.00';
-
-/**
- * Per-color background hex values for bill rows, derived from the exact
- * Google Sheets COLOR_KEY_TO_RGB values (converted from 0-1 floats to hex).
- */
-const BILL_BG_HEX: Readonly<Record<string, string>> = {
-  blue:   'ADCCF7',
-  green:  'B5EAB8',
-  orange: 'FFD4A1',
-  purple: 'D6BAF7',
-  red:    'FFB5B5',
-  slate:  'D6DDE5',
-  amber:  'FFE68C',
-  teal:   'B3EBE6',
-  rose:   'FFBDCC',
-  indigo: 'BDBFF7',
-  yellow: 'FFF599',
-  cyan:   'ABEBF7',
-};
-
-/**
- * Returns fill + font color style objects for a bill row based on its color key.
- * Each color key maps to its own background (matching Google Sheets).
- * Bills with color = "none" (or missing) get no special styling (plain/white).
- */
-function billColorStyle(colorKey?: string | null): { fill: any; fontColor: string | null } {
-  if (!colorKey || colorKey === 'none' || !BILL_BG_HEX[colorKey]) {
-    return { fill: null, fontColor: null };
-  }
-  const bg = BILL_BG_HEX[colorKey];
-  return {
-    fill: { patternType: 'solid', fgColor: { rgb: bg } },
-    fontColor: BILL_COLOR_HEX[colorKey] ?? null,
-  };
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -114,13 +68,10 @@ function writeBillsSectionBelow(
   const colHdrRow  = headerRow + 1;
   const firstDataRow = colHdrRow + 1;
 
-  // Single dark-green fill used for every row in the Bills section.
-  const billsFill = { patternType: 'solid' as const, fgColor: { rgb: BILLS_SECTION_BG } };
   const whiteFont = { color: { rgb: 'FFFFFF' } };
 
   const sectionHeaderStyle = {
     font: { bold: true, sz: 11, name: 'Arial', ...whiteFont },
-    fill: billsFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, headerRow, 0, makeCell('Bills', sectionHeaderStyle));
@@ -130,21 +81,19 @@ function writeBillsSectionBelow(
 
   const colHdrStyle = {
     font: { bold: true, sz: 10, name: 'Arial', ...whiteFont },
-    fill: billsFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, colHdrRow, 0, makeCell('Name',    colHdrStyle));
   set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'right' as const } }));
   set(sheet, colHdrRow, 2, makeCell('Due Day', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
 
-  // All bill rows: dark green background, white font.
   const billRowFont = { sz: 10, name: 'Arial', ...whiteFont };
 
   let row = firstDataRow;
   for (const bill of filteredBills) {
-    const nameStyle: any = { font: { ...billRowFont }, fill: billsFill, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { ...billRowFont }, fill: billsFill, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
-    const dayStyle:  any = { font: { ...billRowFont }, fill: billsFill, alignment: { horizontal: 'center' } };
+    const nameStyle: any = { font: { ...billRowFont }, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { ...billRowFont }, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
+    const dayStyle:  any = { font: { ...billRowFont }, alignment: { horizontal: 'center' } };
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
@@ -178,9 +127,8 @@ function writeWeeksToSheet(
   startCol: number,
   includeRemainingAcct: boolean,
   style: SheetStyle = DEFAULT_STYLE,
-  billColorMap: Map<string, string> = new Map(),
 ) {
-  const { labelColWidth, valueColWidth } = style;
+  const { labelColWidth: _lcw, valueColWidth: _vcw } = style;
   const totalNewCols = weekBudgets.length * 2;
 
   // Uniform height: every week column must be the same number of rows.
@@ -199,9 +147,8 @@ function writeWeeksToSheet(
 
     // Row 0: header label (merged + centered)
     const headerStyle = {
-      font: { bold: true, sz: 10, name: 'Arial' },
+      font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
       alignment: { horizontal: 'center' },
-      fill: { patternType: 'solid', fgColor: { rgb: 'D9E1F2' } },
     };
     set(sheet, nextRow, labelCol, makeCell(week.weekLabel, headerStyle));
     set(sheet, nextRow, valCol,   makeCell('', headerStyle));
@@ -211,8 +158,8 @@ function writeWeeksToSheet(
     // Track where the SUM range begins (first numeric value row)
     const sumStartRow = nextRow;
 
-    // Body cell base style — Arial 10pt
-    const bodyFont = { sz: 10, name: 'Arial' };
+    // Body cell base style — Arial 10pt, white text
+    const bodyFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
 
     // Remaining Acct (optional)
     if (includeRemainingAcct) {
@@ -226,22 +173,10 @@ function writeWeeksToSheet(
     set(sheet, nextRow, valCol,   makeCell(week.paycheck, { font: bodyFont, numFmt: MONEY_FMT }));
     nextRow++;
 
-    // Bill line items — apply per-bill color styling when a color map is provided.
+    // Bill line items — white text, no background fill.
     for (const bill of week.bills) {
-      // Use color carried on the bill object directly; fall back to name-based map lookup.
-      const colorKey = bill.color
-        ?? billColorMap.get(bill.name)
-        ?? billColorMap.get(bill.name.replace(/^Partial\s+/, ''))
-        ?? null;
-      const { fill } = billColorStyle(colorKey);
-      const labelStyle: any = { font: { sz: 10, name: 'Arial' } };
-      const valStyle:   any = { font: { sz: 10, name: 'Arial' }, numFmt: MONEY_FMT };
-      if (fill) {
-        labelStyle.fill = fill; valStyle.fill = fill;
-        // White text on any colored background for legibility.
-        labelStyle.font.color = { rgb: 'FFFFFF' };
-        valStyle.font.color   = { rgb: 'FFFFFF' };
-      }
+      const labelStyle: any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } } };
+      const valStyle:   any = { font: { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } }, numFmt: MONEY_FMT };
       set(sheet, nextRow, labelCol, makeCell(bill.name,   labelStyle));
       set(sheet, nextRow, valCol,   makeCell(bill.amount, valStyle));
       nextRow++;
@@ -256,8 +191,8 @@ function writeWeeksToSheet(
 
     // Remaining row → =SUM() formula spanning ALL value rows above
     const remainingStyle = {
-      font: { bold: true, sz: 10, name: 'Arial' },
-      border: { top: { style: 'thin', color: { rgb: '000000' } } },
+      font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
+      border: { top: { style: 'thin', color: { rgb: 'FFFFFF' } } },
     };
     set(sheet, remainingRowIdx, labelCol, makeCell('Remaining', remainingStyle));
     set(sheet, remainingRowIdx, valCol,   {
@@ -624,11 +559,8 @@ function writeDebtsSection(
   const gapRow    = startRow + 1;
   const headerRow = gapRow + 1;
 
-  const debtFill = { patternType: 'solid' as const, fgColor: { rgb: DEBTS_SECTION_HEADER_BG } };
-
   const headerStyle = {
-    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: DEBTS_SECTION_HEADER_FG } },
-    fill: debtFill,
+    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: 'FFFFFF' } },
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, headerRow, 0, makeCell('Debts', headerStyle));
@@ -639,19 +571,17 @@ function writeDebtsSection(
 
   const colHeaderRow = headerRow + 1;
   const colHeaderStyle = {
-    font: { bold: true, sz: 10, name: 'Arial' },
-    fill: debtFill,
+    font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
   };
   set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
   set(sheet, colHeaderRow, 1, makeCell('Balance', colHeaderStyle));
   set(sheet, colHeaderRow, 2, makeCell('APR %', colHeaderStyle));
   set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
 
-  const bodyFont = { sz: 10, name: 'Arial' };
-  const rowFill  = debtFill;
-  const nameStyle   = { font: bodyFont, fill: rowFill };
-  const moneyStyle  = { font: bodyFont, fill: rowFill, numFmt: MONEY_FMT };
-  const aprStyle    = { font: bodyFont, fill: rowFill };
+  const bodyFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
+  const nameStyle   = { font: bodyFont };
+  const moneyStyle  = { font: bodyFont, numFmt: MONEY_FMT };
+  const aprStyle    = { font: bodyFont };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
@@ -736,17 +666,6 @@ function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[], debts?: Debt[] | 
   wb.Workbook.Sheets[idx].Hidden = 1;
 }
 
-function buildBillColorMap(bills: Bill[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const bill of bills) {
-    if (bill.color && bill.color !== 'none') {
-      map.set(bill.name, bill.color);
-      map.set(`Partial ${bill.name}`, bill.color);
-    }
-  }
-  return map;
-}
-
 export function appendBudgetWeeks(
   rawBytes: Uint8Array,
   weekBudgets: WeeklyBudget[],
@@ -770,8 +689,7 @@ export function appendBudgetWeeks(
   freshSheet['!ref'] = 'A1:A1';
 
   // Weeks always start at column A in the new layout.
-  const colorMap = bills ? buildBillColorMap(bills) : new Map<string, string>();
-  writeWeeksToSheet(freshSheet, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMap);
+  writeWeeksToSheet(freshSheet, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
   // Write Bills section below the weeks.
   if (bills && bills.length > 0) {
@@ -827,9 +745,7 @@ export function createBlankBudget(
   ws['!ref'] = 'A1:A1';
 
   // Budget weeks always start at column A — no left-side bills panel.
-  const allBillsForColor = bills ?? fallbackBills;
-  const colorMapBlank = allBillsForColor ? buildBillColorMap(allBillsForColor) : new Map<string, string>();
-  writeWeeksToSheet(ws, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE, colorMapBlank);
+  writeWeeksToSheet(ws, weekBudgets, 0, includeRemainingAcct, style ?? DEFAULT_STYLE);
 
   // Write Bills section below the weeks.
   const allBillsForBelow = bills ?? fallbackBills;

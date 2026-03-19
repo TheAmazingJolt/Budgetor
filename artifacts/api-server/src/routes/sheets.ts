@@ -605,21 +605,6 @@ interface CreateAndWriteRequest {
   bills?: BillMeta[];
 }
 
-const COLOR_KEY_TO_RGB: Record<string, { red: number; green: number; blue: number }> = {
-  blue:   { red: 0.68, green: 0.80, blue: 0.97 },
-  green:  { red: 0.71, green: 0.92, blue: 0.72 },
-  orange: { red: 1.00, green: 0.83, blue: 0.63 },
-  purple: { red: 0.84, green: 0.73, blue: 0.97 },
-  red:    { red: 1.00, green: 0.71, blue: 0.71 },
-  slate:  { red: 0.84, green: 0.87, blue: 0.90 },
-  amber:  { red: 1.00, green: 0.90, blue: 0.55 },
-  teal:   { red: 0.70, green: 0.92, blue: 0.90 },
-  rose:   { red: 1.00, green: 0.74, blue: 0.80 },
-  indigo: { red: 0.74, green: 0.75, blue: 0.97 },
-  yellow: { red: 1.00, green: 0.96, blue: 0.60 },
-  cyan:   { red: 0.67, green: 0.92, blue: 0.97 },
-};
-
 function buildBudgetWriteData(
   weeks: WriteRequest["weeks"],
   startCol: number,
@@ -628,12 +613,6 @@ function buildBudgetWriteData(
   sheetColumnCount: number = 1000,
   billsMeta?: BillMeta[],
 ) {
-  const billColorByName: Record<string, string> = {};
-  if (billsMeta) {
-    for (const b of billsMeta) {
-      if (b.color && b.color !== "none") billColorByName[b.name] = b.color;
-    }
-  }
   const maxBills = Math.max(...weeks.map((w) => w.bills.length));
   const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
   const remainingRowIdx = totalRows - 1;
@@ -691,15 +670,15 @@ function buildBudgetWriteData(
         cell: {
           userEnteredFormat: {
             horizontalAlignment: "CENTER",
-            backgroundColor: { red: 0.85, green: 0.88, blue: 0.95 },
             textFormat: {
               bold: true,
               fontSize: 10,
               fontFamily: "Arial",
+              foregroundColor: { red: 1, green: 1, blue: 1 },
             },
           },
         },
-        fields: "userEnteredFormat(horizontalAlignment,backgroundColor,textFormat)",
+        fields: "userEnteredFormat(horizontalAlignment,textFormat)",
       },
     });
     nextRow++;
@@ -720,32 +699,27 @@ function buildBudgetWriteData(
       valueRows[nextRow][labelCol] = bill.name;
       valueRows[nextRow][valCol] = bill.amount;
 
-      const colorKey = bill.color ?? billColorByName[bill.name]
-        ?? billColorByName[bill.name.replace(/^Partial\s+/, '')];
-      const bgColor = colorKey ? COLOR_KEY_TO_RGB[colorKey] : undefined;
-      if (bgColor) {
-        requests.push({
-          repeatCell: {
-            range: {
-              sheetId,
-              startRowIndex: nextRow,
-              endRowIndex: nextRow + 1,
-              startColumnIndex: labelCol,
-              endColumnIndex: valCol + 1,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: bgColor,
-                textFormat: {
-                  fontSize: 10,
-                  fontFamily: "Arial",
-                },
+      requests.push({
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: nextRow,
+            endRowIndex: nextRow + 1,
+            startColumnIndex: labelCol,
+            endColumnIndex: valCol + 1,
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: {
+                fontSize: 10,
+                fontFamily: "Arial",
+                foregroundColor: { red: 1, green: 1, blue: 1 },
               },
             },
-            fields: "userEnteredFormat(backgroundColor,textFormat)",
           },
-        });
-      }
+          fields: "userEnteredFormat(textFormat)",
+        },
+      });
       nextRow++;
     }
 
@@ -774,11 +748,12 @@ function buildBudgetWriteData(
               bold: true,
               fontSize: 10,
               fontFamily: "Arial",
+              foregroundColor: { red: 1, green: 1, blue: 1 },
             },
             borders: {
               top: {
                 style: "SOLID",
-                color: { red: 0, green: 0, blue: 0 },
+                color: { red: 1, green: 1, blue: 1 },
               },
             },
           },
@@ -821,6 +796,7 @@ function buildBudgetWriteData(
           textFormat: {
             fontSize: 10,
             fontFamily: "Arial",
+            foregroundColor: { red: 1, green: 1, blue: 1 },
           },
         },
       },
@@ -909,8 +885,7 @@ function buildDebtRows(
     ]);
   }
 
-  const roseBg = { red: 0.99, green: 0.91, blue: 0.91 };
-  const headerBg = { red: 0.99, green: 0.91, blue: 0.91 };
+  const debtWhite = { red: 1, green: 1, blue: 1 };
 
   const debtRequests: sheets_v4.Schema$Request[] = [];
 
@@ -949,16 +924,15 @@ function buildDebtRows(
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: headerBg,
           textFormat: {
             bold: true,
             fontSize: 11,
             fontFamily: "Arial",
-            foregroundColor: { red: 0.61, green: 0.15, blue: 0.15 },
+            foregroundColor: debtWhite,
           },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(textFormat)",
     },
   });
 
@@ -973,15 +947,15 @@ function buildDebtRows(
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: headerBg,
           textFormat: {
             bold: true,
             fontSize: 10,
             fontFamily: "Arial",
+            foregroundColor: debtWhite,
           },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(textFormat)",
     },
   });
 
@@ -996,14 +970,14 @@ function buildDebtRows(
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: roseBg,
           textFormat: {
             fontSize: 10,
             fontFamily: "Arial",
+            foregroundColor: debtWhite,
           },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(textFormat)",
     },
   });
 
@@ -1059,7 +1033,6 @@ function buildBillRows(
     ]);
   }
 
-  const billBg = { red: 0.110, green: 0.369, blue: 0.180 };
   const billWhite = { red: 1, green: 1, blue: 1 };
 
   const billRequests: sheets_v4.Schema$Request[] = [];
@@ -1099,7 +1072,6 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: billBg,
           textFormat: {
             bold: true,
             fontSize: 11,
@@ -1108,7 +1080,7 @@ function buildBillRows(
           },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(textFormat)",
     },
   });
 
@@ -1123,7 +1095,6 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: billBg,
           textFormat: {
             bold: true,
             fontSize: 10,
@@ -1132,11 +1103,11 @@ function buildBillRows(
           },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(textFormat)",
     },
   });
 
-  // All bill data rows: uniform dark green background + white text.
+  // All bill data rows: white text, no background.
   billRequests.push({
     repeatCell: {
       range: {
@@ -1148,11 +1119,10 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
-          backgroundColor: billBg,
           textFormat: { fontSize: 10, fontFamily: "Arial", foregroundColor: billWhite },
         },
       },
-      fields: "userEnteredFormat(backgroundColor,textFormat)",
+      fields: "userEnteredFormat(textFormat)",
     },
   });
 
