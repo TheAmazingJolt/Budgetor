@@ -670,6 +670,7 @@ function buildBudgetWriteData(
         cell: {
           userEnteredFormat: {
             horizontalAlignment: "CENTER",
+            backgroundColor: { red: 0.741, green: 0.843, blue: 0.933 },
             textFormat: {
               bold: true,
               fontSize: 10,
@@ -1019,6 +1020,25 @@ function buildDebtRows(
     });
   }
 
+  // Right-align Min Payment (col 3) from column header row through data rows.
+  debtRequests.push({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: colHeaderRow,
+        endRowIndex: firstDataRow + debts.length,
+        startColumnIndex: 3,
+        endColumnIndex: 4,
+      },
+      cell: {
+        userEnteredFormat: {
+          horizontalAlignment: "RIGHT",
+        },
+      },
+      fields: "userEnteredFormat(horizontalAlignment)",
+    },
+  });
+
   return { debtRows, debtRequests, debtRowCount: debtRows.length };
 }
 
@@ -1277,6 +1297,23 @@ async function writeBudgetToSheet(
       requestBody: { requests: widthRequests },
     });
   }
+
+  // Auto-resize week columns so the "Budget from … to …" label is never clipped.
+  await sheetsApi.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        autoResizeDimensions: {
+          dimensions: {
+            sheetId,
+            dimension: "COLUMNS",
+            startIndex: startCol,
+            endIndex: startCol + weeks.length * 2,
+          },
+        },
+      }],
+    },
+  });
 
   let billRowCount = 0;
   if (bills && bills.length > 0) {

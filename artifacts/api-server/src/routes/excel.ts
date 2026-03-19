@@ -597,6 +597,14 @@ async function writeExcelDebtRows(
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${debtCenterRange}')/format`,
     { horizontalAlignment: "Center" }
   );
+
+  // Right-align Min Payment (D) from column header row through data rows.
+  const minPayRange = `D${headerRow + 2}:D${startRow + debtGrid.length}`;
+  await graphPost(
+    token,
+    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${minPayRange}')/format`,
+    { horizontalAlignment: "Right" }
+  );
 }
 
 async function writeExcelBillRows(
@@ -897,6 +905,13 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       { patternType: "none" }
     );
 
+    // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
+    await graphPatch(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/fill`,
+      { color: "#BDD7EE" }
+    );
+
     let afterSectionsRow = totalRows;
     if (body.bills && body.bills.length > 0) {
       await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills);
@@ -1018,6 +1033,14 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeWrite}')/format/fill`,
       { patternType: "none" }
+    );
+
+    // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
+    const boldRowRangeWrite = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
+    await graphPatch(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRangeWrite}')/format/fill`,
+      { color: "#BDD7EE" }
     );
 
     let afterSectionsRowWrite = totalRows;

@@ -150,6 +150,7 @@ function writeWeeksToSheet(
     // Row 0: header label (merged + centered)
     const headerStyle = {
       font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
+      fill: { patternType: 'solid', fgColor: { rgb: 'BDD7EE' } },
       alignment: { horizontal: 'center' },
     };
     set(sheet, nextRow, labelCol, makeCell(week.weekLabel, headerStyle));
@@ -582,19 +583,20 @@ function writeDebtsSection(
   set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
   set(sheet, colHeaderRow, 1, makeCell('Balance',     { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
   set(sheet, colHeaderRow, 2, makeCell('APR %',       { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
-  set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
+  set(sheet, colHeaderRow, 3, makeCell('Min Payment', { ...colHeaderStyle, alignment: { horizontal: 'right' as const } }));
 
   const bodyFont = { sz: 10, name: 'Arial' };
-  const nameStyle   = { font: bodyFont, fill: debtFill };
-  const moneyStyle  = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const }, numFmt: MONEY_FMT };
-  const aprStyle    = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const } };
+  const nameStyle    = { font: bodyFont, fill: debtFill };
+  const moneyStyle   = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const }, numFmt: MONEY_FMT };
+  const aprStyle     = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const } };
+  const minPayStyle  = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'right' as const }, numFmt: MONEY_FMT };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
     set(sheet, currentRow, 0, makeCell(debt.name, nameStyle));
     set(sheet, currentRow, 1, makeCell(debt.balance, moneyStyle));
     set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', aprStyle));
-    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, moneyStyle));
+    set(sheet, currentRow, 3, makeCell(debt.minimumPayment, minPayStyle));
     currentRow++;
   }
 
