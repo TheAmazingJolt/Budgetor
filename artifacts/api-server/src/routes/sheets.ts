@@ -907,6 +907,8 @@ function buildDebtRows(
     },
   });
 
+  const debtBg = { red: 0.976, green: 0.914, blue: 0.914 };
+
   debtRequests.push({
     repeatCell: {
       range: {
@@ -918,6 +920,7 @@ function buildDebtRows(
       },
       cell: {
         userEnteredFormat: {
+          backgroundColor: debtBg,
           textFormat: {
             bold: true,
             fontSize: 11,
@@ -940,6 +943,7 @@ function buildDebtRows(
       },
       cell: {
         userEnteredFormat: {
+          backgroundColor: debtBg,
           textFormat: {
             bold: true,
             fontSize: 10,
@@ -962,6 +966,7 @@ function buildDebtRows(
       },
       cell: {
         userEnteredFormat: {
+          backgroundColor: debtBg,
           textFormat: {
             fontSize: 10,
             fontFamily: "Arial",
@@ -1050,6 +1055,8 @@ function buildBillRows(
     },
   });
 
+  const billBg = { red: 0.922, green: 0.965, blue: 0.933 };
+
   billRequests.push({
     repeatCell: {
       range: {
@@ -1061,6 +1068,7 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
+          backgroundColor: billBg,
           textFormat: {
             bold: true,
             fontSize: 11,
@@ -1083,6 +1091,7 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
+          backgroundColor: billBg,
           textFormat: {
             bold: true,
             fontSize: 10,
@@ -1094,7 +1103,7 @@ function buildBillRows(
     },
   });
 
-  // All bill data rows: default text color, clear background.
+  // All bill data rows: mint green background, default text color.
   billRequests.push({
     repeatCell: {
       range: {
@@ -1106,6 +1115,7 @@ function buildBillRows(
       },
       cell: {
         userEnteredFormat: {
+          backgroundColor: billBg,
           textFormat: { fontSize: 10, fontFamily: "Arial" },
         },
       },

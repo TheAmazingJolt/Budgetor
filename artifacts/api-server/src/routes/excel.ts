@@ -587,7 +587,7 @@ async function writeExcelDebtRows(
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
-    { patternType: "none" }
+    { color: "#F9E9E9" }
   );
 }
 
@@ -648,7 +648,7 @@ async function writeExcelBillRows(
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
-    { patternType: "none" }
+    { color: "#EBF6EE" }
   );
 }
 

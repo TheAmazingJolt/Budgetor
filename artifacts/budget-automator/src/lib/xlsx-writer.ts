@@ -68,10 +68,11 @@ function writeBillsSectionBelow(
   const colHdrRow  = headerRow + 1;
   const firstDataRow = colHdrRow + 1;
 
-  const whiteFont = { color: { rgb: 'FFFFFF' } };
+  const billFill = { patternType: 'solid' as const, fgColor: { rgb: 'EBF6EE' } };
 
   const sectionHeaderStyle = {
-    font: { bold: true, sz: 11, name: 'Arial', ...whiteFont },
+    font: { bold: true, sz: 11, name: 'Arial' },
+    fill: billFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, headerRow, 0, makeCell('Bills', sectionHeaderStyle));
@@ -80,20 +81,21 @@ function writeBillsSectionBelow(
   addMerge(sheet, headerRow, 0, headerRow, 2);
 
   const colHdrStyle = {
-    font: { bold: true, sz: 10, name: 'Arial', ...whiteFont },
+    font: { bold: true, sz: 10, name: 'Arial' },
+    fill: billFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, colHdrRow, 0, makeCell('Name',    colHdrStyle));
   set(sheet, colHdrRow, 1, makeCell('Amount',  { ...colHdrStyle, alignment: { horizontal: 'right' as const } }));
   set(sheet, colHdrRow, 2, makeCell('Due Day', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
 
-  const billRowFont = { sz: 10, name: 'Arial', ...whiteFont };
+  const billRowFont = { sz: 10, name: 'Arial' };
 
   let row = firstDataRow;
   for (const bill of filteredBills) {
-    const nameStyle: any = { font: { ...billRowFont }, alignment: { horizontal: 'left' } };
-    const amtStyle:  any = { font: { ...billRowFont }, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
-    const dayStyle:  any = { font: { ...billRowFont }, alignment: { horizontal: 'center' } };
+    const nameStyle: any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'right' }, numFmt: MONEY_FMT };
+    const dayStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'center' } };
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
@@ -559,8 +561,11 @@ function writeDebtsSection(
   const gapRow    = startRow + 1;
   const headerRow = gapRow + 1;
 
+  const debtFill = { patternType: 'solid' as const, fgColor: { rgb: 'F9E9E9' } };
+
   const headerStyle = {
-    font: { bold: true, sz: 11, name: 'Arial', color: { rgb: 'FFFFFF' } },
+    font: { bold: true, sz: 11, name: 'Arial' },
+    fill: debtFill,
     alignment: { horizontal: 'left' as const },
   };
   set(sheet, headerRow, 0, makeCell('Debts', headerStyle));
@@ -571,17 +576,18 @@ function writeDebtsSection(
 
   const colHeaderRow = headerRow + 1;
   const colHeaderStyle = {
-    font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } },
+    font: { bold: true, sz: 10, name: 'Arial' },
+    fill: debtFill,
   };
   set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
   set(sheet, colHeaderRow, 1, makeCell('Balance', colHeaderStyle));
   set(sheet, colHeaderRow, 2, makeCell('APR %', colHeaderStyle));
   set(sheet, colHeaderRow, 3, makeCell('Min Payment', colHeaderStyle));
 
-  const bodyFont = { sz: 10, name: 'Arial', color: { rgb: 'FFFFFF' } };
-  const nameStyle   = { font: bodyFont };
-  const moneyStyle  = { font: bodyFont, numFmt: MONEY_FMT };
-  const aprStyle    = { font: bodyFont };
+  const bodyFont = { sz: 10, name: 'Arial' };
+  const nameStyle   = { font: bodyFont, fill: debtFill };
+  const moneyStyle  = { font: bodyFont, fill: debtFill, numFmt: MONEY_FMT };
+  const aprStyle    = { font: bodyFont, fill: debtFill };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
