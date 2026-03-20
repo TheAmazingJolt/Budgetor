@@ -27,4 +27,6 @@ export interface Debt {
   dueDay?: number | null;
   /** When true, the auto-generated linked bill uses "Balanced" type (spread evenly across weeks) */
   billAsBalanced?: boolean | null;
+  /** When true, the user has opted this debt out of auto-generating a bill */
+  excludeFromBill?: boolean | null;
 }

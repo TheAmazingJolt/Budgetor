@@ -1030,6 +1030,14 @@ components:
           maximum: 31
           nullable: true
           description: Day of month the payment is due (1-31, optional)
+        billAsBalanced:
+          type: boolean
+          nullable: true
+          description: When true, the auto-generated linked bill uses "Balanced" type (spread evenly across weeks)
+        excludeFromBill:
+          type: boolean
+          nullable: true
+          description: When true, the user has opted this debt out of auto-generating a bill
       required:
         - id
         - name

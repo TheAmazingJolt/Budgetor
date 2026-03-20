@@ -496,7 +496,7 @@ export function BudgetWizard({
       debtAutoAddDoneRef.current = currentUser.id;
       setBills(prev => {
         const existingDebtIds = new Set(prev.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
-        const missing = serverDebts.filter(d => !existingDebtIds.has(d.id));
+        const missing = serverDebts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
         if (missing.length === 0) return prev;
         return [...prev, ...missing.map(d => ({
           name: `${d.name} (min payment)`,
@@ -508,7 +508,7 @@ export function BudgetWizard({
           sourceDebtId: d.id,
         }))];
       });
-      setDebtBillImports(new Set(serverDebts.map(d => d.id)));
+      setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill).map(d => d.id)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userDebtsQuery.data]);
@@ -562,7 +562,7 @@ export function BudgetWizard({
     if (debtsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
       debtAutoAddDoneRef.current = currentUser.id;
       const existingDebtIds = new Set(serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
-      const missing = debts.filter(d => !existingDebtIds.has(d.id));
+      const missing = debts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
       if (missing.length > 0) {
         const newDebtBills = missing.map(d => ({
           name: `${d.name} (min payment)`,
@@ -575,7 +575,7 @@ export function BudgetWizard({
         }));
         setBills([...serverBills, ...newDebtBills]);
       }
-      setDebtBillImports(new Set(debts.map(d => d.id)));
+      setDebtBillImports(new Set(debts.filter(d => !d.excludeFromBill).map(d => d.id)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userBillsQuery.data]);
@@ -1761,9 +1761,11 @@ export function BudgetWizard({
   };
 
   const toggleDebtAsBill = (debtId: string, checked: boolean) => {
-    const debt = debts.find(d => d.id === debtId);
-    if (!debt) return;
+    const debtIdx = debts.findIndex(d => d.id === debtId);
+    if (debtIdx < 0) return;
+    const debt = debts[debtIdx];
     if (checked) {
+      updateDebt(debtIdx, { ...debt, excludeFromBill: false });
       setDebtBillImports(prev => { const next = new Set(prev); next.add(debtId); return next; });
       const alreadyExists = bills.some(b => b.sourceDebtId === debtId);
       if (!alreadyExists) {
@@ -1778,6 +1780,7 @@ export function BudgetWizard({
         });
       }
     } else {
+      updateDebt(debtIdx, { ...debt, excludeFromBill: true });
       setDebtBillImports(prev => { const next = new Set(prev); next.delete(debtId); return next; });
       const idx = bills.findIndex(b => b.sourceDebtId === debtId);
       if (idx >= 0) preserveScroll(() => removeBill(idx));
@@ -1786,6 +1789,7 @@ export function BudgetWizard({
 
   const toggleAllDebtsAsBills = (enable: boolean) => {
     if (enable) {
+      setDebts(debts.map(d => ({ ...d, excludeFromBill: false })));
       const newImports = new Set(debts.map(d => d.id));
       setDebtBillImports(newImports);
       const debtIdsWithBill = new Set(bills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string));
@@ -1804,6 +1808,7 @@ export function BudgetWizard({
         setBills([...bills, ...newDebtBills]);
       }
     } else {
+      setDebts(debts.map(d => ({ ...d, excludeFromBill: true })));
       const debtIds = new Set(debts.map(d => d.id));
       setDebtBillImports(new Set());
       setBills(bills.filter(b => !b.sourceDebtId || !debtIds.has(b.sourceDebtId)));
