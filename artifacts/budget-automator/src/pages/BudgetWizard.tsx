@@ -535,8 +535,13 @@ export function BudgetWizard({
     if (serialized === prevDebtsRef.current) return;
     prevDebtsRef.current = serialized;
     if (debtsSaveTimerRef.current) clearTimeout(debtsSaveTimerRef.current);
+    const debtsSnapshot = debts;
     debtsSaveTimerRef.current = setTimeout(() => {
-      updateUserDebtsMutation.mutate({ data: { debts } });
+      updateUserDebtsMutation.mutate({ data: { debts: debtsSnapshot } }, {
+        onSuccess: () => {
+          queryClient.setQueryData(getGetUserDebtsQueryKey(), { debts: debtsSnapshot });
+        },
+      });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debts, isSignedIn]);
@@ -604,8 +609,13 @@ export function BudgetWizard({
     if (serialized === prevBillsRef.current) return;
     prevBillsRef.current = serialized;
     if (billsSaveTimerRef.current) clearTimeout(billsSaveTimerRef.current);
+    const billsSnapshot = bills as Bill[];
     billsSaveTimerRef.current = setTimeout(() => {
-      updateUserBillsMutation.mutate({ data: { bills: bills as Bill[] } });
+      updateUserBillsMutation.mutate({ data: { bills: billsSnapshot } }, {
+        onSuccess: () => {
+          queryClient.setQueryData(getGetUserBillsQueryKey(), { bills: billsSnapshot });
+        },
+      });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bills, isSignedIn, inputMode]);
