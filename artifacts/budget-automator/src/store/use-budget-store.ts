@@ -57,7 +57,7 @@ interface BudgetState {
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
   removeBill: (index: number) => void;
-  setDebts: (debts: Debt[]) => void;
+  setDebts: (debts: Debt[] | ((prev: Debt[]) => Debt[])) => void;
   addDebt: (debt: Debt) => void;
   updateDebt: (index: number, debt: Debt) => void;
   removeDebt: (index: number) => void;
@@ -124,7 +124,9 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   removeBill: (index) =>
     set((state) => ({ bills: state.bills.filter((_, i) => i !== index) })),
 
-  setDebts: (debts) => set({ debts }),
+  setDebts: (debtsOrUpdater) => set((state) => ({
+    debts: typeof debtsOrUpdater === 'function' ? debtsOrUpdater(state.debts) : debtsOrUpdater,
+  })),
   addDebt: (debt) => set((state) => ({ debts: [...state.debts, debt] })),
   updateDebt: (index, debt) =>
     set((state) => {

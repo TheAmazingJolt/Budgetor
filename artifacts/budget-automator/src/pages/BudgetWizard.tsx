@@ -328,7 +328,7 @@ export function BudgetWizard({
     blankMode,
     includeBillsSummary,
     sheetStyle,
-    bills,
+    bills: _bills,
     newWeekStartDate,
     newWeekEndDate,
     weekCount,
@@ -340,7 +340,7 @@ export function BudgetWizard({
     setBlankMode,
     setIncludeBillsSummary,
     setBills,
-    debts,
+    debts: _debts,
     setDebts,
     addDebt,
     updateDebt,
@@ -361,6 +361,9 @@ export function BudgetWizard({
     setPayPeriod,
     reset,
   } = useBudgetStore();
+
+  const bills: Bill[] = Array.isArray(_bills) ? _bills : [];
+  const debts: Debt[] = Array.isArray(_debts) ? _debts : [];
 
   const [activeCloudBudgetId, setActiveCloudBudgetId] = useState<string | null>(null);
   const [activeCloudBudgetName, setActiveCloudBudgetName] = useState<string | null>(null);
