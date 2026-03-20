@@ -595,6 +595,7 @@ export function BudgetWizard({
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
     if (billsFromImportPendingRef.current) return;
+    if (inputMode === "cloud") return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
     prevBillsRef.current = serialized;
@@ -603,7 +604,7 @@ export function BudgetWizard({
       updateUserBillsMutation.mutate({ data: { bills: bills as Bill[] } });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bills, isSignedIn]);
+  }, [bills, isSignedIn, inputMode]);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -887,6 +888,41 @@ export function BudgetWizard({
     setIncludeBillsSummary(true);
     setVisitedStep1(true);
     setStep(1);
+  };
+
+  const handleBackToMenu = () => {
+    if (inputMode === "cloud" && isSignedIn && currentUser) {
+      if (billsSaveTimerRef.current) {
+        clearTimeout(billsSaveTimerRef.current);
+        billsSaveTimerRef.current = null;
+      }
+      const cachedBills = stripHeuristicColors((userBillsQuery.data?.bills ?? []) as Bill[]);
+      prevBillsRef.current = JSON.stringify(cachedBills);
+      setBills(cachedBills);
+      const cachedDebts = (userDebtsQuery.data?.debts ?? []) as Debt[];
+      prevDebtsRef.current = JSON.stringify(cachedDebts);
+      setDebts(cachedDebts);
+      const billedIds = new Set<string>(
+        cachedBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
+      );
+      setDebtBillImports(billedIds);
+    }
+    reset();
+    setSelectedSheetId(null);
+    setSelectedSheetName(null);
+    setSelectedExcelFileId(null);
+    setSelectedExcelFileName(null);
+    setActiveCloudBudgetId(null);
+    setActiveCloudBudgetName(null);
+    setCloudExistingWeeks([]);
+    setScratchExistingWeeks([]);
+    setCloudSaveSuccess(false);
+    setWeekEdits({});
+    setEditModeOn(false);
+    setSelectedWeekIdx(null);
+    setInputMode("upload");
+    setVisitedStep1(false);
+    setStep(0);
   };
 
   const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
@@ -2105,7 +2141,7 @@ export function BudgetWizard({
                   <DropdownMenuSeparator />
                   {!isGuest && (
                     <>
-                      <DropdownMenuItem onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}>
+                      <DropdownMenuItem onClick={handleBackToMenu}>
                         <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -2555,7 +2591,7 @@ export function BudgetWizard({
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+                  onClick={handleBackToMenu}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -3763,7 +3799,7 @@ export function BudgetWizard({
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+                  onClick={handleBackToMenu}
                   className="sm:w-auto h-14 rounded-2xl border-border/60"
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Back to menu
@@ -4561,7 +4597,7 @@ export function BudgetWizard({
               <>
                 <button
                   className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${homeActive ? activeClass : inactiveClass}`}
-                  onClick={() => { reset(); setSelectedSheetId(null); setSelectedSheetName(null); setSelectedExcelFileId(null); setSelectedExcelFileName(null); setActiveCloudBudgetId(null); setActiveCloudBudgetName(null); setCloudExistingWeeks([]); setScratchExistingWeeks([]); setCloudSaveSuccess(false); setWeekEdits({}); setEditModeOn(false); setSelectedWeekIdx(null); setInputMode("upload"); setVisitedStep1(false); setStep(0); }}
+                  onClick={handleBackToMenu}
                 >
                   <FolderOpen className="w-5 h-5" />
                   <span>Home</span>
