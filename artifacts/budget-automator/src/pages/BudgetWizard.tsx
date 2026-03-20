@@ -366,6 +366,12 @@ export function BudgetWizard({
   const [cloudExistingWeeks, setCloudExistingWeeks] = useState<any[]>([]);
   const cloudBudgetLoadedBillsRef = useRef<string>("");
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
+
+  const [pendingImportBills, setPendingImportBills] = useState<Bill[] | null>(null);
+  const [savedBillsCountAtConflict, setSavedBillsCountAtConflict] = useState(0);
+  const [isImportConflictDialogOpen, setIsImportConflictDialogOpen] = useState(false);
+  const billsFromImportPendingRef = useRef(false);
+  const pendingImportCallbackRef = useRef<((useBills: Bill[]) => void) | null>(null);
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
 
   const [saveBudgetName, setSaveBudgetName] = useState("");
@@ -584,6 +590,7 @@ export function BudgetWizard({
   useEffect(() => {
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
+    if (billsFromImportPendingRef.current) return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
     prevBillsRef.current = serialized;
@@ -660,8 +667,6 @@ export function BudgetWizard({
     if (sheetReadQuery.data && selectedSheetId) {
       const data = sheetReadQuery.data;
       const sheetBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
-      setBills(sheetBills);
-      prevBillsRef.current = JSON.stringify(sheetBills);
       const sheetDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
       if (sheetDebts.length > 0) {
         setDebts(sheetDebts);
@@ -681,16 +686,20 @@ export function BudgetWizard({
         title: "Sheet loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      if (data.existingWeeks.length > 0) {
-        setStep(2);
-      } else {
-        scheduleAutoGenerate({
-          inputMode: "google",
-          bills: sheetBills,
-          openingBalance: data.lastRemaining,
-          startDate: nextStart ?? newWeekStartDate,
-        });
-      }
+
+      handleImportBillsRef.current!(sheetBills, (billsToUse) => {
+        setBills(billsToUse);
+        if (data.existingWeeks.length > 0) {
+          setStep(2);
+        } else {
+          scheduleAutoGenerate({
+            inputMode: "google",
+            bills: billsToUse,
+            openingBalance: data.lastRemaining,
+            startDate: nextStart ?? newWeekStartDate,
+          });
+        }
+      });
     }
   }, [sheetReadQuery.data, selectedSheetId]);
 
@@ -713,8 +722,6 @@ export function BudgetWizard({
     if (excelReadQuery.data && selectedExcelFileId) {
       const data = excelReadQuery.data;
       const excelBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
-      setBills(excelBills);
-      prevBillsRef.current = JSON.stringify(excelBills);
       const excelDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
       if (excelDebts.length > 0) {
         setDebts(excelDebts);
@@ -734,16 +741,20 @@ export function BudgetWizard({
         title: "Excel file loaded",
         description: `Found ${data.bills.length} bills and ${data.existingWeeks.length} existing budget weeks.`,
       });
-      if (data.existingWeeks.length > 0) {
-        setStep(2);
-      } else {
-        scheduleAutoGenerate({
-          inputMode: "excel",
-          bills: excelBills,
-          openingBalance: data.lastRemaining,
-          startDate: nextStartExcel ?? newWeekStartDate,
-        });
-      }
+
+      handleImportBillsRef.current!(excelBills, (billsToUse) => {
+        setBills(billsToUse);
+        if (data.existingWeeks.length > 0) {
+          setStep(2);
+        } else {
+          scheduleAutoGenerate({
+            inputMode: "excel",
+            bills: billsToUse,
+            openingBalance: data.lastRemaining,
+            startDate: nextStartExcel ?? newWeekStartDate,
+          });
+        }
+      });
     }
   }, [excelReadQuery.data, selectedExcelFileId]);
 
@@ -762,29 +773,6 @@ export function BudgetWizard({
         setParsedWorkbook(parsed);
         setInputMode("upload");
         const uploadBills = stripHeuristicColors(stripDebtMinPayments(parsed.bills));
-        if (isGuest && parsed.debts.length > 0) {
-          setDebts(parsed.debts);
-          const existingDebtIds = new Set(uploadBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
-          const debtBillsFromFile = parsed.debts
-            .filter(d => !existingDebtIds.has(d.id))
-            .map(d => ({
-              name: `${d.name} (min payment)`,
-              amount: -Math.abs(d.minimumPayment),
-              dayOfMonth: d.dueDay ?? 1,
-              category: "Debt Payment",
-              type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
-              color: "red",
-              sourceDebtId: d.id,
-            }));
-          const allUploadBills = [...uploadBills, ...debtBillsFromFile];
-          setBills(allUploadBills);
-          prevBillsRef.current = JSON.stringify(allUploadBills);
-          setDebtBillImports(new Set(parsed.debts.map(d => d.id)));
-        } else {
-          if (isGuest) setDebts([]);
-          setBills(uploadBills);
-          prevBillsRef.current = JSON.stringify(uploadBills);
-        }
         const lastWeek = parsed.existingWeeks.at(-1);
         const uploadNextStart = lastWeek ? nextStartAfterLabel(lastWeek.label ?? "") : null;
         const uploadOpeningBalance = lastWeek?.remaining ?? openingBalance;
@@ -794,16 +782,44 @@ export function BudgetWizard({
           title: "Spreadsheet loaded",
           description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
         });
-        if (parsed.existingWeeks.length > 0) {
-          setStep(2);
-        } else {
-          scheduleAutoGenerate({
-            inputMode: "upload",
-            bills: uploadBills,
-            openingBalance: uploadOpeningBalance,
-            startDate: uploadNextStart ?? newWeekStartDate,
-          });
-        }
+
+        const applyUploadBills = (billsToUse: Bill[]) => {
+          if (isGuest && parsed.debts.length > 0) {
+            setDebts(parsed.debts);
+            const existingDebtIds = new Set(billsToUse.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
+            const debtBillsFromFile = parsed.debts
+              .filter(d => !existingDebtIds.has(d.id))
+              .map(d => ({
+                name: `${d.name} (min payment)`,
+                amount: -Math.abs(d.minimumPayment),
+                dayOfMonth: d.dueDay ?? 1,
+                category: "Debt Payment",
+                type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
+                color: "red",
+                sourceDebtId: d.id,
+              }));
+            const allUploadBills = [...billsToUse, ...debtBillsFromFile];
+            setBills(allUploadBills);
+            prevBillsRef.current = JSON.stringify(allUploadBills);
+            setDebtBillImports(new Set(parsed.debts.map(d => d.id)));
+          } else {
+            if (isGuest) setDebts([]);
+            setBills(billsToUse);
+          }
+
+          if (parsed.existingWeeks.length > 0) {
+            setStep(2);
+          } else {
+            scheduleAutoGenerate({
+              inputMode: "upload",
+              bills: billsToUse,
+              openingBalance: uploadOpeningBalance,
+              startDate: uploadNextStart ?? newWeekStartDate,
+            });
+          }
+        };
+
+        handleImportBillsRef.current!(uploadBills, applyUploadBills);
       } catch (err) {
         toast({
           title: "Failed to read file",
@@ -867,6 +883,56 @@ export function BudgetWizard({
     setIncludeBillsSummary(true);
     setVisitedStep1(true);
     setStep(1);
+  };
+
+  const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
+  handleImportBillsRef.current = (importedBills: Bill[], onApply: (useBills: Bill[]) => void) => {
+    const savedBills: Bill[] = JSON.parse(prevBillsRef.current || "[]");
+    const hasSavedBills =
+      isSignedIn &&
+      billsLoadedForUserRef.current !== null &&
+      savedBills.length > 0;
+
+    if (!hasSavedBills) {
+      onApply(importedBills);
+      return;
+    }
+
+    const normalizeBillKey = (b: Bill) =>
+      `${b.name}|${b.amount}|${b.type ?? ""}|${b.dayOfMonth ?? ""}|${b.category ?? ""}|${b.color ?? ""}|${b.sourceDebtId ?? ""}`;
+    const savedSorted = [...savedBills].map(normalizeBillKey).sort().join("\n");
+    const importedSorted = [...importedBills].map(normalizeBillKey).sort().join("\n");
+    const billsAreDifferent = savedSorted !== importedSorted;
+
+    if (!billsAreDifferent) {
+      onApply(importedBills);
+      return;
+    }
+
+    billsFromImportPendingRef.current = true;
+    setPendingImportBills(importedBills);
+    setSavedBillsCountAtConflict(savedBills.length);
+    pendingImportCallbackRef.current = onApply;
+    setIsImportConflictDialogOpen(true);
+  };
+  const handleImportConflictReplace = () => {
+    const importedBills = pendingImportBills ?? [];
+    const callback = pendingImportCallbackRef.current;
+    billsFromImportPendingRef.current = false;
+    setPendingImportBills(null);
+    pendingImportCallbackRef.current = null;
+    setIsImportConflictDialogOpen(false);
+    if (callback) callback(importedBills);
+  };
+
+  const handleImportConflictKeep = () => {
+    const savedBills = JSON.parse(prevBillsRef.current || "[]") as Bill[];
+    const callback = pendingImportCallbackRef.current;
+    billsFromImportPendingRef.current = false;
+    setPendingImportBills(null);
+    pendingImportCallbackRef.current = null;
+    setIsImportConflictDialogOpen(false);
+    if (callback) callback(savedBills);
   };
 
   const handleConnectGoogle = async () => {
@@ -4380,6 +4446,25 @@ export function BudgetWizard({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isImportConflictDialogOpen} onOpenChange={(open) => { if (!open) { handleImportConflictKeep(); } }}>
+        <AlertDialogContent className="sm:rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Spreadsheet has different bills</AlertDialogTitle>
+            <AlertDialogDescription>
+              The spreadsheet contains {pendingImportBills?.length ?? 0} bill{(pendingImportBills?.length ?? 0) === 1 ? "" : "s"}, but your account already has {savedBillsCountAtConflict} saved bill{savedBillsCountAtConflict === 1 ? "" : "s"}. What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel onClick={handleImportConflictKeep} className="sm:flex-1">
+              Keep my saved bills
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleImportConflictReplace} className="sm:flex-1 bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-600">
+              Use spreadsheet bills
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isSignedIn && (
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-border/50 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] flex items-stretch h-16 safe-area-bottom">
