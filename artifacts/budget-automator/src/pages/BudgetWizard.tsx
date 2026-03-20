@@ -82,6 +82,7 @@ import {
   sheetWrite,
   excelWrite,
 } from "@workspace/api-client-react";
+import type { BudgetResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -437,6 +438,9 @@ export function BudgetWizard({
   const pendingAutoGenerateRef = useRef<GenerateOverrides | null>(null);
   const [autoGenerateTick, setAutoGenerateTick] = useState(0);
   const suppressSheetAutoSelectRef = useRef(false);
+
+  const lastGeneratedBillsFingerprintRef = useRef<string | null>(null);
+  const [isRegeneratingForExport, setIsRegeneratingForExport] = useState(false);
 
   const scheduleAutoGenerate = (params: GenerateOverrides) => {
     pendingAutoGenerateRef.current = params;
@@ -1398,6 +1402,9 @@ export function BudgetWizard({
     setInputMode("google");
   };
 
+  const billsFingerprint = (billList: typeof bills): string =>
+    billList.map(b => `${b.name}|${b.amount}|${b.type}|${b.dayOfMonth ?? ""}`).sort().join(";");
+
   const handleGenerate = (overrides?: GenerateOverrides) => {
     const effectiveInputMode = overrides?.inputMode ?? inputMode;
     if (effectiveInputMode === "upload" && !parsedWorkbook) return;
@@ -1425,6 +1432,7 @@ export function BudgetWizard({
         onSuccess: (data) => {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
+          lastGeneratedBillsFingerprintRef.current = billsFingerprint(overrides?.bills ?? bills);
           setCloudSaveSuccess(false);
 
           setNewSheetSaveSuccess(false);
@@ -1603,8 +1611,41 @@ export function BudgetWizard({
     return `Budget ${startLabel} – ${endLabel}`;
   };
 
+  const isBillsStaleForExport = (): boolean => {
+    const currentFingerprint = billsFingerprint(bills);
+    return lastGeneratedBillsFingerprintRef.current !== currentFingerprint;
+  };
+
+  const regenerateForExport = async (): Promise<BudgetResponse> => {
+    setIsRegeneratingForExport(true);
+    try {
+      const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
+      const data = await generateMutation.mutateAsync({
+        data: {
+          startDate: newWeekStartDate,
+          endDate: newWeekEndDate,
+          openingBalance: effectiveOpeningBalance,
+          paycheckAmount,
+          numberOfWeeks: weekCount,
+          bills,
+          payPeriod,
+        },
+      });
+      if (!data.weeks?.length) throw new Error("Generation returned no weeks");
+      setGeneratedWeek(data);
+      lastGeneratedBillsFingerprintRef.current = billsFingerprint(bills);
+      setCloudSaveSuccess(false);
+      setNewSheetSaveSuccess(false);
+      setNewSheetUrl(null);
+      setNewExcelSaveSuccess(false);
+      setNewExcelUrl(null);
+      return data;
+    } finally {
+      setIsRegeneratingForExport(false);
+    }
+  };
+
   const handleSaveToNewGoogleSheet = async (customTitle?: string) => {
-    if (!generatedWeek) return;
     setIsSavingToNewSheet(true);
     setNewSheetSaveSuccess(false);
     setNewSheetUrl(null);
@@ -1612,11 +1653,17 @@ export function BudgetWizard({
     try {
       const title = customTitle ?? buildDefaultExportTitle();
 
+      let weeksToExport = generatedWeek?.weeks ?? null;
+      if (!weeksToExport || isBillsStaleForExport()) {
+        const fresh = await regenerateForExport();
+        weeksToExport = fresh.weeks;
+      }
+
       const colorLookup = buildBillColorLookup(bills);
       const result = await sheetCreateAndWriteMutation.mutateAsync({
         data: {
           title,
-          weeks: generatedWeek.weeks.map((w) => ({
+          weeks: weeksToExport.map((w) => ({
             ...w,
             bills: injectBillColors(w.bills, colorLookup),
           })),
@@ -1651,7 +1698,6 @@ export function BudgetWizard({
   };
 
   const handleSaveToNewExcelFile = async (customTitle?: string) => {
-    if (!generatedWeek) return;
     setIsSavingToNewExcel(true);
     setNewExcelSaveSuccess(false);
     setNewExcelUrl(null);
@@ -1659,10 +1705,16 @@ export function BudgetWizard({
     try {
       const title = customTitle ?? buildDefaultExportTitle();
 
+      let weeksToExport = generatedWeek?.weeks ?? null;
+      if (!weeksToExport || isBillsStaleForExport()) {
+        const fresh = await regenerateForExport();
+        weeksToExport = fresh.weeks;
+      }
+
       const result = await excelCreateAndWriteMutation.mutateAsync({
         data: {
           title,
-          weeks: generatedWeek.weeks,
+          weeks: weeksToExport,
           includeRemainingAcct: !zeroOpeningBalance,
           ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
@@ -3591,14 +3643,16 @@ export function BudgetWizard({
                         setExportNameInput(buildDefaultExportTitle());
                         setPendingExportType("google");
                       }}
-                      disabled={isSavingToNewSheet || newSheetSaveSuccess}
+                      disabled={isSavingToNewSheet || newSheetSaveSuccess || isRegeneratingForExport}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
                         newSheetSaveSuccess
                           ? "bg-emerald-600"
                           : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
                       }`}
                     >
-                      {isSavingToNewSheet ? (
+                      {isRegeneratingForExport ? (
+                        <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Regenerating…</>
+                      ) : isSavingToNewSheet ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to Google Sheets…</>
                       ) : newSheetSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to Google Sheets</>
@@ -3628,14 +3682,16 @@ export function BudgetWizard({
                         setExportNameInput(buildDefaultExportTitle());
                         setPendingExportType("excel");
                       }}
-                      disabled={isSavingToNewExcel || newExcelSaveSuccess}
+                      disabled={isSavingToNewExcel || newExcelSaveSuccess || isRegeneratingForExport}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
                         newExcelSaveSuccess
                           ? "bg-emerald-600"
                           : "bg-gradient-to-r from-teal-600 to-teal-500 shadow-teal-500/25 hover:shadow-teal-500/30"
                       }`}
                     >
-                      {isSavingToNewExcel ? (
+                      {isRegeneratingForExport ? (
+                        <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Regenerating…</>
+                      ) : isSavingToNewExcel ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to OneDrive…</>
                       ) : newExcelSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to OneDrive</>
