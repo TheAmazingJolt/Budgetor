@@ -91,7 +91,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -402,6 +402,7 @@ export function BudgetWizard({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
+  const [isGenerateDateDialogOpen, setIsGenerateDateDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const [errorLog, setErrorLog] = useState<Array<{ time: string; label: string; detail: string }>>(() => {
@@ -3410,14 +3411,14 @@ export function BudgetWizard({
                       <div className="flex justify-center pt-2">
                         <Button
                           size="lg"
-                          onClick={() => handleGenerate()}
+                          onClick={() => setIsGenerateDateDialogOpen(true)}
                           disabled={!canGenerate}
                           className="rounded-2xl px-8 bg-gradient-to-r from-primary to-emerald-600 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all"
                         >
                           {generateMutation.isPending ? (
                             <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Generating…</>
                           ) : (
-                            <><Plus className="w-5 h-5 mr-2" /> Generate next week</>
+                            <><Plus className="w-5 h-5 mr-2" /> Generate next week(s)</>
                           )}
                         </Button>
                       </div>
@@ -3711,6 +3712,75 @@ export function BudgetWizard({
             }}
             onCancel={() => setIsDebtDialogOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGenerateDateDialogOpen} onOpenChange={setIsGenerateDateDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl font-bold">Generate next week(s)</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Confirm or adjust the date range before generating.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                <CalendarDays className="w-4 h-4" /> Start Date
+              </Label>
+              <Input
+                type="date"
+                value={newWeekStartDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                <CalendarDays className="w-4 h-4" /> {payPeriod === "weekly" ? "Number of Weeks" : payPeriod === "biweekly" ? "Number of Periods" : "Number of Months"}
+              </Label>
+              <Input
+                type="number"
+                min={1}
+                max={52}
+                value={weekCount}
+                onChange={(e) => setWeekCount(parseInt(e.target.value) || 1)}
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                <CalendarDays className="w-4 h-4" /> End Date
+                <span className="text-xs font-normal text-muted-foreground/70 ml-1">(auto-calculated, editable)</span>
+              </Label>
+              <Input
+                type="date"
+                value={newWeekEndDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-11 rounded-xl"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-6 flex gap-2">
+            <Button
+              variant="outline"
+              className="rounded-xl flex-1"
+              onClick={() => setIsGenerateDateDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl flex-1 bg-gradient-to-r from-primary to-emerald-600"
+              onClick={() => { setIsGenerateDateDialogOpen(false); handleGenerate(); }}
+              disabled={generateMutation.isPending}
+            >
+              {generateMutation.isPending ? (
+                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+              ) : (
+                "Generate"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
