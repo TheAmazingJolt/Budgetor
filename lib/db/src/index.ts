@@ -56,6 +56,9 @@ export async function initDb(): Promise<void> {
       );
 
       ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS debts JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS linked_sheet_id TEXT;
+      ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS linked_sheet_name TEXT;
+      ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS linked_sheet_type TEXT;
 
       CREATE TABLE IF NOT EXISTS user_sessions (
         sid VARCHAR NOT NULL PRIMARY KEY,
