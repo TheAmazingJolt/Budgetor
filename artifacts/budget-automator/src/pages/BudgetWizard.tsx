@@ -386,7 +386,8 @@ export function BudgetWizard({
 
   const [pendingExportType, setPendingExportType] = useState<null | "xlsx" | "google" | "excel">(null);
   const [exportNameInput, setExportNameInput] = useState("");
-  const [quickUpdateBudgetId, setQuickUpdateBudgetId] = useState<string | null>(null);
+  const [activeLinkedSheet, setActiveLinkedSheet] = useState<{ id: string; type: string; name: string } | null>(null);
+  const [isUpdatingLinkedSheet, setIsUpdatingLinkedSheet] = useState(false);
 
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
@@ -886,6 +887,7 @@ export function BudgetWizard({
       billsLoadedForUserRef.current = null;
       debtsLoadedForUserRef.current = null;
     }
+    setActiveLinkedSheet(null);
     setInputMode("scratch");
     setBlankMode(true);
     setIncludeBillsSummary(true);
@@ -917,6 +919,7 @@ export function BudgetWizard({
     setSelectedExcelFileName(null);
     setActiveCloudBudgetId(null);
     setActiveCloudBudgetName(null);
+    setActiveLinkedSheet(null);
     setCloudExistingWeeks([]);
     setScratchExistingWeeks([]);
     setCloudSaveSuccess(false);
@@ -1284,6 +1287,15 @@ export function BudgetWizard({
     const restoredWeeks = Array.isArray(s?.existingWeeks) ? s.existingWeeks : [];
     setCloudExistingWeeks(restoredWeeks);
     setCloudSaveSuccess(false);
+    if (budget.linkedSheetId && budget.linkedSheetType) {
+      setActiveLinkedSheet({
+        id: budget.linkedSheetId,
+        type: budget.linkedSheetType,
+        name: budget.linkedSheetName ?? (budget.linkedSheetType === "google" ? "Google Sheet" : "Excel file"),
+      });
+    } else {
+      setActiveLinkedSheet(null);
+    }
     let effectiveOpeningBalance = s?.openingBalance ?? openingBalance;
     let effectiveStartDate = s?.newWeekStartDate ?? newWeekStartDate;
     if (restoredWeeks.length > 0) {
@@ -1803,53 +1815,40 @@ export function BudgetWizard({
     }
   };
 
-  const handleQuickUpdateLinkedSheet = async (budget: SavedBudget) => {
-    if (!budget.linkedSheetId || !budget.linkedSheetType) return;
-    setQuickUpdateBudgetId(budget.id);
+  const handleGenerateAndUpdateSheet = async () => {
+    if (!activeLinkedSheet) return;
+    setIsUpdatingLinkedSheet(true);
     try {
-      const s = budget.settings as SavedBudgetSettings;
-      const budgetBills = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
-      const colorLookup = buildBillColorLookup(budgetBills);
-      const startDate = s.newWeekStartDate ?? new Date().toISOString().split("T")[0];
-      const weekCount = s.weekCount ?? 1;
-      const payPeriodDays = s.payPeriod === "biweekly" ? 14 : s.payPeriod === "monthly" ? 30 : 7;
-      const endDateObj = new Date(startDate);
-      endDateObj.setDate(endDateObj.getDate() + payPeriodDays * weekCount - 1);
-      const endDate = s.newWeekEndDate ?? endDateObj.toISOString().split("T")[0];
-
+      const colorLookup = buildBillColorLookup(bills);
       const generated = await generateBudget({
-        startDate,
-        endDate,
-        openingBalance: s.openingBalance ?? 0,
-        paycheckAmount: s.paycheckAmount ?? 0,
+        startDate: newWeekStartDate,
+        endDate: newWeekEndDate,
+        openingBalance: zeroOpeningBalance ? 0 : openingBalance,
+        paycheckAmount,
         numberOfWeeks: weekCount,
-        payPeriod: s.payPeriod ?? "weekly",
-        bills: budgetBills,
+        payPeriod,
+        bills,
       });
-
       const weeks = generated.weeks.map((w: any) => ({
         ...w,
         bills: injectBillColors(w.bills, colorLookup),
       }));
-      const budgetDebts = Array.isArray(budget.debts) ? budget.debts : [];
-      const includeRemainingAcct = !(s.zeroOpeningBalance ?? false);
+      const includeRemainingAcct = !zeroOpeningBalance;
       const writePayload = {
         weeks,
         startCol: 2,
         includeRemainingAcct,
-        ...(budgetDebts.length > 0 ? { debts: budgetDebts } : {}),
-        ...(budgetBills.length > 0 ? { bills: stripHeuristicColors(budgetBills) } : {}),
+        ...(debts.length > 0 ? { debts } : {}),
+        ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
       };
-
-      if (budget.linkedSheetType === "google") {
-        await sheetWrite(budget.linkedSheetId, writePayload);
+      if (activeLinkedSheet.type === "google") {
+        await sheetWrite(activeLinkedSheet.id, writePayload);
       } else {
-        await excelWrite(budget.linkedSheetId, { ...writePayload, includeRemainingAcct });
+        await excelWrite(activeLinkedSheet.id, { ...writePayload, includeRemainingAcct });
       }
-
       toast({
         title: "Sheet updated",
-        description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to "${budget.linkedSheetName}".`,
+        description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to "${activeLinkedSheet.name}".`,
       });
     } catch (err) {
       toast({
@@ -1858,7 +1857,7 @@ export function BudgetWizard({
         variant: "destructive",
       });
     } finally {
-      setQuickUpdateBudgetId(null);
+      setIsUpdatingLinkedSheet(false);
     }
   };
 
@@ -2520,17 +2519,12 @@ export function BudgetWizard({
                                   size="sm"
                                   variant="outline"
                                   className="h-6 text-xs px-2 gap-1 shrink-0"
-                                  disabled={quickUpdateBudgetId === budget.id}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleQuickUpdateLinkedSheet(budget);
+                                    handleLoadSavedBudget(budget);
                                   }}
                                 >
-                                  {quickUpdateBudgetId === budget.id ? (
-                                    <><RefreshCw className="w-3 h-3 animate-spin" /> Updating…</>
-                                  ) : (
-                                    <><CloudUpload className="w-3 h-3" /> Update Sheet</>
-                                  )}
+                                  <CloudUpload className="w-3 h-3" /> Update Sheet
                                 </Button>
                               </div>
                             )}
@@ -2879,6 +2873,21 @@ export function BudgetWizard({
                     >
                       <Save className="w-4 h-4 mr-1" /> Save to Cloud
                     </Button>
+                    {activeLinkedSheet && inputMode === "cloud" && (
+                      <Button
+                        variant="outline"
+                        size="default"
+                        onClick={handleGenerateAndUpdateSheet}
+                        disabled={!canGenerate || isUpdatingLinkedSheet}
+                        className="shrink-0 rounded-xl gap-1"
+                      >
+                        {isUpdatingLinkedSheet ? (
+                          <><RefreshCw className="w-4 h-4 animate-spin" /> Updating…</>
+                        ) : (
+                          <><CloudUpload className="w-4 h-4" /> Update {activeLinkedSheet.name}</>
+                        )}
+                      </Button>
+                    )}
                     <Button
                       size="default"
                       onClick={() => handleGenerate()}
