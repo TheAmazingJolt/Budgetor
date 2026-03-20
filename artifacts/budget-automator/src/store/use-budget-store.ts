@@ -53,7 +53,7 @@ interface BudgetState {
   setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
   setBlankMode: (val: boolean) => void;
   setIncludeBillsSummary: (val: boolean) => void;
-  setBills: (bills: Bill[]) => void;
+  setBills: (bills: Bill[] | ((prev: Bill[]) => Bill[])) => void;
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
   removeBill: (index: number) => void;
@@ -111,7 +111,9 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
     })),
   setBlankMode: (val) => set({ blankMode: val }),
   setIncludeBillsSummary: (val) => set({ includeBillsSummary: val }),
-  setBills: (bills) => set({ bills }),
+  setBills: (billsOrUpdater) => set((state) => ({
+    bills: typeof billsOrUpdater === 'function' ? billsOrUpdater(state.bills) : billsOrUpdater,
+  })),
   addBill: (bill) => set((state) => ({ bills: [...state.bills, bill] })),
   updateBill: (index, bill) =>
     set((state) => {
