@@ -1616,7 +1616,7 @@ export function BudgetWizard({
     return lastGeneratedBillsFingerprintRef.current !== currentFingerprint;
   };
 
-  const regenerateForExport = async (): Promise<BudgetResponse> => {
+  const regenerateForExport = async (): Promise<{ data: BudgetResponse; blob: Blob }> => {
     setIsRegeneratingForExport(true);
     try {
       const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
@@ -1639,7 +1639,26 @@ export function BudgetWizard({
       setNewSheetUrl(null);
       setNewExcelSaveSuccess(false);
       setNewExcelUrl(null);
-      return data;
+
+      const rawBills = includeBillsSummary ? (parsedWorkbook?.rawBillsSection ?? null) : null;
+      const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
+      const debtsForExport = debts.length > 0 ? debts : undefined;
+      const xlsxColorLookup = buildBillColorLookup(bills);
+      const coloredWeeks = data.weeks.map(w => ({
+        ...w,
+        bills: injectBillColors(w.bills, xlsxColorLookup),
+      }));
+      let freshBlob: Blob;
+      if (inputMode === "google" || inputMode === "excel") {
+        const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
+        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+      } else if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
+        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+      } else {
+        freshBlob = appendBudgetWeeks(parsedWorkbook!.rawBytes, coloredWeeks, parsedWorkbook!.nextWeekStartCol, !zeroOpeningBalance, sheetStyle, debtsForExport, bills);
+      }
+      setGeneratedBlob(freshBlob);
+      return { data, blob: freshBlob };
     } finally {
       setIsRegeneratingForExport(false);
     }
@@ -1656,7 +1675,7 @@ export function BudgetWizard({
       let weeksToExport = generatedWeek?.weeks ?? null;
       if (!weeksToExport || isBillsStaleForExport()) {
         const fresh = await regenerateForExport();
-        weeksToExport = fresh.weeks;
+        weeksToExport = fresh.data.weeks;
       }
 
       const colorLookup = buildBillColorLookup(bills);
@@ -1708,7 +1727,7 @@ export function BudgetWizard({
       let weeksToExport = generatedWeek?.weeks ?? null;
       if (!weeksToExport || isBillsStaleForExport()) {
         const fresh = await regenerateForExport();
-        weeksToExport = fresh.weeks;
+        weeksToExport = fresh.data.weeks;
       }
 
       const result = await excelCreateAndWriteMutation.mutateAsync({
@@ -1814,9 +1833,14 @@ export function BudgetWizard({
     }
   };
 
-  const handleDownload = (customFilename?: string) => {
-    if (!generatedBlob) return;
-    downloadBlob(generatedBlob, customFilename ?? buildDefaultXlsxFilename());
+  const handleDownload = async (customFilename?: string) => {
+    let blobToDownload = generatedBlob;
+    if (!blobToDownload || isBillsStaleForExport()) {
+      const { blob } = await regenerateForExport();
+      blobToDownload = blob;
+    }
+    if (!blobToDownload) return;
+    downloadBlob(blobToDownload, customFilename ?? buildDefaultXlsxFilename());
   };
 
   const handleDeleteSpreadsheet = async () => {
@@ -3719,13 +3743,16 @@ export function BudgetWizard({
                       setExportNameInput(buildDefaultXlsxFilename().replace(/\.xlsx$/, ""));
                       setPendingExportType("xlsx");
                     }}
-                    disabled={!generatedBlob}
+                    disabled={!generatedBlob || isRegeneratingForExport}
                     className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
                       inputMode === "google" || inputMode === "excel" || inputMode === "cloud" || googleAuthenticated ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
                     }`}
                   >
-                    <Download className="w-5 h-5 mr-2" />
-                    Download Spreadsheet
+                    {isRegeneratingForExport ? (
+                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Regenerating…</>
+                    ) : (
+                      <><Download className="w-5 h-5 mr-2" /> Download Spreadsheet</>
+                    )}
                   </Button>
                 )}
 
