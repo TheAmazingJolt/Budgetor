@@ -259,7 +259,12 @@ export function generateWeeklyBudgets(
       const dueDate = new Date(year, month, actualDay);
 
       let activeIndices = monthWeekIndices.filter((idx) => weeks[idx].start <= dueDate);
-      if (activeIndices.length === 0) activeIndices = [...monthWeekIndices];
+      // Fall back to all month weeks when no week qualifies, or when only the
+      // first week qualifies (bill due on day 1 should still spread across the
+      // whole month, not dump everything into that one week).
+      if (activeIndices.length === 0 || (activeIndices.length === 1 && monthWeekIndices.length > 1)) {
+        activeIndices = [...monthWeekIndices];
+      }
 
       // Base totals for eligible weeks = fixed + weekly + already-placed balanced
       const baseTotals = activeIndices.map((idx) =>
