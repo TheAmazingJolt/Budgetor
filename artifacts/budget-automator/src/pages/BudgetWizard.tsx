@@ -297,6 +297,8 @@ export function BudgetWizard({
   const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
   const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
   const [isBillsManagerOpen, setIsBillsManagerOpen] = useState(false);
+  const [billsDialogOrigin, setBillsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [debtsDialogOrigin, setDebtsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
   const [editingBillInManagerIndex, setEditingBillInManagerIndex] = useState<number | null>(null);
   const [isBillManagerFormOpen, setIsBillManagerFormOpen] = useState(false);
   const [debtBillImports, setDebtBillImports] = useState<Set<string>>(new Set());
@@ -432,6 +434,13 @@ export function BudgetWizard({
   const scheduleAutoGenerate = (params: GenerateOverrides) => {
     pendingAutoGenerateRef.current = params;
     setAutoGenerateTick(n => n + 1);
+  };
+
+  const getDialogOriginStyle = (origin: { x: number; y: number } | null): string | undefined => {
+    if (!origin) return undefined;
+    const ox = Math.round(origin.x - window.innerWidth / 2);
+    const oy = Math.round(origin.y - window.innerHeight / 2);
+    return `calc(50% + ${ox}px) calc(50% + ${oy}px)`;
   };
 
   const guestLoginMutation = useAuthGuestLogin();
@@ -1892,7 +1901,11 @@ export function BudgetWizard({
                   variant="ghost"
                   size="sm"
                   className="hidden sm:flex items-center gap-1.5 rounded-xl text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsBillsManagerOpen(true)}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setBillsDialogOrigin({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                    setIsBillsManagerOpen(true);
+                  }}
                   title="Manage Bills"
                 >
                   <Receipt className="w-4 h-4" />
@@ -1902,7 +1915,11 @@ export function BudgetWizard({
                   variant="ghost"
                   size="sm"
                   className="hidden sm:flex items-center gap-1.5 rounded-xl text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsDebtManagerOpen(true)}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setDebtsDialogOrigin({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                    setIsDebtManagerOpen(true);
+                  }}
                   title="Manage Debts"
                 >
                   <DollarSign className="w-4 h-4" />
@@ -3693,7 +3710,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isDebtManagerOpen} onOpenChange={setIsDebtManagerOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" transformOrigin={getDialogOriginStyle(debtsDialogOrigin)}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <DollarSign className="w-6 h-6 text-red-600" /> Your Debts
@@ -3870,7 +3887,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isBillsManagerOpen} onOpenChange={setIsBillsManagerOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" transformOrigin={getDialogOriginStyle(billsDialogOrigin)}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
               <Receipt className="w-6 h-6 text-emerald-600" /> Your Bills
@@ -4310,14 +4327,22 @@ export function BudgetWizard({
                   <>
                     <button
                       className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${billsActive ? activeClass : inactiveClass}`}
-                      onClick={() => setIsBillsManagerOpen(true)}
+                      onClick={(e) => {
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setBillsDialogOrigin({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                        setIsBillsManagerOpen(true);
+                      }}
                     >
                       <Receipt className="w-5 h-5" />
                       <span>Bills</span>
                     </button>
                     <button
                       className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${debtsActive ? activeClass : inactiveClass}`}
-                      onClick={() => setIsDebtManagerOpen(true)}
+                      onClick={(e) => {
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setDebtsDialogOrigin({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                        setIsDebtManagerOpen(true);
+                      }}
                     >
                       <DollarSign className="w-5 h-5" />
                       <span>Debts</span>
