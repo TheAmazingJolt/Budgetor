@@ -2481,6 +2481,18 @@ export function BudgetWizard({
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                                  title="Configure budget"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLoadSavedBudget(budget);
+                                  }}
+                                >
+                                  <Settings2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setRenameBudgetId(budget.id);
@@ -2493,39 +2505,26 @@ export function BudgetWizard({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setDeleteBudgetTarget({ id: budget.id, name: budget.name });
                                   }}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             </div>
                             {budget.linkedSheetId && budget.linkedSheetType && (
-                              <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  {budget.linkedSheetType === "google" ? (
-                                    <Sheet className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                  ) : (
-                                    <FileSpreadsheet className="w-3.5 h-3.5 text-teal-500 shrink-0" />
-                                  )}
-                                  <span className="text-xs text-muted-foreground truncate">
-                                    {budget.linkedSheetName ?? (budget.linkedSheetType === "google" ? "Google Sheet" : "Excel file")}
-                                  </span>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 text-xs px-2 gap-1 shrink-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleLoadSavedBudget(budget);
-                                  }}
-                                >
-                                  <CloudUpload className="w-3 h-3" /> Update Sheet
-                                </Button>
+                              <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-1.5 min-w-0">
+                                {budget.linkedSheetType === "google" ? (
+                                  <Sheet className="w-3 h-3 text-blue-500 shrink-0" />
+                                ) : (
+                                  <FileSpreadsheet className="w-3 h-3 text-teal-500 shrink-0" />
+                                )}
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {budget.linkedSheetName ?? (budget.linkedSheetType === "google" ? "Google Sheet" : "Excel file")}
+                                </span>
                               </div>
                             )}
                           </CardContent>
