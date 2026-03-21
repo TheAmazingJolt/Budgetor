@@ -332,6 +332,8 @@ export function BudgetWizard({
   const [editingBillIndex, setEditingBillIndex] = useState<number | null>(null);
   const [isDebtDialogOpen, setIsDebtDialogOpen] = useState(false);
   const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
+  const [billsCollapsed, setBillsCollapsed] = useState(false);
+  const [debtsCollapsed, setDebtsCollapsed] = useState(false);
   const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
   const [isBillsManagerOpen, setIsBillsManagerOpen] = useState(false);
   const [logPaymentDebtId, setLogPaymentDebtId] = useState<string | null>(null);
@@ -2984,11 +2986,21 @@ export function BudgetWizard({
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-foreground">Bills</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Rent, utilities, and subscriptions are balanced so every week ends with the same amount.
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBillsCollapsed(c => !c)}
+                      className="rounded-lg p-1 hover:bg-muted transition-colors"
+                      aria-label={billsCollapsed ? "Expand bills" : "Collapse bills"}
+                    >
+                      <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform duration-200 ${billsCollapsed ? "-rotate-90" : ""}`} />
+                    </button>
+                    <div>
+                      <h3 className="text-xl font-semibold text-foreground">Bills</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Rent, utilities, and subscriptions are balanced so every week ends with the same amount.
+                      </p>
+                    </div>
                   </div>
                   <Button
                     size="sm"
@@ -2999,11 +3011,11 @@ export function BudgetWizard({
                   </Button>
                 </div>
 
-                {bills.length === 0 ? (
+                {!billsCollapsed && bills.length === 0 ? (
                   <Card className="border-dashed border-2 p-10 text-center">
                     <p className="text-muted-foreground">No bills loaded. Add them manually.</p>
                   </Card>
-                ) : (
+                ) : !billsCollapsed ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {bills.map((bill, i) => (
                       <motion.div
@@ -3055,18 +3067,28 @@ export function BudgetWizard({
                       </motion.div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div className="space-y-4">
                 <div id="debts-section" className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                      <DollarSign className="w-5 h-5" /> Debts
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Track credit cards, loans, and more. Optionally include minimum payments as bills.
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDebtsCollapsed(c => !c)}
+                      className="rounded-lg p-1 hover:bg-muted transition-colors"
+                      aria-label={debtsCollapsed ? "Expand debts" : "Collapse debts"}
+                    >
+                      <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform duration-200 ${debtsCollapsed ? "-rotate-90" : ""}`} />
+                    </button>
+                    <div>
+                      <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                        <DollarSign className="w-5 h-5" /> Debts
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Track credit cards, loans, and more. Optionally include minimum payments as bills.
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {debts.length > 0 && (
@@ -3092,7 +3114,7 @@ export function BudgetWizard({
                   </div>
                 </div>
 
-                {debts.length > 0 && (
+                {!debtsCollapsed && debts.length > 0 && (
                   <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
                     <CardContent className="p-5">
                       <div className="flex items-center gap-3 mb-1">
@@ -3108,11 +3130,11 @@ export function BudgetWizard({
                   </Card>
                 )}
 
-                {debts.length === 0 ? (
+                {!debtsCollapsed && debts.length === 0 ? (
                   <Card className="border-dashed border-2 p-10 text-center">
                     <p className="text-muted-foreground">No debts tracked yet. Add debts to see your full financial picture.</p>
                   </Card>
-                ) : (
+                ) : !debtsCollapsed ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {debts.map((debt, i) => (
                       <motion.div
@@ -3182,7 +3204,7 @@ export function BudgetWizard({
                       </motion.div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div className="flex justify-end pt-2">
