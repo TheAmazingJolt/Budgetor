@@ -3090,28 +3090,13 @@ export function BudgetWizard({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {debts.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          const allActive = debts.every(d => debtBillImports.has(d.id));
-                          preserveScroll(() => toggleAllDebtsAsBills(!allActive));
-                        }}
-                        className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
-                      >
-                        {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
-                      className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
-                    >
-                      <Plus className="w-4 h-4 mr-1" /> Add Debt
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                    className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add Debt
+                  </Button>
                 </div>
 
                 {!debtsCollapsed && debts.length > 0 && (
@@ -3128,6 +3113,22 @@ export function BudgetWizard({
                       </p>
                     </CardContent>
                   </Card>
+                )}
+
+                {!debtsCollapsed && debts.length > 0 && (
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const allActive = debts.every(d => debtBillImports.has(d.id));
+                        preserveScroll(() => toggleAllDebtsAsBills(!allActive));
+                      }}
+                      className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
+                    >
+                      {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                    </Button>
+                  </div>
                 )}
 
                 {!debtsCollapsed && debts.length === 0 ? (
