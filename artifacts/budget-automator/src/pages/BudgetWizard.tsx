@@ -642,7 +642,7 @@ export function BudgetWizard({
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
     if (billsFromImportPendingRef.current) return;
-    if (inputMode === "cloud") return;
+    if (inputMode !== "scratch") return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
     prevBillsRef.current = serialized;
@@ -977,6 +977,19 @@ export function BudgetWizard({
     setInputMode("upload");
     setVisitedStep1(false);
     setStep(0);
+  };
+
+  const handleAddAccountBills = () => {
+    const accountBills = stripHeuristicColors((userBillsQuery.data?.bills ?? []) as Bill[]);
+    if (accountBills.length === 0) return;
+    const existingKeys = new Set(bills.map((b: Bill) => `${b.name}|${b.amount}`));
+    const toAdd = accountBills.filter(b => !existingKeys.has(`${b.name}|${b.amount}`));
+    if (toAdd.length === 0) {
+      toast({ title: "Already added", description: "All your saved bills are already in this budget." });
+      return;
+    }
+    setBills((prev: Bill[]) => [...prev, ...toAdd]);
+    toast({ title: `${toAdd.length} bill${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved bills have been added to this budget." });
   };
 
   const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
@@ -4323,14 +4336,26 @@ export function BudgetWizard({
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                onClick={() => { setEditingBillInManagerIndex(null); setIsBillManagerFormOpen(true); }}
-                className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add Bill
-              </Button>
+            <div className="flex items-center justify-between gap-2">
+              {isSignedIn && inputMode !== "scratch" && (userBillsQuery.data?.bills?.length ?? 0) > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddAccountBills}
+                  className="rounded-xl text-xs gap-1.5"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" /> Add my saved bills
+                </Button>
+              )}
+              <div className="ml-auto">
+                <Button
+                  size="sm"
+                  onClick={() => { setEditingBillInManagerIndex(null); setIsBillManagerFormOpen(true); }}
+                  className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Add Bill
+                </Button>
+              </div>
             </div>
 
             {nonDebtBills.length > 0 && (
