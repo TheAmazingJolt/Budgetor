@@ -642,7 +642,8 @@ export function BudgetWizard({
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
     if (billsFromImportPendingRef.current) return;
-    if (inputMode !== "scratch") return;
+    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0);
+    if (!isAccountMode) return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
     prevBillsRef.current = serialized;
@@ -656,7 +657,7 @@ export function BudgetWizard({
       });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bills, isSignedIn, inputMode]);
+  }, [bills, isSignedIn, inputMode, step]);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -4337,7 +4338,7 @@ export function BudgetWizard({
 
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
-              {isSignedIn && inputMode !== "scratch" && (userBillsQuery.data?.bills?.length ?? 0) > 0 && (
+              {isSignedIn && !(inputMode === "scratch" || (inputMode === "upload" && step === 0)) && (userBillsQuery.data?.bills?.length ?? 0) > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
