@@ -569,6 +569,8 @@ export function BudgetWizard({
   useEffect(() => {
     if (!isSignedIn) return;
     if (!debtsLoadedForUserRef.current) return;
+    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0);
+    if (!isAccountMode) return;
     const serialized = JSON.stringify(debts);
     if (serialized === prevDebtsRef.current) return;
     prevDebtsRef.current = serialized;
@@ -582,7 +584,7 @@ export function BudgetWizard({
       });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debts, isSignedIn]);
+  }, [debts, isSignedIn, inputMode, step]);
 
   const billsLoadedForUserRef = useRef<string | null>(null);
   const billsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -991,6 +993,19 @@ export function BudgetWizard({
     }
     setBills((prev: Bill[]) => [...prev, ...toAdd]);
     toast({ title: `${toAdd.length} bill${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved bills have been added to this budget." });
+  };
+
+  const handleAddAccountDebts = () => {
+    const accountDebts = (userDebtsQuery.data?.debts ?? []) as Debt[];
+    if (accountDebts.length === 0) return;
+    const existingKeys = new Set(debts.map((d: Debt) => `${d.name}|${d.type}|${d.balance}`));
+    const toAdd = accountDebts.filter(d => !existingKeys.has(`${d.name}|${d.type}|${d.balance}`));
+    if (toAdd.length === 0) {
+      toast({ title: "Already added", description: "All your saved debts are already in this budget." });
+      return;
+    }
+    setDebts((prev: Debt[]) => [...prev, ...toAdd]);
+    toast({ title: `${toAdd.length} debt${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved debts have been added to this budget." });
   };
 
   const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
@@ -2934,7 +2949,7 @@ export function BudgetWizard({
                       disabled={bills.length === 0}
                       className="shrink-0 rounded-xl"
                     >
-                      <Save className="w-4 h-4 mr-1" /> Save to Cloud
+                      <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
                     </Button>
                     {activeLinkedSheet && inputMode === "cloud" && (
                       <Button
@@ -2960,7 +2975,7 @@ export function BudgetWizard({
                       {generateMutation.isPending ? (
                         <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
                       ) : (
-                        <>Generate Budget <ChevronRight className="w-4 h-4 ml-1" /></>
+                        <>{activeCloudBudgetId ? "Update Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
                       )}
                     </Button>
                   </div>
@@ -4131,27 +4146,39 @@ export function BudgetWizard({
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex justify-end gap-2">
-              {debts.length > 0 && (
+            <div className="flex items-center justify-between gap-2">
+              {isSignedIn && !(inputMode === "scratch" || (inputMode === "upload" && step === 0)) && (userDebtsQuery.data?.debts?.length ?? 0) > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    const allActive = debts.every(d => debtBillImports.has(d.id));
-                    preserveScroll(() => toggleAllDebtsAsBills(!allActive));
-                  }}
-                  className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
+                  onClick={handleAddAccountDebts}
+                  className="rounded-xl text-xs gap-1.5"
                 >
-                  {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                  <FolderOpen className="w-3.5 h-3.5" /> Add my saved debts
                 </Button>
               )}
-              <Button
-                size="sm"
-                onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
-                className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add Debt
-              </Button>
+              <div className="ml-auto flex gap-2">
+                {debts.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const allActive = debts.every(d => debtBillImports.has(d.id));
+                      preserveScroll(() => toggleAllDebtsAsBills(!allActive));
+                    }}
+                    className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
+                  >
+                    {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                  className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Add Debt
+                </Button>
+              </div>
             </div>
 
             {debts.length > 0 && (
