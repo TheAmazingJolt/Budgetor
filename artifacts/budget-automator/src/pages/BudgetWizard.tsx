@@ -1293,7 +1293,7 @@ export function BudgetWizard({
     });
   };
 
-  const handleLoadSavedBudget = (budget: SavedBudget) => {
+  const handleLoadSavedBudget = (budget: SavedBudget, forceStep?: number) => {
     reset();
     const b = ((budget.bills ?? []) as any[]).map(migrateLegacyBill);
     const s = budget.settings as SavedBudgetSettings;
@@ -1373,7 +1373,9 @@ export function BudgetWizard({
       }
     }
     toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${billsToSet.length} bills.` });
-    if (restoredWeeks.length > 0) {
+    if (forceStep !== undefined) {
+      setStep(forceStep);
+    } else if (restoredWeeks.length > 0) {
       setStep(2);
     } else {
       setStep(1);
@@ -2546,7 +2548,7 @@ export function BudgetWizard({
                                   title="Configure budget"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleLoadSavedBudget(budget);
+                                    handleLoadSavedBudget(budget, 1);
                                   }}
                                 >
                                   <Settings2 className="h-3.5 w-3.5" />
