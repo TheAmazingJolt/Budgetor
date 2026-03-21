@@ -1475,9 +1475,9 @@ export function BudgetWizard({
         const closing = e ? (openingBalance + paycheck + items.reduce((s, b) => s + b.amount, 0)) : w.closingBalance;
         return { label: w.weekLabel, remaining: closing, openingBalance, paycheck, items };
       });
-    const existingLabels = new Set(editedCloudWeeks.map((w: any) => w.label));
-    const deduped = newWeeks.filter((w) => !existingLabels.has(w.label));
-    const updatedExistingWeeks = [...editedCloudWeeks, ...deduped];
+    const generatedLabels = new Set(newWeeks.map((w) => w.label));
+    const keptExistingWeeks = editedCloudWeeks.filter((w: any) => !generatedLabels.has(w.label));
+    const updatedExistingWeeks = [...keptExistingWeeks, ...newWeeks];
 
     cloudSaveMutation.mutate(
       {
@@ -1508,7 +1508,7 @@ export function BudgetWizard({
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({
             title: "Saved to Cloud",
-            description: `"${activeCloudBudgetName}" updated with ${deduped.length} new week(s).`,
+            description: `"${activeCloudBudgetName}" updated (${newWeeks.length} week${newWeeks.length !== 1 ? "s" : ""}).`,
           });
         },
         onError: (err: unknown) => {
@@ -1532,6 +1532,45 @@ export function BudgetWizard({
     setSelectedSheetId(id);
     setSelectedSheetName(name);
     setInputMode("google");
+  };
+
+  const handleQuickUpdate = () => {
+    if (!activeCloudBudgetId) return;
+    cloudSaveMutation.mutate(
+      {
+        id: activeCloudBudgetId,
+        data: {
+          bills,
+          settings: {
+            openingBalance,
+            paycheckAmount,
+            weekCount,
+            newWeekStartDate,
+            newWeekEndDate,
+            zeroOpeningBalance,
+            includeBillsSummary,
+            blankMode,
+            inputMode: "cloud",
+            existingWeeks: cloudExistingWeeks,
+            payPeriod,
+          },
+          debts,
+        },
+      },
+      {
+        onSuccess: () => {
+          cloudBudgetLoadedBillsRef.current = JSON.stringify(bills);
+          queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
+          toast({ title: "Budget updated", description: `"${activeCloudBudgetName}" has been updated.` });
+        },
+        onError: (err: unknown) => {
+          const apiErr = err as { data?: { error?: string } };
+          const detail = apiErr?.data?.error ?? (err instanceof Error ? err.message : "Unknown error");
+          const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
+          toast({ title: "Failed to update", description, variant: "destructive" });
+        },
+      }
+    );
   };
 
   const billsFingerprint = (billList: typeof bills): string =>
@@ -1571,6 +1610,21 @@ export function BudgetWizard({
           setNewSheetUrl(null);
           setNewExcelSaveSuccess(false);
           setNewExcelUrl(null);
+
+          if (effectiveInputMode === "cloud") {
+            const freshLabels = new Set(data.weeks.map(w => w.weekLabel));
+            const freshAsCloudWeeks = data.weeks.map(w => ({
+              label: w.weekLabel,
+              remaining: w.closingBalance,
+              openingBalance: w.openingBalance,
+              paycheck: w.paycheck,
+              items: w.bills,
+            }));
+            setCloudExistingWeeks(prev => [
+              ...prev.filter((w: any) => !freshLabels.has(w.label)),
+              ...freshAsCloudWeeks,
+            ]);
+          }
 
           {
             let blob: Blob;
@@ -2947,8 +3001,8 @@ export function BudgetWizard({
                     <Button
                       variant="outline"
                       size="default"
-                      onClick={() => setIsSaveDialogOpen(true)}
-                      disabled={bills.length === 0}
+                      onClick={activeCloudBudgetId ? handleQuickUpdate : () => setIsSaveDialogOpen(true)}
+                      disabled={bills.length === 0 || cloudSaveMutation.isPending}
                       className="shrink-0 rounded-xl"
                     >
                       <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
@@ -2975,9 +3029,9 @@ export function BudgetWizard({
                       className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                     >
                       {generateMutation.isPending ? (
-                        <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+                        <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {activeCloudBudgetId ? "Regenerating…" : "Generating…"}</>
                       ) : (
-                        <>{activeCloudBudgetId ? "Update Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
+                        <>{activeCloudBudgetId ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
                       )}
                     </Button>
                   </div>
