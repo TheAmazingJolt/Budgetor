@@ -73,6 +73,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
   const isLoanType = debtType === "personal_loan" || debtType === "student_loan" || debtType === "car_loan";
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
+    const isNew = !initialData;
     onSubmit({
       id: initialData?.id ?? crypto.randomUUID(),
       name: values.name,
@@ -83,6 +84,9 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       dueDay: values.dueDay ?? undefined,
       originalAmount: values.originalAmount ?? undefined,
       billAsBalanced: values.billAsBalanced ?? false,
+      lastPaymentDate: initialData?.lastPaymentDate ?? undefined,
+      lastPaymentAmount: initialData?.lastPaymentAmount ?? undefined,
+      createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
     });
   };
 

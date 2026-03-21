@@ -29,4 +29,10 @@ export interface Debt {
   billAsBalanced?: boolean | null;
   /** When true, the user has opted this debt out of auto-generating a bill */
   excludeFromBill?: boolean | null;
+  /** ISO date string of the most recent logged payment (optional) */
+  lastPaymentDate?: string | null;
+  /** Amount of the most recent logged payment (optional) */
+  lastPaymentAmount?: number | null;
+  /** ISO date string when the debt was created (optional, used for payment-due nudge) */
+  createdAt?: string | null;
 }

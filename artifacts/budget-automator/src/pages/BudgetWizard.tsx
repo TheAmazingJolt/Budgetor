@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Bug,
   ClipboardCopy,
+  Banknote,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -200,6 +201,41 @@ function debtTypeLeftBar(type: string): string {
   return "bg-amber-500";
 }
 
+function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: number | null): string | null {
+  if (balance <= 0 || minimumPayment <= 0) return null;
+  const monthlyRate = interestRate != null ? interestRate / 100 / 12 : 0;
+  if (monthlyRate > 0) {
+    const monthlyInterest = balance * monthlyRate;
+    if (minimumPayment <= monthlyInterest) return "Balance growing — increase payment";
+    const months = Math.ceil(
+      -Math.log(1 - (balance * monthlyRate) / minimumPayment) / Math.log(1 + monthlyRate)
+    );
+    if (!isFinite(months) || months <= 0) return null;
+    const payoffDate = new Date();
+    payoffDate.setMonth(payoffDate.getMonth() + months);
+    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })}`;
+  } else {
+    const months = Math.ceil(balance / minimumPayment);
+    if (months <= 0) return null;
+    const payoffDate = new Date();
+    payoffDate.setMonth(payoffDate.getMonth() + months);
+    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })}`;
+  }
+}
+
+function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null; createdAt?: string | null }): boolean {
+  if (!debt.dueDay) return false;
+  const referenceDate = debt.lastPaymentDate ?? debt.createdAt ?? null;
+  if (!referenceDate) {
+    return true;
+  }
+  const ref = new Date(referenceDate);
+  const now = new Date();
+  const diffMs = now.getTime() - ref.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays >= 25;
+}
+
 function nextStartAfterLabel(label: string): string | null {
   const m = label.match(/to\s+(\d{1,2})\/(\d{1,2})\/(\d{2})\s*$/i);
   if (!m) return null;
@@ -298,6 +334,8 @@ export function BudgetWizard({
   const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
   const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
   const [isBillsManagerOpen, setIsBillsManagerOpen] = useState(false);
+  const [logPaymentDebtId, setLogPaymentDebtId] = useState<string | null>(null);
+  const [logPaymentAmount, setLogPaymentAmount] = useState<string>("");
   const [billsDialogOrigin, setBillsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
   const [debtsDialogOrigin, setDebtsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
   const [editingBillInManagerIndex, setEditingBillInManagerIndex] = useState<number | null>(null);
@@ -3921,6 +3959,84 @@ export function BudgetWizard({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!logPaymentDebtId} onOpenChange={(open) => { if (!open) setLogPaymentDebtId(null); }}>
+        <DialogContent className="sm:max-w-xs rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-emerald-600" /> Log Payment
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm">
+              {logPaymentDebtId ? (() => {
+                const d = debts.find(x => x.id === logPaymentDebtId);
+                return d ? `Enter the amount paid toward ${d.name}.` : "";
+              })() : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                value={logPaymentAmount}
+                onChange={e => setLogPaymentAmount(e.target.value)}
+                className="pl-7 focus:ring-primary/20 focus:border-primary"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    const amt = parseFloat(logPaymentAmount);
+                    if (!isNaN(amt) && amt > 0 && logPaymentDebtId) {
+                      const idx = debts.findIndex(x => x.id === logPaymentDebtId);
+                      if (idx >= 0) {
+                        const d = debts[idx];
+                        updateDebt(idx, {
+                          ...d,
+                          balance: Math.max(0, d.balance - amt),
+                          lastPaymentDate: new Date().toISOString().split("T")[0],
+                          lastPaymentAmount: amt,
+                        });
+                      }
+                      setLogPaymentDebtId(null);
+                      setLogPaymentAmount("");
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" className="rounded-xl border-border/60" onClick={() => setLogPaymentDebtId(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white"
+                onClick={() => {
+                  const amt = parseFloat(logPaymentAmount);
+                  if (!isNaN(amt) && amt > 0 && logPaymentDebtId) {
+                    const idx = debts.findIndex(x => x.id === logPaymentDebtId);
+                    if (idx >= 0) {
+                      const d = debts[idx];
+                      updateDebt(idx, {
+                        ...d,
+                        balance: Math.max(0, d.balance - amt),
+                        lastPaymentDate: new Date().toISOString().split("T")[0],
+                        lastPaymentAmount: amt,
+                      });
+                    }
+                    setLogPaymentDebtId(null);
+                    setLogPaymentAmount("");
+                  }
+                }}
+                disabled={!logPaymentAmount || isNaN(parseFloat(logPaymentAmount)) || parseFloat(logPaymentAmount) <= 0}
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isGenerateDateDialogOpen} onOpenChange={setIsGenerateDateDialogOpen}>
         <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="mb-4">
@@ -4057,10 +4173,22 @@ export function BudgetWizard({
                         <div className="flex justify-between items-start mb-2">
                           <div className="space-y-1">
                             <p className="font-semibold text-sm text-foreground leading-tight">{debt.name}</p>
-                            <Badge variant="outline" className={`text-xs px-2 py-0.5 ${debtTypeBadgeClass(debt.type)}`}>
-                              <DebtTypeIcon type={debt.type} />
-                              <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
-                            </Badge>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant="outline" className={`text-xs px-2 py-0.5 ${debtTypeBadgeClass(debt.type)}`}>
+                                <DebtTypeIcon type={debt.type} />
+                                <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
+                              </Badge>
+                              {isPaymentLikelyDue(debt) && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setLogPaymentDebtId(debt.id); setLogPaymentAmount(""); }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 text-[10px] font-semibold hover:bg-amber-200 transition-colors cursor-pointer"
+                                >
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Payment likely due
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
@@ -4119,6 +4247,16 @@ export function BudgetWizard({
                             </div>
                           );
                         })()}
+                        {(() => {
+                          const payoffLabel = getPayoffLabel(debt.balance, debt.minimumPayment, debt.interestRate);
+                          if (!payoffLabel) return null;
+                          const isGrowing = payoffLabel.startsWith("Balance growing");
+                          return (
+                            <p className={`text-[11px] mt-1.5 ${isGrowing ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                              {payoffLabel}
+                            </p>
+                          );
+                        })()}
                         <div className="flex items-center justify-between mt-3">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">
@@ -4134,6 +4272,15 @@ export function BudgetWizard({
                             </label>
                           </div>
                           <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-emerald-600"
+                              title="Log Payment"
+                              onClick={() => { setLogPaymentDebtId(debt.id); setLogPaymentAmount(""); }}
+                            >
+                              <Banknote className="h-3.5 w-3.5" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

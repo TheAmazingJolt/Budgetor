@@ -1038,6 +1038,18 @@ components:
           type: boolean
           nullable: true
           description: When true, the user has opted this debt out of auto-generating a bill
+        lastPaymentDate:
+          type: string
+          nullable: true
+          description: ISO date string of the most recent logged payment (optional)
+        lastPaymentAmount:
+          type: number
+          nullable: true
+          description: Amount of the most recent logged payment (optional)
+        createdAt:
+          type: string
+          nullable: true
+          description: ISO date string when the debt was created (optional, used for payment-due nudge)
       required:
         - id
         - name
