@@ -18,6 +18,8 @@ import type { Debt } from "@workspace/api-client-react";
 
 const DEBT_TYPES = ["credit_card", "personal_loan", "student_loan", "car_loan", "installment", "collections"] as const;
 
+const PAYMENT_FREQUENCIES = ["monthly", "weekly", "biweekly"] as const;
+
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
   type: z.enum(DEBT_TYPES),
@@ -27,6 +29,7 @@ const formSchema = z.object({
   dueDay: z.coerce.number().int().min(1, "Must be 1–31").max(31, "Must be 1–31").nullable().optional(),
   originalAmount: z.coerce.number().min(0).nullable().optional(),
   billAsBalanced: z.boolean().optional(),
+  paymentFrequency: z.enum(PAYMENT_FREQUENCIES).optional(),
 }).refine(
   (data) => {
     if (data.originalAmount == null) return true;
@@ -55,6 +58,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           dueDay: initialData.dueDay ?? null,
           originalAmount: initialData.originalAmount ?? null,
           billAsBalanced: initialData.billAsBalanced ?? false,
+          paymentFrequency: (PAYMENT_FREQUENCIES as readonly string[]).includes(initialData.paymentFrequency ?? "") ? initialData.paymentFrequency as typeof PAYMENT_FREQUENCIES[number] : "monthly",
         }
       : {
           name: "",
@@ -65,15 +69,20 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           dueDay: null,
           originalAmount: null,
           billAsBalanced: false,
+          paymentFrequency: "monthly" as const,
         },
   });
 
   const debtType = form.watch("type");
+  const paymentFrequency = form.watch("paymentFrequency");
   const isCreditCard = debtType === "credit_card";
   const isLoanType = debtType === "personal_loan" || debtType === "student_loan" || debtType === "car_loan";
+  const isInstallment = debtType === "installment";
+  const isRecurringFrequency = paymentFrequency === "weekly" || paymentFrequency === "biweekly";
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
     const isNew = !initialData;
+    const recurring = values.paymentFrequency === "weekly" || values.paymentFrequency === "biweekly";
     onSubmit({
       id: initialData?.id ?? crypto.randomUUID(),
       name: values.name,
@@ -81,9 +90,10 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       balance: values.balance,
       interestRate: values.interestRate ?? undefined,
       minimumPayment: values.minimumPayment,
-      dueDay: values.dueDay ?? undefined,
+      dueDay: recurring ? undefined : (values.dueDay ?? undefined),
       originalAmount: values.originalAmount ?? undefined,
-      billAsBalanced: values.billAsBalanced ?? false,
+      billAsBalanced: recurring ? false : (values.billAsBalanced ?? false),
+      paymentFrequency: values.type === "installment" ? (values.paymentFrequency ?? "monthly") : undefined,
       lastPaymentDate: initialData?.lastPaymentDate ?? undefined,
       lastPaymentAmount: initialData?.lastPaymentAmount ?? undefined,
       createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
@@ -196,29 +206,61 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           />
         </div>
 
-        <FormField
-          control={form.control}
-          name="dueDay"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Due Day<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={1}
-                  max={31}
-                  step={1}
-                  placeholder="e.g. 15"
-                  value={field.value ?? ""}
-                  onChange={e => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
-                  className="focus:ring-primary/20 focus:border-primary"
-                />
-              </FormControl>
-              <FormDescription>Day of the month your payment is due (1–31).</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {isInstallment && (
+          <FormField
+            control={form.control}
+            name="paymentFrequency"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Frequency</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value ?? "monthly"}>
+                  <FormControl>
+                    <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Biweekly (every 2 weeks)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription className="text-xs">
+                  {isRecurringFrequency
+                    ? "This payment will appear in every applicable budget period automatically."
+                    : "The payment appears once per month on its due day."}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {!isRecurringFrequency && (
+          <FormField
+            control={form.control}
+            name="dueDay"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Due Day<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    step={1}
+                    placeholder="e.g. 15"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
+                </FormControl>
+                <FormDescription>Day of the month your payment is due (1–31).</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}
@@ -273,6 +315,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           )}
         />
 
+        {!isRecurringFrequency && (
         <FormField
           control={form.control}
           name="billAsBalanced"
@@ -293,6 +336,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             </FormItem>
           )}
         />
+        )}
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onCancel} className="rounded-xl border-border/60">

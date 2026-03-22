@@ -112,7 +112,7 @@ function parseBillMetaRows(
   markerValues: string[],
 ): any[] {
   const colorMap: Record<string, string> = {};
-  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly"]);
+  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly"]);
   const bills: any[] = [];
   let startIdx = -1;
   for (let i = 0; i < rows.length; i++) {
@@ -639,7 +639,7 @@ async function writeExcelBillRows(
   for (const bill of filteredBills) {
     const dueDay = bill.dayOfMonth != null
       ? bill.dayOfMonth
-      : bill.type === "weekly" ? "weekly" : "varies";
+      : bill.type === "weekly" ? "weekly" : bill.type === "biweekly" ? "biweekly" : "varies";
     rows.push([
       bill.name,
       Math.abs(bill.amount),

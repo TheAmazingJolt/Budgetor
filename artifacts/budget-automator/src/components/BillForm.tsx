@@ -24,7 +24,7 @@ const formSchema = z.object({
   amount: z.coerce.number().refine(v => v !== 0, "Amount is required").transform(v => -Math.abs(v)),
   dayOfMonth: z.coerce.number().min(1).max(31).nullable().optional(),
   category: z.string().min(1, "Category label is required"),
-  type: z.enum(["balanced", "fixed", "weekly"]),
+  type: z.enum(["balanced", "fixed", "weekly", "biweekly"]),
   color: z.string().default("none"),
 });
 
@@ -185,6 +185,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                     <SelectItem value="balanced">Balanced</SelectItem>
                     <SelectItem value="fixed">Fixed Monthly</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Biweekly</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -201,7 +202,10 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             <p><span className="font-semibold text-foreground">Fixed Monthly:</span> Full amount appears in the week it falls due, based on the day of month set below.</p>
           )}
           {billType === "weekly" && (
-            <p><span className="font-semibold text-foreground">Weekly:</span> This amount is added to every single week.</p>
+            <p><span className="font-semibold text-foreground">Weekly:</span> This amount is added to every single budget period.</p>
+          )}
+          {billType === "biweekly" && (
+            <p><span className="font-semibold text-foreground">Biweekly:</span> This amount is added every other week in a weekly budget, or every period in a biweekly budget.</p>
           )}
         </div>
 
@@ -220,7 +224,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             )}
           />
 
-          {billType !== "weekly" && (
+          {billType !== "weekly" && billType !== "biweekly" && (
             <FormField
               control={form.control}
               name="dayOfMonth"

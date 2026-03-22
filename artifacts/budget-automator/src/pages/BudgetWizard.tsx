@@ -223,6 +223,17 @@ function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: 
   }
 }
 
+function debtBillType(d: { paymentFrequency?: string | null; billAsBalanced?: boolean | null }): "weekly" | "biweekly" | "balanced" | "fixed" {
+  if (d.paymentFrequency === "weekly") return "weekly";
+  if (d.paymentFrequency === "biweekly") return "biweekly";
+  return d.billAsBalanced ? "balanced" : "fixed";
+}
+
+function debtBillDayOfMonth(d: { paymentFrequency?: string | null; dueDay?: number | null }): number | null {
+  if (d.paymentFrequency === "weekly" || d.paymentFrequency === "biweekly") return null;
+  return d.dueDay ?? 1;
+}
+
 function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null; createdAt?: string | null }, showReminders: boolean): boolean {
   if (!showReminders) return false;
   if (!debt.dueDay) return false;
@@ -563,9 +574,9 @@ export function BudgetWizard({
         return [...prev, ...missing.map(d => ({
           name: `${d.name} (min payment)`,
           amount: -Math.abs(d.minimumPayment),
-          dayOfMonth: d.dueDay ?? 1,
+          dayOfMonth: debtBillDayOfMonth(d),
           category: "Debt Payment",
-          type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
+          type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
         }))];
@@ -636,9 +647,9 @@ export function BudgetWizard({
         const newDebtBills = missing.map(d => ({
           name: `${d.name} (min payment)`,
           amount: -Math.abs(d.minimumPayment),
-          dayOfMonth: d.dueDay ?? 1,
+          dayOfMonth: debtBillDayOfMonth(d),
           category: "Debt Payment",
-          type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
+          type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
         }));
@@ -861,9 +872,9 @@ export function BudgetWizard({
               .map(d => ({
                 name: `${d.name} (min payment)`,
                 amount: -Math.abs(d.minimumPayment),
-                dayOfMonth: d.dueDay ?? 1,
+                dayOfMonth: debtBillDayOfMonth(d),
                 category: "Debt Payment",
-                type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
+                type: debtBillType(d),
                 color: "red",
                 sourceDebtId: d.id,
               }));
@@ -2067,7 +2078,7 @@ export function BudgetWizard({
 
   const migrateLegacyBill = (bill: any): Bill => {
     if (bill.type) return bill as Bill;
-    const legacyTypeMap: Record<string, string> = { rent: "balanced", utilities: "balanced", car: "balanced", fixed: "fixed", weekly: "weekly" };
+    const legacyTypeMap: Record<string, string> = { rent: "balanced", utilities: "balanced", car: "balanced", fixed: "fixed", weekly: "weekly", biweekly: "biweekly" };
     const legacyCategoryMap: Record<string, string> = { rent: "Rent", utilities: "Utilities", car: "Car", fixed: "Fixed", weekly: "Weekly" };
     const cat = bill.category ?? "fixed";
     return { ...bill, type: legacyTypeMap[cat] ?? "fixed", color: bill.color ?? "none", category: legacyCategoryMap[cat] ?? bill.category } as Bill;
@@ -2095,9 +2106,9 @@ export function BudgetWizard({
         addBill({
           name: `${debt.name} (min payment)`,
           amount: -Math.abs(debt.minimumPayment),
-          dayOfMonth: debt.dueDay ?? 1,
+          dayOfMonth: debtBillDayOfMonth(debt),
           category: "Debt Payment",
-          type: debt.billAsBalanced ? "balanced" : "fixed",
+          type: debtBillType(debt),
           color: "red",
           sourceDebtId: debtId,
         });
@@ -2121,9 +2132,9 @@ export function BudgetWizard({
         .map(d => ({
           name: `${d.name} (min payment)`,
           amount: -Math.abs(d.minimumPayment),
-          dayOfMonth: d.dueDay ?? 1,
+          dayOfMonth: debtBillDayOfMonth(d),
           category: "Debt Payment",
-          type: d.billAsBalanced ? "balanced" as const : "fixed" as const,
+          type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
         }));
@@ -2142,7 +2153,7 @@ export function BudgetWizard({
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
   const monthlyAmount = (b: { amount: number; type: string }) =>
-    Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : 1);
+    Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : 1);
 
   const nonDebtBills = bills.filter(b => !b.sourceDebtId);
   const totalAllBillsMonthly = nonDebtBills.reduce((s, b) => s + monthlyAmount(b), 0);
@@ -3105,7 +3116,7 @@ export function BudgetWizard({
                             </div>
                             <div className="flex items-center justify-between mt-3">
                               <span className="text-xs text-muted-foreground">
-                                {bill.type === "weekly" ? "Weekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                                {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                               </span>
                               <div className="flex gap-1">
                                 <Button
@@ -4047,7 +4058,8 @@ export function BudgetWizard({
                 if (linkedBillIdx >= 0) {
                   updateBill(linkedBillIdx, {
                     ...bills[linkedBillIdx],
-                    type: data.billAsBalanced ? "balanced" : "fixed",
+                    type: debtBillType(data),
+                    dayOfMonth: debtBillDayOfMonth(data),
                   });
                 }
               } else {
@@ -4062,9 +4074,9 @@ export function BudgetWizard({
                   addBill({
                     name: `${data.name} (min payment)`,
                     amount: -Math.abs(data.minimumPayment),
-                    dayOfMonth: data.dueDay ?? 1,
+                    dayOfMonth: debtBillDayOfMonth(data),
                     category: "Debt Payment",
-                    type: data.billAsBalanced ? "balanced" : "fixed",
+                    type: debtBillType(data),
                     color: "red",
                     sourceDebtId: data.id,
                   });
@@ -4308,6 +4320,11 @@ export function BudgetWizard({
                                 <DebtTypeIcon type={debt.type} />
                                 <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
                               </Badge>
+                              {(debt.paymentFrequency === "weekly" || debt.paymentFrequency === "biweekly") && (
+                                <Badge variant="outline" className="text-xs px-2 py-0.5 bg-teal-50 text-teal-700 border-teal-200">
+                                  {debt.paymentFrequency === "weekly" ? "Weekly payments" : "Biweekly payments"}
+                                </Badge>
+                              )}
                               {isPaymentLikelyDue(debt, showPaymentReminders) && (
                                 <button
                                   type="button"
@@ -4526,7 +4543,7 @@ export function BudgetWizard({
                           </div>
                           <div className="flex items-center justify-between mt-3">
                             <span className="text-xs text-muted-foreground">
-                              {bill.type === "weekly" ? "Weekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                              {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                             </span>
                             <div className="flex gap-1">
                               <Button

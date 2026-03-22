@@ -35,4 +35,6 @@ export interface Debt {
   lastPaymentAmount?: number | null;
   /** ISO date string when the debt was created (optional, used for payment-due nudge) */
   createdAt?: string | null;
+  /** Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable period. */
+  paymentFrequency?: "monthly" | "weekly" | "biweekly" | null;
 }

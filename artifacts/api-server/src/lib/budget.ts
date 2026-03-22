@@ -40,6 +40,7 @@ export function generateWeeklyBudgets(
   const balancedBills = bills.filter((b) => b.type === "balanced");
   const fixedBills = bills.filter((b) => b.type === "fixed");
   const weeklyBills = bills.filter((b) => b.type === "weekly");
+  const biweeklyBills = bills.filter((b) => b.type === "biweekly");
 
   // alwaysBills = balanced with no specific due day (varies across all weeks)
   const alwaysBills = balancedBills.filter((b) => !b.dayOfMonth);
@@ -136,6 +137,34 @@ export function generateWeeklyBudgets(
         for (let o = 0; o < occurrences; o++) {
           weeks[i].fixedWeeklyBills.push({
             name: occurrences > 1 ? `${bill.name} (wk ${o + 1})` : bill.name,
+            amount: bill.amount,
+            color: bill.sourceDebtId ? undefined : bill.color,
+          });
+        }
+      }
+    }
+  }
+
+  // ── Add biweekly bills ───────────────────────────────────────────────────
+  // Weekly budget: every other period (periods 0, 2, 4, …)
+  // Biweekly budget: every period (one payment per 14-day period)
+  // Monthly budget: Math.round(days/14) occurrences per period (~2/month)
+  for (const bill of biweeklyBills) {
+    for (let i = 0; i < weeks.length; i++) {
+      if (payPeriod === "weekly") {
+        if (i % 2 === 0) {
+          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+        }
+      } else if (payPeriod === "biweekly") {
+        weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+      } else {
+        const periodStart = weeks[i].start;
+        const periodEnd = weeks[i].end;
+        const diffDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000) + 1;
+        const occurrences = Math.max(1, Math.round(diffDays / 14));
+        for (let o = 0; o < occurrences; o++) {
+          weeks[i].fixedWeeklyBills.push({
+            name: occurrences > 1 ? `${bill.name} (pmt ${o + 1})` : bill.name,
             amount: bill.amount,
             color: bill.sourceDebtId ? undefined : bill.color,
           });

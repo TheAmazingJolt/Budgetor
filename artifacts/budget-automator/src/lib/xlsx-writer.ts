@@ -100,6 +100,8 @@ function writeBillsSectionBelow(
     const dayStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'center' } };
     const dayValue = bill.type === 'weekly'
       ? 'Weekly'
+      : bill.type === 'biweekly'
+      ? 'Biweekly'
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
     const billDisplayName = bill.name;
     set(sheet, row, 0, makeCell(billDisplayName,       nameStyle));

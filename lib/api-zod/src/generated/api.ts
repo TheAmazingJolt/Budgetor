@@ -47,7 +47,7 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -216,6 +216,8 @@ export const SavedBudgetListResponse = zod.object({
               .max(savedBudgetListResponseBudgetsItemDebtsItemDueDayMax)
               .nullish()
               .describe("Day of month the payment is due (1-31, optional)"),
+            paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+            billAsBalanced: zod.boolean().nullish(),
           }),
         )
         .optional(),
@@ -269,6 +271,8 @@ export const SavedBudgetCreateBody = zod.object({
           .max(savedBudgetCreateBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+        billAsBalanced: zod.boolean().nullish(),
       }),
     )
     .optional(),
@@ -320,6 +324,8 @@ export const SavedBudgetCreateResponse = zod.object({
             .max(savedBudgetCreateResponseBudgetDebtsItemDueDayMax)
             .nullish()
             .describe("Day of month the payment is due (1-31, optional)"),
+          paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+          billAsBalanced: zod.boolean().nullish(),
         }),
       )
       .optional(),
@@ -376,6 +382,8 @@ export const SavedBudgetUpdateBody = zod.object({
           .max(savedBudgetUpdateBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+        billAsBalanced: zod.boolean().nullish(),
       }),
     )
     .optional(),
@@ -427,6 +435,8 @@ export const SavedBudgetUpdateResponse = zod.object({
             .max(savedBudgetUpdateResponseBudgetDebtsItemDueDayMax)
             .nullish()
             .describe("Day of month the payment is due (1-31, optional)"),
+          paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+          billAsBalanced: zod.boolean().nullish(),
         }),
       )
       .optional(),
@@ -505,7 +515,7 @@ export const SheetReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -553,7 +563,7 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -629,7 +639,7 @@ export const SheetWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -680,6 +690,8 @@ export const SheetWriteBody = zod.object({
           .max(sheetWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+        billAsBalanced: zod.boolean().nullish(),
       }),
     )
     .optional(),
@@ -770,6 +782,8 @@ export const SheetCreateAndWriteBody = zod.object({
           .max(sheetCreateAndWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+        billAsBalanced: zod.boolean().nullish(),
       }),
     )
     .optional(),
@@ -786,7 +800,7 @@ export const SheetCreateAndWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -866,7 +880,7 @@ export const ExcelReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -914,7 +928,7 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1015,6 +1029,8 @@ export const ExcelWriteBody = zod.object({
           .max(excelWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+        billAsBalanced: zod.boolean().nullish(),
       }),
     )
     .optional(),
@@ -1031,7 +1047,7 @@ export const ExcelWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -1130,6 +1146,8 @@ export const ExcelCreateAndWriteBody = zod.object({
           .max(excelCreateAndWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
+        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+        billAsBalanced: zod.boolean().nullish(),
       }),
     )
     .optional(),
@@ -1146,7 +1164,7 @@ export const ExcelCreateAndWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -1183,7 +1201,7 @@ export const GetUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1214,7 +1232,7 @@ export const UpdateUserBillsBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1241,7 +1259,7 @@ export const UpdateUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1294,6 +1312,8 @@ export const GetUserDebtsResponse = zod.object({
         .max(getUserDebtsResponseDebtsItemDueDayMax)
         .nullish()
         .describe("Day of month the payment is due (1-31, optional)"),
+      paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+      billAsBalanced: zod.boolean().nullish(),
     }),
   ),
 });
@@ -1337,6 +1357,8 @@ export const UpdateUserDebtsBody = zod.object({
         .max(updateUserDebtsBodyDebtsItemDueDayMax)
         .nullish()
         .describe("Day of month the payment is due (1-31, optional)"),
+      paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+      billAsBalanced: zod.boolean().nullish(),
     }),
   ),
 });
@@ -1376,6 +1398,8 @@ export const UpdateUserDebtsResponse = zod.object({
         .max(updateUserDebtsResponseDebtsItemDueDayMax)
         .nullish()
         .describe("Day of month the payment is due (1-31, optional)"),
+      paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
+      billAsBalanced: zod.boolean().nullish(),
     }),
   ),
 });
