@@ -78,11 +78,11 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
   const isCreditCard = debtType === "credit_card";
   const isLoanType = debtType === "personal_loan" || debtType === "student_loan" || debtType === "car_loan";
   const isInstallment = debtType === "installment";
-  const isRecurringFrequency = paymentFrequency === "weekly" || paymentFrequency === "biweekly";
+  const isRecurringFrequency = isInstallment && (paymentFrequency === "weekly" || paymentFrequency === "biweekly");
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
     const isNew = !initialData;
-    const recurring = values.paymentFrequency === "weekly" || values.paymentFrequency === "biweekly";
+    const recurring = values.type === "installment" && (values.paymentFrequency === "weekly" || values.paymentFrequency === "biweekly");
     onSubmit({
       id: initialData?.id ?? crypto.randomUUID(),
       name: values.name,
