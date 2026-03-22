@@ -223,9 +223,8 @@ function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: 
   }
 }
 
-function debtBillType(d: { paymentFrequency?: string | null; billAsBalanced?: boolean | null }): "weekly" | "biweekly" | "balanced" | "fixed" {
-  if (d.paymentFrequency === "weekly") return "weekly";
-  if (d.paymentFrequency === "biweekly") return "biweekly";
+function debtBillType(d: { paymentFrequency?: string | null; billAsBalanced?: boolean | null }): "weekly" | "balanced" | "fixed" {
+  if (d.paymentFrequency === "weekly" || d.paymentFrequency === "biweekly") return "weekly";
   return d.billAsBalanced ? "balanced" : "fixed";
 }
 
