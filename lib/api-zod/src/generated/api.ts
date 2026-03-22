@@ -57,6 +57,7 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
 });
@@ -525,6 +526,7 @@ export const SheetReadResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -573,6 +575,7 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -649,6 +652,7 @@ export const SheetWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
       }),
     )
     .optional(),
@@ -810,6 +814,7 @@ export const SheetCreateAndWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
       }),
     )
     .optional(),
@@ -890,6 +895,7 @@ export const ExcelReadResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -938,6 +944,7 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
   existingWeeks: zod.array(
@@ -1057,6 +1064,7 @@ export const ExcelWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
       }),
     )
     .optional(),
@@ -1174,6 +1182,7 @@ export const ExcelCreateAndWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
       }),
     )
     .optional(),
@@ -1211,6 +1220,7 @@ export const GetUserBillsResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
 });
@@ -1242,6 +1252,7 @@ export const UpdateUserBillsBody = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
 });
@@ -1269,6 +1280,7 @@ export const UpdateUserBillsResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
     }),
   ),
 });

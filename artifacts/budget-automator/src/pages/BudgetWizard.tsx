@@ -223,6 +223,33 @@ function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: 
   }
 }
 
+function calcDebtPayoffDate(
+  balance: number,
+  minimumPayment: number,
+  interestRate?: number | null,
+  paymentFrequency?: string | null
+): string | null {
+  if (!balance || balance <= 0 || !minimumPayment || minimumPayment <= 0) return null;
+  const freq = paymentFrequency === "weekly" ? 52 : paymentFrequency === "biweekly" ? 26 : 12;
+  const annualRate = interestRate ?? 0;
+  let months: number;
+  if (annualRate > 0) {
+    const periodicRate = annualRate / 100 / freq;
+    const periodicInterest = balance * periodicRate;
+    if (minimumPayment <= periodicInterest) return null;
+    const periods = -Math.log(1 - (balance * periodicRate) / minimumPayment) / Math.log(1 + periodicRate);
+    if (!isFinite(periods) || periods <= 0) return null;
+    months = Math.ceil(periods * (12 / freq));
+  } else {
+    const periods = Math.ceil(balance / minimumPayment);
+    months = Math.ceil(periods * (12 / freq));
+  }
+  if (months <= 0) return null;
+  const payoffDate = new Date();
+  payoffDate.setMonth(payoffDate.getMonth() + months);
+  return payoffDate.toISOString().split("T")[0];
+}
+
 function debtBillType(d: { paymentFrequency?: string | null; billAsBalanced?: boolean | null }): "weekly" | "biweekly" | "balanced" | "fixed" {
   if (d.paymentFrequency === "weekly") return "weekly";
   if (d.paymentFrequency === "biweekly") return "biweekly";
@@ -579,6 +606,7 @@ export function BudgetWizard({
           type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
         }))];
       });
       setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill).map(d => d.id)));
@@ -652,6 +680,7 @@ export function BudgetWizard({
           type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
         }));
         setBills([...serverBills, ...newDebtBills]);
       }
@@ -877,6 +906,7 @@ export function BudgetWizard({
                 type: debtBillType(d),
                 color: "red",
                 sourceDebtId: d.id,
+                payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
               }));
             const allUploadBills = [...billsToUse, ...debtBillsFromFile];
             setBills(allUploadBills);
@@ -2111,6 +2141,7 @@ export function BudgetWizard({
           type: debtBillType(debt),
           color: "red",
           sourceDebtId: debtId,
+          payoffDate: calcDebtPayoffDate(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency),
         });
       }
     } else {
@@ -2137,6 +2168,7 @@ export function BudgetWizard({
           type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
         }));
       if (newDebtBills.length > 0) {
         setBills([...bills, ...newDebtBills]);
@@ -4060,6 +4092,7 @@ export function BudgetWizard({
                     ...bills[linkedBillIdx],
                     type: debtBillType(data),
                     dayOfMonth: debtBillDayOfMonth(data),
+                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency),
                   });
                 }
               } else {
@@ -4079,6 +4112,7 @@ export function BudgetWizard({
                     type: debtBillType(data),
                     color: "red",
                     sourceDebtId: data.id,
+                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency),
                   });
                 }
               }

@@ -106,6 +106,7 @@ export function generateWeeklyBudgets(
   for (const bill of fixedBills) {
     const day = bill.dayOfMonth;
     if (day == null) continue;
+    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
 
     for (let m = 0; m < totalMonths + 1; m++) {
       const year = startYear + Math.floor((startMonth + m) / 12);
@@ -113,6 +114,8 @@ export function generateWeeklyBudgets(
       const maxDay = new Date(year, month + 1, 0).getDate();
       const actualDay = Math.min(day, maxDay);
       const dueDate = new Date(year, month, actualDay);
+
+      if (billPayoffDate && dueDate >= billPayoffDate) break;
 
       for (let i = 0; i < weeks.length; i++) {
         const { start, end } = weeks[i];
@@ -126,7 +129,9 @@ export function generateWeeklyBudgets(
 
   // ── Add weekly bills to every period ────────────────────────────────────
   for (const bill of weeklyBills) {
+    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
     for (let i = 0; i < weeks.length; i++) {
+      if (billPayoffDate && weeks[i].start >= billPayoffDate) continue;
       if (payPeriod === "weekly") {
         weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
       } else {
@@ -150,7 +155,9 @@ export function generateWeeklyBudgets(
   // Biweekly budget: every period (one payment per 14-day period)
   // Monthly budget: Math.round(days/14) occurrences per period (~2/month)
   for (const bill of biweeklyBills) {
+    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
     for (let i = 0; i < weeks.length; i++) {
+      if (billPayoffDate && weeks[i].start >= billPayoffDate) continue;
       if (payPeriod === "weekly") {
         if (i % 2 === 0) {
           weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
@@ -230,19 +237,29 @@ export function generateWeeklyBudgets(
       .filter((i) => i >= 0);
     const N = monthWeekIndices.length;
 
+    // Compute start of this month for payoff comparison
+    const [mkYear, mkMonth] = mk.split("-").map(Number);
+    const monthStartDate = new Date(mkYear, mkMonth, 1);
+
     // ── "Varies" balanced bills (no due day) ─────────────────────────────
-    if (alwaysTotal > 0 && N > 0) {
+    // Filter out bills paid off before this month starts
+    const effectiveAlwaysBills = alwaysBills.filter(
+      (b) => !b.payoffDate || new Date(b.payoffDate) > monthStartDate
+    );
+    const effectiveAlwaysTotal = effectiveAlwaysBills.reduce((s, b) => s + Math.abs(b.amount), 0);
+
+    if (effectiveAlwaysTotal > 0 && N > 0) {
       const fixedTotals = monthWeekIndices.map((idx) =>
         weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0)
       );
 
-      const weeklyAmounts = equalizeAcrossSlots(fixedTotals, -alwaysTotal);
+      const weeklyAmounts = equalizeAcrossSlots(fixedTotals, -effectiveAlwaysTotal);
 
-      const parts = alwaysBills
+      const parts = effectiveAlwaysBills
         .filter((b) => Math.abs(b.amount) > 0)
         .map((b) => ({
           name: `Partial ${b.name}`,
-          ratio: Math.abs(b.amount) / alwaysTotal,
+          ratio: Math.abs(b.amount) / effectiveAlwaysTotal,
           color: b.sourceDebtId ? 'red' : b.color,
         }));
 
@@ -279,6 +296,9 @@ export function generateWeeklyBudgets(
     // amounts so equalization accounts for what's already committed.
 
     for (const bill of timedBills) {
+      // Skip if this bill is paid off before this month
+      if (bill.payoffDate && new Date(bill.payoffDate) <= monthStartDate) continue;
+
       const day = bill.dayOfMonth!;
       const [yearStr, monthStr] = mk.split("-");
       const year = parseInt(yearStr);
