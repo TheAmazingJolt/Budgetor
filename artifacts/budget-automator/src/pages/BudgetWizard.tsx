@@ -223,17 +223,23 @@ function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: 
   }
 }
 
-function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null }, showReminders: boolean): boolean {
+function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null; createdAt?: string | null }, showReminders: boolean): boolean {
   if (!showReminders) return false;
   if (!debt.dueDay) return false;
+  const now = new Date();
   if (debt.lastPaymentDate) {
     const paid = new Date(debt.lastPaymentDate);
-    const now = new Date();
     if (paid.getFullYear() === now.getFullYear() && paid.getMonth() === now.getMonth()) {
       return false;
     }
   }
-  return new Date().getDate() >= debt.dueDay;
+  if (debt.createdAt) {
+    const created = new Date(debt.createdAt);
+    if (created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth()) {
+      return false;
+    }
+  }
+  return now.getDate() >= debt.dueDay;
 }
 
 function nextStartAfterLabel(label: string): string | null {
