@@ -115,12 +115,13 @@ export function generateWeeklyBudgets(
       const actualDay = Math.min(day, maxDay);
       const dueDate = new Date(year, month, actualDay);
 
-      if (billPayoffDate && dueDate >= billPayoffDate) break;
-
       for (let i = 0; i < weeks.length; i++) {
         const { start, end } = weeks[i];
         if (dueDate >= start && dueDate <= end) {
-          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+          // Place bill only if the week starts before the payoff date
+          if (!billPayoffDate || start < billPayoffDate) {
+            weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+          }
           break;
         }
       }
@@ -235,57 +236,37 @@ export function generateWeeklyBudgets(
     const monthWeekIndices = weeks
       .map((w, i) => (w.month === mk ? i : -1))
       .filter((i) => i >= 0);
-    const N = monthWeekIndices.length;
-
-    // Compute start of this month for payoff comparison
-    const [mkYear, mkMonth] = mk.split("-").map(Number);
-    const monthStartDate = new Date(mkYear, mkMonth, 1);
-
     // ── "Varies" balanced bills (no due day) ─────────────────────────────
-    // Filter out bills paid off before this month starts
-    const effectiveAlwaysBills = alwaysBills.filter(
-      (b) => !b.payoffDate || new Date(b.payoffDate) > monthStartDate
-    );
-    const effectiveAlwaysTotal = effectiveAlwaysBills.reduce((s, b) => s + Math.abs(b.amount), 0);
+    // Initialise largeBills to empty for each week in the month.
+    // Each bill is then distributed individually, only across weeks that
+    // start before the bill's payoff date (week.start < payoffDate).
+    for (const idx of monthWeekIndices) weeks[idx].largeBills = [];
 
-    if (effectiveAlwaysTotal > 0 && N > 0) {
-      const fixedTotals = monthWeekIndices.map((idx) =>
-        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0)
+    for (const bill of alwaysBills) {
+      if (Math.abs(bill.amount) < 0.005) continue;
+      const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+      // Eligible week indices: weeks that start before this bill's payoff date
+      const eligibleIndices = billPayoffDate
+        ? monthWeekIndices.filter((idx) => weeks[idx].start < billPayoffDate)
+        : [...monthWeekIndices];
+      if (eligibleIndices.length === 0) continue;
+
+      const baseTotals = eligibleIndices.map((idx) =>
+        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+        weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
       );
-
-      const weeklyAmounts = equalizeAcrossSlots(fixedTotals, -effectiveAlwaysTotal);
-
-      const parts = effectiveAlwaysBills
-        .filter((b) => Math.abs(b.amount) > 0)
-        .map((b) => ({
-          name: `Partial ${b.name}`,
-          ratio: Math.abs(b.amount) / effectiveAlwaysTotal,
-          color: b.sourceDebtId ? 'red' : b.color,
-        }));
-
-      for (let j = 0; j < monthWeekIndices.length; j++) {
-        const idx = monthWeekIndices[j];
-        const weekTotal = Math.round(weeklyAmounts[j] * 100) / 100;
-        const items: WeeklyBill[] = [];
-
-        if (Math.abs(weekTotal) >= 0.005 && parts.length > 0) {
-          let allocated = 0;
-          for (let p = 0; p < parts.length; p++) {
-            if (p === parts.length - 1) {
-              items.push({ name: parts[p].name, amount: Math.round((weekTotal - allocated) * 100) / 100, color: parts[p].color });
-            } else {
-              const val = Math.round(weekTotal * parts[p].ratio * 100) / 100;
-              items.push({ name: parts[p].name, amount: val, color: parts[p].color });
-              allocated += val;
-            }
-          }
+      const slotAmounts = equalizeAcrossSlots(baseTotals, bill.amount);
+      for (let j = 0; j < eligibleIndices.length; j++) {
+        const idx = eligibleIndices[j];
+        const amt = Math.round(slotAmounts[j] * 100) / 100;
+        if (Math.abs(amt) >= 0.005) {
+          weeks[idx].largeBills.push({
+            name: `Partial ${bill.name}`,
+            amount: amt,
+            color: bill.sourceDebtId ? 'red' : bill.color,
+          });
         }
-
-        weeks[idx].largeBills = items;
       }
-    } else {
-      // No always-bills — initialise largeBills to empty for each week
-      for (const idx of monthWeekIndices) weeks[idx].largeBills = [];
     }
 
     // ── Timed balanced bills (due day set) ───────────────────────────────
@@ -296,8 +277,7 @@ export function generateWeeklyBudgets(
     // amounts so equalization accounts for what's already committed.
 
     for (const bill of timedBills) {
-      // Skip if this bill is paid off before this month
-      if (bill.payoffDate && new Date(bill.payoffDate) <= monthStartDate) continue;
+      const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
 
       const day = bill.dayOfMonth!;
       const [yearStr, monthStr] = mk.split("-");
@@ -313,6 +293,11 @@ export function generateWeeklyBudgets(
       // whole month, not dump everything into that one week).
       if (activeIndices.length === 0 || (activeIndices.length === 1 && monthWeekIndices.length > 1)) {
         activeIndices = [...monthWeekIndices];
+      }
+      // Apply payoff cutoff at week level: only include weeks that start before payoff date
+      if (billPayoffDate) {
+        activeIndices = activeIndices.filter((idx) => weeks[idx].start < billPayoffDate);
+        if (activeIndices.length === 0) continue;
       }
 
       // Base totals for eligible weeks = fixed + weekly + already-placed balanced
