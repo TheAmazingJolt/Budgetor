@@ -230,23 +230,29 @@ function calcDebtPayoffDate(
   paymentFrequency?: string | null
 ): string | null {
   if (!balance || balance <= 0 || !minimumPayment || minimumPayment <= 0) return null;
-  const freq = paymentFrequency === "weekly" ? 52 : paymentFrequency === "biweekly" ? 26 : 12;
+  const isWeekly = paymentFrequency === "weekly";
+  const isBiweekly = paymentFrequency === "biweekly";
+  const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
   const annualRate = interestRate ?? 0;
-  let months: number;
+  let periods: number;
   if (annualRate > 0) {
     const periodicRate = annualRate / 100 / freq;
     const periodicInterest = balance * periodicRate;
     if (minimumPayment <= periodicInterest) return null;
-    const periods = -Math.log(1 - (balance * periodicRate) / minimumPayment) / Math.log(1 + periodicRate);
+    periods = Math.ceil(-Math.log(1 - (balance * periodicRate) / minimumPayment) / Math.log(1 + periodicRate));
     if (!isFinite(periods) || periods <= 0) return null;
-    months = Math.ceil(periods * (12 / freq));
   } else {
-    const periods = Math.ceil(balance / minimumPayment);
-    months = Math.ceil(periods * (12 / freq));
+    periods = Math.ceil(balance / minimumPayment);
   }
-  if (months <= 0) return null;
+  if (periods <= 0) return null;
   const payoffDate = new Date();
-  payoffDate.setMonth(payoffDate.getMonth() + months);
+  if (isWeekly) {
+    payoffDate.setDate(payoffDate.getDate() + periods * 7);
+  } else if (isBiweekly) {
+    payoffDate.setDate(payoffDate.getDate() + periods * 14);
+  } else {
+    payoffDate.setMonth(payoffDate.getMonth() + periods);
+  }
   return payoffDate.toISOString().split("T")[0];
 }
 
