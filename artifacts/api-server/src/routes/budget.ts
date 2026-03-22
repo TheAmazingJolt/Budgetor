@@ -39,7 +39,10 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
     payPeriod ?? "weekly"
   );
 
-  const totalMonthlyBills = bills.reduce((s, b) => s + Math.abs(b.amount), 0);
+  const totalMonthlyBills = bills.reduce(
+    (s, b) => s + Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : 1),
+    0
+  );
   const averageWeeklyBills =
     weeks.length > 0
       ? weeks.reduce((s, w) => s + Math.abs(w.totalBills), 0) / weeks.length
