@@ -223,17 +223,17 @@ function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: 
   }
 }
 
-function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null; createdAt?: string | null }): boolean {
+function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null }, showReminders: boolean): boolean {
+  if (!showReminders) return false;
   if (!debt.dueDay) return false;
-  const referenceDate = debt.lastPaymentDate ?? debt.createdAt ?? null;
-  if (!referenceDate) {
-    return true;
+  if (debt.lastPaymentDate) {
+    const paid = new Date(debt.lastPaymentDate);
+    const now = new Date();
+    if (paid.getFullYear() === now.getFullYear() && paid.getMonth() === now.getMonth()) {
+      return false;
+    }
   }
-  const ref = new Date(referenceDate);
-  const now = new Date();
-  const diffMs = now.getTime() - ref.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  return diffDays >= 25;
+  return new Date().getDate() >= debt.dueDay;
 }
 
 function nextStartAfterLabel(label: string): string | null {
@@ -521,6 +521,7 @@ export function BudgetWizard({
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
   const autoOpenLastSheet = prefsLoaded && userPrefsQuery.data?.preferences?.autoOpenLastSheet !== false;
+  const showPaymentReminders = !prefsLoaded || userPrefsQuery.data?.preferences?.showPaymentReminders !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -4298,7 +4299,7 @@ export function BudgetWizard({
                                 <DebtTypeIcon type={debt.type} />
                                 <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
                               </Badge>
-                              {isPaymentLikelyDue(debt) && (
+                              {isPaymentLikelyDue(debt, showPaymentReminders) && (
                                 <button
                                   type="button"
                                   onClick={() => { setLogPaymentDebtId(debt.id); setLogPaymentAmount(""); }}
@@ -4744,6 +4745,35 @@ export function BudgetWizard({
                         queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
                           ...old,
                           preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
+                        }));
+                        toast({ title: "Failed to save preference", variant: "destructive" });
+                      },
+                    },
+                  );
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="text-sm font-medium">Payment due reminders</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Show a badge on debt cards when a payment is likely due based on the due date</p>
+              </div>
+              <Switch
+                className="ml-4 shrink-0"
+                checked={showPaymentReminders}
+                onCheckedChange={(checked) => {
+                  const previousValue = showPaymentReminders;
+                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                    ...old,
+                    preferences: { ...(old?.preferences ?? {}), showPaymentReminders: checked },
+                  }));
+                  updateUserPrefsMutation.mutate(
+                    { data: { preferences: { showPaymentReminders: checked } } },
+                    {
+                      onError: () => {
+                        queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
+                          ...old,
+                          preferences: { ...(old?.preferences ?? {}), showPaymentReminders: previousValue },
                         }));
                         toast({ title: "Failed to save preference", variant: "destructive" });
                       },

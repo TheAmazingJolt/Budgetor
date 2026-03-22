@@ -1519,6 +1519,8 @@ components:
               type: boolean
             skipOpeningScreen:
               type: boolean
+            showPaymentReminders:
+              type: boolean
           additionalProperties: true
       required:
         - preferences
@@ -1532,6 +1534,8 @@ components:
             autoOpenLastSheet:
               type: boolean
             skipOpeningScreen:
+              type: boolean
+            showPaymentReminders:
               type: boolean
           additionalProperties: true
       required:
