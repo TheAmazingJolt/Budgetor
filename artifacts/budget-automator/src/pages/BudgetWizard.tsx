@@ -3064,7 +3064,7 @@ export function BudgetWizard({
                         : "Bills loaded. Edit if needed, then generate."}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <Button
                       variant="outline"
                       size="default"
