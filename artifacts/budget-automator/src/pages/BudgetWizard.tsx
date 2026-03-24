@@ -627,7 +627,7 @@ export function BudgetWizard({
   useEffect(() => {
     if (!isSignedIn) return;
     if (!debtsLoadedForUserRef.current) return;
-    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0);
+    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0) || inputMode === "cloud";
     if (!isAccountMode) return;
     const serialized = JSON.stringify(debts);
     if (serialized === prevDebtsRef.current) return;
@@ -703,7 +703,7 @@ export function BudgetWizard({
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
     if (billsFromImportPendingRef.current) return;
-    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0);
+    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0) || inputMode === "cloud";
     if (!isAccountMode) return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
@@ -1397,6 +1397,7 @@ export function BudgetWizard({
     if (s?.payPeriod) setPayPeriod(s.payPeriod);
     const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
     setDebts(restoredDebts);
+    prevDebtsRef.current = JSON.stringify(restoredDebts);
     const importedIds = new Set<string>();
     for (const debt of restoredDebts) {
       if (b.some((bill: Bill) => bill.sourceDebtId === debt.id)) {
