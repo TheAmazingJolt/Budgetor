@@ -4329,18 +4329,18 @@ export function BudgetWizard({
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {isSignedIn && !(inputMode === "scratch" || (inputMode === "upload" && step === 0)) && (userDebtsQuery.data?.debts?.length ?? 0) > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleAddAccountDebts}
-                  className="rounded-xl text-xs gap-1.5"
+                  className="rounded-xl text-xs gap-1.5 shrink-0"
                 >
                   <FolderOpen className="w-3.5 h-3.5" /> Add my saved debts
                 </Button>
               )}
-              <div className="ml-auto flex gap-2">
+              <div className="flex gap-2 ml-auto shrink-0">
                 {debts.length > 0 && (
                   <Button
                     size="sm"
@@ -4349,7 +4349,7 @@ export function BudgetWizard({
                       const allActive = debts.every(d => debtBillImports.has(d.id));
                       preserveScroll(() => toggleAllDebtsAsBills(!allActive));
                     }}
-                    className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
+                    className="rounded-xl border-red-300 text-red-700 hover:bg-red-50 shrink-0"
                   >
                     {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
                   </Button>
@@ -4357,7 +4357,7 @@ export function BudgetWizard({
                 <Button
                   size="sm"
                   onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
-                  className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+                  className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600 shrink-0"
                 >
                   <Plus className="w-4 h-4 mr-1" /> Add Debt
                 </Button>
