@@ -1492,6 +1492,17 @@ export function BudgetWizard({
       setStep(forceStep);
     } else if (restoredWeeks.length > 0) {
       setStep(2);
+      if (debtsNeedingBills.length > 0) {
+        scheduleAutoGenerate({
+          bills: billsToSet,
+          openingBalance: effectiveOpeningBalance,
+          paycheckAmount: s?.paycheckAmount ?? 0,
+          startDate: effectiveStartDate,
+          endDate: s?.newWeekEndDate,
+          weekCount: s?.weekCount,
+          inputMode: "cloud",
+        });
+      }
     } else {
       setStep(1);
       scheduleAutoGenerate({
