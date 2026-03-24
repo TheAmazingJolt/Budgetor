@@ -3932,7 +3932,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {microsoftAuthenticated && inputMode !== "excel" && !(inputMode === "cloud" && activeLinkedSheet) && (
+                {microsoftAuthenticated && inputMode !== "excel" && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
