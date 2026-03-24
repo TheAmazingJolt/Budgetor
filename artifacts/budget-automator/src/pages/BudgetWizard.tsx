@@ -1473,7 +1473,7 @@ export function BudgetWizard({
     setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
-    setZeroOpeningBalance(true);
+    if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
     setInputMode("cloud");
