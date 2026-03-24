@@ -1505,7 +1505,13 @@ export function BudgetWizard({
       setStep(forceStep);
     } else if (restoredWeeks.length > 0) {
       setStep(2);
-      if (debtsNeedingBills.length > 0) {
+      const debtBillNamesInSavedWeeks = new Set(
+        restoredWeeks.flatMap((w: any) => (w.items ?? []).map((item: any) => item.name))
+      );
+      const debtBillsMissingFromWeeks = billsToSet
+        .filter((bill: Bill) => bill.sourceDebtId)
+        .filter((bill: Bill) => !debtBillNamesInSavedWeeks.has(bill.name));
+      if (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0) {
         scheduleAutoGenerate({
           bills: billsToSet,
           openingBalance: effectiveOpeningBalance,
