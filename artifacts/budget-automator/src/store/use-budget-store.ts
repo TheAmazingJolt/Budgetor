@@ -98,7 +98,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   weekCount: 1,
   openingBalance: 0,
   paycheckAmount: 0,
-  zeroOpeningBalance: false,
+  zeroOpeningBalance: true,
   payPeriod: "weekly",
   generatedWeek: null,
 
@@ -254,7 +254,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       generatedWeek: null,
       openingBalance: 0,
       paycheckAmount: 0,
-      zeroOpeningBalance: false,
+      zeroOpeningBalance: true,
       weekCount: 1,
       payPeriod: "weekly",
     }),

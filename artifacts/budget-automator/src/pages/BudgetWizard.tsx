@@ -1473,7 +1473,7 @@ export function BudgetWizard({
     setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
-    if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
+    setZeroOpeningBalance(true);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
     setInputMode("cloud");
@@ -2276,23 +2276,27 @@ export function BudgetWizard({
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setStep(0)}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
             <div className="bg-gradient-to-br from-primary to-emerald-600 p-2 rounded-xl shadow-md shadow-primary/30">
               <FileSpreadsheet className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="font-bold text-lg leading-none text-foreground">Budgify</h1>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center gap-3">
             {step > 0 && (
               <button
                 onClick={() => setStep(step - 1)}
-                className="sm:hidden flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-3 py-1 rounded-full transition-colors"
+                className="sm:hidden p-1.5 rounded-full text-muted-foreground hover:bg-muted transition-colors"
+                aria-label="Go back"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                {STEPS[step - 1]}
+                <ChevronLeft className="w-5 h-5" />
               </button>
             )}
             <div className="hidden sm:flex items-center gap-2">
@@ -2752,6 +2756,7 @@ export function BudgetWizard({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleLoadSavedBudget(budget, 1);
+                                    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
                                   }}
                                 >
                                   <Settings2 className="h-3.5 w-3.5" />
@@ -2789,8 +2794,8 @@ export function BudgetWizard({
                                 ) : (
                                   <FileSpreadsheet className="w-3 h-3 text-teal-500 shrink-0" />
                                 )}
-                                <span className="text-xs text-muted-foreground truncate">
-                                  {budget.linkedSheetName ?? (budget.linkedSheetType === "google" ? "Google Sheet" : "Excel file")}
+                                <span className="text-xs text-muted-foreground">
+                                  {budget.linkedSheetType === "google" ? "Linked to Google Sheets" : "Linked to Excel"}
                                 </span>
                               </div>
                             )}
@@ -2859,84 +2864,6 @@ export function BudgetWizard({
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
               </div>
-
-              {parsedWorkbook && parsedWorkbook.existingWeeks.length > 0 && inputMode === "upload" && (
-                <Card className="bg-emerald-50/60 border-emerald-200/60">
-                  <CardContent className="p-5">
-                    <p className="text-sm font-semibold text-emerald-800 mb-1">
-                      Last budget week
-                    </p>
-                    <p className="text-lg font-bold text-emerald-900">
-                      {parsedWorkbook.existingWeeks.at(-1)?.label}
-                    </p>
-                    <p className="text-sm text-emerald-700 mt-1">
-                      Ending balance:{" "}
-                      <span className="font-semibold">
-                        ${parsedWorkbook.existingWeeks.at(-1)?.remaining.toFixed(2)}
-                      </span>
-                      {" "}— pre-filled as your opening balance below.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {inputMode === "google" && sheetReadQuery.data && sheetReadQuery.data.existingWeeks.length > 0 && (
-                <Card className="bg-emerald-50/60 border-emerald-200/60">
-                  <CardContent className="p-5">
-                    <p className="text-sm font-semibold text-emerald-800 mb-1">
-                      Last budget week (from Google Sheet)
-                    </p>
-                    <p className="text-lg font-bold text-emerald-900">
-                      {sheetReadQuery.data.existingWeeks.at(-1)?.label}
-                    </p>
-                    <p className="text-sm text-emerald-700 mt-1">
-                      Ending balance:{" "}
-                      <span className="font-semibold">
-                        ${sheetReadQuery.data.existingWeeks.at(-1)?.remaining.toFixed(2)}
-                      </span>
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {inputMode === "excel" && excelReadQuery.data && excelReadQuery.data.existingWeeks.length > 0 && (
-                <Card className="bg-emerald-50/60 border-emerald-200/60">
-                  <CardContent className="p-5">
-                    <p className="text-sm font-semibold text-emerald-800 mb-1">
-                      Last budget week (from Excel Online)
-                    </p>
-                    <p className="text-lg font-bold text-emerald-900">
-                      {(excelReadQuery.data.existingWeeks.at(-1) as any)?.label}
-                    </p>
-                    <p className="text-sm text-emerald-700 mt-1">
-                      Ending balance:{" "}
-                      <span className="font-semibold">
-                        ${((excelReadQuery.data.existingWeeks.at(-1) as any)?.remaining ?? 0).toFixed(2)}
-                      </span>
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {inputMode === "cloud" && cloudExistingWeeks.length > 0 && (
-                <Card className="bg-emerald-50/60 border-emerald-200/60">
-                  <CardContent className="p-5">
-                    <p className="text-sm font-semibold text-emerald-800 mb-1">
-                      Last budget week (from Cloud)
-                    </p>
-                    <p className="text-lg font-bold text-emerald-900">
-                      {cloudExistingWeeks.at(-1)?.label}
-                    </p>
-                    <p className="text-sm text-emerald-700 mt-1">
-                      Ending balance:{" "}
-                      <span className="font-semibold">
-                        ${(cloudExistingWeeks.at(-1)?.remaining ?? 0).toFixed(2)}
-                      </span>
-                      {" "}— pre-filled as your opening balance below.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
 
               <Card className="border-border/40">
                 <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -3010,33 +2937,6 @@ export function BudgetWizard({
                       onChange={(e) => setEndDate(e.target.value)}
                       className="h-11 rounded-xl"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-muted-foreground">
-                        Opening Balance (Remaining Acct)
-                      </Label>
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <Checkbox
-                          checked={zeroOpeningBalance}
-                          onCheckedChange={(v) => setZeroOpeningBalance(!!v)}
-                          id="zero-balance"
-                          className="rounded"
-                        />
-                        <span className="text-xs text-muted-foreground font-medium">Set to $0</span>
-                      </label>
-                    </div>
-                    <div className="relative">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 ${zeroOpeningBalance ? "text-muted-foreground/40" : "text-muted-foreground"}`}>$</span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={zeroOpeningBalance ? 0 : openingBalance}
-                        onChange={(e) => setOpeningBalance(parseFloat(e.target.value) || 0)}
-                        disabled={zeroOpeningBalance}
-                        className="pl-7 h-11 rounded-xl disabled:opacity-40"
-                      />
-                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold text-muted-foreground">
@@ -3972,7 +3872,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {inputMode === "cloud" && activeCloudBudgetId && generatedWeek && (
+                {inputMode !== "cloud" && activeCloudBudgetId && generatedWeek && (
                   <Button
                     size="lg"
                     onClick={handleSaveToCloud}
@@ -3993,7 +3893,7 @@ export function BudgetWizard({
                   </Button>
                 )}
 
-                {inputMode !== "google" && googleAuthenticated && (
+                {googleAuthenticated && inputMode !== "google" && !(inputMode === "cloud" && activeLinkedSheet) && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
@@ -4032,7 +3932,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {inputMode !== "excel" && microsoftAuthenticated && (
+                {microsoftAuthenticated && inputMode !== "excel" && !(inputMode === "cloud" && activeLinkedSheet) && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
