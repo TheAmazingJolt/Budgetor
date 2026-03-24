@@ -3144,7 +3144,7 @@ export function BudgetWizard({
                         {isUpdatingLinkedSheet ? (
                           <><RefreshCw className="w-4 h-4 animate-spin" /> Updating…</>
                         ) : (
-                          <><CloudUpload className="w-4 h-4" /> Update {activeLinkedSheet.name}</>
+                          <><CloudUpload className="w-4 h-4" /> {activeLinkedSheet.type === "google" ? "Sync to Sheets" : "Sync to Excel"}</>
                         )}
                       </Button>
                     )}
