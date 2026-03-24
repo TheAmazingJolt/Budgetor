@@ -157,7 +157,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       }
 
       if (state.payPeriod === "monthly") {
-        const wc = Math.max(1, monthDiff(effectiveStart, endDate));
+        const wc = Math.min(100, Math.max(1, monthDiff(effectiveStart, endDate)));
         return {
           newWeekStartDate: effectiveStart,
           newWeekEndDate: computeEndDate(effectiveStart, wc, "monthly"),
@@ -167,7 +167,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
 
       const diffDays = Math.round((endMs - startMs) / 86400000) + 1;
       const daysPerPeriod = state.payPeriod === "biweekly" ? 14 : 7;
-      const wc = Math.max(1, Math.ceil(diffDays / daysPerPeriod));
+      const wc = Math.min(100, Math.max(1, Math.ceil(diffDays / daysPerPeriod)));
       return {
         newWeekStartDate: effectiveStart,
         newWeekEndDate: endDate,
@@ -195,7 +195,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
         return { newWeekEndDate: end };
       }
       if (state.payPeriod === "monthly") {
-        const wc = Math.max(1, monthDiff(state.newWeekStartDate, end));
+        const wc = Math.min(100, Math.max(1, monthDiff(state.newWeekStartDate, end)));
         return {
           newWeekEndDate: computeEndDate(state.newWeekStartDate, wc, "monthly"),
           weekCount: wc,
@@ -204,14 +204,14 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       const startMs = new Date(state.newWeekStartDate + 'T12:00:00').getTime();
       const diffDays = Math.round((endMs - startMs) / 86400000) + 1;
       const daysPerPeriod = state.payPeriod === "biweekly" ? 14 : 7;
-      const wc = Math.max(1, Math.ceil(diffDays / daysPerPeriod));
+      const wc = Math.min(100, Math.max(1, Math.ceil(diffDays / daysPerPeriod)));
       return { newWeekEndDate: end, weekCount: wc };
     }),
 
   setWeekCount: (count) =>
     set((state) => ({
-      weekCount: Math.max(1, count),
-      newWeekEndDate: computeEndDate(state.newWeekStartDate, Math.max(1, count), state.payPeriod),
+      weekCount: Math.min(100, Math.max(1, count)),
+      newWeekEndDate: computeEndDate(state.newWeekStartDate, Math.min(100, Math.max(1, count)), state.payPeriod),
     })),
 
   setPayPeriod: (val) =>

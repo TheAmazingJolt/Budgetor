@@ -2964,9 +2964,9 @@ export function BudgetWizard({
                     <Input
                       type="number"
                       min={1}
-                      max={52}
+                      max={100}
                       value={weekCount}
-                      onChange={(e) => setWeekCount(parseInt(e.target.value) || 1)}
+                      onChange={(e) => setWeekCount(Math.min(100, parseInt(e.target.value) || 1))}
                       className="h-11 rounded-xl"
                     />
                   </div>
@@ -4278,9 +4278,9 @@ export function BudgetWizard({
               <Input
                 type="number"
                 min={1}
-                max={52}
+                max={100}
                 value={weekCount}
-                onChange={(e) => setWeekCount(parseInt(e.target.value) || 1)}
+                onChange={(e) => setWeekCount(Math.min(100, parseInt(e.target.value) || 1))}
                 className="h-11 rounded-xl"
               />
             </div>
