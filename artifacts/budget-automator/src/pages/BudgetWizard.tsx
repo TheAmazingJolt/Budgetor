@@ -1065,6 +1065,29 @@ export function BudgetWizard({
       return;
     }
     setDebts((prev: Debt[]) => [...prev, ...toAdd]);
+    const toImport = toAdd.filter(d => !d.excludeFromBill);
+    const newDebtBills = toImport
+      .filter(d => !bills.some(b => b.sourceDebtId === d.id))
+      .map(d => ({
+        name: `${d.name} (min payment)`,
+        amount: -Math.abs(d.minimumPayment),
+        dayOfMonth: debtBillDayOfMonth(d),
+        category: "Debt Payment",
+        type: debtBillType(d),
+        color: "red",
+        sourceDebtId: d.id,
+        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+      }));
+    if (newDebtBills.length > 0) {
+      setBills(prev => [...prev, ...newDebtBills]);
+    }
+    if (toImport.length > 0) {
+      setDebtBillImports(prev => {
+        const next = new Set(prev);
+        toImport.forEach(d => next.add(d.id));
+        return next;
+      });
+    }
     toast({ title: `${toAdd.length} debt${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved debts have been added to this budget." });
   };
 
@@ -1391,16 +1414,32 @@ export function BudgetWizard({
       }
     }
 
+    const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
+    // Auto-create minimum payment bills for any debt that has no matching bill saved
+    const existingDebtBillIds = new Set(billsToSet.filter((bill: Bill) => bill.sourceDebtId).map((bill: Bill) => bill.sourceDebtId as string));
+    const debtsNeedingBills = restoredDebts.filter((d: Debt) => !existingDebtBillIds.has(d.id) && !d.excludeFromBill);
+    if (debtsNeedingBills.length > 0) {
+      const autoBills = debtsNeedingBills.map((d: Debt) => ({
+        name: `${d.name} (min payment)`,
+        amount: -Math.abs(d.minimumPayment),
+        dayOfMonth: debtBillDayOfMonth(d),
+        category: "Debt Payment",
+        type: debtBillType(d),
+        color: "red",
+        sourceDebtId: d.id,
+        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+      }));
+      billsToSet = [...billsToSet, ...autoBills];
+    }
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
     prevBillsRef.current = JSON.stringify(billsToSet);
     if (s?.payPeriod) setPayPeriod(s.payPeriod);
-    const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
     setDebts(restoredDebts);
     prevDebtsRef.current = JSON.stringify(restoredDebts);
     const importedIds = new Set<string>();
     for (const debt of restoredDebts) {
-      if (b.some((bill: Bill) => bill.sourceDebtId === debt.id)) {
+      if (billsToSet.some((bill: Bill) => bill.sourceDebtId === debt.id)) {
         importedIds.add(debt.id);
       }
     }
