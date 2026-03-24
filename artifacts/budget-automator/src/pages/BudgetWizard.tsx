@@ -82,6 +82,8 @@ import {
   generateBudget,
   sheetWrite,
   excelWrite,
+  getSheetReadQueryKey,
+  getExcelReadQueryKey,
 } from "@workspace/api-client-react";
 import type { BudgetResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -1229,6 +1231,7 @@ export function BudgetWizard({
       });
       setExcelWriteSuccess(true);
       setWeekEdits({});
+      queryClient.invalidateQueries({ queryKey: getExcelReadQueryKey(selectedExcelFileId) });
       toast({
         title: "Written to Excel Online",
         description: `${weeksToWrite.length} budget weeks written to "${selectedExcelFileName}".`,
@@ -1904,6 +1907,7 @@ export function BudgetWizard({
       });
       setSheetWriteSuccess(true);
       setWeekEdits({});
+      queryClient.invalidateQueries({ queryKey: getSheetReadQueryKey(selectedSheetId) });
       toast({
         title: "Written to Google Sheets",
         description: `${weeksToWrite.length} budget weeks written to "${selectedSheetName}".`,
