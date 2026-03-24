@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { google, type sheets_v4 } from "googleapis";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -31,15 +31,15 @@ function getAuthedClient(req: any) {
       "";
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     oauth2Client.setCredentials({
-      access_token: user.googleAccessToken,
-      refresh_token: user.googleRefreshToken ?? undefined,
+      access_token: maybeDecrypt(user.googleAccessToken) ?? undefined,
+      refresh_token: maybeDecrypt(user.googleRefreshToken ?? null) ?? undefined,
       expiry_date: user.googleTokenExpiry ?? undefined,
     });
 
     oauth2Client.on("tokens", (newTokens) => {
       const update: Record<string, unknown> = { updatedAt: new Date() };
-      if (newTokens.access_token) update.googleAccessToken = newTokens.access_token;
-      if (newTokens.refresh_token) update.googleRefreshToken = newTokens.refresh_token;
+      if (newTokens.access_token) update.googleAccessToken = maybeEncrypt(newTokens.access_token);
+      if (newTokens.refresh_token) update.googleRefreshToken = maybeEncrypt(newTokens.refresh_token);
       if (newTokens.expiry_date) update.googleTokenExpiry = newTokens.expiry_date;
       db.update(usersTable).set(update as any).where(eq(usersTable.id, user.id)).catch((err) => {
         console.error("Failed to persist refreshed Google tokens:", err);

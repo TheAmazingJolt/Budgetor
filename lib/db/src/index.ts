@@ -75,3 +75,4 @@ export async function initDb(): Promise<void> {
 }
 
 export * from "./schema";
+export * from "./crypto";

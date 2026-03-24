@@ -112,14 +112,21 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 ### `lib/db` (`@workspace/db`)
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance, schema models, and encryption helpers.
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
+- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema and crypto helpers
 - `src/schema/index.ts` — barrel re-export of all models
 - `src/schema/users.ts` — users table (id, email, name, avatarUrl, provider [google/apple/guest], providerId, debts jsonb, preferences jsonb)
 - `src/schema/saved-budgets.ts` — saved_budgets table (id, userId, name, bills JSON, settings JSON, debts JSON, timestamps)
+- `src/crypto.ts` — AES-256-GCM encryption helpers (`encrypt`, `decrypt`, `encryptJson`, `decryptJson`, `maybeEncrypt`, `maybeDecrypt`, `isEncrypted`)
 - `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+- Exports: `.` (pool, db, schema, crypto), `./schema` (schema only)
+
+**Application-layer encryption**: All sensitive DB columns are encrypted with AES-256-GCM before storage and decrypted on read. Encrypted values use the format `enc:v1:<iv_hex>:<ciphertext_hex>:<authTag_hex>`. Plaintext values pass through transparently for migration safety. Requires `ENCRYPTION_KEY` env var (64 hex chars / 32 bytes). Migration script: `pnpm --filter @workspace/api-server tsx src/scripts/encrypt-existing-data.ts`.
+
+Encrypted columns:
+- `users`: `googleAccessToken`, `googleRefreshToken`, `microsoftAccessToken`, `microsoftRefreshToken`, `bills`, `debts`, `preferences`
+- `saved_budgets`: `name`, `bills`, `debts`, `settings`
 
 Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
 

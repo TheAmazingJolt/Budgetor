@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { usersTable, savedBudgetsTable, type User } from "@workspace/db";
+import { usersTable, savedBudgetsTable, type User, encryptJson, decryptJson, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq, and, lt } from "drizzle-orm";
 import { google } from "googleapis";
 import { createRemoteJWKSet, jwtVerify, SignJWT, importPKCS8 } from "jose";
@@ -402,8 +402,8 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
 
     if (tokens.access_token) {
       await db.update(usersTable).set({
-        googleAccessToken: tokens.access_token,
-        googleRefreshToken: tokens.refresh_token ?? null,
+        googleAccessToken: maybeEncrypt(tokens.access_token),
+        googleRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
         googleTokenExpiry: tokens.expiry_date ?? null,
         updatedAt: new Date(),
       }).where(eq(usersTable.id, userId));
@@ -551,7 +551,8 @@ router.get("/auth/providers", (_req: Request, res: Response) => {
 });
 
 router.get("/user/debts", requireAuth, async (req: Request, res: Response) => {
-  const debts = (req.user as User).debts ?? [];
+  const rawDebts = (req.user as User).debts;
+  const debts = rawDebts != null ? decryptJson<unknown[]>(rawDebts) : [];
   res.json({ debts });
 });
 
@@ -561,12 +562,13 @@ router.put("/user/debts", requireAuth, async (req: Request, res: Response) => {
     res.status(400).json({ error: "debts must be an array" });
     return;
   }
-  await db.update(usersTable).set({ debts, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  await db.update(usersTable).set({ debts: encryptJson(debts), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
   res.json({ debts });
 });
 
 router.get("/user/bills", requireAuth, async (req: Request, res: Response) => {
-  const bills = (req.user as User).bills ?? [];
+  const rawBills = (req.user as User).bills;
+  const bills = rawBills != null ? decryptJson<unknown[]>(rawBills) : [];
   res.json({ bills });
 });
 
@@ -576,12 +578,13 @@ router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
     res.status(400).json({ error: "bills must be an array" });
     return;
   }
-  await db.update(usersTable).set({ bills, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
   res.json({ bills });
 });
 
 router.get("/user/preferences", requireAuth, async (req: Request, res: Response) => {
-  const preferences = (req.user as User).preferences ?? {};
+  const rawPrefs = (req.user as User).preferences;
+  const preferences = rawPrefs != null ? decryptJson<Record<string, unknown>>(rawPrefs) : {};
   res.json({ preferences });
 });
 
@@ -591,9 +594,10 @@ router.put("/user/preferences", requireAuth, async (req: Request, res: Response)
     res.status(400).json({ error: "preferences must be an object" });
     return;
   }
-  const current = ((req.user as User).preferences ?? {}) as Record<string, unknown>;
+  const rawCurrent = (req.user as User).preferences;
+  const current = rawCurrent != null ? decryptJson<Record<string, unknown>>(rawCurrent) : {};
   const merged = { ...current, ...preferences };
-  await db.update(usersTable).set({ preferences: merged, updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  await db.update(usersTable).set({ preferences: encryptJson(merged), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
   res.json({ preferences: merged });
 });
 

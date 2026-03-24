@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import crypto from "crypto";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -123,8 +123,8 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
     const user = (req as any).user;
     if (user?.id && tokens.access_token) {
       await db.update(usersTable).set({
-        microsoftAccessToken: tokens.access_token,
-        microsoftRefreshToken: tokens.refresh_token ?? null,
+        microsoftAccessToken: maybeEncrypt(tokens.access_token),
+        microsoftRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
         microsoftTokenExpiry: expiresAt,
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id));
@@ -166,17 +166,18 @@ export async function refreshMicrosoftToken(req: any): Promise<string | null> {
   if (user?.microsoftAccessToken) {
     const expiry = user.microsoftTokenExpiry;
     if (expiry && Date.now() < expiry - 60000) {
-      return user.microsoftAccessToken;
+      return maybeDecrypt(user.microsoftAccessToken);
     }
 
-    if (user.microsoftRefreshToken) {
+    const decryptedRefreshToken = maybeDecrypt(user.microsoftRefreshToken ?? null);
+    if (decryptedRefreshToken) {
       const config = getMicrosoftConfig();
       if (config) {
         try {
           const body = new URLSearchParams({
             client_id: config.clientId,
             client_secret: config.clientSecret,
-            refresh_token: user.microsoftRefreshToken,
+            refresh_token: decryptedRefreshToken,
             grant_type: "refresh_token",
             scope: SCOPES.join(" "),
           });
@@ -192,8 +193,8 @@ export async function refreshMicrosoftToken(req: any): Promise<string | null> {
             const newExpiry = Date.now() + (newTokens.expires_in ?? 3600) * 1000;
 
             await db.update(usersTable).set({
-              microsoftAccessToken: newTokens.access_token,
-              microsoftRefreshToken: newTokens.refresh_token ?? user.microsoftRefreshToken,
+              microsoftAccessToken: maybeEncrypt(newTokens.access_token),
+              microsoftRefreshToken: maybeEncrypt(newTokens.refresh_token ?? decryptedRefreshToken),
               microsoftTokenExpiry: newExpiry,
               updatedAt: new Date(),
             }).where(eq(usersTable.id, user.id));
@@ -246,8 +247,8 @@ export async function refreshMicrosoftToken(req: any): Promise<string | null> {
 
     if (user?.id) {
       db.update(usersTable).set({
-        microsoftAccessToken: newTokens.access_token,
-        microsoftRefreshToken: newTokens.refresh_token ?? tokens.refresh_token,
+        microsoftAccessToken: maybeEncrypt(newTokens.access_token),
+        microsoftRefreshToken: maybeEncrypt(newTokens.refresh_token ?? tokens.refresh_token),
         microsoftTokenExpiry: newExpiry,
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id)).catch((err) => {
