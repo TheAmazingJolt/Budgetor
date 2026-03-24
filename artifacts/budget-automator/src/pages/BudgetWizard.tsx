@@ -386,8 +386,8 @@ export function BudgetWizard({
   const [editingBillIndex, setEditingBillIndex] = useState<number | null>(null);
   const [isDebtDialogOpen, setIsDebtDialogOpen] = useState(false);
   const [editingDebtIndex, setEditingDebtIndex] = useState<number | null>(null);
-  const [billsCollapsed, setBillsCollapsed] = useState(false);
-  const [debtsCollapsed, setDebtsCollapsed] = useState(false);
+  const [billsCollapsed, setBillsCollapsed] = useState(true);
+  const [debtsCollapsed, setDebtsCollapsed] = useState(true);
   const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
   const [isBillsManagerOpen, setIsBillsManagerOpen] = useState(false);
   const [logPaymentDebtId, setLogPaymentDebtId] = useState<string | null>(null);
@@ -3093,9 +3093,9 @@ export function BudgetWizard({
                       className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                     >
                       {generateMutation.isPending ? (
-                        <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {activeCloudBudgetId ? "Regenerating…" : "Generating…"}</>
+                        <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}</>
                       ) : (
-                        <>{activeCloudBudgetId ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
+                        <>{generatedWeek ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
                       )}
                     </Button>
                   </div>
@@ -3335,11 +3335,11 @@ export function BudgetWizard({
                 >
                   {generateMutation.isPending ? (
                     <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}
                     </>
                   ) : (
                     <>
-                      Generate Budget <ChevronRight className="w-4 h-4 ml-2" />
+                      {generatedWeek ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-2" />
                     </>
                   )}
                 </Button>
