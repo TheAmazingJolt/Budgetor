@@ -414,6 +414,8 @@ export function BudgetWizard({
   const [selectedExcelFileUrl, setSelectedExcelFileUrl] = useState<string | null>(null);
   const [excelSheetTitle, setExcelSheetTitle] = useState<string>("Budget");
   const [excelNextCol, setExcelNextCol] = useState(2);
+  const [sheetsListOpen, setSheetsListOpen] = useState(false);
+  const [savedBudgetsOpen, setSavedBudgetsOpen] = useState(false);
   const [isWritingToExcel, setIsWritingToExcel] = useState(false);
   const [excelWriteSuccess, setExcelWriteSuccess] = useState(false);
   const [scratchExistingWeeks, setScratchExistingWeeks] = useState<any[]>([]);
@@ -2661,33 +2663,49 @@ export function BudgetWizard({
                         )}
 
                         {sheetListQuery.data && (
-                          <div className="max-h-48 overflow-y-auto space-y-1">
-                            {sheetListQuery.data.sheets.length === 0 ? (
-                              <p className="text-sm text-muted-foreground py-2">No spreadsheets found in Google Drive.</p>
-                            ) : (
-                              sheetListQuery.data.sheets.map((s: { id: string; name: string; modifiedTime?: string }) => (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => handleSelectSheet(s.id, s.name)}
-                                  disabled={sheetReadQuery.isLoading}
-                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
-                                    selectedSheetId === s.id && sheetReadQuery.isLoading
-                                      ? "bg-primary/10"
-                                      : ""
-                                  }`}
-                                >
-                                  <span className="font-medium text-foreground">{s.name}</span>
-                                  {s.modifiedTime && (
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                      {new Date(s.modifiedTime).toLocaleDateString()}
-                                    </span>
-                                  )}
-                                  {selectedSheetId === s.id && sheetReadQuery.isLoading && (
-                                    <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
-                                  )}
-                                </button>
-                              ))
+                          <div>
+                            <button
+                              type="button"
+                              className="flex items-center justify-between w-full text-sm text-muted-foreground py-1 hover:text-foreground transition-colors"
+                              onClick={() => setSheetsListOpen(v => !v)}
+                            >
+                              <span>
+                                {selectedSheetId
+                                  ? sheetListQuery.data.sheets.find((s: { id: string; name: string }) => s.id === selectedSheetId)?.name ?? "Google Sheets"
+                                  : `${sheetListQuery.data.sheets.length} spreadsheet${sheetListQuery.data.sheets.length !== 1 ? "s" : ""}`}
+                              </span>
+                              <ChevronDown className={`w-4 h-4 transition-transform ${sheetsListOpen ? "rotate-180" : ""}`} />
+                            </button>
+                            {sheetsListOpen && (
+                              <div className="max-h-48 overflow-y-auto space-y-1 mt-1">
+                                {sheetListQuery.data.sheets.length === 0 ? (
+                                  <p className="text-sm text-muted-foreground py-2">No spreadsheets found in Google Drive.</p>
+                                ) : (
+                                  sheetListQuery.data.sheets.map((s: { id: string; name: string; modifiedTime?: string }) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => handleSelectSheet(s.id, s.name)}
+                                      disabled={sheetReadQuery.isLoading}
+                                      className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
+                                        selectedSheetId === s.id && sheetReadQuery.isLoading
+                                          ? "bg-primary/10"
+                                          : ""
+                                      }`}
+                                    >
+                                      <span className="font-medium text-foreground">{s.name}</span>
+                                      {s.modifiedTime && (
+                                        <span className="text-xs text-muted-foreground ml-2">
+                                          {new Date(s.modifiedTime).toLocaleDateString()}
+                                        </span>
+                                      )}
+                                      {selectedSheetId === s.id && sheetReadQuery.isLoading && (
+                                        <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
+                                      )}
+                                    </button>
+                                  ))
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
@@ -2716,11 +2734,23 @@ export function BudgetWizard({
 
               {isSignedIn && !isGuest && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <FolderOpen className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold text-foreground">My Saved Budgets</h3>
-                  </div>
-                  {savedBudgetsQuery.isLoading ? (
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full group"
+                    onClick={() => setSavedBudgetsOpen(v => !v)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold text-foreground">My Saved Budgets</h3>
+                      {savedBudgetsQuery.data && (
+                        <span className="text-sm text-muted-foreground font-normal">
+                          ({savedBudgetsQuery.data.budgets.length})
+                        </span>
+                      )}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${savedBudgetsOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {savedBudgetsOpen && (savedBudgetsQuery.isLoading ? (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   ) : savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2809,7 +2839,7 @@ export function BudgetWizard({
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">No saved budgets yet. Configure a budget and save it to access it here.</p>
-                  )}
+                  ))}
                 </div>
               )}
 
