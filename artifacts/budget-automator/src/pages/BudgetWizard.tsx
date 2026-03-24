@@ -453,6 +453,7 @@ export function BudgetWizard({
     generatedWeek,
     payPeriod,
     setPayPeriod,
+    restorePayPeriodSettings,
     reset,
   } = useBudgetStore();
 
@@ -1434,7 +1435,33 @@ export function BudgetWizard({
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
     prevBillsRef.current = JSON.stringify(billsToSet);
-    if (s?.payPeriod) setPayPeriod(s.payPeriod);
+    if (s?.payPeriod && s?.newWeekStartDate) {
+      const restoredPayPeriod = s.payPeriod as "weekly" | "biweekly" | "monthly";
+      const restoredWeekCount = s?.weekCount ?? 1;
+      const restoredStartDate = s.newWeekStartDate;
+      const restoredEndDate = s?.newWeekEndDate ?? (() => {
+        const daysPerPeriod = restoredPayPeriod === "biweekly" ? 14 : 7;
+        if (restoredPayPeriod === "monthly") {
+          const d = new Date(restoredStartDate + 'T12:00:00');
+          const end = new Date(d.getFullYear(), d.getMonth() + restoredWeekCount, 0, 12, 0, 0);
+          return end.toISOString().split('T')[0];
+        }
+        const d = new Date(restoredStartDate + 'T12:00:00');
+        d.setDate(d.getDate() + restoredWeekCount * daysPerPeriod - 1);
+        return d.toISOString().split('T')[0];
+      })();
+      restorePayPeriodSettings(restoredPayPeriod, restoredWeekCount, restoredStartDate, restoredEndDate);
+    } else if (s?.payPeriod) {
+      setPayPeriod(s.payPeriod);
+    } else if (s?.newWeekStartDate && s?.newWeekEndDate) {
+      setStartDate(s.newWeekStartDate);
+      setEndDate(s.newWeekEndDate);
+    } else if (s?.newWeekStartDate) {
+      if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
+      setStartDatePreserveCount(s.newWeekStartDate);
+    } else if (s?.weekCount !== undefined) {
+      setWeekCount(s.weekCount);
+    }
     setDebts(restoredDebts);
     prevDebtsRef.current = JSON.stringify(restoredDebts);
     const importedIds = new Set<string>();
@@ -1446,15 +1473,6 @@ export function BudgetWizard({
     setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
-    if (s?.newWeekStartDate && s?.newWeekEndDate) {
-      setStartDate(s.newWeekStartDate);
-      setEndDate(s.newWeekEndDate);
-    } else if (s?.newWeekStartDate) {
-      if (s?.weekCount !== undefined) setWeekCount(s.weekCount);
-      setStartDatePreserveCount(s.newWeekStartDate);
-    } else if (s?.weekCount !== undefined) {
-      setWeekCount(s.weekCount);
-    }
     if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
@@ -1474,17 +1492,12 @@ export function BudgetWizard({
       setActiveLinkedSheet(null);
     }
     let effectiveOpeningBalance = s?.openingBalance ?? openingBalance;
-    let effectiveStartDate = s?.newWeekStartDate ?? newWeekStartDate;
+    const effectiveStartDate = s?.newWeekStartDate ?? newWeekStartDate;
     if (restoredWeeks.length > 0) {
       const lastWeek = restoredWeeks.at(-1);
       if (lastWeek?.remaining !== undefined) {
         setOpeningBalance(lastWeek.remaining);
         effectiveOpeningBalance = lastWeek.remaining;
-      }
-      const nextStart = lastWeek?.label ? nextStartAfterLabel(lastWeek.label) : null;
-      if (nextStart) {
-        setStartDatePreserveCount(nextStart);
-        effectiveStartDate = nextStart;
       }
     }
     toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${billsToSet.length} bills.` });

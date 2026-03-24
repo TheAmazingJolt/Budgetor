@@ -70,6 +70,7 @@ interface BudgetState {
   setPaycheckAmount: (val: number) => void;
   setZeroOpeningBalance: (val: boolean) => void;
   setPayPeriod: (val: PayPeriod) => void;
+  restorePayPeriodSettings: (payPeriod: PayPeriod, weekCount: number, startDate: string, endDate: string) => void;
   setGeneratedWeek: (budget: BudgetResponse | null) => void;
   reset: () => void;
 }
@@ -233,6 +234,13 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
 
   setNewWeekDates: (start, end) =>
     set({ newWeekStartDate: start, newWeekEndDate: end }),
+  restorePayPeriodSettings: (payPeriod, weekCount, startDate, endDate) =>
+    set({
+      payPeriod,
+      weekCount: Math.min(100, Math.max(1, weekCount)),
+      newWeekStartDate: startDate,
+      newWeekEndDate: endDate,
+    }),
   setOpeningBalance: (val) => set({ openingBalance: val }),
   setPaycheckAmount: (val) => set({ paycheckAmount: val }),
   setZeroOpeningBalance: (val) => set({ zeroOpeningBalance: val }),
