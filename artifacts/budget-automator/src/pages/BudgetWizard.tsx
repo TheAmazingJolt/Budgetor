@@ -1478,7 +1478,7 @@ export function BudgetWizard({
     setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
-    if (s?.zeroOpeningBalance !== undefined) setZeroOpeningBalance(s.zeroOpeningBalance);
+    setZeroOpeningBalance(true);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
     setInputMode("cloud");
@@ -1717,8 +1717,9 @@ export function BudgetWizard({
     setSelectedWeekIdx(null);
     setEditDraft(null);
 
-    const effectiveOpeningBalance = overrides?.openingBalance
-      ?? (zeroOpeningBalance ? 0 : openingBalance);
+    const effectiveOpeningBalance = zeroOpeningBalance
+      ? 0
+      : (overrides?.openingBalance ?? openingBalance);
 
     generateMutation.mutate(
       {
