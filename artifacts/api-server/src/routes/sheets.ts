@@ -1257,10 +1257,12 @@ async function writeBudgetToSheet(
   const escapedTitle = sheetTitleStr.replace(/'/g, "''");
   const range = `'${escapedTitle}'!${rangeStart}:${rangeEnd}`;
 
-  // Clear from startCol to the rightmost previously-used column (capped to sheet size)
+  // Clear from startCol to the rightmost previously-used column (capped to sheet size).
+  // When existingLastCol is unknown (e.g. Sync to Sheets flow), clear to the end of the
+  // sheet so any old weeks beyond the new count are fully removed.
   const rawClearEnd = existingLastCol != null
     ? Math.max(totalCols - 1, existingLastCol + 1)
-    : totalCols - 1;
+    : sheetColumnCount - 1;
   const clearEndColIdx = Math.min(rawClearEnd, sheetColumnCount - 1);
   const clearEndCol = columnToLetter(clearEndColIdx);
   const clearRange = `'${escapedTitle}'!${rangeStart}:${clearEndCol}`;
