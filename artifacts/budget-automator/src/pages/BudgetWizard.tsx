@@ -2252,7 +2252,6 @@ export function BudgetWizard({
             </div>
             <div>
               <h1 className="font-bold text-lg leading-none text-foreground">Budgify</h1>
-              <p className="text-xs text-muted-foreground">Your personal budget companion</p>
             </div>
           </div>
 
