@@ -201,26 +201,30 @@ function debtTypeLeftBar(type: string): string {
   return "bg-amber-500";
 }
 
-function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: number | null): string | null {
+function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: number | null, paymentFrequency?: string | null): string | null {
   if (balance <= 0 || minimumPayment <= 0) return null;
-  const monthlyRate = interestRate != null ? interestRate / 100 / 12 : 0;
-  if (monthlyRate > 0) {
-    const monthlyInterest = balance * monthlyRate;
-    if (minimumPayment <= monthlyInterest) return "Balance growing — increase payment";
-    const months = Math.ceil(
-      -Math.log(1 - (balance * monthlyRate) / minimumPayment) / Math.log(1 + monthlyRate)
-    );
-    if (!isFinite(months) || months <= 0) return null;
-    const payoffDate = new Date();
-    payoffDate.setMonth(payoffDate.getMonth() + months);
-    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })}`;
+  const isWeekly = paymentFrequency === "weekly";
+  const isBiweekly = paymentFrequency === "biweekly";
+  const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
+  const annualRate = interestRate ?? 0;
+  const payoffDate = new Date();
+  if (annualRate > 0) {
+    const periodicRate = annualRate / 100 / freq;
+    const periodicInterest = balance * periodicRate;
+    if (minimumPayment <= periodicInterest) return "Balance growing — increase payment";
+    const periods = Math.ceil(-Math.log(1 - (balance * periodicRate) / minimumPayment) / Math.log(1 + periodicRate));
+    if (!isFinite(periods) || periods <= 0) return null;
+    if (isWeekly) payoffDate.setDate(payoffDate.getDate() + periods * 7);
+    else if (isBiweekly) payoffDate.setDate(payoffDate.getDate() + periods * 14);
+    else payoffDate.setMonth(payoffDate.getMonth() + periods);
   } else {
-    const months = Math.ceil(balance / minimumPayment);
-    if (months <= 0) return null;
-    const payoffDate = new Date();
-    payoffDate.setMonth(payoffDate.getMonth() + months);
-    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })}`;
+    const periods = Math.ceil(balance / minimumPayment);
+    if (periods <= 0) return null;
+    if (isWeekly) payoffDate.setDate(payoffDate.getDate() + periods * 7);
+    else if (isBiweekly) payoffDate.setDate(payoffDate.getDate() + periods * 14);
+    else payoffDate.setMonth(payoffDate.getMonth() + periods);
   }
+  return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })}`;
 }
 
 function calcDebtPayoffDate(
@@ -4435,7 +4439,7 @@ export function BudgetWizard({
                           );
                         })()}
                         {(() => {
-                          const payoffLabel = getPayoffLabel(debt.balance, debt.minimumPayment, debt.interestRate);
+                          const payoffLabel = getPayoffLabel(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency);
                           if (!payoffLabel) return null;
                           const isGrowing = payoffLabel.startsWith("Balance growing");
                           return (
