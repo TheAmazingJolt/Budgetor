@@ -107,6 +107,14 @@ function colLetter(n: number): string {
   return s;
 }
 
+function letterToColIndex(letters: string): number {
+  let idx = -1;
+  for (const ch of letters.toUpperCase()) {
+    idx = (idx + 1) * 26 + (ch.charCodeAt(0) - 65);
+  }
+  return idx;
+}
+
 function parseBillMetaRows(
   rows: (string | number | boolean | null)[][],
   markerValues: string[],
@@ -992,8 +1000,23 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
     const totalCols = startCol + weeks.length * 2;
 
+    // Find the sheet's current used extent so we can clear any old week columns
+    // that lie beyond the new weeks (handles reducing week count on re-sync).
+    let clearEndColIdx = totalCols - 1;
+    try {
+      const usedRangeRes = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`);
+      const usedAddr = usedRangeRes.address?.split("!")?.[1] ?? "";
+      const endCell = usedAddr.split(":")?.[1] ?? "";
+      const oldLastColLetters = endCell.replace(/[0-9]/g, "");
+      if (oldLastColLetters) {
+        const oldLastColIdx = letterToColIndex(oldLastColLetters);
+        clearEndColIdx = Math.max(clearEndColIdx, oldLastColIdx);
+      }
+    } catch { /* proceed without extra clearing */ }
+
+    // Build the grid wide enough to overwrite all previously-used columns with "".
     const grid: (string | number)[][] = Array.from({ length: totalRows }, () =>
-      Array(totalCols).fill("")
+      Array(clearEndColIdx + 1).fill("")
     );
 
     for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
@@ -1035,7 +1058,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     }
 
     const startAddr = `${colLetter(startCol)}1`;
-    const endAddr = `${colLetter(totalCols - 1)}${totalRows}`;
+    const endAddr = `${colLetter(clearEndColIdx)}${totalRows}`;
     const rangeAddr = `${startAddr}:${endAddr}`;
 
     const slicedGrid = grid.map((row) => row.slice(startCol));
@@ -1060,7 +1083,8 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       { bold: false, name: "Arial", size: 10 }
     );
 
-    const fullWeekRangeWrite = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}${totalRows}`;
+    // Clear fill for all columns from startCol to clearEndColIdx (covers old weeks too).
+    const fullWeekRangeWrite = `${colLetter(startCol)}1:${colLetter(clearEndColIdx)}${totalRows}`;
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeWrite}')/format/fill`,
