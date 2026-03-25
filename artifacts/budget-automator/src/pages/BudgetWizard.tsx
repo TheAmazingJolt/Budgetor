@@ -477,6 +477,7 @@ export function BudgetWizard({
   const pendingImportCallbackRef = useRef<((useBills: Bill[]) => void) | null>(null);
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
   const [newCloudSaveSuccess, setNewCloudSaveSuccess] = useState(false);
+  const [savedCloudName, setSavedCloudName] = useState("");
 
   const [saveBudgetName, setSaveBudgetName] = useState("");
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -1381,6 +1382,7 @@ export function BudgetWizard({
             queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
             toast({ title: "Budget saved", description: `"${saveBudgetName.trim()}" has been saved.` });
             setIsSaveDialogOpen(false);
+            setSavedCloudName(saveBudgetName.trim());
             setSaveBudgetName("");
             setNewCloudSaveSuccess(true);
           },
@@ -3947,7 +3949,7 @@ export function BudgetWizard({
                       size="lg"
                       onClick={() => {
                         if (newSheetSaveSuccess) return;
-                        setExportNameInput(buildDefaultExportTitle());
+                        setExportNameInput(newCloudSaveSuccess && savedCloudName ? savedCloudName : buildDefaultExportTitle());
                         setPendingExportType("google");
                       }}
                       disabled={isSavingToNewSheet || newSheetSaveSuccess || isRegeneratingForExport}
