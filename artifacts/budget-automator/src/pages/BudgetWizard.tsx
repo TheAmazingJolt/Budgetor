@@ -3972,7 +3972,7 @@ export function BudgetWizard({
                       ) : newSheetSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to Google Sheets</>
                       ) : (
-                        <><Sheet className="w-5 h-5 mr-2" /> {newCloudSaveSuccess ? "Link to Google Sheets" : "Save to Google Sheets"}</>
+                        <><Sheet className="w-5 h-5 mr-2" /><span key={newCloudSaveSuccess ? "link" : "save"} className="animate-in fade-in zoom-in-95 duration-300">{newCloudSaveSuccess ? "Link to Google Sheets" : "Save to Google Sheets"}</span></>
                       )}
                     </Button>
                     {newSheetSaveSuccess && newSheetUrl && (
