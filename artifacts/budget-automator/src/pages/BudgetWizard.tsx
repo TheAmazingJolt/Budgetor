@@ -3931,7 +3931,7 @@ export function BudgetWizard({
                   </Button>
                 )}
 
-                {inputMode === "upload" && !activeCloudBudgetId && generatedWeek && (
+                {(inputMode === "upload" || inputMode === "scratch") && !activeCloudBudgetId && generatedWeek && (
                   <Button
                     size="lg"
                     onClick={() => setIsSaveDialogOpen(true)}
