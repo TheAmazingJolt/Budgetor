@@ -3058,7 +3058,7 @@ export function BudgetWizard({
 
 
               <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">Ready to generate?</p>
                     <p className="text-xs text-muted-foreground">
@@ -3067,7 +3067,7 @@ export function BudgetWizard({
                         : "Bills loaded. Edit if needed, then generate."}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       variant="outline"
                       size="default"
