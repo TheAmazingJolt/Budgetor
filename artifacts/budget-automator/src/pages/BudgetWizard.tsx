@@ -2132,6 +2132,9 @@ export function BudgetWizard({
   };
 
   const buildDefaultXlsxFilename = () => {
+    if (inputMode === "cloud" && activeCloudBudgetName) {
+      return `${activeCloudBudgetName.replace(/[/\\?%*:|"<>]/g, "_")}.xlsx`;
+    }
     if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
       const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
       return `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
@@ -3925,6 +3928,16 @@ export function BudgetWizard({
                     ) : (
                       <><CloudUpload className="w-5 h-5 mr-2" /> Save to Cloud</>
                     )}
+                  </Button>
+                )}
+
+                {inputMode === "upload" && !activeCloudBudgetId && generatedWeek && (
+                  <Button
+                    size="lg"
+                    onClick={() => setIsSaveDialogOpen(true)}
+                    className="flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all bg-gradient-to-r from-primary to-emerald-600 shadow-primary/25 hover:shadow-primary/30"
+                  >
+                    <Save className="w-5 h-5 mr-2" /> Save to Cloud
                   </Button>
                 )}
 
