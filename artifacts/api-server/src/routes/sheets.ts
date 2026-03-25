@@ -1265,7 +1265,7 @@ async function writeBudgetToSheet(
     : sheetColumnCount - 1;
   const clearEndColIdx = Math.min(rawClearEnd, sheetColumnCount - 1);
   const clearEndCol = columnToLetter(clearEndColIdx);
-  const clearRange = `'${escapedTitle}'!${rangeStart}:${clearEndCol}`;
+  const clearRange = `'${escapedTitle}'!${rangeStart}:${clearEndCol}${totalRows}`;
 
   await Promise.all([
     sheetsApi.spreadsheets.values.clear({
@@ -1280,6 +1280,7 @@ async function writeBudgetToSheet(
             range: {
               sheetId,
               startRowIndex: 0,
+              endRowIndex: totalRows,
               startColumnIndex: startCol,
               endColumnIndex: clearEndColIdx + 1,
             },
