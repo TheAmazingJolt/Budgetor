@@ -489,6 +489,7 @@ export function BudgetWizard({
   const [exportNameInput, setExportNameInput] = useState("");
   const [activeLinkedSheet, setActiveLinkedSheet] = useState<{ id: string; type: string; name: string } | null>(null);
   const [isUpdatingLinkedSheet, setIsUpdatingLinkedSheet] = useState(false);
+  const [syncOnUpdate, setSyncOnUpdate] = useState(false);
 
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
@@ -1672,7 +1673,7 @@ export function BudgetWizard({
     setInputMode("google");
   };
 
-  const handleQuickUpdate = () => {
+  const handleQuickUpdate = (afterSuccess?: () => void) => {
     if (!activeCloudBudgetId) return;
     cloudSaveMutation.mutate(
       {
@@ -1700,6 +1701,7 @@ export function BudgetWizard({
           cloudBudgetLoadedBillsRef.current = JSON.stringify(bills);
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({ title: "Budget updated", description: `"${activeCloudBudgetName}" has been updated.` });
+          afterSuccess?.();
         },
         onError: (err: unknown) => {
           const apiErr = err as { data?: { error?: string } };
@@ -2112,7 +2114,7 @@ export function BudgetWizard({
       const includeRemainingAcct = !zeroOpeningBalance;
       const writePayload = {
         weeks,
-        startCol: 2,
+        startCol: 0,
         includeRemainingAcct,
         ...(debts.length > 0 ? { debts } : {}),
         ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
@@ -3065,43 +3067,45 @@ export function BudgetWizard({
                         : "Bills loaded. Edit if needed, then generate."}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={activeCloudBudgetId ? handleQuickUpdate : () => setIsSaveDialogOpen(true)}
-                      disabled={bills.length === 0 || cloudSaveMutation.isPending}
-                      className="flex-1 rounded-xl"
-                    >
-                      <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
-                    </Button>
-                    {activeLinkedSheet && (inputMode === "cloud" || newCloudSaveSuccess) && (
+                  <div className="flex flex-col gap-2 min-w-0 w-full sm:w-auto">
+                    <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="default"
-                        onClick={handleGenerateAndUpdateSheet}
-                        disabled={!canGenerate || isUpdatingLinkedSheet}
-                        className="flex-1 rounded-xl gap-1"
+                        onClick={activeCloudBudgetId
+                          ? () => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)
+                          : () => setIsSaveDialogOpen(true)}
+                        disabled={bills.length === 0 || cloudSaveMutation.isPending}
+                        className="flex-1 rounded-xl"
                       >
-                        {isUpdatingLinkedSheet ? (
-                          <><RefreshCw className="w-4 h-4 animate-spin" /> Updating…</>
+                        <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
+                      </Button>
+                      <Button
+                        size="default"
+                        onClick={() => handleGenerate()}
+                        disabled={!canGenerate}
+                        className="flex-1 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
+                      >
+                        {generateMutation.isPending ? (
+                          <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}</>
                         ) : (
-                          <><CloudUpload className="w-4 h-4" /> {activeLinkedSheet.type === "google" ? "Sync to Sheets" : "Sync to Excel"}</>
+                          <>{generatedWeek ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
                         )}
                       </Button>
+                    </div>
+                    {activeLinkedSheet && (inputMode === "cloud" || newCloudSaveSuccess) && (
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={syncOnUpdate}
+                          onChange={e => setSyncOnUpdate(e.target.checked)}
+                          className="accent-primary w-3.5 h-3.5"
+                        />
+                        <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                        Also sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"} on update
+                        {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                      </label>
                     )}
-                    <Button
-                      size="default"
-                      onClick={() => handleGenerate()}
-                      disabled={!canGenerate}
-                      className="flex-1 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
-                    >
-                      {generateMutation.isPending ? (
-                        <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}</>
-                      ) : (
-                        <>{generatedWeek ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
-                      )}
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
