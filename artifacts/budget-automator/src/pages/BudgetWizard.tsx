@@ -1066,8 +1066,8 @@ export function BudgetWizard({
   const handleAddAccountDebts = () => {
     const accountDebts = (userDebtsQuery.data?.debts ?? []) as Debt[];
     if (accountDebts.length === 0) return;
-    const existingKeys = new Set(debts.map((d: Debt) => `${d.name}|${d.type}|${d.balance}`));
-    const toAdd = accountDebts.filter(d => !existingKeys.has(`${d.name}|${d.type}|${d.balance}`));
+    const existingKeys = new Set(debts.map((d: Debt) => d.id));
+    const toAdd = accountDebts.filter(d => !existingKeys.has(d.id));
     if (toAdd.length === 0) {
       toast({ title: "Already added", description: "All your saved debts are already in this budget." });
       return;
