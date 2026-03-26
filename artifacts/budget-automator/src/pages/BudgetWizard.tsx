@@ -1385,7 +1385,7 @@ export function BudgetWizard({
             setSavedCloudName(saveBudgetName.trim());
             setSaveBudgetName("");
             setNewCloudSaveSuccess(true);
-            if (data?.id) setActiveCloudBudgetId(data.id);
+            if (data?.budget?.id) setActiveCloudBudgetId(data.budget.id);
           },
           onError: (err: unknown) => {
             const apiErr = err as { data?: { error?: string } };
@@ -2026,6 +2026,7 @@ export function BudgetWizard({
         }, {
           onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }),
         });
+        setActiveLinkedSheet({ id: result.spreadsheetId, type: "google", name: title });
       }
       toast({
         title: "Saved to Google Sheets",
@@ -3064,23 +3065,23 @@ export function BudgetWizard({
                         : "Bills loaded. Edit if needed, then generate."}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="default"
                       onClick={activeCloudBudgetId ? handleQuickUpdate : () => setIsSaveDialogOpen(true)}
                       disabled={bills.length === 0 || cloudSaveMutation.isPending}
-                      className="shrink-0 rounded-xl"
+                      className="flex-1 rounded-xl"
                     >
                       <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
                     </Button>
-                    {activeLinkedSheet && inputMode === "cloud" && (
+                    {activeLinkedSheet && (inputMode === "cloud" || newCloudSaveSuccess) && (
                       <Button
                         variant="outline"
                         size="default"
                         onClick={handleGenerateAndUpdateSheet}
                         disabled={!canGenerate || isUpdatingLinkedSheet}
-                        className="shrink-0 rounded-xl gap-1"
+                        className="flex-1 rounded-xl gap-1"
                       >
                         {isUpdatingLinkedSheet ? (
                           <><RefreshCw className="w-4 h-4 animate-spin" /> Updating…</>
@@ -3093,7 +3094,7 @@ export function BudgetWizard({
                       size="default"
                       onClick={() => handleGenerate()}
                       disabled={!canGenerate}
-                      className="shrink-0 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
+                      className="flex-1 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                     >
                       {generateMutation.isPending ? (
                         <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}</>
