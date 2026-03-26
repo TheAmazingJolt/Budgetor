@@ -1427,9 +1427,33 @@ export function BudgetWizard({
     }
 
     const restoredDebts = Array.isArray(budget.debts) ? budget.debts : [];
+
+    // Refresh mutable debt fields (balance, minimumPayment, interestRate) from the
+    // user's current account debts so that payments made since last save are reflected.
+    const accountDebtMap = new Map(
+      ((userDebtsQuery.data?.debts ?? []) as Debt[]).map((d: Debt) => [d.id, d])
+    );
+    const refreshedDebts: Debt[] = restoredDebts.map((d: Debt) => {
+      const acct = accountDebtMap.get(d.id);
+      if (!acct) return d;
+      return { ...d, balance: acct.balance, minimumPayment: acct.minimumPayment, interestRate: acct.interestRate };
+    });
+
+    // Update any already-saved debt bills to match refreshed minimum payment / payoff date.
+    billsToSet = billsToSet.map((bill: Bill) => {
+      if (!bill.sourceDebtId) return bill;
+      const refreshed = refreshedDebts.find((d: Debt) => d.id === bill.sourceDebtId);
+      if (!refreshed || !accountDebtMap.has(refreshed.id)) return bill;
+      return {
+        ...bill,
+        amount: -Math.abs(refreshed.minimumPayment),
+        payoffDate: calcDebtPayoffDate(refreshed.balance, refreshed.minimumPayment, refreshed.interestRate, refreshed.paymentFrequency),
+      };
+    });
+
     // Auto-create minimum payment bills for any debt that has no matching bill saved
     const existingDebtBillIds = new Set(billsToSet.filter((bill: Bill) => bill.sourceDebtId).map((bill: Bill) => bill.sourceDebtId as string));
-    const debtsNeedingBills = restoredDebts.filter((d: Debt) => !existingDebtBillIds.has(d.id) && !d.excludeFromBill);
+    const debtsNeedingBills = refreshedDebts.filter((d: Debt) => !existingDebtBillIds.has(d.id) && !d.excludeFromBill);
     if (debtsNeedingBills.length > 0) {
       const autoBills = debtsNeedingBills.map((d: Debt) => ({
         name: `${d.name} (min payment)`,
@@ -1473,10 +1497,10 @@ export function BudgetWizard({
     } else if (s?.weekCount !== undefined) {
       setWeekCount(s.weekCount);
     }
-    setDebts(restoredDebts);
-    prevDebtsRef.current = JSON.stringify(restoredDebts);
+    setDebts(refreshedDebts);
+    prevDebtsRef.current = JSON.stringify(refreshedDebts);
     const importedIds = new Set<string>();
-    for (const debt of restoredDebts) {
+    for (const debt of refreshedDebts) {
       if (billsToSet.some((bill: Bill) => bill.sourceDebtId === debt.id)) {
         importedIds.add(debt.id);
       }
