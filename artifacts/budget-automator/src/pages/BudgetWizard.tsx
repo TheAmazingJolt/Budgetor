@@ -3075,7 +3075,7 @@ export function BudgetWizard({
                         onClick={activeCloudBudgetId
                           ? () => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)
                           : () => setIsSaveDialogOpen(true)}
-                        disabled={bills.length === 0 || cloudSaveMutation.isPending}
+                        disabled={bills.length === 0 || cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
                         className="flex-1 rounded-xl"
                       >
                         <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
