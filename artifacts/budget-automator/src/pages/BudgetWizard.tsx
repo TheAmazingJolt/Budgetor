@@ -1378,13 +1378,14 @@ export function BudgetWizard({
           },
         },
         {
-          onSuccess: () => {
+          onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
             toast({ title: "Budget saved", description: `"${saveBudgetName.trim()}" has been saved.` });
             setIsSaveDialogOpen(false);
             setSavedCloudName(saveBudgetName.trim());
             setSaveBudgetName("");
             setNewCloudSaveSuccess(true);
+            if (data?.id) setActiveCloudBudgetId(data.id);
           },
           onError: (err: unknown) => {
             const apiErr = err as { data?: { error?: string } };
@@ -3906,7 +3907,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {inputMode !== "cloud" && activeCloudBudgetId && generatedWeek && (
+                {inputMode !== "cloud" && activeCloudBudgetId && generatedWeek && !newCloudSaveSuccess && (
                   <Button
                     size="lg"
                     onClick={handleSaveToCloud}
@@ -3927,7 +3928,7 @@ export function BudgetWizard({
                   </Button>
                 )}
 
-                {(inputMode === "upload" || inputMode === "scratch") && !activeCloudBudgetId && generatedWeek && (
+                {(inputMode === "upload" || inputMode === "scratch") && (!activeCloudBudgetId || newCloudSaveSuccess) && generatedWeek && (
                   newCloudSaveSuccess ? (
                     <div className="flex-1 h-14 flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-white text-base font-medium shadow-lg animate-in fade-in zoom-in-95 duration-300">
                       <Check className="w-5 h-5" /> Saved to Cloud
@@ -3966,7 +3967,7 @@ export function BudgetWizard({
                       ) : newSheetSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to Google Sheets</>
                       ) : (
-                        <><Sheet className="w-5 h-5 mr-2" /><span key={newCloudSaveSuccess ? "link" : "save"} className="animate-in fade-in zoom-in-95 duration-300">{newCloudSaveSuccess ? "Link to Google Sheets" : "Save to Google Sheets"}</span></>
+                        <><Sheet className="w-5 h-5 mr-2" /><span key={newCloudSaveSuccess ? "link" : "save"} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{newCloudSaveSuccess ? "Link to Google Sheets" : "Save to Google Sheets"}</span></>
                       )}
                     </Button>
                     {newSheetSaveSuccess && newSheetUrl && (
