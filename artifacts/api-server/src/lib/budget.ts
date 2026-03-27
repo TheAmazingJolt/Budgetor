@@ -231,11 +231,21 @@ export function generateWeeklyBudgets(
         weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
       }
 
-      weeks[i].fixedWeeklyBills.push({
-        name: label,
-        amount: weeklyContrib,
-        color: bill.color,
-      });
+      if (payPeriod === "weekly") {
+        weeks[i].fixedWeeklyBills.push({ name: label, amount: weeklyContrib, color: bill.color });
+      } else {
+        // For biweekly/monthly periods, scale contribution by number of 7-day chunks
+        const periodEnd = weeks[i].end;
+        const diffDays = Math.round((periodEnd.getTime() - weekStart.getTime()) / 86400000) + 1;
+        const occurrences = Math.max(1, Math.ceil(diffDays / 7));
+        for (let o = 0; o < occurrences; o++) {
+          weeks[i].fixedWeeklyBills.push({
+            name: occurrences > 1 ? `${label} (wk ${o + 1})` : label,
+            amount: weeklyContrib,
+            color: bill.color,
+          });
+        }
+      }
     }
   }
 
