@@ -120,7 +120,7 @@ function parseBillMetaRows(
   markerValues: string[],
 ): any[] {
   const colorMap: Record<string, string> = {};
-  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
+  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]);
   const bills: any[] = [];
   let startIdx = -1;
   for (let i = 0; i < rows.length; i++) {

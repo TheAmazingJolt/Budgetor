@@ -121,7 +121,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     sheetsData.find((s) => s.properties?.title === "_MoneyPalData");
   const metaRows = metaSheet?.data?.[0]?.rowData ?? [];
   let foundBillsMarker = false;
-  const VALID_META_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
+  const VALID_META_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]);
   for (let i = 0; i < metaRows.length; i++) {
     const val = metaRows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
     if (val === "Bills") { foundBillsMarker = true; }
@@ -237,7 +237,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       }
     }
     if (billsMetaStart !== -1) {
-      const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
+      const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]);
       for (let i = billsMetaStart + 2; i < rows.length; i++) {
         const cells = rows[i]?.values ?? [];
         const rawName = cells[billsMetaCol]?.formattedValue?.trim() ?? "";
