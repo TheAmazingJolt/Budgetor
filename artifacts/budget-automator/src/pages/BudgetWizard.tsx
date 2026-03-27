@@ -2321,7 +2321,7 @@ export function BudgetWizard({
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
   const monthlyAmount = (b: { amount: number; type: string }) =>
-    Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : b.type === "yearly" ? 1 / 12 : 1);
+    Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : (b.type === "yearly" || b.type === "yearly-flat") ? 1 / 12 : 1);
 
   const nonDebtBills = bills.filter(b => !b.sourceDebtId);
   const totalAllBillsMonthly = nonDebtBills.reduce((s, b) => s + monthlyAmount(b), 0);
