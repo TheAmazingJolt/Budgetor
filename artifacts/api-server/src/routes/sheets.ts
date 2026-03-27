@@ -1368,6 +1368,35 @@ async function writeBudgetToSheet(
     },
   });
 
+  // Clear the bills+debts row range before writing to prevent stale rows/formatting
+  // from previous writes bleeding through when the number of rows changes.
+  const billsDebtsBufferRows = 200;
+  const billsDebtsStartRow = totalRows; // 0-indexed row index where bills begin
+  await Promise.all([
+    sheetsApi.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${escapedTitle}'!A${totalRows + 1}:Z${totalRows + billsDebtsBufferRows}`,
+    }),
+    sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: billsDebtsStartRow,
+              endRowIndex: billsDebtsStartRow + billsDebtsBufferRows,
+              startColumnIndex: 0,
+              endColumnIndex: 26,
+            },
+            cell: {},
+            fields: "userEnteredFormat",
+          },
+        }],
+      },
+    }),
+  ]);
+
   let billRowCount = 0;
   if (bills && bills.length > 0) {
     const { billRows, billRequests } = buildBillRows(bills, totalRows, sheetId);
