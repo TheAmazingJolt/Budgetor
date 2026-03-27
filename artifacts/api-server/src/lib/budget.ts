@@ -225,7 +225,7 @@ export function generateWeeklyBudgets(
 
       if (payPeriod === "weekly") {
         // Update cycle before adding contribution
-        if (weekStart > currentCycleDueDate) {
+        if (weekStart >= currentCycleDueDate) {
           currentCycleDueDate = getNextYearlyDueDate(weekStart, dueMonth, dueDay);
           currentCycleWeeks = Math.max(1, Math.ceil(
             (currentCycleDueDate.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
@@ -242,8 +242,8 @@ export function generateWeeklyBudgets(
         for (let o = 0; o < occurrences; o++) {
           const chunkStart = addDays(weekStart, o * 7);
           if (billPayoffDate && chunkStart >= billPayoffDate) break;
-          // Reset cycle if this chunk starts after current due date
-          if (chunkStart > currentCycleDueDate) {
+          // Reset cycle if this chunk starts on or after current due date
+          if (chunkStart >= currentCycleDueDate) {
             currentCycleDueDate = getNextYearlyDueDate(chunkStart, dueMonth, dueDay);
             currentCycleWeeks = Math.max(1, Math.ceil(
               (currentCycleDueDate.getTime() - chunkStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
