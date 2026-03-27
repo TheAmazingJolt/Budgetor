@@ -154,7 +154,7 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
             // Group 1 = annual amount, group 2 = month abbr, group 3 = due day
             const annualMatch = name.match(ANNUAL_BRACKET_RE);
             if (annualMatch) {
-              const cleanName = name.replace(ANNUAL_BRACKET_RE, '').trim();
+              const cleanName = name.replace(ANNUAL_BRACKET_RE, '').replace(/\s*\(wk\s+\d+\)\s*$/i, '').trim();
               const annualAmt = parseFloat(annualMatch[1].replace(/,/g, ''));
               const annualAmount = isNaN(annualAmt) ? (amount > 0 ? -amount : amount) : -Math.abs(annualAmt);
               const monthNum = MONTH_ABBR[annualMatch[2].toLowerCase().substring(0, 3)] ?? null;
