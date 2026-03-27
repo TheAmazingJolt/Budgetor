@@ -50,7 +50,7 @@ const formSchema = z.object({
   type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]),
   color: z.string().default("none"),
 }).superRefine((data, ctx) => {
-  if (data.type === "yearly") {
+  if (data.type === "yearly" || data.type === "yearly-flat") {
     if (data.annualDueMonth == null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Due month is required for yearly bills", path: ["annualDueMonth"] });
     }
@@ -158,15 +158,16 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
   const isAnyYearly = isYearly || isYearlyFlat;
 
   const weeklyEstimate = (() => {
-    const annualAbs = Math.abs(typeof watchedAmount === "number" ? watchedAmount : 0);
-    if (!annualAbs) return null;
+    const month = typeof watchedAnnualDueMonth === "number" ? watchedAnnualDueMonth : null;
+    const day = typeof watchedDayOfMonth === "number" ? watchedDayOfMonth : null;
     if (isYearlyFlat) {
-      const weekly = annualAbs / 52;
-      return { weekly, weeksUntil: null, monthStr: null, day: null, flat: true };
+      if (!month || !day) return null;
+      const monthStr = MONTH_SHORT[(month - 1) % 12];
+      return { flat: true, monthStr, day, weekly: 0, weeksUntil: null };
     }
     if (!isYearly) return null;
-    const month = typeof watchedAnnualDueMonth === "number" ? watchedAnnualDueMonth : 1;
-    const day = typeof watchedDayOfMonth === "number" ? watchedDayOfMonth : 1;
+    const annualAbs = Math.abs(typeof watchedAmount === "number" ? watchedAmount : 0);
+    if (!annualAbs || !month || !day) return null;
     const today = new Date();
     const dueDate = getNextYearlyDueDate(today, month, day);
     const weeksUntil = Math.max(1, Math.ceil((dueDate.getTime() - today.getTime()) / (7 * 24 * 60 * 60 * 1000)));
@@ -187,8 +188,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
       ...values,
       category: normalizeCategory(values.category),
       userColor: values.color !== "none",
-      annualDueMonth: isYearly ? (values.annualDueMonth ?? 1) : undefined,
-      dayOfMonth: isAnyYearly && !isYearly ? undefined : values.dayOfMonth,
+      annualDueMonth: isAnyYearly ? (values.annualDueMonth ?? 1) : undefined,
     } as Bill;
     onSubmit(result);
   }
@@ -217,7 +217,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{isAnyYearly ? "Annual Amount" : "Amount"}</FormLabel>
+                <FormLabel>{isYearly ? "Annual Amount" : "Amount"}</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -230,7 +230,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  {isYearly ? "Total yearly cost. Saved as a weekly contribution." : "Automatically saved as a negative (expense)."}
+                  {isYearly ? "Total yearly cost. Saved as a weekly contribution." : isYearlyFlat ? "Full amount appears in the due week, once per year." : "Automatically saved as a negative (expense)."}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -243,7 +243,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Type</FormLabel>
-                <Select onValueChange={(val) => { field.onChange(val); if (val === "yearly" && form.getValues("annualDueMonth") == null) { form.setValue("annualDueMonth", 1); } }} defaultValue={field.value}>
+                <Select onValueChange={(val) => { field.onChange(val); if ((val === "yearly" || val === "yearly-flat") && form.getValues("annualDueMonth") == null) { form.setValue("annualDueMonth", 1); } }} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
                       <SelectValue placeholder="Select type" />
@@ -255,7 +255,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="biweekly">Biweekly</SelectItem>
                     <SelectItem value="yearly">Yearly (Sinking Fund)</SelectItem>
-                    <SelectItem value="yearly-flat">Yearly (Fixed Weekly)</SelectItem>
+                    <SelectItem value="yearly-flat">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -281,7 +281,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             <p><span className="font-semibold text-foreground">Yearly (Sinking Fund):</span> The annual amount is divided by the number of weeks until the due date. A small weekly contribution appears in every budget period so you're ready when the bill arrives.</p>
           )}
           {billType === "yearly-flat" && (
-            <p><span className="font-semibold text-foreground">Yearly (Fixed Weekly):</span> The annual amount is divided evenly by 52 weeks. The same fixed amount appears every single week — no due-date math involved.</p>
+            <p><span className="font-semibold text-foreground">Yearly:</span> Full amount appears in the budget week it falls due, once per year. Great for small annual expenses like subscriptions, renewals, or registrations.</p>
           )}
         </div>
 
@@ -359,7 +359,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             {weeklyEstimate && (
               <div className="col-span-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary font-medium">
                 {weeklyEstimate.flat
-                  ? `≈ $${weeklyEstimate.weekly.toFixed(2)}/week — fixed (annual ÷ 52)`
+                  ? `Due ${weeklyEstimate.monthStr} ${weeklyEstimate.day} — full amount appears that week once per year`
                   : `≈ $${weeklyEstimate.weekly.toFixed(2)}/week — ${weeklyEstimate.weeksUntil} week${weeklyEstimate.weeksUntil !== 1 ? "s" : ""} until ${weeklyEstimate.monthStr} ${weeklyEstimate.day}`}
               </div>
             )}

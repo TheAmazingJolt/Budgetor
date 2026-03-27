@@ -261,35 +261,33 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Add yearly-flat bills (fixed weekly: annual / 52) ───────────────────
-  // No due-date awareness — simply divides the annual cost by 52 and posts
-  // that constant amount to every budget period.
+  // ── Add yearly-flat bills (once-per-year lump sum on the due date) ─────────
+  // Places the full bill amount in the single week the due date falls within.
   for (const bill of yearlyFlatBills) {
-    const annualAbs = Math.abs(bill.amount);
-    const weeklyContrib = Math.round((-annualAbs / 52) * 100) / 100;
-    const label = `${bill.name} [annual: ${fmtAnnualAmount(annualAbs)}/yr fixed]`;
+    const dueMonth = bill.annualDueMonth ?? 1;
+    const dueDay = bill.dayOfMonth ?? 1;
     const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
 
-    for (let i = 0; i < weeks.length; i++) {
-      const weekStart = weeks[i].start;
-      if (billPayoffDate && weekStart >= billPayoffDate) continue;
+    // Start from one year before startDate so we catch any due date in range
+    const searchFrom = new Date(startDate);
+    searchFrom.setFullYear(searchFrom.getFullYear() - 1);
+    let dueDate = getNextYearlyDueDate(searchFrom, dueMonth, dueDay);
 
-      if (payPeriod === "weekly") {
-        weeks[i].fixedWeeklyBills.push({ name: label, amount: weeklyContrib, color: bill.color });
-      } else {
-        const periodEnd = weeks[i].end;
-        const diffDays = Math.round((periodEnd.getTime() - weekStart.getTime()) / 86400000) + 1;
-        const occurrences = Math.max(1, Math.ceil(diffDays / 7));
-        for (let o = 0; o < occurrences; o++) {
-          const chunkStart = addDays(weekStart, o * 7);
-          if (billPayoffDate && chunkStart >= billPayoffDate) break;
-          weeks[i].fixedWeeklyBills.push({
-            name: occurrences > 1 ? `${label} (wk ${o + 1})` : label,
-            amount: weeklyContrib,
-            color: bill.color,
-          });
+    while (dueDate <= endDate) {
+      if (dueDate >= startDate) {
+        for (let i = 0; i < weeks.length; i++) {
+          const { start, end } = weeks[i];
+          if (dueDate >= start && dueDate <= end) {
+            if (!billPayoffDate || start < billPayoffDate) {
+              weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.color });
+            }
+            break;
+          }
         }
       }
+      const next = new Date(dueDate);
+      next.setFullYear(next.getFullYear() + 1);
+      dueDate = next;
     }
   }
 

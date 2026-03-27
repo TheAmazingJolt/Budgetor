@@ -104,15 +104,13 @@ function writeBillsSectionBelow(
       ? 'Biweekly'
       : bill.type === 'yearly'
       ? 'Yearly'
-      : bill.type === 'yearly-flat'
-      ? 'Yearly (Fixed)'
+      : bill.type === 'yearly-flat' && bill.annualDueMonth != null
+      ? (() => { const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${M[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}`; })()
       : bill.dayOfMonth != null ? bill.dayOfMonth : 'Varies';
     const MONTH_SHORT_W = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const annualDisplayAmt = (n: number) => n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
     const billDisplayName = bill.type === 'yearly' && bill.annualDueMonth != null
       ? `${bill.name} [annual: ${annualDisplayAmt(Math.abs(bill.amount))}/yr → ${MONTH_SHORT_W[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}]`
-      : bill.type === 'yearly-flat'
-      ? `${bill.name} [annual: ${annualDisplayAmt(Math.abs(bill.amount))}/yr fixed]`
       : bill.name;
     set(sheet, row, 0, makeCell(billDisplayName,       nameStyle));
     set(sheet, row, 1, makeCell(Math.abs(bill.amount), amtStyle));
