@@ -3,6 +3,8 @@ import type { WeeklyBudget, Debt } from '@workspace/api-client-react';
 import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 import { BILL_COLOR_HEX } from './billColors';
+import { computeSavings } from './savingsComputation';
+import type { WeekForSavings } from './savingsComputation';
 
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
@@ -645,6 +647,131 @@ function writeDebtsSection(
 
 // ── Public exports ───────────────────────────────────────────────────────────
 
+function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills: Bill[]): void {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const weeks: WeekForSavings[] = weekBudgets.map(w => ({
+    label: w.weekLabel,
+    items: (w.bills ?? []) as { name: string; amount: number }[],
+  }));
+
+  const { sinkingFunds, balanced } = computeSavings(bills, weeks, today);
+
+  const ss: XLSX.WorkSheet = {};
+  let row = 0;
+
+  const violetFill = { patternType: 'solid' as const, fgColor: { rgb: '7C3AED' } };
+  const headerStyle = {
+    font: { bold: true, sz: 14, name: 'Arial', color: { rgb: 'FFFFFF' } },
+    fill: violetFill,
+    alignment: { horizontal: 'center' as const },
+  };
+  set(ss, row, 0, makeCell('Savings Progress', headerStyle));
+  addMerge(ss, row, 0, row, 5);
+  row++;
+
+  const subtitleStyle = {
+    font: { sz: 10, name: 'Arial', italic: true, color: { rgb: '6B7280' } },
+    alignment: { horizontal: 'center' as const },
+  };
+  const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  set(ss, row, 0, makeCell(`Generated on ${dateStr}`, subtitleStyle));
+  addMerge(ss, row, 0, row, 5);
+  row++;
+  row++;
+
+  if (sinkingFunds.length === 0 && balanced.length === 0) {
+    const emptyStyle = {
+      font: { sz: 11, name: 'Arial', color: { rgb: '6B7280' } },
+      alignment: { horizontal: 'center' as const },
+    };
+    set(ss, row, 0, makeCell('No sinking funds or balanced bills to track. Add yearly or balanced bills to see savings progress here.', emptyStyle));
+    addMerge(ss, row, 0, row, 5);
+    ss['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: row, c: 5 } });
+    ss['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ss, 'Savings');
+    return;
+  }
+
+  if (sinkingFunds.length > 0) {
+    const sfSectionStyle = {
+      font: { bold: true, sz: 11, name: 'Arial', color: { rgb: '5B21B6' } },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'EDE9FE' } },
+    };
+    set(ss, row, 0, makeCell('Sinking Funds', sfSectionStyle));
+    addMerge(ss, row, 0, row, 5);
+    row++;
+
+    const sfColHdrStyle = {
+      font: { bold: true, sz: 10, name: 'Arial' },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'F5F3FF' } },
+      border: { bottom: { style: 'thin' as const, color: { rgb: 'C4B5FD' } } },
+    };
+    const sfCols = ['Bill Name', 'Annual Goal', 'Saved This Cycle', 'Progress', 'Next Due Date', 'Weeks Left'];
+    for (let c = 0; c < sfCols.length; c++) {
+      set(ss, row, c, makeCell(sfCols[c], sfColHdrStyle));
+    }
+    row++;
+
+    for (const sf of sinkingFunds) {
+      set(ss, row, 0, makeCell(sf.bill.name ?? ''));
+      set(ss, row, 1, { v: sf.annualGoal, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: sf.savedInCycle, t: 'n', z: MONEY_FMT });
+      const sfPct: any = { v: sf.progressPct / 100, t: 'n', z: '0%' };
+      if (sf.progressPct >= 100) sfPct.s = { font: { color: { rgb: '059669' }, bold: true } };
+      set(ss, row, 3, sfPct);
+      set(ss, row, 4, makeCell(sf.nextDueDateStr));
+      set(ss, row, 5, { v: sf.weeksRemaining, t: 'n' });
+      row++;
+    }
+    row++;
+  }
+
+  if (balanced.length > 0) {
+    const currentMonthStr = today.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const balSectionStyle = {
+      font: { bold: true, sz: 11, name: 'Arial', color: { rgb: '3730A3' } },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'E0E7FF' } },
+    };
+    set(ss, row, 0, makeCell(`Monthly Set-Aside — ${currentMonthStr}`, balSectionStyle));
+    addMerge(ss, row, 0, row, 3);
+    row++;
+
+    const balColHdrStyle = {
+      font: { bold: true, sz: 10, name: 'Arial' },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'EEF2FF' } },
+      border: { bottom: { style: 'thin' as const, color: { rgb: 'A5B4FC' } } },
+    };
+    const balCols = ['Bill Name', 'Monthly Goal', 'Set Aside This Month', 'Progress'];
+    for (let c = 0; c < balCols.length; c++) {
+      set(ss, row, c, makeCell(balCols[c], balColHdrStyle));
+    }
+    row++;
+
+    for (const b of balanced) {
+      set(ss, row, 0, makeCell(b.bill.name ?? ''));
+      set(ss, row, 1, { v: b.monthlyGoal, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: b.savedThisMonth, t: 'n', z: MONEY_FMT });
+      const balPct: any = { v: b.progressPct / 100, t: 'n', z: '0%' };
+      if (b.progressPct >= 100) balPct.s = { font: { color: { rgb: '059669' }, bold: true } };
+      set(ss, row, 3, balPct);
+      row++;
+    }
+    row++;
+  }
+
+  const noteStyle = {
+    font: { sz: 9, name: 'Arial', italic: true, color: { rgb: '9CA3AF' } },
+  };
+  set(ss, row, 0, makeCell('Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month.', noteStyle));
+  addMerge(ss, row, 0, row, 5);
+
+  ss['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: row, c: 5 } });
+  ss['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ss, 'Savings');
+}
+
 function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[], debts?: Debt[] | null): void {
   const ds: XLSX.WorkSheet = {};
   const headers = ['name', 'amount', 'dayOfMonth', 'category', 'type', 'color', 'sourceDebtId', 'annualDueMonth'];
@@ -747,7 +874,7 @@ export function appendBudgetWeeks(
   const newSheets: Record<string, XLSX.WorkSheet> = {};
   const newSheetNames: string[] = [];
   for (const name of workbook.SheetNames) {
-    if (name === '_BudgifyData' || name === '_BillsData' || name === '_MoneyPalData' || name === budgetSheetName) continue;
+    if (name === '_BudgifyData' || name === '_BillsData' || name === '_MoneyPalData' || name === 'Savings' || name === budgetSheetName) continue;
     newSheets[name] = workbook.Sheets[name];
     newSheetNames.push(name);
   }
@@ -759,6 +886,8 @@ export function appendBudgetWeeks(
   if ((bills && bills.length > 0) || (debts && debts.length > 0)) {
     writeBillsDataSheet(newWb, bills ?? [], debts);
   }
+
+  writeSavingsSheet(newWb, weekBudgets, bills ?? []);
 
   const wbOut = XLSX.write(newWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {
@@ -805,7 +934,7 @@ export function createBlankBudget(
   if (rawBytes) {
     const originalWb = XLSX.read(rawBytes, { type: 'array', cellStyles: true });
     for (const sheetName of originalWb.SheetNames) {
-      if (sheetName === 'Budget' || sheetName === '_BudgifyData' || sheetName === '_BillsData' || sheetName === '_MoneyPalData') continue;
+      if (sheetName === 'Budget' || sheetName === '_BudgifyData' || sheetName === '_BillsData' || sheetName === '_MoneyPalData' || sheetName === 'Savings') continue;
       if (wb.SheetNames.includes(sheetName)) continue;
       XLSX.utils.book_append_sheet(wb, originalWb.Sheets[sheetName], sheetName);
     }
@@ -815,6 +944,8 @@ export function createBlankBudget(
   if ((allBills && allBills.length > 0) || (debts && debts.length > 0)) {
     writeBillsDataSheet(wb, allBills ?? [], debts);
   }
+
+  writeSavingsSheet(wb, weekBudgets, allBills ?? []);
 
   const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {

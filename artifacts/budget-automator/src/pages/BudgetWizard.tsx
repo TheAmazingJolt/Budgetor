@@ -516,6 +516,7 @@ export function BudgetWizard({
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
+  const [step2Tab, setStep2Tab] = useState<"budget" | "savings">("budget");
   const [editDraft, setEditDraft] = useState<{ paycheck: string; openingBalance: string; items: { name: string; amount: string }[] } | null>(null);
   const [showEditOb, setShowEditOb] = useState(false);
   const [visitedStep1, setVisitedStep1] = useState(false);
@@ -3770,26 +3771,47 @@ export function BudgetWizard({
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
                           <div className="flex-1" />
-                          {allWeeks.length > 0 && (
-                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
-                              <CalendarDays className="w-3.5 h-3.5" /> Today
-                            </Button>
-                          )}
-                          <Button
-                            variant={editModeOn ? "default" : "outline"}
-                            size="sm"
-                            className={`h-8 text-xs gap-1.5 ${editModeOn ? "bg-teal-600 hover:bg-teal-700" : ""}`}
-                            onClick={() => { setEditModeOn(v => !v); setSelectedWeekIdx(null); setEditDraft(null); }}
-                          >
-                            <Pencil className="w-3.5 h-3.5" /> {editModeOn ? "Done" : "Edit"}
-                          </Button>
-                          {hasEdits && (
-                            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setWeekEdits({})}>
-                              Reset edits
-                            </Button>
+                          <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setStep2Tab("budget")}
+                              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "budget" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                            >
+                              Budget
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStep2Tab("savings")}
+                              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "savings" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                            >
+                              Savings
+                            </button>
+                          </div>
+                          {step2Tab === "budget" && (
+                            <>
+                              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
+                                <CalendarDays className="w-3.5 h-3.5" /> Today
+                              </Button>
+                              <Button
+                                variant={editModeOn ? "default" : "outline"}
+                                size="sm"
+                                className={`h-8 text-xs gap-1.5 ${editModeOn ? "bg-teal-600 hover:bg-teal-700" : ""}`}
+                                onClick={() => { setEditModeOn(v => !v); setSelectedWeekIdx(null); setEditDraft(null); }}
+                              >
+                                <Pencil className="w-3.5 h-3.5" /> {editModeOn ? "Done" : "Edit"}
+                              </Button>
+                              {hasEdits && (
+                                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setWeekEdits({})}>
+                                  Reset edits
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
-                        <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
+                        {step2Tab === "savings" && (
+                          <SavingsSection bills={bills} weeks={allWeeks} />
+                        )}
+                        {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-border/40">
@@ -3900,14 +3922,12 @@ export function BudgetWizard({
                               </tr>
                             </tfoot>
                           </table>
-                        </div>
-                        {hasEdits && (
+                        </div>}
+                        {step2Tab === "budget" && hasEdits && (
                           <p className="text-xs text-muted-foreground px-1 mt-1">* Remaining is estimated from your edits. Exact balances recalculate when you save.</p>
                         )}
                       </div>
                     )}
-
-                    <SavingsSection bills={bills} weeks={allWeeks} />
 
                     <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
                       <CardContent className="p-5">
