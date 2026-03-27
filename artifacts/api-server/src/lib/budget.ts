@@ -223,22 +223,33 @@ export function generateWeeklyBudgets(
       const weekStart = weeks[i].start;
       if (billPayoffDate && weekStart >= billPayoffDate) continue;
 
-      if (weekStart > currentCycleDueDate) {
-        currentCycleDueDate = getNextYearlyDueDate(weekStart, dueMonth, dueDay);
-        currentCycleWeeks = Math.max(1, Math.ceil(
-          (currentCycleDueDate.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
-        ));
-        weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
-      }
-
       if (payPeriod === "weekly") {
+        // Update cycle before adding contribution
+        if (weekStart > currentCycleDueDate) {
+          currentCycleDueDate = getNextYearlyDueDate(weekStart, dueMonth, dueDay);
+          currentCycleWeeks = Math.max(1, Math.ceil(
+            (currentCycleDueDate.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
+          ));
+          weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
+        }
         weeks[i].fixedWeeklyBills.push({ name: label, amount: weeklyContrib, color: bill.color });
       } else {
-        // For biweekly/monthly periods, scale contribution by number of 7-day chunks
+        // For biweekly/monthly periods, iterate chunk-by-chunk so cycle resets
+        // correctly when the due date falls inside the period.
         const periodEnd = weeks[i].end;
         const diffDays = Math.round((periodEnd.getTime() - weekStart.getTime()) / 86400000) + 1;
         const occurrences = Math.max(1, Math.ceil(diffDays / 7));
         for (let o = 0; o < occurrences; o++) {
+          const chunkStart = addDays(weekStart, o * 7);
+          if (billPayoffDate && chunkStart >= billPayoffDate) break;
+          // Reset cycle if this chunk starts after current due date
+          if (chunkStart > currentCycleDueDate) {
+            currentCycleDueDate = getNextYearlyDueDate(chunkStart, dueMonth, dueDay);
+            currentCycleWeeks = Math.max(1, Math.ceil(
+              (currentCycleDueDate.getTime() - chunkStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
+            ));
+            weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
+          }
           weeks[i].fixedWeeklyBills.push({
             name: occurrences > 1 ? `${label} (wk ${o + 1})` : label,
             amount: weeklyContrib,
