@@ -133,7 +133,8 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
             }
           }
         } else {
-          const ANNUAL_BRACKET_RE = /\[annual:\s*\$[\d,.]+\/yr\s*→\s*(\w+)\s+(\d+)\]/i;
+          // Captures: group 1 = annual dollar amount, group 2 = month abbr, group 3 = due day
+          const ANNUAL_BRACKET_RE = /\[annual:\s*\$([\d,.]+)\/yr\s*→\s*(\w+)\s+(\d+)\]/i;
           const MONTH_ABBR: Record<string, number> = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
           const BILL_STOP_MARKERS = new Set(['debts', 'balance', 'apr %', 'min payment', 'name', 'due day', 'paycheck', 'remaining', 'partial']);
           const BILL_WEEK_KEYWORDS = ['paycheck', 'remaining', 'partial'];
@@ -150,15 +151,18 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
             if (isNaN(amount)) continue;
 
             // Detect yearly sinking-fund bills by bracket notation: "Name [annual: $X/yr → Mon Day]"
+            // Group 1 = annual amount, group 2 = month abbr, group 3 = due day
             const annualMatch = name.match(ANNUAL_BRACKET_RE);
             if (annualMatch) {
               const cleanName = name.replace(ANNUAL_BRACKET_RE, '').trim();
-              const monthNum = MONTH_ABBR[annualMatch[1].toLowerCase().substring(0, 3)] ?? null;
-              const dueDay = parseInt(annualMatch[2]);
+              const annualAmt = parseFloat(annualMatch[1].replace(/,/g, ''));
+              const annualAmount = isNaN(annualAmt) ? (amount > 0 ? -amount : amount) : -Math.abs(annualAmt);
+              const monthNum = MONTH_ABBR[annualMatch[2].toLowerCase().substring(0, 3)] ?? null;
+              const dueDay = parseInt(annualMatch[3]);
               const dayOfMonth = !isNaN(dueDay) && dueDay >= 1 && dueDay <= 31 ? dueDay : null;
               bills.push({
                 name: cleanName,
-                amount: amount > 0 ? -amount : amount,
+                amount: annualAmount,
                 dayOfMonth,
                 category: cleanName,
                 type: 'yearly' as Bill['type'],

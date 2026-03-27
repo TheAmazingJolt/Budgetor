@@ -272,8 +272,9 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     }
   }
 
-  // Shared constants for bracket-pattern yearly bill heuristic parsing
-  const ANNUAL_BRACKET_RE = /\[annual:\s*\$[\d,.]+\/yr\s*→\s*(\w+)\s+(\d+)\]/i;
+  // Shared constants for bracket-pattern yearly bill heuristic parsing.
+  // Captures: group 1 = annual dollar amount, group 2 = month abbr, group 3 = due day
+  const ANNUAL_BRACKET_RE = /\[annual:\s*\$([\d,.]+)\/yr\s*→\s*(\w+)\s+(\d+)\]/i;
   const MONTH_ABBR: Record<string, number> = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
 
   if (bills.length === 0) {
@@ -325,13 +326,16 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       const amount = rawAmt > 0 ? -rawAmt : rawAmt;
 
       // Detect yearly sinking-fund bills by bracket notation: "Name [annual: $X/yr → Mon Day]"
+      // Group 1 = annual amount, group 2 = month abbr, group 3 = due day
       const annualMatch = nameCell.match(ANNUAL_BRACKET_RE);
       if (annualMatch) {
         const cleanName = nameCell.replace(ANNUAL_BRACKET_RE, "").trim();
-        const monthNum = MONTH_ABBR[annualMatch[1].toLowerCase().substring(0, 3)] ?? null;
-        const dueDay = parseInt(annualMatch[2]);
+        const annualAmt = parseFloat(annualMatch[1].replace(/,/g, ""));
+        const annualAmount = isNaN(annualAmt) ? amount : -Math.abs(annualAmt);
+        const monthNum = MONTH_ABBR[annualMatch[2].toLowerCase().substring(0, 3)] ?? null;
+        const dueDay = parseInt(annualMatch[3]);
         const dayOfMonth = !isNaN(dueDay) && dueDay >= 1 && dueDay <= 31 ? dueDay : null;
-        const billEntry: Record<string, unknown> = { name: cleanName, amount, dayOfMonth, category: cleanName, type: "yearly", color: "teal" };
+        const billEntry: Record<string, unknown> = { name: cleanName, amount: annualAmount, dayOfMonth, category: cleanName, type: "yearly", color: "teal" };
         if (monthNum) billEntry.annualDueMonth = monthNum;
         bills.push(billEntry);
         continue;
