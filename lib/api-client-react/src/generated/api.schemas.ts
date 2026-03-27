@@ -24,6 +24,7 @@ export const BillType = {
   weekly: "weekly",
   biweekly: "biweekly",
   yearly: "yearly",
+  "yearly-flat": "yearly-flat",
 } as const;
 
 export interface Bill {

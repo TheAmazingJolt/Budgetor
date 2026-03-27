@@ -47,7 +47,7 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -517,7 +517,7 @@ export const SheetReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -567,7 +567,7 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -890,7 +890,7 @@ export const ExcelReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -940,7 +940,7 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1219,7 +1219,7 @@ export const GetUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1252,7 +1252,7 @@ export const UpdateUserBillsBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1281,7 +1281,7 @@ export const UpdateUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()

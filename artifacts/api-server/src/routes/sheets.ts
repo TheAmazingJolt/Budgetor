@@ -342,6 +342,17 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         continue;
       }
 
+      // Detect yearly-flat bills by bracket notation: "Name [annual: $X/yr fixed]"
+      const ANNUAL_FLAT_RE = /\[annual:\s*\$([\d,.]+)\/yr\s+fixed\]/i;
+      const flatMatch = nameCell.match(ANNUAL_FLAT_RE);
+      if (flatMatch) {
+        const cleanName = nameCell.replace(ANNUAL_FLAT_RE, "").replace(/\s*\(wk\s+\d+\)\s*$/i, "").trim();
+        const annualAmt = parseFloat(flatMatch[1].replace(/,/g, ""));
+        const annualAmount = isNaN(annualAmt) ? amount : -Math.abs(annualAmt);
+        bills.push({ name: cleanName, amount: annualAmount, dayOfMonth: null, category: cleanName, type: "yearly-flat", color: "teal" });
+        continue;
+      }
+
       const dayStr = cells[2]?.formattedValue ?? "";
       const dayOfMonth =
         dayStr && !isNaN(parseInt(dayStr)) && parseInt(dayStr) <= 31

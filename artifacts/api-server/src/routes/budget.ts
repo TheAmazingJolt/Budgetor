@@ -4,7 +4,7 @@ import { generateWeeklyBudgets } from "../lib/budget.js";
 
 const router: IRouter = Router();
 
-const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
+const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]);
 
 router.post("/budget/generate", async (req, res): Promise<void> => {
   if (req.body?.bills && Array.isArray(req.body.bills)) {
@@ -53,7 +53,7 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
   );
 
   const totalMonthlyBills = bills.reduce(
-    (s, b) => s + Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : b.type === "yearly" ? 1 / 12 : 1),
+    (s, b) => s + Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : b.type === "yearly" ? 1 / 12 : b.type === "yearly-flat" ? 1 / 12 : 1),
     0
   );
   const averageWeeklyBills =

@@ -61,6 +61,7 @@ export function generateWeeklyBudgets(
   const weeklyBills = bills.filter((b) => b.type === "weekly");
   const biweeklyBills = bills.filter((b) => b.type === "biweekly");
   const yearlyBills = bills.filter((b) => b.type === "yearly");
+  const yearlyFlatBills = bills.filter((b) => b.type === "yearly-flat");
 
   // alwaysBills = balanced with no specific due day (varies across all weeks)
   const alwaysBills = balancedBills.filter((b) => !b.dayOfMonth);
@@ -250,6 +251,38 @@ export function generateWeeklyBudgets(
             ));
             weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
           }
+          weeks[i].fixedWeeklyBills.push({
+            name: occurrences > 1 ? `${label} (wk ${o + 1})` : label,
+            amount: weeklyContrib,
+            color: bill.color,
+          });
+        }
+      }
+    }
+  }
+
+  // ── Add yearly-flat bills (fixed weekly: annual / 52) ───────────────────
+  // No due-date awareness — simply divides the annual cost by 52 and posts
+  // that constant amount to every budget period.
+  for (const bill of yearlyFlatBills) {
+    const annualAbs = Math.abs(bill.amount);
+    const weeklyContrib = Math.round((-annualAbs / 52) * 100) / 100;
+    const label = `${bill.name} [annual: ${fmtAnnualAmount(annualAbs)}/yr fixed]`;
+    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+
+    for (let i = 0; i < weeks.length; i++) {
+      const weekStart = weeks[i].start;
+      if (billPayoffDate && weekStart >= billPayoffDate) continue;
+
+      if (payPeriod === "weekly") {
+        weeks[i].fixedWeeklyBills.push({ name: label, amount: weeklyContrib, color: bill.color });
+      } else {
+        const periodEnd = weeks[i].end;
+        const diffDays = Math.round((periodEnd.getTime() - weekStart.getTime()) / 86400000) + 1;
+        const occurrences = Math.max(1, Math.ceil(diffDays / 7));
+        for (let o = 0; o < occurrences; o++) {
+          const chunkStart = addDays(weekStart, o * 7);
+          if (billPayoffDate && chunkStart >= billPayoffDate) break;
           weeks[i].fixedWeeklyBills.push({
             name: occurrences > 1 ? `${label} (wk ${o + 1})` : label,
             amount: weeklyContrib,

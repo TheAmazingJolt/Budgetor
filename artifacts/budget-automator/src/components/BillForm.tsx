@@ -47,7 +47,7 @@ const formSchema = z.object({
   dayOfMonth: z.coerce.number().min(1).max(31).nullable().optional(),
   annualDueMonth: z.coerce.number().min(1).max(12).nullable().optional(),
   category: z.string().min(1, "Category label is required"),
-  type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly"]),
+  type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]),
   color: z.string().default("none"),
 }).superRefine((data, ctx) => {
   if (data.type === "yearly") {
@@ -154,11 +154,17 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
   const watchedDayOfMonth = form.watch("dayOfMonth");
 
   const isYearly = billType === "yearly";
+  const isYearlyFlat = billType === "yearly-flat";
+  const isAnyYearly = isYearly || isYearlyFlat;
 
   const weeklyEstimate = (() => {
-    if (!isYearly) return null;
     const annualAbs = Math.abs(typeof watchedAmount === "number" ? watchedAmount : 0);
     if (!annualAbs) return null;
+    if (isYearlyFlat) {
+      const weekly = annualAbs / 52;
+      return { weekly, weeksUntil: null, monthStr: null, day: null, flat: true };
+    }
+    if (!isYearly) return null;
     const month = typeof watchedAnnualDueMonth === "number" ? watchedAnnualDueMonth : 1;
     const day = typeof watchedDayOfMonth === "number" ? watchedDayOfMonth : 1;
     const today = new Date();
@@ -166,7 +172,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
     const weeksUntil = Math.max(1, Math.ceil((dueDate.getTime() - today.getTime()) / (7 * 24 * 60 * 60 * 1000)));
     const weekly = annualAbs / weeksUntil;
     const monthStr = MONTH_SHORT[(month - 1) % 12];
-    return { weekly, weeksUntil, monthStr, day };
+    return { weekly, weeksUntil, monthStr, day, flat: false };
   })();
 
   function handleSubmit(values: z.infer<typeof formSchema>) {
@@ -175,6 +181,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
       ...values,
       userColor: values.color !== "none",
       annualDueMonth: isYearly ? (values.annualDueMonth ?? 1) : undefined,
+      dayOfMonth: isAnyYearly && !isYearly ? undefined : values.dayOfMonth,
     } as Bill;
     onSubmit(result);
   }
@@ -241,6 +248,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="biweekly">Biweekly</SelectItem>
                     <SelectItem value="yearly">Yearly (Sinking Fund)</SelectItem>
+                    <SelectItem value="yearly-flat">Yearly (Fixed Weekly)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -265,9 +273,12 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           {billType === "yearly" && (
             <p><span className="font-semibold text-foreground">Yearly (Sinking Fund):</span> The annual amount is divided by the number of weeks until the due date. A small weekly contribution appears in every budget period so you're ready when the bill arrives.</p>
           )}
+          {billType === "yearly-flat" && (
+            <p><span className="font-semibold text-foreground">Yearly (Fixed Weekly):</span> The annual amount is divided evenly by 52 weeks. The same fixed amount appears every single week — no due-date math involved.</p>
+          )}
         </div>
 
-        {isYearly ? (
+        {isAnyYearly ? (
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -283,60 +294,66 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="annualDueMonth"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Due Month</FormLabel>
-                  <Select
-                    onValueChange={v => field.onChange(parseInt(v, 10))}
-                    value={field.value != null ? String(field.value) : "1"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
-                        <SelectValue placeholder="Month" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {MONTH_NAMES.map((name, idx) => (
-                        <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {isYearly && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="annualDueMonth"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Month</FormLabel>
+                      <Select
+                        onValueChange={v => field.onChange(parseInt(v, 10))}
+                        value={field.value != null ? String(field.value) : "1"}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
+                            <SelectValue placeholder="Month" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {MONTH_NAMES.map((name, idx) => (
+                            <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="dayOfMonth"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Due Day of Month</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={31}
-                      placeholder="1–31"
-                      value={field.value != null ? field.value : ""}
-                      onChange={e => {
-                        const num = parseInt(e.target.value, 10);
-                        field.onChange(!isNaN(num) ? num : null);
-                      }}
-                      className="w-24 focus:ring-primary/20 focus:border-primary"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="dayOfMonth"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Day of Month</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={31}
+                          placeholder="1–31"
+                          value={field.value != null ? field.value : ""}
+                          onChange={e => {
+                            const num = parseInt(e.target.value, 10);
+                            field.onChange(!isNaN(num) ? num : null);
+                          }}
+                          className="w-24 focus:ring-primary/20 focus:border-primary"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
 
             {weeklyEstimate && (
               <div className="col-span-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary font-medium">
-                ≈ ${weeklyEstimate.weekly.toFixed(2)}/week — {weeklyEstimate.weeksUntil} week{weeklyEstimate.weeksUntil !== 1 ? "s" : ""} until {weeklyEstimate.monthStr} {weeklyEstimate.day}
+                {weeklyEstimate.flat
+                  ? `≈ $${weeklyEstimate.weekly.toFixed(2)}/week — fixed (annual ÷ 52)`
+                  : `≈ $${weeklyEstimate.weekly.toFixed(2)}/week — ${weeklyEstimate.weeksUntil} week${weeklyEstimate.weeksUntil !== 1 ? "s" : ""} until ${weeklyEstimate.monthStr} ${weeklyEstimate.day}`}
               </div>
             )}
           </div>
