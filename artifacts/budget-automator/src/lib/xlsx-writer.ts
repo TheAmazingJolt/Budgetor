@@ -4,7 +4,7 @@ import type { Bill } from '@workspace/api-client-react';
 import type { SheetStyle, RawBillsSection } from './xlsx-parser';
 import { BILL_COLOR_HEX } from './billColors';
 import { computeSavings } from './savingsComputation';
-import type { WeekForSavings } from './savingsComputation';
+import type { WeekForSavings, ManualContribution } from './savingsComputation';
 
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
@@ -647,7 +647,7 @@ function writeDebtsSection(
 
 // ── Public exports ───────────────────────────────────────────────────────────
 
-function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills: Bill[]): void {
+function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills: Bill[], contributions: ManualContribution[] = []): void {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -656,7 +656,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
     items: (w.bills ?? []) as { name: string; amount: number }[],
   }));
 
-  const { sinkingFunds, balanced } = computeSavings(bills, weeks, today);
+  const { sinkingFunds, balanced } = computeSavings(bills, weeks, today, contributions);
 
   const ss: XLSX.WorkSheet = {};
   let row = 0;
@@ -717,7 +717,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
     for (const sf of sinkingFunds) {
       set(ss, row, 0, makeCell(sf.bill.name ?? ''));
       set(ss, row, 1, { v: sf.annualGoal, t: 'n', z: MONEY_FMT });
-      set(ss, row, 2, { v: sf.savedInCycle, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: sf.savedInCycle + sf.manualInCycle, t: 'n', z: MONEY_FMT });
       const sfPct: any = { v: sf.progressPct / 100, t: 'n', z: '0%' };
       if (sf.progressPct >= 100) sfPct.s = { font: { color: { rgb: '059669' }, bold: true } };
       set(ss, row, 3, sfPct);
@@ -752,7 +752,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
     for (const b of balanced) {
       set(ss, row, 0, makeCell(b.bill.name ?? ''));
       set(ss, row, 1, { v: b.monthlyGoal, t: 'n', z: MONEY_FMT });
-      set(ss, row, 2, { v: b.savedThisMonth, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: b.savedThisMonth + b.manualThisMonth, t: 'n', z: MONEY_FMT });
       const balPct: any = { v: b.progressPct / 100, t: 'n', z: '0%' };
       if (b.progressPct >= 100) balPct.s = { font: { color: { rgb: '059669' }, bold: true } };
       set(ss, row, 3, balPct);
@@ -837,6 +837,7 @@ export function appendBudgetWeeks(
   style?: SheetStyle | null,
   debts?: Debt[] | null,
   bills?: Bill[] | null,
+  contributions?: ManualContribution[] | null,
 ): Blob {
   // Re-read the original workbook to preserve any extra sheets (e.g. custom
   // tabs the user may have added), but we rebuild the Budget sheet from scratch
@@ -887,7 +888,7 @@ export function appendBudgetWeeks(
     writeBillsDataSheet(newWb, bills ?? [], debts);
   }
 
-  writeSavingsSheet(newWb, weekBudgets, bills ?? []);
+  writeSavingsSheet(newWb, weekBudgets, bills ?? [], contributions ?? []);
 
   const wbOut = XLSX.write(newWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {
@@ -904,6 +905,7 @@ export function createBlankBudget(
   rawBytes?: Uint8Array | null,
   debts?: Debt[] | null,
   bills?: Bill[] | null,
+  contributions?: ManualContribution[] | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
@@ -945,7 +947,7 @@ export function createBlankBudget(
     writeBillsDataSheet(wb, allBills ?? [], debts);
   }
 
-  writeSavingsSheet(wb, weekBudgets, allBills ?? []);
+  writeSavingsSheet(wb, weekBudgets, allBills ?? [], contributions ?? []);
 
   const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {

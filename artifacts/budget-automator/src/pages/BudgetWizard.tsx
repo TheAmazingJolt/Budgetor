@@ -1836,11 +1836,14 @@ export function BudgetWizard({
               ...w,
               bills: injectBillColors(w.bills, xlsxColorLookup),
             }));
+            const cachedContribs = activeCloudBudgetId
+              ? ((queryClient.getQueryData(["savings-contributions", activeCloudBudgetId]) as any)?.contributions ?? [])
+              : [];
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
+              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs);
             } else if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
-              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills);
+              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs);
             } else {
               blob = appendBudgetWeeks(
                 parsedWorkbook!.rawBytes,
@@ -1850,6 +1853,7 @@ export function BudgetWizard({
                 sheetStyle,
                 debtsForExport,
                 effectiveBills,
+                cachedContribs,
               );
             }
             setGeneratedBlob(blob);
@@ -1969,6 +1973,7 @@ export function BudgetWizard({
           ...(existingLastCol != null ? { existingLastCol } : {}),
           ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+          ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
         },
       });
       setSheetWriteSuccess(true);
@@ -2032,14 +2037,17 @@ export function BudgetWizard({
         ...w,
         bills: injectBillColors(w.bills, xlsxColorLookup),
       }));
+      const cachedContribs2 = activeCloudBudgetId
+        ? ((queryClient.getQueryData(["savings-contributions", activeCloudBudgetId]) as any)?.contributions ?? [])
+        : [];
       let freshBlob: Blob;
       if (inputMode === "google" || inputMode === "excel") {
         const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2);
       } else if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
-        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills);
+        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2);
       } else {
-        freshBlob = appendBudgetWeeks(parsedWorkbook!.rawBytes, coloredWeeks, parsedWorkbook!.nextWeekStartCol, !zeroOpeningBalance, sheetStyle, debtsForExport, bills);
+        freshBlob = appendBudgetWeeks(parsedWorkbook!.rawBytes, coloredWeeks, parsedWorkbook!.nextWeekStartCol, !zeroOpeningBalance, sheetStyle, debtsForExport, bills, cachedContribs2);
       }
       setGeneratedBlob(freshBlob);
       return { data, blob: freshBlob };
@@ -2073,6 +2081,7 @@ export function BudgetWizard({
           includeRemainingAcct: !zeroOpeningBalance,
           ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+          ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
         },
       });
       setNewSheetSaveSuccess(true);
@@ -3809,7 +3818,7 @@ export function BudgetWizard({
                           )}
                         </div>
                         {step2Tab === "savings" && (
-                          <SavingsSection bills={bills} weeks={allWeeks} />
+                          <SavingsSection bills={bills} weeks={allWeeks} budgetId={activeCloudBudgetId ?? undefined} />
                         )}
                         {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">

@@ -7,6 +7,7 @@ import microsoftAuthRouter from "./microsoft-auth";
 import excelRouter from "./excel";
 import userAuthRouter, { attachUser } from "./user-auth";
 import savedBudgetsRouter from "./saved-budgets";
+import savingsContributionsRouter from "./savings-contributions";
 
 const router: IRouter = Router();
 
@@ -19,5 +20,6 @@ router.use(microsoftAuthRouter);
 router.use(excelRouter);
 router.use(userAuthRouter);
 router.use(savedBudgetsRouter);
+router.use(savingsContributionsRouter);
 
 export default router;

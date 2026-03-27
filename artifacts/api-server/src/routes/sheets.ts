@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { google, type sheets_v4 } from "googleapis";
-import { db, usersTable, maybeEncrypt, maybeDecrypt } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, usersTable, maybeEncrypt, maybeDecrypt, savingsContributionsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -647,6 +647,7 @@ interface WriteRequest {
   debts?: DebtItem[];
   bills?: BillMeta[];
   existingLastCol?: number;
+  budgetId?: string;
 }
 
 interface CreateAndWriteRequest {
@@ -655,6 +656,7 @@ interface CreateAndWriteRequest {
   includeRemainingAcct?: boolean;
   debts?: DebtItem[];
   bills?: BillMeta[];
+  budgetId?: string;
 }
 
 function buildBudgetWriteData(
@@ -1555,11 +1557,14 @@ function getNextYearlyDueSrv(from: Date, month: number, day: number): Date {
   return due;
 }
 
+interface ManualContribRow { billName: string; amount: number; date: string; }
+
 async function writeSavingsTabToSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
   bills: BillMeta[],
   weeks: WriteRequest["weeks"],
+  contributions: ManualContribRow[] = [],
 ): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1599,12 +1604,20 @@ async function writeSavingsTabToSheet(
           if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
         }
       }
+      let manualInCycle = 0;
+      for (const c of contributions) {
+        if (c.billName !== bill.name) continue;
+        const cDate = new Date(c.date + "T00:00:00");
+        if (cDate <= cycleStart || cDate > today) continue;
+        manualInCycle += c.amount;
+      }
+      const totalSavedCycle = savedInCycle + manualInCycle;
 
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT_SHEETS[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const cycleStartStr = `${MONTH_SHORT_SHEETS[cycleStart.getMonth()]} ${cycleStart.getDate()}`;
-      const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
-      sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining });
+      const progressPct = annualGoal > 0 ? Math.min(100, (totalSavedCycle / annualGoal) * 100) : 0;
+      sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle: totalSavedCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining });
 
     } else if (bill.type === "balanced") {
       const monthlyGoal = Math.abs(bill.amount);
@@ -1619,8 +1632,17 @@ async function writeSavingsTabToSheet(
           if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
         }
       }
-      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
-      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, progressPct });
+      let manualThisMonth = 0;
+      for (const c of contributions) {
+        if (c.billName !== bill.name) continue;
+        const cDate = new Date(c.date + "T00:00:00");
+        if (cDate > today) continue;
+        if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
+        manualThisMonth += c.amount;
+      }
+      const totalSavedMonth = savedThisMonth + manualThisMonth;
+      const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSavedMonth / monthlyGoal) * 100) : 0;
+      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth: totalSavedMonth, progressPct });
     }
   }
 
@@ -1833,7 +1855,15 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
       try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
     }
     if (body.bills && body.bills.length > 0) {
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks); } catch { }
+      let savingsContribs: ManualContribRow[] = [];
+      if (body.budgetId && (req as any).user?.id) {
+        try {
+          const rows = await db.select().from(savingsContributionsTable)
+            .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
+          savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+        } catch { }
+      }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -1881,7 +1911,15 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
       try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
     }
     if (body.bills && body.bills.length > 0) {
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks); } catch { }
+      let savingsContribs: ManualContribRow[] = [];
+      if (body.budgetId && (req as any).user?.id) {
+        try {
+          const rows = await db.select().from(savingsContributionsTable)
+            .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
+          savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+        } catch { }
+      }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs); } catch { }
     }
 
     res.json({

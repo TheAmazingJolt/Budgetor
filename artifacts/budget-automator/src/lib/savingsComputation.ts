@@ -5,13 +5,23 @@ export interface WeekForSavings {
   items: { name: string; amount: number }[];
 }
 
+export interface ManualContribution {
+  id: string;
+  billName: string;
+  amount: number;
+  date: string;
+  note?: string | null;
+}
+
 export interface SinkingFundProgress {
   bill: Bill;
   annualGoal: number;
   savedInCycle: number;
+  manualInCycle: number;
   progressPct: number;
   nextDueDateStr: string;
   cycleStartStr: string;
+  cycleStart: Date;
   weeksRemaining: number;
 }
 
@@ -19,7 +29,10 @@ export interface BalancedProgress {
   bill: Bill;
   monthlyGoal: number;
   savedThisMonth: number;
+  manualThisMonth: number;
   progressPct: number;
+  currentMonth: number;
+  currentYear: number;
 }
 
 export interface SavingsData {
@@ -29,7 +42,7 @@ export interface SavingsData {
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function parseLabelDates(label: string): { start: Date; end: Date } | null {
+export function parseLabelDates(label: string): { start: Date; end: Date } | null {
   const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
   if (!m) return null;
   const toFull = (yy: string) => { const n = parseInt(yy); return n < 100 ? 2000 + n : n; };
@@ -39,7 +52,7 @@ function parseLabelDates(label: string): { start: Date; end: Date } | null {
   };
 }
 
-function getNextYearlyDueDate(from: Date, month: number, day: number): Date {
+export function getNextYearlyDueDate(from: Date, month: number, day: number): Date {
   const m = month - 1;
   let year = from.getFullYear();
   const max1 = new Date(year, m + 1, 0).getDate();
@@ -55,17 +68,14 @@ function getNextYearlyDueDate(from: Date, month: number, day: number): Date {
 /**
  * Compute savings progress for yearly (sinking fund) and balanced bills.
  *
- * For sinking funds: counts contributions from weeks that started AFTER the
- * last annual due date (cycle start) and on/before today. This reflects what
- * has been set aside toward the NEXT occurrence of the bill, not all history.
- *
- * For balanced bills: counts contributions posted in the current calendar
- * month's weeks that have already started (on/before today).
+ * Accepts optional manual contributions (extra amounts logged outside weekly budgets).
+ * Manual contributions are included in cycle/month totals using the same date windows.
  */
 export function computeSavings(
   bills: Bill[],
   weeks: WeekForSavings[],
   today: Date,
+  contributions: ManualContribution[] = [],
 ): SavingsData {
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
@@ -81,8 +91,6 @@ export function computeSavings(
       const dueDay = bill.dayOfMonth ?? 1;
 
       const nextDue = getNextYearlyDueDate(today, dueMonth, dueDay);
-
-      // Current cycle started one year before the next due date
       const cycleStart = new Date(nextDue);
       cycleStart.setFullYear(cycleStart.getFullYear() - 1);
 
@@ -92,7 +100,6 @@ export function computeSavings(
       for (const w of weeks) {
         const dates = parseLabelDates(w.label);
         if (!dates) continue;
-        // Only count weeks that started after cycle start and on/before today
         if (dates.start <= cycleStart || dates.start > today) continue;
         for (const item of w.items) {
           if (item.name.startsWith(prefix)) {
@@ -101,12 +108,24 @@ export function computeSavings(
         }
       }
 
+      let manualInCycle = 0;
+      for (const c of contributions) {
+        if (c.billName !== bill.name) continue;
+        const cDate = new Date(c.date + "T00:00:00");
+        if (cDate <= cycleStart || cDate > today) continue;
+        manualInCycle += c.amount;
+      }
+
+      const totalSaved = savedInCycle + manualInCycle;
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const cycleStartStr = `${MONTH_SHORT[cycleStart.getMonth()]} ${cycleStart.getDate()}`;
-      const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
+      const progressPct = annualGoal > 0 ? Math.min(100, (totalSaved / annualGoal) * 100) : 0;
 
-      sinkingFunds.push({ bill, annualGoal, savedInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining });
+      sinkingFunds.push({
+        bill, annualGoal, savedInCycle, manualInCycle, progressPct,
+        nextDueDateStr, cycleStartStr, cycleStart, weeksRemaining,
+      });
 
     } else if (bill.type === "balanced") {
       const monthlyGoal = Math.abs(bill.amount);
@@ -117,7 +136,6 @@ export function computeSavings(
         const dates = parseLabelDates(w.label);
         if (!dates) continue;
         if (dates.start > today) continue;
-        // Only current month
         if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
         for (const item of w.items) {
           if (item.name === prefix) {
@@ -126,8 +144,21 @@ export function computeSavings(
         }
       }
 
-      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
-      balanced.push({ bill, monthlyGoal, savedThisMonth, progressPct });
+      let manualThisMonth = 0;
+      for (const c of contributions) {
+        if (c.billName !== bill.name) continue;
+        const cDate = new Date(c.date + "T00:00:00");
+        if (cDate > today) continue;
+        if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
+        manualThisMonth += c.amount;
+      }
+
+      const totalSaved = savedThisMonth + manualThisMonth;
+      const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSaved / monthlyGoal) * 100) : 0;
+      balanced.push({
+        bill, monthlyGoal, savedThisMonth, manualThisMonth, progressPct,
+        currentMonth, currentYear,
+      });
     }
   }
 
