@@ -217,7 +217,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{isYearly ? "Annual Amount" : "Amount"}</FormLabel>
+                <FormLabel>{isAnyYearly ? "Annual Amount" : "Amount"}</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
