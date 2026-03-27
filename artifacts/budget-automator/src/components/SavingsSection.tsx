@@ -26,9 +26,10 @@ interface SavingsSectionProps {
   bills: Bill[];
   weeks: WeekForSavings[];
   budgetId?: string;
+  onContributionChange?: () => void;
 }
 
-export function SavingsSection({ bills, weeks, budgetId }: SavingsSectionProps) {
+export function SavingsSection({ bills, weeks, budgetId, onContributionChange }: SavingsSectionProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -50,13 +51,19 @@ export function SavingsSection({ bills, weeks, budgetId }: SavingsSectionProps) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] });
+      onContributionChange?.();
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/budgets/${budgetId}/contributions/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] });
+      onContributionChange?.();
+    },
   });
 
   const { sinkingFunds, balanced } = computeSavings(bills, weeks, today, contributions);

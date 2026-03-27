@@ -535,6 +535,55 @@ export function BudgetWizard({
   const sheetDeleteMutation = useSheetDelete();
   const excelDeleteMutation = useExcelDelete();
 
+  const bgSyncRef = useRef({
+    activeLinkedSheet: null as { id: string; type: string; name: string } | null,
+    generatedWeek: null as typeof generatedWeek,
+    bills: [] as typeof bills,
+    debts: [] as typeof debts,
+    zeroOpeningBalance: true,
+    activeCloudBudgetId: null as string | null,
+  });
+  bgSyncRef.current.activeLinkedSheet = activeLinkedSheet;
+  bgSyncRef.current.generatedWeek = generatedWeek;
+  bgSyncRef.current.bills = bills;
+  bgSyncRef.current.debts = debts;
+  bgSyncRef.current.zeroOpeningBalance = zeroOpeningBalance;
+  bgSyncRef.current.activeCloudBudgetId = activeCloudBudgetId;
+
+  const triggerBackgroundSheetSync = useCallback(() => {
+    setTimeout(async () => {
+      const s = bgSyncRef.current;
+      if (!s.activeLinkedSheet || !s.generatedWeek) return;
+      const colorLookup = buildBillColorLookup(s.bills);
+      const weeks = s.generatedWeek.weeks.map((w: any) => ({
+        ...w,
+        bills: injectBillColors(w.bills, colorLookup),
+      }));
+      const writePayload = {
+        weeks,
+        startCol: 0,
+        includeRemainingAcct: !s.zeroOpeningBalance,
+        ...(s.debts.length > 0 ? { debts: s.debts } : {}),
+        ...(s.bills.length > 0 ? { bills: stripHeuristicColors(s.bills) } : {}),
+        ...(s.activeCloudBudgetId ? { budgetId: s.activeCloudBudgetId } : {}),
+      };
+      try {
+        if (s.activeLinkedSheet.type === "google") {
+          await sheetWriteMutation.mutateAsync({ id: s.activeLinkedSheet.id, data: writePayload });
+        } else {
+          await excelWriteMutation.mutateAsync({ id: s.activeLinkedSheet.id, data: writePayload });
+        }
+        toast({ title: "Sheet synced", description: `"${s.activeLinkedSheet.name}" updated.` });
+      } catch (err) {
+        toast({
+          title: "Sheet sync failed",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      }
+    }, 0);
+  }, [sheetWriteMutation, excelWriteMutation, toast]);
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
@@ -3818,7 +3867,7 @@ export function BudgetWizard({
                           )}
                         </div>
                         {step2Tab === "savings" && (
-                          <SavingsSection bills={bills} weeks={allWeeks} budgetId={activeCloudBudgetId ?? undefined} />
+                          <SavingsSection bills={bills} weeks={allWeeks} budgetId={activeCloudBudgetId ?? undefined} onContributionChange={triggerBackgroundSheetSync} />
                         )}
                         {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
@@ -4397,6 +4446,7 @@ export function BudgetWizard({
                     payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency),
                   });
                 }
+                triggerBackgroundSheetSync();
               } else {
                 addDebt(data);
                 setDebtBillImports(prev => {
@@ -4463,6 +4513,7 @@ export function BudgetWizard({
                           lastPaymentDate: new Date().toISOString().split("T")[0],
                           lastPaymentAmount: amt,
                         });
+                        triggerBackgroundSheetSync();
                       }
                       setLogPaymentDebtId(null);
                       setLogPaymentAmount("");
@@ -4489,6 +4540,7 @@ export function BudgetWizard({
                         lastPaymentDate: new Date().toISOString().split("T")[0],
                         lastPaymentAmount: amt,
                       });
+                      triggerBackgroundSheetSync();
                     }
                     setLogPaymentDebtId(null);
                     setLogPaymentAmount("");
