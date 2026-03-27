@@ -11,6 +11,7 @@ import {
   CreditCard,
   Sheet,
   DollarSign,
+  PiggyBank,
 } from "lucide-react";
 
 interface HelpDialogProps {
@@ -31,7 +32,7 @@ const sections = [
     title: "Bills",
     color: "text-blue-600 bg-blue-50",
     content:
-      'Add your recurring expenses — rent, subscriptions, utilities, etc. Each bill has a name, amount, due date, and type. "Balanced" bills are spread across pay periods, "Fixed" bills hit the period they fall in, and "Weekly" bills repeat every period.',
+      'Add your recurring expenses — rent, subscriptions, utilities, etc. Each bill has a name, amount, due date, and type. "Balanced" bills are spread evenly across pay periods. "Fixed" bills hit the single period they fall in. "Weekly" or "Biweekly" bills repeat on that cadence. "Yearly" (sinking fund) bills automatically set aside a little each period so the full amount is ready by the annual due date. "Yearly-flat" bills drop the full lump sum into the period the due date falls in.',
   },
   {
     icon: CalendarDays,
@@ -46,6 +47,13 @@ const sections = [
     color: "text-sky-600 bg-sky-50",
     content:
       "Sign in with Google or Apple to save budgets to the cloud. Your bills, settings, and generated budget weeks sync to your account so you can pick up where you left off on any device.",
+  },
+  {
+    icon: PiggyBank,
+    title: "Savings progress",
+    color: "text-pink-600 bg-pink-50",
+    content:
+      'The Savings tab shows how you\'re tracking toward each annual savings goal. For sinking fund bills, it displays the current cycle (e.g. "Sep 9 2025 – Sep 9 2026"), the amount accumulated so far, and how much remains. You can log extra payments at any time — tap "Log extra" on any goal, enter an amount, date, and optional note, and it will be counted toward your progress immediately.',
   },
   {
     icon: CreditCard,
