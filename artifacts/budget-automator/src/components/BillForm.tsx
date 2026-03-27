@@ -175,10 +175,17 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
     return { weekly, weeksUntil, monthStr, day, flat: false };
   })();
 
+  function normalizeCategory(raw: string): string {
+    return raw
+      .trim()
+      .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+
   function handleSubmit(values: z.infer<typeof formSchema>) {
     const result: Bill = {
       ...(initialData ?? {}),
       ...values,
+      category: normalizeCategory(values.category),
       userColor: values.color !== "none",
       annualDueMonth: isYearly ? (values.annualDueMonth ?? 1) : undefined,
       dayOfMonth: isAnyYearly && !isYearly ? undefined : values.dayOfMonth,

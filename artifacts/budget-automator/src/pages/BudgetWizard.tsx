@@ -2326,14 +2326,20 @@ export function BudgetWizard({
   const nonDebtBills = bills.filter(b => !b.sourceDebtId);
   const totalAllBillsMonthly = nonDebtBills.reduce((s, b) => s + monthlyAmount(b), 0);
 
-  const billCategories = Array.from(new Set(bills.map(b => (b as any).category).filter(Boolean))).sort();
-  const nonDebtBillCategories = Array.from(new Set(nonDebtBills.map(b => (b as any).category).filter(Boolean))).sort();
+  function normalizeBillCategory(raw: string): string {
+    return raw
+      .trim()
+      .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+
+  const billCategories = Array.from(new Set(bills.map(b => normalizeBillCategory((b as any).category ?? "")).filter(Boolean))).sort();
+  const nonDebtBillCategories = Array.from(new Set(nonDebtBills.map(b => normalizeBillCategory((b as any).category ?? "")).filter(Boolean))).sort();
   const debtTypes = Array.from(new Set(debts.map(d => d.type).filter(Boolean))).sort();
 
   function applyBillsSortFilter(billList: Bill[]): Bill[] {
     let result = billList;
     if (billsCategoryFilter !== "all") {
-      result = result.filter(b => (b as any).category === billsCategoryFilter);
+      result = result.filter(b => normalizeBillCategory((b as any).category ?? "") === normalizeBillCategory(billsCategoryFilter));
     }
     switch (billsSort) {
       case "name-asc": result = [...result].sort((a, b) => a.name.localeCompare(b.name)); break;
