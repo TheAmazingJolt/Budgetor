@@ -129,6 +129,7 @@ import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
+import { SavingsSection } from "@/components/SavingsSection";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
@@ -3905,6 +3906,8 @@ export function BudgetWizard({
                         )}
                       </div>
                     )}
+
+                    <SavingsSection bills={bills} weeks={allWeeks} />
 
                     <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
                       <CardContent className="p-5">
