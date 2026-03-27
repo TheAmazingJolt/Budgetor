@@ -58,7 +58,7 @@ export const GenerateBudgetBody = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
 });
@@ -528,7 +528,7 @@ export const SheetReadResponse = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
   existingWeeks: zod.array(
@@ -578,7 +578,7 @@ export const SheetReadByUrlResponse = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
   existingWeeks: zod.array(
@@ -656,7 +656,7 @@ export const SheetWriteBody = zod.object({
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
         payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
       }),
     )
     .optional(),
@@ -819,7 +819,7 @@ export const SheetCreateAndWriteBody = zod.object({
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
         payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
       }),
     )
     .optional(),
@@ -901,7 +901,7 @@ export const ExcelReadResponse = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
   existingWeeks: zod.array(
@@ -951,7 +951,7 @@ export const ExcelReadByUrlResponse = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
   existingWeeks: zod.array(
@@ -1072,7 +1072,7 @@ export const ExcelWriteBody = zod.object({
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
         payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
       }),
     )
     .optional(),
@@ -1191,7 +1191,7 @@ export const ExcelCreateAndWriteBody = zod.object({
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
         payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
       }),
     )
     .optional(),
@@ -1230,7 +1230,7 @@ export const GetUserBillsResponse = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
 });
@@ -1263,7 +1263,7 @@ export const UpdateUserBillsBody = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
 });
@@ -1292,7 +1292,7 @@ export const UpdateUserBillsResponse = zod.object({
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
       payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
     }),
   ),
 });

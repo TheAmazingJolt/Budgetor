@@ -49,6 +49,15 @@ const formSchema = z.object({
   category: z.string().min(1, "Category label is required"),
   type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly"]),
   color: z.string().default("none"),
+}).superRefine((data, ctx) => {
+  if (data.type === "yearly") {
+    if (data.annualDueMonth == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Due month is required for yearly bills", path: ["annualDueMonth"] });
+    }
+    if (data.dayOfMonth == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Due day is required for yearly bills", path: ["dayOfMonth"] });
+    }
+  }
 });
 
 function DayOfMonthInput({ value, onChange }: { value: number | null | undefined; onChange: (v: number | null) => void }) {
