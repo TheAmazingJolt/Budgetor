@@ -163,7 +163,8 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     const sourceDebtId = cells[6]?.formattedValue?.trim() || undefined;
     // Use stored annualDueMonth (col 7) if present.
     const annualDueMonthStr = cells[7]?.formattedValue?.trim() ?? "";
-    const annualDueMonth = annualDueMonthStr && !isNaN(parseInt(annualDueMonthStr)) ? parseInt(annualDueMonthStr) : null;
+    const annualDueMonthRaw = annualDueMonthStr && !isNaN(parseInt(annualDueMonthStr)) ? parseInt(annualDueMonthStr) : null;
+    const annualDueMonth = annualDueMonthRaw != null && annualDueMonthRaw >= 1 && annualDueMonthRaw <= 12 ? annualDueMonthRaw : null;
     bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId, ...(annualDueMonth ? { annualDueMonth } : {}) });
   }
 
