@@ -21,6 +21,19 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
 
   const { startDate, endDate, openingBalance, paycheckAmount, numberOfWeeks, bills, payPeriod } = parsed.data;
 
+  for (const bill of bills) {
+    if (bill.type === "yearly") {
+      if (bill.annualDueMonth == null || bill.annualDueMonth < 1 || bill.annualDueMonth > 12) {
+        res.status(400).json({ error: `Yearly bill "${bill.name}" requires annualDueMonth (1–12)` });
+        return;
+      }
+      if (bill.dayOfMonth == null || bill.dayOfMonth < 1 || bill.dayOfMonth > 31) {
+        res.status(400).json({ error: `Yearly bill "${bill.name}" requires dayOfMonth (1–31)` });
+        return;
+      }
+    }
+  }
+
   const startDateObj = new Date(startDate);
   const endDateObj = new Date(endDate);
 
