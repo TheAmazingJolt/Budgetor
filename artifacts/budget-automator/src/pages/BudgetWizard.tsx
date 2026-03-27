@@ -3001,7 +3001,7 @@ export function BudgetWizard({
                               : "bg-background text-muted-foreground hover:bg-muted"
                           }`}
                         >
-                          {option === "weekly" ? "Weekly (7 days)" : option === "biweekly" ? "Biweekly (14 days)" : "Monthly"}
+                          {option === "weekly" ? "Weekly" : option === "biweekly" ? "Biweekly" : "Monthly"}
                         </button>
                       ))}
                     </div>

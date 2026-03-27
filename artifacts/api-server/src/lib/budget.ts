@@ -149,6 +149,41 @@ export function generateWeeklyBudgets(
     }
   }
 
+  // ── Allocate yearly-flat bills as a lump sum in the week of their due date ─
+  // Unlike yearly (sinking fund), yearly-flat places the full amount once per
+  // year in the week containing the annual due date.
+  for (const bill of yearlyFlatBills) {
+    const dueMonth = bill.annualDueMonth ?? 1;
+    const dueDay = bill.dayOfMonth ?? 1;
+    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+
+    let dueDate = getNextYearlyDueDate(startDate, dueMonth, dueDay);
+    // Also check if the due date falls before startDate but within range
+    // by starting one year back
+    const prevYear = new Date(startDate);
+    prevYear.setFullYear(prevYear.getFullYear() - 1);
+    let prevDue = getNextYearlyDueDate(prevYear, dueMonth, dueDay);
+    if (prevDue >= startDate) {
+      dueDate = prevDue;
+    }
+
+    while (dueDate <= endDate) {
+      for (let i = 0; i < weeks.length; i++) {
+        const { start, end } = weeks[i];
+        if (dueDate >= start && dueDate <= end) {
+          if (!billPayoffDate || start < billPayoffDate) {
+            weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.color });
+          }
+          break;
+        }
+      }
+      // Advance to next year's due date
+      const next = new Date(dueDate);
+      next.setFullYear(next.getFullYear() + 1);
+      dueDate = next;
+    }
+  }
+
   // ── Add weekly bills to every period ────────────────────────────────────
   for (const bill of weeklyBills) {
     const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
