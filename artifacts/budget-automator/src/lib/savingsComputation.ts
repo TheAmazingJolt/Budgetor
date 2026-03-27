@@ -32,7 +32,7 @@ const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 function parseLabelDates(label: string): { start: Date; end: Date } | null {
   const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
   if (!m) return null;
-  const toFull = (yy: string) => 2000 + parseInt(yy);
+  const toFull = (yy: string) => { const n = parseInt(yy); return n < 100 ? 2000 + n : n; };
   return {
     start: new Date(toFull(m[3]), parseInt(m[1]) - 1, parseInt(m[2])),
     end:   new Date(toFull(m[6]), parseInt(m[4]) - 1, parseInt(m[5])),
@@ -120,7 +120,7 @@ export function computeSavings(
         // Only current month
         if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
         for (const item of w.items) {
-          if (item.name === prefix || item.name === bill.name) {
+          if (item.name === prefix) {
             savedThisMonth += Math.abs(item.amount);
           }
         }
