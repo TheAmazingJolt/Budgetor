@@ -11,7 +11,10 @@ import type { Bill } from "@workspace/api-client-react";
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...init });
+  const headers = new Headers(init?.headers);
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("auth_token") : null;
+  if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "include", ...init, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as any).error ?? `HTTP ${res.status}`);
@@ -33,7 +36,7 @@ export function SavingsSection({ bills, weeks, budgetId }: SavingsSectionProps) 
 
   const { data: contribData } = useQuery<{ contributions: ManualContribution[] }>({
     queryKey: ["savings-contributions", budgetId],
-    queryFn: () => apiFetch(`/budgets/${budgetId}/contributions`),
+    queryFn: () => apiFetch(`/api/budgets/${budgetId}/contributions`),
     enabled: !!budgetId,
     staleTime: 30_000,
   });
@@ -42,7 +45,7 @@ export function SavingsSection({ bills, weeks, budgetId }: SavingsSectionProps) 
 
   const addMutation = useMutation({
     mutationFn: (payload: { billName: string; amount: number; date: string; note?: string }) =>
-      apiFetch(`/budgets/${budgetId}/contributions`, {
+      apiFetch(`/api/budgets/${budgetId}/contributions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -52,7 +55,7 @@ export function SavingsSection({ bills, weeks, budgetId }: SavingsSectionProps) 
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      apiFetch(`/budgets/${budgetId}/contributions/${id}`, { method: "DELETE" }),
+      apiFetch(`/api/budgets/${budgetId}/contributions/${id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] }),
   });
 
@@ -342,7 +345,7 @@ function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete }: Sinki
         billName={bill.name ?? ""}
         canLog={canLog}
         contributions={contributions}
-        cycleLabel={`Cycle: ${cycleStartStr} – ${nextDueDateStr}`}
+        cycleLabel={`Cycle: ${cycleStartStr} ${data.cycleStart.getFullYear()} – ${nextDueDateStr} ${data.cycleStart.getFullYear() + 1}`}
         onAdd={onAdd}
         onDelete={onDelete}
         accentClass="text-violet-600"
