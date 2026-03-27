@@ -3815,7 +3815,6 @@ export function BudgetWizard({
                                   if (w.openingBalance !== undefined) count++;
                                   if (w.paycheck !== undefined) count++;
                                   count += w.items.length;
-                                  count++;
                                   return count;
                                 }));
 
@@ -3836,8 +3835,6 @@ export function BudgetWizard({
                                             bill.name.startsWith("Partial ") ? "bg-amber-50 text-amber-900" : "";
                                           rowItems.push({ label: bill.name, value: bill.amount, style: billStyle });
                                         }
-                                        const isEdited = !!weekEdits[week.label] && !weekEdits[week.label].deleted;
-                                        rowItems.push({ label: isEdited ? "Remaining*" : "Remaining", value: week.remaining, style: "font-bold border-t-2 border-foreground/20" });
 
                                         const item = rowItems[r];
                                         if (!item) {
@@ -3867,6 +3864,24 @@ export function BudgetWizard({
                                 return rows;
                               })()}
                             </tbody>
+                            <tfoot>
+                              <tr>
+                                {allWeeks.map((week, wi) => {
+                                  const isEdited = !!weekEdits[week.label] && !weekEdits[week.label].deleted;
+                                  const dimmed = !week.isNew ? " text-muted-foreground" : "";
+                                  const cellClick = editModeOn ? () => openEditPanel(wi) : undefined;
+                                  const remainingStyle = "font-bold border-t-2 border-foreground/20";
+                                  return [
+                                    <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${remainingStyle}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
+                                      {isEdited ? "Remaining*" : "Remaining"}
+                                    </td>,
+                                    <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${remainingStyle}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
+                                      ${week.remaining.toFixed(2)}
+                                    </td>,
+                                  ];
+                                })}
+                              </tr>
+                            </tfoot>
                           </table>
                         </div>
                         {hasEdits && (
