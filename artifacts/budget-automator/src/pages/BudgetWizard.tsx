@@ -384,6 +384,18 @@ function parsedWeekToWeeklyBudget(w: ParsedWeek): WeeklyBudget {
   };
 }
 
+function inferPeriodTypeFromWeekLabel(label: string): "weekly" | "biweekly" | "monthly" | null {
+  const match = label.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})\s+to\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+  if (!match) return null;
+  const from = new Date(match[1]);
+  const to = new Date(match[2]);
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) return null;
+  const days = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  if (days <= 9) return "weekly";
+  if (days <= 16) return "biweekly";
+  return "monthly";
+}
+
 export function BudgetWizard({
   currentUser,
   isSignedIn,
@@ -1560,12 +1572,16 @@ export function BudgetWizard({
       const debtBillsMissingFromWeeks = billsToSet
         .filter((bill: Bill) => bill.sourceDebtId)
         .filter((bill: Bill) => !debtBillNamesInSavedWeeks.has(bill.name));
-      if (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0) {
+      const configuredPayPeriod = s?.payPeriod ?? "weekly";
+      const firstWeekLabel: string = restoredWeeks[0]?.label ?? restoredWeeks[0]?.name ?? "";
+      const storedPeriodType = inferPeriodTypeFromWeekLabel(firstWeekLabel);
+      const periodMismatch = storedPeriodType !== null && storedPeriodType !== configuredPayPeriod;
+      if (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0 || periodMismatch) {
         scheduleAutoGenerate({
           bills: billsToSet,
           openingBalance: effectiveOpeningBalance,
           paycheckAmount: s?.paycheckAmount ?? 0,
-          startDate: effectiveStartDate,
+          startDate: s?.newWeekStartDate ?? effectiveStartDate,
           endDate: s?.newWeekEndDate,
           weekCount: s?.weekCount,
           inputMode: "cloud",
