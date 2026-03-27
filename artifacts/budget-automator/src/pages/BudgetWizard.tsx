@@ -32,6 +32,8 @@ import {
   Bug,
   ClipboardCopy,
   Banknote,
+  ArrowUpDown,
+  SlidersHorizontal,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -116,6 +118,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
@@ -532,6 +541,11 @@ export function BudgetWizard({
   };
   const [billsCardCollapsed, setBillsCardCollapsed] = useState(true);
   const [debtCardCollapsed, setDebtCardCollapsed] = useState(true);
+
+  const [billsSort, setBillsSort] = useState<"default" | "name-asc" | "amount-desc" | "amount-asc" | "due-day">("default");
+  const [billsCategoryFilter, setBillsCategoryFilter] = useState<string>("all");
+  const [debtsSort, setDebtsSort] = useState<"default" | "name-asc" | "balance-desc" | "balance-asc" | "apr-desc" | "min-payment-desc">("default");
+  const [debtsTypeFilter, setDebtsTypeFilter] = useState<string>("all");
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
@@ -2312,6 +2326,42 @@ export function BudgetWizard({
   const nonDebtBills = bills.filter(b => !b.sourceDebtId);
   const totalAllBillsMonthly = nonDebtBills.reduce((s, b) => s + monthlyAmount(b), 0);
 
+  const billCategories = Array.from(new Set(bills.map(b => (b as any).category).filter(Boolean))).sort();
+  const nonDebtBillCategories = Array.from(new Set(nonDebtBills.map(b => (b as any).category).filter(Boolean))).sort();
+  const debtTypes = Array.from(new Set(debts.map(d => d.type).filter(Boolean))).sort();
+
+  function applyBillsSortFilter(billList: Bill[]): Bill[] {
+    let result = billList;
+    if (billsCategoryFilter !== "all") {
+      result = result.filter(b => (b as any).category === billsCategoryFilter);
+    }
+    switch (billsSort) {
+      case "name-asc": result = [...result].sort((a, b) => a.name.localeCompare(b.name)); break;
+      case "amount-desc": result = [...result].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)); break;
+      case "amount-asc": result = [...result].sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount)); break;
+      case "due-day": result = [...result].sort((a, b) => (a.dayOfMonth ?? 99) - (b.dayOfMonth ?? 99)); break;
+    }
+    return result;
+  }
+
+  function applyDebtsSortFilter(debtList: Debt[]): Debt[] {
+    let result = debtList;
+    if (debtsTypeFilter !== "all") {
+      result = result.filter(d => d.type === debtsTypeFilter);
+    }
+    switch (debtsSort) {
+      case "name-asc": result = [...result].sort((a, b) => a.name.localeCompare(b.name)); break;
+      case "balance-desc": result = [...result].sort((a, b) => b.balance - a.balance); break;
+      case "balance-asc": result = [...result].sort((a, b) => a.balance - b.balance); break;
+      case "apr-desc": result = [...result].sort((a, b) => (b.interestRate ?? 0) - (a.interestRate ?? 0)); break;
+      case "min-payment-desc": result = [...result].sort((a, b) => b.minimumPayment - a.minimumPayment); break;
+    }
+    return result;
+  }
+
+  const billsFilterActive = billsCategoryFilter !== "all" || billsSort !== "default";
+  const debtsFilterActive = debtsTypeFilter !== "all" || debtsSort !== "default";
+
   const canGenerate = bills.length > 0 && !generateMutation.isPending;
 
   return (
@@ -3166,57 +3216,118 @@ export function BudgetWizard({
                     <p className="text-muted-foreground">No bills loaded. Add them manually.</p>
                   </Card>
                 ) : !billsCollapsed ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {bills.map((bill, i) => (
-                      <motion.div
-                        key={`${bill.name}-${i}`}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                      >
-                        <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
-                          <div className={`absolute top-0 left-0 w-1 h-full ${getBillColorEntry((bill as any).color).leftBar} transition-colors`} />
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="space-y-1">
-                                <p className="font-semibold text-sm text-foreground leading-tight">{bill.name}</p>
-                                <Badge
-                                  variant="outline"
-                                  className={`text-xs px-2 py-0.5 ${getBillColorEntry((bill as any).color).badge}`}
-                                >
-                                  {(bill as any).category ?? ""}
-                                </Badge>
-                              </div>
-                              <Currency value={bill.amount} className="text-sm font-semibold" />
-                            </div>
-                            <div className="flex items-center justify-between mt-3">
-                              <span className="text-xs text-muted-foreground">
-                                {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
-                              </span>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
-                                  onClick={() => { setEditingBillIndex(i); setIsBillDialogOpen(true); }}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
-                                  onClick={() => preserveScroll(() => removeBill(i))}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </div>
+                  <>
+                    {bills.length > 1 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <Select value={billsSort} onValueChange={v => setBillsSort(v as typeof billsSort)}>
+                          <SelectTrigger className="h-8 rounded-xl text-xs w-44 border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Default order</SelectItem>
+                            <SelectItem value="name-asc">Name A–Z</SelectItem>
+                            <SelectItem value="amount-desc">Amount: high–low</SelectItem>
+                            <SelectItem value="amount-asc">Amount: low–high</SelectItem>
+                            <SelectItem value="due-day">Due day</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {billCategories.length > 1 && (
+                          <>
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <Select value={billsCategoryFilter} onValueChange={setBillsCategoryFilter}>
+                              <SelectTrigger className="h-8 rounded-xl text-xs w-44 border-border/50">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All categories</SelectItem>
+                                {billCategories.map(c => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </>
+                        )}
+                        {billsFilterActive && (
+                          <button
+                            type="button"
+                            onClick={() => { setBillsSort("default"); setBillsCategoryFilter("all"); }}
+                            className="text-xs text-primary underline underline-offset-2 hover:text-primary/70"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        {billsCategoryFilter !== "all" && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {applyBillsSortFilter(bills).length} of {bills.length} bills
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {bills
+                        .map((bill, originalIdx) => ({ bill, originalIdx }))
+                        .filter(({ bill }) => billsCategoryFilter === "all" || (bill as any).category === billsCategoryFilter)
+                        .sort(({ bill: a }, { bill: b }) => {
+                          switch (billsSort) {
+                            case "name-asc": return a.name.localeCompare(b.name);
+                            case "amount-desc": return Math.abs(b.amount) - Math.abs(a.amount);
+                            case "amount-asc": return Math.abs(a.amount) - Math.abs(b.amount);
+                            case "due-day": return (a.dayOfMonth ?? 99) - (b.dayOfMonth ?? 99);
+                            default: return 0;
+                          }
+                        })
+                        .map(({ bill, originalIdx: i }) => (
+                          <motion.div
+                            key={`${bill.name}-${i}`}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0 }}
+                          >
+                            <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                              <div className={`absolute top-0 left-0 w-1 h-full ${getBillColorEntry((bill as any).color).leftBar} transition-colors`} />
+                              <CardContent className="p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="space-y-1">
+                                    <p className="font-semibold text-sm text-foreground leading-tight">{bill.name}</p>
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-xs px-2 py-0.5 ${getBillColorEntry((bill as any).color).badge}`}
+                                    >
+                                      {(bill as any).category ?? ""}
+                                    </Badge>
+                                  </div>
+                                  <Currency value={bill.amount} className="text-sm font-semibold" />
+                                </div>
+                                <div className="flex items-center justify-between mt-3">
+                                  <span className="text-xs text-muted-foreground">
+                                    {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                                  </span>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                                      onClick={() => { setEditingBillIndex(i); setIsBillDialogOpen(true); }}
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                                      onClick={() => preserveScroll(() => removeBill(i))}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                    </div>
+                  </>
                 ) : null}
               </div>
 
@@ -3286,75 +3397,138 @@ export function BudgetWizard({
                     <p className="text-muted-foreground">No debts tracked yet. Add debts to see your full financial picture.</p>
                   </Card>
                 ) : !debtsCollapsed ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {debts.map((debt, i) => (
-                      <motion.div
-                        key={debt.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                      >
-                        <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
-                          <div className={`absolute top-0 left-0 w-1 h-full ${debtTypeLeftBar(debt.type)} transition-colors`} />
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="space-y-1">
-                                <p className="font-semibold text-sm text-foreground leading-tight">{debt.name}</p>
-                                <Badge variant="outline" className={`text-xs px-2 py-0.5 ${debtTypeBadgeClass(debt.type)}`}>
-                                  <DebtTypeIcon type={debt.type} />
-                                  <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
-                                </Badge>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                                {debt.interestRate != null && (
-                                  <p className="text-xs text-muted-foreground">{debt.interestRate}% APR</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between mt-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">
-                                  Min: ${debt.minimumPayment.toFixed(2)}/mo
-                                </span>
-                                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                  <Checkbox
-                                    checked={debtBillImports.has(debt.id)}
-                                    onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
-                                    className="rounded h-3.5 w-3.5"
-                                  />
-                                  <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
-                                </label>
-                              </div>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
-                                  onClick={() => { setEditingDebtIndex(i); setIsDebtDialogOpen(true); }}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
-                                  onClick={() => {
-                                    const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
-                                    if (billIdx >= 0) preserveScroll(() => removeBill(billIdx));
-                                    setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
-                                    removeDebt(i);
-                                  }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </div>
+                  <>
+                    {debts.length > 1 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <Select value={debtsSort} onValueChange={v => setDebtsSort(v as typeof debtsSort)}>
+                          <SelectTrigger className="h-8 rounded-xl text-xs w-48 border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Default order</SelectItem>
+                            <SelectItem value="name-asc">Name A–Z</SelectItem>
+                            <SelectItem value="balance-desc">Balance: high–low</SelectItem>
+                            <SelectItem value="balance-asc">Balance: low–high</SelectItem>
+                            <SelectItem value="apr-desc">APR: high–low</SelectItem>
+                            <SelectItem value="min-payment-desc">Min payment: high–low</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {debtTypes.length > 1 && (
+                          <>
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <Select value={debtsTypeFilter} onValueChange={setDebtsTypeFilter}>
+                              <SelectTrigger className="h-8 rounded-xl text-xs w-44 border-border/50">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All types</SelectItem>
+                                {debtTypes.map(t => (
+                                  <SelectItem key={t} value={t}>{DEBT_TYPE_LABELS[t] ?? t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </>
+                        )}
+                        {debtsFilterActive && (
+                          <button
+                            type="button"
+                            onClick={() => { setDebtsSort("default"); setDebtsTypeFilter("all"); }}
+                            className="text-xs text-primary underline underline-offset-2 hover:text-primary/70"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        {debtsTypeFilter !== "all" && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {applyDebtsSortFilter(debts).length} of {debts.length} debts
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {debts
+                        .map((debt, originalIdx) => ({ debt, originalIdx }))
+                        .filter(({ debt }) => debtsTypeFilter === "all" || debt.type === debtsTypeFilter)
+                        .sort(({ debt: a }, { debt: b }) => {
+                          switch (debtsSort) {
+                            case "name-asc": return a.name.localeCompare(b.name);
+                            case "balance-desc": return b.balance - a.balance;
+                            case "balance-asc": return a.balance - b.balance;
+                            case "apr-desc": return (b.interestRate ?? 0) - (a.interestRate ?? 0);
+                            case "min-payment-desc": return b.minimumPayment - a.minimumPayment;
+                            default: return 0;
+                          }
+                        })
+                        .map(({ debt, originalIdx: i }) => (
+                          <motion.div
+                            key={debt.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0 }}
+                          >
+                            <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                              <div className={`absolute top-0 left-0 w-1 h-full ${debtTypeLeftBar(debt.type)} transition-colors`} />
+                              <CardContent className="p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="space-y-1">
+                                    <p className="font-semibold text-sm text-foreground leading-tight">{debt.name}</p>
+                                    <Badge variant="outline" className={`text-xs px-2 py-0.5 ${debtTypeBadgeClass(debt.type)}`}>
+                                      <DebtTypeIcon type={debt.type} />
+                                      <span className="ml-1">{DEBT_TYPE_LABELS[debt.type] ?? debt.type}</span>
+                                    </Badge>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-semibold text-red-600">${debt.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                    {debt.interestRate != null && (
+                                      <p className="text-xs text-muted-foreground">{debt.interestRate}% APR</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between mt-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                      Min: ${debt.minimumPayment.toFixed(2)}/mo
+                                    </span>
+                                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                      <Checkbox
+                                        checked={debtBillImports.has(debt.id)}
+                                        onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
+                                        className="rounded h-3.5 w-3.5"
+                                      />
+                                      <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
+                                    </label>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                                      onClick={() => { setEditingDebtIndex(i); setIsDebtDialogOpen(true); }}
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                                      onClick={() => {
+                                        const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
+                                        if (billIdx >= 0) preserveScroll(() => removeBill(billIdx));
+                                        setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
+                                        removeDebt(i);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                    </div>
+                  </>
                 ) : null}
               </div>
 
@@ -4394,13 +4568,75 @@ export function BudgetWizard({
                 <p className="text-muted-foreground">No debts tracked yet. Add debts to see your full financial picture.</p>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {debts.map((debt, i) => (
+              <>
+                {debts.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <Select value={debtsSort} onValueChange={v => setDebtsSort(v as typeof debtsSort)}>
+                      <SelectTrigger className="h-8 rounded-xl text-xs w-48 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default order</SelectItem>
+                        <SelectItem value="name-asc">Name A–Z</SelectItem>
+                        <SelectItem value="balance-desc">Balance: high–low</SelectItem>
+                        <SelectItem value="balance-asc">Balance: low–high</SelectItem>
+                        <SelectItem value="apr-desc">APR: high–low</SelectItem>
+                        <SelectItem value="min-payment-desc">Min payment: high–low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {debtTypes.length > 1 && (
+                      <>
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <Select value={debtsTypeFilter} onValueChange={setDebtsTypeFilter}>
+                          <SelectTrigger className="h-8 rounded-xl text-xs w-44 border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All types</SelectItem>
+                            {debtTypes.map(t => (
+                              <SelectItem key={t} value={t}>{DEBT_TYPE_LABELS[t] ?? t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
+                    {debtsFilterActive && (
+                      <button
+                        type="button"
+                        onClick={() => { setDebtsSort("default"); setDebtsTypeFilter("all"); }}
+                        className="text-xs text-primary underline underline-offset-2 hover:text-primary/70"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    {debtsTypeFilter !== "all" && (
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {applyDebtsSortFilter(debts).length} of {debts.length} debts
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {debts
+                  .map((debt, originalIdx) => ({ debt, originalIdx }))
+                  .filter(({ debt }) => debtsTypeFilter === "all" || debt.type === debtsTypeFilter)
+                  .sort(({ debt: a }, { debt: b }) => {
+                    switch (debtsSort) {
+                      case "name-asc": return a.name.localeCompare(b.name);
+                      case "balance-desc": return b.balance - a.balance;
+                      case "balance-asc": return a.balance - b.balance;
+                      case "apr-desc": return (b.interestRate ?? 0) - (a.interestRate ?? 0);
+                      case "min-payment-desc": return b.minimumPayment - a.minimumPayment;
+                      default: return 0;
+                    }
+                  })
+                  .map(({ debt, originalIdx: i }) => (
                   <motion.div
                     key={debt.id}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
+                    transition={{ delay: 0 }}
                   >
                     <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
                       <div className={`absolute top-0 left-0 w-1 h-full ${debtTypeLeftBar(debt.type)} transition-colors`} />
@@ -4547,8 +4783,9 @@ export function BudgetWizard({
                       </CardContent>
                     </Card>
                   </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </DialogContent>
@@ -4606,62 +4843,121 @@ export function BudgetWizard({
                 <p className="text-muted-foreground">No bills saved yet. Add a bill to get started.</p>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {bills
-                  .map((bill, originalIdx) => ({ bill, originalIdx }))
-                  .filter(({ bill }) => !bill.sourceDebtId)
-                  .map(({ bill, originalIdx }, i) => (
-                    <motion.div
-                      key={`manager-bill-${originalIdx}`}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                    >
-                      <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
-                        <div className={`absolute top-0 left-0 w-1 h-full ${getBillColorEntry(bill.color).leftBar} transition-colors`} />
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="space-y-1 flex-1 mr-2">
-                              <p className="font-semibold text-sm text-foreground leading-tight">{bill.name}</p>
-                              <div className="flex flex-wrap gap-1">
-                                <Badge
-                                  variant="outline"
-                                  className={`text-xs px-2 py-0.5 ${getBillColorEntry(bill.color).badge}`}
+              <>
+                {nonDebtBills.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <Select value={billsSort} onValueChange={v => setBillsSort(v as typeof billsSort)}>
+                      <SelectTrigger className="h-8 rounded-xl text-xs w-44 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default order</SelectItem>
+                        <SelectItem value="name-asc">Name A–Z</SelectItem>
+                        <SelectItem value="amount-desc">Amount: high–low</SelectItem>
+                        <SelectItem value="amount-asc">Amount: low–high</SelectItem>
+                        <SelectItem value="due-day">Due day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {nonDebtBillCategories.length > 1 && (
+                      <>
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <Select value={billsCategoryFilter} onValueChange={setBillsCategoryFilter}>
+                          <SelectTrigger className="h-8 rounded-xl text-xs w-44 border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All categories</SelectItem>
+                            {nonDebtBillCategories.map(c => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
+                    {billsFilterActive && (
+                      <button
+                        type="button"
+                        onClick={() => { setBillsSort("default"); setBillsCategoryFilter("all"); }}
+                        className="text-xs text-primary underline underline-offset-2 hover:text-primary/70"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    {billsCategoryFilter !== "all" && (
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {applyBillsSortFilter(nonDebtBills).length} of {nonDebtBills.length} bills
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {bills
+                    .map((bill, originalIdx) => ({ bill, originalIdx }))
+                    .filter(({ bill }) => !bill.sourceDebtId)
+                    .filter(({ bill }) => billsCategoryFilter === "all" || (bill as any).category === billsCategoryFilter)
+                    .sort(({ bill: a }, { bill: b }) => {
+                      switch (billsSort) {
+                        case "name-asc": return a.name.localeCompare(b.name);
+                        case "amount-desc": return Math.abs(b.amount) - Math.abs(a.amount);
+                        case "amount-asc": return Math.abs(a.amount) - Math.abs(b.amount);
+                        case "due-day": return (a.dayOfMonth ?? 99) - (b.dayOfMonth ?? 99);
+                        default: return 0;
+                      }
+                    })
+                    .map(({ bill, originalIdx }) => (
+                      <motion.div
+                        key={`manager-bill-${originalIdx}`}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0 }}
+                      >
+                        <Card className="relative hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl overflow-hidden border-border/40">
+                          <div className={`absolute top-0 left-0 w-1 h-full ${getBillColorEntry(bill.color).leftBar} transition-colors`} />
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="space-y-1 flex-1 mr-2">
+                                <p className="font-semibold text-sm text-foreground leading-tight">{bill.name}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-xs px-2 py-0.5 ${getBillColorEntry(bill.color).badge}`}
+                                  >
+                                    {bill.category ?? ""}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <Currency value={bill.amount} className="text-sm font-semibold shrink-0" />
+                            </div>
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-xs text-muted-foreground">
+                                {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                              </span>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
+                                  onClick={() => { setEditingBillInManagerIndex(originalIdx); setIsBillManagerFormOpen(true); }}
                                 >
-                                  {bill.category ?? ""}
-                                </Badge>
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
+                                  onClick={() => preserveScroll(() => removeBill(originalIdx))}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
                             </div>
-                            <Currency value={bill.amount} className="text-sm font-semibold shrink-0" />
-                          </div>
-                          <div className="flex items-center justify-between mt-3">
-                            <span className="text-xs text-muted-foreground">
-                              {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
-                            </span>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-primary"
-                                onClick={() => { setEditingBillInManagerIndex(originalIdx); setIsBillManagerFormOpen(true); }}
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
-                                onClick={() => preserveScroll(() => removeBill(originalIdx))}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-              </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                </div>
+              </>
             )}
           </div>
         </DialogContent>
