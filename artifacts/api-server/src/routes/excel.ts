@@ -271,6 +271,9 @@ function parseExcelData(
     bills = parseBillMetaRows(rows, ["Bills", "## BILLS ##"]);
   }
 
+  const ANNUAL_BRACKET_RE = /\[annual:\s*\$[\d,.]+\/yr\s*→\s*(\w+)\s+(\d+)\]/i;
+  const MONTH_ABBR: Record<string, number> = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+
   if (bills.length === 0) {
     // ── Fallback: keyword-based detection for sheets without metadata ──────
     for (let i = 1; i < rows.length; i++) {
@@ -281,6 +284,19 @@ function parseExcelData(
       const rawAmt = typeof cells[1] === "number" ? cells[1] : parseFloat(String(cells[1] ?? ""));
       if (isNaN(rawAmt)) continue;
       const amount = rawAmt > 0 ? -rawAmt : rawAmt;
+
+      // Detect yearly sinking-fund bills by bracket notation: "Name [annual: $X/yr → Mon Day]"
+      const annualMatch = nameCell.match(ANNUAL_BRACKET_RE);
+      if (annualMatch) {
+        const cleanName = nameCell.replace(ANNUAL_BRACKET_RE, "").trim();
+        const monthNum = MONTH_ABBR[annualMatch[1].toLowerCase().substring(0, 3)] ?? null;
+        const dueDay = parseInt(annualMatch[2]);
+        const dayOfMonth = !isNaN(dueDay) && dueDay >= 1 && dueDay <= 31 ? dueDay : null;
+        const billEntry: Record<string, unknown> = { name: cleanName, amount, dayOfMonth, category: cleanName, type: "yearly", color: "teal" };
+        if (monthNum) billEntry.annualDueMonth = monthNum;
+        bills.push(billEntry);
+        continue;
+      }
 
       const dayStr = String(cells[2] ?? "");
       const dayOfMonth =
