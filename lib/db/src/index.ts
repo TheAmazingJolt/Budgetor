@@ -67,6 +67,17 @@ export async function initDb(): Promise<void> {
       );
 
       CREATE INDEX IF NOT EXISTS user_sessions_expire_idx ON user_sessions (expire);
+
+      CREATE TABLE IF NOT EXISTS savings_contributions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        budget_id UUID NOT NULL REFERENCES saved_budgets(id) ON DELETE CASCADE,
+        bill_name TEXT NOT NULL,
+        amount NUMERIC(12, 2) NOT NULL,
+        date TEXT NOT NULL,
+        note TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
     `);
     console.log("[initDb] schema migrations complete");
   } finally {
