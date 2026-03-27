@@ -120,7 +120,7 @@ function parseBillMetaRows(
   markerValues: string[],
 ): any[] {
   const colorMap: Record<string, string> = {};
-  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly"]);
+  const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
   const bills: any[] = [];
   let startIdx = -1;
   for (let i = 0; i < rows.length; i++) {
@@ -163,7 +163,11 @@ function parseBillMetaRows(
     // Use stored sourceDebtId (col 6) if present.
     const storedSourceDebtId = String(cells[6] ?? "").trim();
     const sourceDebtId = storedSourceDebtId || undefined;
-    bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId });
+    // Use stored annualDueMonth (col 7) if present.
+    const annualDueMonthRaw = cells[7];
+    const annualDueMonthNum = typeof annualDueMonthRaw === "number" ? annualDueMonthRaw : parseInt(String(annualDueMonthRaw ?? ""), 10);
+    const annualDueMonth = !isNaN(annualDueMonthNum) && annualDueMonthNum >= 1 && annualDueMonthNum <= 12 ? annualDueMonthNum : null;
+    bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId, ...(annualDueMonth ? { annualDueMonth } : {}) });
   }
   return bills;
 }
@@ -510,6 +514,7 @@ interface BillMeta {
   dayOfMonth?: number | null;
   color?: string;
   sourceDebtId?: string;
+  annualDueMonth?: number | null;
 }
 
 interface ExcelWriteRequest {
@@ -732,7 +737,7 @@ async function writeHiddenExcelBillsSheet(
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endAddr}')`,
-      { values: Array.from({ length: 50 }, () => Array(7).fill("")) }
+      { values: Array.from({ length: 50 }, () => Array(9).fill("")) }
     );
   } else {
     const added = await graphPost(
@@ -751,7 +756,7 @@ async function writeHiddenExcelBillsSheet(
 
   const grid: (string | number)[][] = [
     ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId"],
+    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId", "AnnualDueMonth"],
     ...(bills ?? []).map((b) => [
       b.name,
       Math.abs(b.amount),
@@ -760,6 +765,7 @@ async function writeHiddenExcelBillsSheet(
       b.dayOfMonth != null ? b.dayOfMonth : "varies",
       b.color ?? "",
       b.sourceDebtId ?? "",
+      b.annualDueMonth != null ? b.annualDueMonth : "",
     ]),
   ];
 

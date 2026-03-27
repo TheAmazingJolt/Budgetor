@@ -2307,7 +2307,7 @@ export function BudgetWizard({
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
   const monthlyAmount = (b: { amount: number; type: string }) =>
-    Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : 1);
+    Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : b.type === "yearly" ? 1 / 12 : 1);
 
   const nonDebtBills = bills.filter(b => !b.sourceDebtId);
   const totalAllBillsMonthly = nonDebtBills.reduce((s, b) => s + monthlyAmount(b), 0);
@@ -3191,7 +3191,7 @@ export function BudgetWizard({
                             </div>
                             <div className="flex items-center justify-between mt-3">
                               <span className="text-xs text-muted-foreground">
-                                {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                                {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][((bill as any).annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                               </span>
                               <div className="flex gap-1">
                                 <Button
@@ -4636,7 +4636,7 @@ export function BudgetWizard({
                           </div>
                           <div className="flex items-center justify-between mt-3">
                             <span className="text-xs text-muted-foreground">
-                              {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                              {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][((bill as any).annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                             </span>
                             <div className="flex gap-1">
                               <Button

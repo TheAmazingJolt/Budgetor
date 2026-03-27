@@ -19,12 +19,35 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { Bill } from "@workspace/api-client-react";
 import { BILL_COLOR_PALETTE } from "@/lib/billColors";
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+function getNextYearlyDueDate(today: Date, dueMonth: number, dueDay: number): Date {
+  const m = dueMonth - 1;
+  let year = today.getFullYear();
+  const maxDay1 = new Date(year, m + 1, 0).getDate();
+  let d = new Date(year, m, Math.min(dueDay, maxDay1));
+  if (d <= today) {
+    year += 1;
+    const maxDay2 = new Date(year, m + 1, 0).getDate();
+    d = new Date(year, m, Math.min(dueDay, maxDay2));
+  }
+  return d;
+}
+
 const formSchema = z.object({
   name: z.string().min(2, "Name is required"),
   amount: z.coerce.number().refine(v => v !== 0, "Amount is required").transform(v => -Math.abs(v)),
   dayOfMonth: z.coerce.number().min(1).max(31).nullable().optional(),
+  annualDueMonth: z.coerce.number().min(1).max(12).nullable().optional(),
   category: z.string().min(1, "Category label is required"),
-  type: z.enum(["balanced", "fixed", "weekly", "biweekly"]),
+  type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly"]),
   color: z.string().default("none"),
 });
 
@@ -99,6 +122,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           name: d.name ?? "",
           amount: d.amount ?? -0,
           dayOfMonth: d.dayOfMonth ?? null,
+          annualDueMonth: d.annualDueMonth ?? null,
           category: d.category ?? "",
           type: d.type ?? "fixed",
           color: d.color ?? "none",
@@ -107,6 +131,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           name: "",
           amount: -0,
           dayOfMonth: null,
+          annualDueMonth: null,
           category: "",
           type: "fixed",
           color: "none",
@@ -115,13 +140,33 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
 
   const billType = form.watch("type");
   const selectedColor = form.watch("color");
+  const watchedAmount = form.watch("amount");
+  const watchedAnnualDueMonth = form.watch("annualDueMonth");
+  const watchedDayOfMonth = form.watch("dayOfMonth");
+
+  const isYearly = billType === "yearly";
+
+  const weeklyEstimate = (() => {
+    if (!isYearly) return null;
+    const annualAbs = Math.abs(typeof watchedAmount === "number" ? watchedAmount : 0);
+    if (!annualAbs) return null;
+    const month = typeof watchedAnnualDueMonth === "number" ? watchedAnnualDueMonth : 1;
+    const day = typeof watchedDayOfMonth === "number" ? watchedDayOfMonth : 1;
+    const today = new Date();
+    const dueDate = getNextYearlyDueDate(today, month, day);
+    const weeksUntil = Math.max(1, Math.ceil((dueDate.getTime() - today.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+    const weekly = annualAbs / weeksUntil;
+    const monthStr = MONTH_SHORT[(month - 1) % 12];
+    return { weekly, weeksUntil, monthStr, day };
+  })();
 
   function handleSubmit(values: z.infer<typeof formSchema>) {
     const result: Bill = {
       ...(initialData ?? {}),
       ...values,
       userColor: values.color !== "none",
-    };
+      annualDueMonth: isYearly ? (values.annualDueMonth ?? 1) : undefined,
+    } as Bill;
     onSubmit(result);
   }
 
@@ -149,7 +194,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Amount</FormLabel>
+                <FormLabel>{isYearly ? "Annual Amount" : "Amount"}</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -162,7 +207,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  Automatically saved as a negative (expense).
+                  {isYearly ? "Total yearly cost. Saved as a weekly contribution." : "Automatically saved as a negative (expense)."}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -186,6 +231,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                     <SelectItem value="fixed">Fixed Monthly</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="biweekly">Biweekly</SelectItem>
+                    <SelectItem value="yearly">Yearly (Sinking Fund)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -207,42 +253,120 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           {billType === "biweekly" && (
             <p><span className="font-semibold text-foreground">Biweekly:</span> This amount is added every other week in a weekly budget, or every period in a biweekly budget.</p>
           )}
+          {billType === "yearly" && (
+            <p><span className="font-semibold text-foreground">Yearly (Sinking Fund):</span> The annual amount is divided by the number of weeks until the due date. A small weekly contribution appears in every budget period so you're ready when the bill arrives.</p>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="category"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Category Label</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Rent, Utilities" {...field} className="focus:ring-primary/20 focus:border-primary" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        {isYearly ? (
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category Label</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Insurance" {...field} className="focus:ring-primary/20 focus:border-primary" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          {billType !== "weekly" && billType !== "biweekly" && (
+            <FormField
+              control={form.control}
+              name="annualDueMonth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Due Month</FormLabel>
+                  <Select
+                    onValueChange={v => field.onChange(parseInt(v, 10))}
+                    value={field.value != null ? String(field.value) : "1"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
+                        <SelectValue placeholder="Month" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {MONTH_NAMES.map((name, idx) => (
+                        <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="dayOfMonth"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Day of Month Due</FormLabel>
-                  <DayOfMonthInput value={field.value} onChange={field.onChange} />
-                  <FormDescription>
-                    {billType === "fixed"
-                      ? "Full amount appears in the week this day falls."
-                      : "Bill is only spread across weeks leading up to and including this day. \"Varies\" spreads across all weeks."}
-                  </FormDescription>
+                  <FormLabel>Due Day of Month</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      placeholder="1–31"
+                      value={field.value != null ? field.value : ""}
+                      onChange={e => {
+                        const num = parseInt(e.target.value, 10);
+                        field.onChange(!isNaN(num) ? num : null);
+                      }}
+                      className="w-24 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          )}
-        </div>
+
+            {weeklyEstimate && (
+              <div className="col-span-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary font-medium">
+                ≈ ${weeklyEstimate.weekly.toFixed(2)}/week — {weeklyEstimate.weeksUntil} week{weeklyEstimate.weeksUntil !== 1 ? "s" : ""} until {weeklyEstimate.monthStr} {weeklyEstimate.day}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category Label</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Rent, Utilities" {...field} className="focus:ring-primary/20 focus:border-primary" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {billType !== "weekly" && billType !== "biweekly" && (
+              <FormField
+                control={form.control}
+                name="dayOfMonth"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Day of Month Due</FormLabel>
+                    <DayOfMonthInput value={field.value} onChange={field.onChange} />
+                    <FormDescription>
+                      {billType === "fixed"
+                        ? "Full amount appears in the week this day falls."
+                        : "Bill is only spread across weeks leading up to and including this day. \"Varies\" spreads across all weeks."}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </div>
+        )}
 
         <FormField
           control={form.control}

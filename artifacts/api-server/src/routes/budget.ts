@@ -4,7 +4,7 @@ import { generateWeeklyBudgets } from "../lib/budget.js";
 
 const router: IRouter = Router();
 
-const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly"]);
+const VALID_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
 
 router.post("/budget/generate", async (req, res): Promise<void> => {
   if (req.body?.bills && Array.isArray(req.body.bills)) {

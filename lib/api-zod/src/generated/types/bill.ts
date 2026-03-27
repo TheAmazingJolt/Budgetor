@@ -28,4 +28,6 @@ export interface Bill {
   sourceDebtId?: string;
   /** ISO date string after which this bill should stop appearing (debt payoff date) */
   payoffDate?: string | null;
+  /** For yearly bills: the month (1–12) when the annual bill is due */
+  annualDueMonth?: number | null;
 }

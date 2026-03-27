@@ -28,6 +28,25 @@ function getNextMonthStart(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 1);
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function fmtAnnualAmount(n: number): string {
+  return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
+}
+
+function getNextYearlyDueDate(fromDate: Date, dueMonth: number, dueDay: number): Date {
+  const m = dueMonth - 1;
+  let year = fromDate.getFullYear();
+  const maxDay1 = new Date(year, m + 1, 0).getDate();
+  let dueDate = new Date(year, m, Math.min(dueDay, maxDay1));
+  if (dueDate <= fromDate) {
+    year += 1;
+    const maxDay2 = new Date(year, m + 1, 0).getDate();
+    dueDate = new Date(year, m, Math.min(dueDay, maxDay2));
+  }
+  return dueDate;
+}
+
 export function generateWeeklyBudgets(
   startDate: Date,
   endDate: Date,
@@ -41,6 +60,7 @@ export function generateWeeklyBudgets(
   const fixedBills = bills.filter((b) => b.type === "fixed");
   const weeklyBills = bills.filter((b) => b.type === "weekly");
   const biweeklyBills = bills.filter((b) => b.type === "biweekly");
+  const yearlyBills = bills.filter((b) => b.type === "yearly");
 
   // alwaysBills = balanced with no specific due day (varies across all weeks)
   const alwaysBills = balancedBills.filter((b) => !b.dayOfMonth);
@@ -178,6 +198,44 @@ export function generateWeeklyBudgets(
           });
         }
       }
+    }
+  }
+
+  // ── Add yearly (sinking fund) bills ─────────────────────────────────────
+  // Each yearly bill contributes a fixed weekly amount (annual / weeksUntilDue)
+  // to every period up to the annual due date. After the due date passes, the
+  // next cycle's weeksUntilDue is recomputed from that week's start date.
+  for (const bill of yearlyBills) {
+    const dueMonth = bill.annualDueMonth ?? 1;
+    const dueDay = bill.dayOfMonth ?? 1;
+    const annualAbs = Math.abs(bill.amount);
+    const monthShort = MONTH_SHORT[(dueMonth - 1) % 12];
+    const label = `${bill.name} [annual: ${fmtAnnualAmount(annualAbs)}/yr → ${monthShort} ${dueDay}]`;
+    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+
+    let currentCycleDueDate = getNextYearlyDueDate(startDate, dueMonth, dueDay);
+    let currentCycleWeeks = Math.max(1, Math.ceil(
+      (currentCycleDueDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
+    ));
+    let weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
+
+    for (let i = 0; i < weeks.length; i++) {
+      const weekStart = weeks[i].start;
+      if (billPayoffDate && weekStart >= billPayoffDate) continue;
+
+      if (weekStart > currentCycleDueDate) {
+        currentCycleDueDate = getNextYearlyDueDate(weekStart, dueMonth, dueDay);
+        currentCycleWeeks = Math.max(1, Math.ceil(
+          (currentCycleDueDate.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
+        ));
+        weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
+      }
+
+      weeks[i].fixedWeeklyBills.push({
+        name: label,
+        amount: weeklyContrib,
+        color: bill.color,
+      });
     }
   }
 

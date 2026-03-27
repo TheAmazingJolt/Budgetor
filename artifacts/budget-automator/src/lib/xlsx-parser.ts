@@ -80,6 +80,9 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
             const dayRaw = r[2];
             const dayParsed = typeof dayRaw === 'number' ? dayRaw : parseInt(String(dayRaw ?? ''), 10);
             const sourceDebt = String(r[6] ?? '').trim();
+            const admRaw = r[7];
+            const admNum = typeof admRaw === 'number' ? admRaw : parseInt(String(admRaw ?? ''), 10);
+            const annualDueMonth = !isNaN(admNum) && admNum >= 1 && admNum <= 12 ? admNum : null;
             bills.push({
               name: firstCell,
               amount: typeof r[1] === 'number' ? r[1] : parseFloat(String(r[1] ?? '0')),
@@ -88,6 +91,7 @@ export async function parseBudgetSpreadsheet(file: File): Promise<ParsedWorkbook
               type: (String(r[4] ?? '').trim() || 'fixed') as Bill['type'],
               color: String(r[5] ?? '').trim() || 'slate',
               ...(sourceDebt ? { sourceDebtId: sourceDebt } : {}),
+              ...(annualDueMonth ? { annualDueMonth } : {}),
             });
           }
 

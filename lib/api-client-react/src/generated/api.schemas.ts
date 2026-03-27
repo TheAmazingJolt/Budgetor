@@ -22,6 +22,8 @@ export const BillType = {
   balanced: "balanced",
   fixed: "fixed",
   weekly: "weekly",
+  biweekly: "biweekly",
+  yearly: "yearly",
 } as const;
 
 export interface Bill {
@@ -43,6 +45,10 @@ export interface Bill {
   userColor?: boolean;
   /** ID of the debt this bill was imported from (if any) */
   sourceDebtId?: string;
+  /** ISO date string after which this bill should stop appearing (debt payoff date) */
+  payoffDate?: string | null;
+  /** For yearly bills: the month (1–12) when the annual bill is due */
+  annualDueMonth?: number | null;
 }
 
 export interface WeeklyBill {
@@ -165,6 +171,8 @@ export interface Debt {
   lastPaymentAmount?: number | null;
   /** ISO date string when the debt was created (optional, used for payment-due nudge) */
   createdAt?: string | null;
+  /** Payment frequency: 'weekly' or 'biweekly' (optional) */
+  paymentFrequency?: string | null;
 }
 
 export type SavedBudgetSettings = { [key: string]: unknown };

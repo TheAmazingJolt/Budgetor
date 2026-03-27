@@ -639,7 +639,7 @@ function writeDebtsSection(
 
 function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[], debts?: Debt[] | null): void {
   const ds: XLSX.WorkSheet = {};
-  const headers = ['name', 'amount', 'dayOfMonth', 'category', 'type', 'color', 'sourceDebtId'];
+  const headers = ['name', 'amount', 'dayOfMonth', 'category', 'type', 'color', 'sourceDebtId', 'annualDueMonth'];
   for (let c = 0; c < headers.length; c++) {
     ds[XLSX.utils.encode_cell({ r: 0, c })] = { v: headers[c], t: 's' };
   }
@@ -653,6 +653,8 @@ function writeBillsDataSheet(wb: XLSX.WorkBook, bills: Bill[], debts?: Debt[] | 
     ds[XLSX.utils.encode_cell({ r, c: 4 })] = { v: b.type ?? '', t: 's' };
     ds[XLSX.utils.encode_cell({ r, c: 5 })] = { v: b.color ?? '', t: 's' };
     ds[XLSX.utils.encode_cell({ r, c: 6 })] = { v: b.sourceDebtId ?? '', t: 's' };
+    const adm = (b as any).annualDueMonth;
+    ds[XLSX.utils.encode_cell({ r, c: 7 })] = adm != null ? { v: adm, t: 'n' } : { v: '', t: 's' };
   }
 
   let lastRow = bills.length;

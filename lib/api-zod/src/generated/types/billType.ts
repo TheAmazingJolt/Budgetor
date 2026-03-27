@@ -16,4 +16,5 @@ export const BillType = {
   fixed: "fixed",
   weekly: "weekly",
   biweekly: "biweekly",
+  yearly: "yearly",
 } as const;

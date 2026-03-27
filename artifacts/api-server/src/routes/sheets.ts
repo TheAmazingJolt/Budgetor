@@ -121,7 +121,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     sheetsData.find((s) => s.properties?.title === "_MoneyPalData");
   const metaRows = metaSheet?.data?.[0]?.rowData ?? [];
   let foundBillsMarker = false;
-  const VALID_META_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly"]);
+  const VALID_META_BILL_TYPES = new Set(["balanced", "fixed", "weekly", "biweekly", "yearly"]);
   for (let i = 0; i < metaRows.length; i++) {
     const val = metaRows[i]?.values?.[0]?.formattedValue?.trim() ?? "";
     if (val === "Bills") { foundBillsMarker = true; }
@@ -161,7 +161,10 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
     const color = storedColor || "none";
     // Use stored sourceDebtId (col 6) if present.
     const sourceDebtId = cells[6]?.formattedValue?.trim() || undefined;
-    bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId });
+    // Use stored annualDueMonth (col 7) if present.
+    const annualDueMonthStr = cells[7]?.formattedValue?.trim() ?? "";
+    const annualDueMonth = annualDueMonthStr && !isNaN(parseInt(annualDueMonthStr)) ? parseInt(annualDueMonthStr) : null;
+    bills.push({ name, amount, dayOfMonth, category, type, color, sourceDebtId, ...(annualDueMonth ? { annualDueMonth } : {}) });
   }
 
   // ── Parse Debts section from _BudgifyData ──
@@ -590,6 +593,7 @@ interface BillMeta {
   dayOfMonth?: number | null;
   color?: string;
   sourceDebtId?: string;
+  annualDueMonth?: number | null;
 }
 
 interface WriteRequest {
@@ -1431,7 +1435,7 @@ async function writeHiddenBillsSheet(
 
   const grid: (string | number)[][] = [
     ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId"],
+    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId", "AnnualDueMonth"],
     ...(bills ?? []).map((b) => [
       b.name,
       Math.abs(b.amount),
@@ -1440,6 +1444,7 @@ async function writeHiddenBillsSheet(
       b.dayOfMonth != null ? b.dayOfMonth : "varies",
       b.color ?? "",
       b.sourceDebtId ?? "",
+      b.annualDueMonth != null ? b.annualDueMonth : "",
     ]),
   ];
 
