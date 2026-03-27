@@ -1540,6 +1540,261 @@ async function writeHiddenBillsSheet(
   });
 }
 
+const MONTH_SHORT_SHEETS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function getNextYearlyDueSrv(from: Date, month: number, day: number): Date {
+  const m = month - 1;
+  let year = from.getFullYear();
+  const cap1 = new Date(year, m + 1, 0).getDate();
+  let due = new Date(year, m, Math.min(day, cap1));
+  if (due <= from) {
+    year++;
+    const cap2 = new Date(year, m + 1, 0).getDate();
+    due = new Date(year, m, Math.min(day, cap2));
+  }
+  return due;
+}
+
+async function writeSavingsTabToSheet(
+  sheetsApi: sheets_v4.Sheets,
+  spreadsheetId: string,
+  bills: BillMeta[],
+  weeks: WriteRequest["weeks"],
+): Promise<void> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+
+  // ── Compute savings per bill ──────────────────────────────────────────────
+
+  interface SinkingRow {
+    name: string; annualGoal: number; savedInCycle: number;
+    progressPct: number; nextDueDateStr: string; cycleStartStr: string; weeksRemaining: number;
+  }
+  interface BalancedRow {
+    name: string; monthlyGoal: number; savedThisMonth: number; progressPct: number;
+  }
+
+  const sinkingFunds: SinkingRow[] = [];
+  const balanced: BalancedRow[] = [];
+
+  for (const bill of bills) {
+    if (bill.type === "yearly") {
+      const annualGoal = Math.abs(bill.amount);
+      const dueMonth = bill.annualDueMonth ?? 1;
+      const dueDay = bill.dayOfMonth ?? 1;
+      const nextDue = getNextYearlyDueSrv(today, dueMonth, dueDay);
+      const cycleStart = new Date(nextDue);
+      cycleStart.setFullYear(cycleStart.getFullYear() - 1);
+
+      const prefix = `${bill.name} [annual:`;
+      let savedInCycle = 0;
+      for (const w of weeks) {
+        const wStart = new Date(w.startDate);
+        wStart.setHours(0, 0, 0, 0);
+        if (wStart <= cycleStart || wStart > today) continue;
+        for (const item of w.bills) {
+          if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
+        }
+      }
+
+      const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
+      const nextDueDateStr = `${MONTH_SHORT_SHEETS[nextDue.getMonth()]} ${nextDue.getDate()}`;
+      const cycleStartStr = `${MONTH_SHORT_SHEETS[cycleStart.getMonth()]} ${cycleStart.getDate()}`;
+      const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
+      sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining });
+
+    } else if (bill.type === "balanced") {
+      const monthlyGoal = Math.abs(bill.amount);
+      const prefix = `Partial ${bill.name}`;
+      let savedThisMonth = 0;
+      for (const w of weeks) {
+        const wStart = new Date(w.startDate);
+        wStart.setHours(0, 0, 0, 0);
+        if (wStart > today) continue;
+        if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
+        for (const item of w.bills) {
+          if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
+        }
+      }
+      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
+      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, progressPct });
+    }
+  }
+
+  // ── Find or create the Savings sheet ─────────────────────────────────────
+
+  const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
+  const existing = (meta.data.sheets ?? []).find((s) => s.properties?.title === "Savings");
+  let savingsSheetId: number;
+
+  if (existing) {
+    savingsSheetId = existing.properties?.sheetId ?? 0;
+    await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: "Savings" });
+  } else {
+    const addResult = await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: "Savings" } } }] },
+    });
+    savingsSheetId = addResult.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
+  }
+
+  // ── Build grid rows ───────────────────────────────────────────────────────
+
+  const dateStr = today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const currentMonthStr = today.toLocaleString("en-US", { month: "long", year: "numeric" });
+
+  const grid: (string | number)[][] = [
+    ["Savings Progress"],
+    [`Generated on ${dateStr}`],
+    [],
+  ];
+
+  if (sinkingFunds.length === 0 && balanced.length === 0) {
+    grid.push(["No sinking funds or balanced bills to track. Add yearly or balanced bills to see savings progress here."]);
+  }
+
+  if (sinkingFunds.length > 0) {
+    grid.push(["Sinking Funds"]);
+    grid.push(["Bill Name", "Annual Goal", "Saved This Cycle", "Progress", "Next Due Date", "Weeks Left"]);
+    for (const sf of sinkingFunds) {
+      grid.push([sf.name, sf.annualGoal, sf.savedInCycle, `${Math.round(sf.progressPct)}%`, sf.nextDueDateStr, sf.weeksRemaining]);
+    }
+    grid.push([]);
+  }
+
+  if (balanced.length > 0) {
+    grid.push([`Monthly Set-Aside — ${currentMonthStr}`]);
+    grid.push(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress"]);
+    for (const b of balanced) {
+      grid.push([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`]);
+    }
+    grid.push([]);
+  }
+
+  grid.push(["Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month."]);
+
+  const maxCols = Math.max(...grid.map((r) => r.length));
+  const lastColLetter = String.fromCharCode(64 + maxCols);
+  await sheetsApi.spreadsheets.values.update({
+    spreadsheetId,
+    range: `Savings!A1:${lastColLetter}${grid.length}`,
+    valueInputOption: "RAW",
+    requestBody: { values: grid },
+  });
+
+  // ── Apply formatting ──────────────────────────────────────────────────────
+
+  const violet = { red: 124 / 255, green: 58 / 255, blue: 237 / 255 };
+  const violetLight = { red: 237 / 255, green: 233 / 255, blue: 254 / 255 };
+  const violetLighter = { red: 245 / 255, green: 243 / 255, blue: 255 / 255 };
+  const indigo = { red: 55 / 255, green: 48 / 255, blue: 163 / 255 };
+  const indigoLight = { red: 224 / 255, green: 231 / 255, blue: 255 / 255 };
+  const indigoLighter = { red: 238 / 255, green: 242 / 255, blue: 255 / 255 };
+  const white = { red: 1, green: 1, blue: 1 };
+  const gray = { red: 107 / 255, green: 114 / 255, blue: 128 / 255 };
+
+  const formatRequests: any[] = [
+    // Main header row: bold, white text, violet bg, large font
+    {
+      repeatCell: {
+        range: { sheetId: savingsSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: maxCols },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 14, foregroundColor: white }, backgroundColor: violet, horizontalAlignment: "CENTER" } },
+        fields: "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)",
+      },
+    },
+    // Subtitle row: gray italic centered
+    {
+      repeatCell: {
+        range: { sheetId: savingsSheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: maxCols },
+        cell: { userEnteredFormat: { textFormat: { italic: true, fontSize: 10, foregroundColor: gray }, horizontalAlignment: "CENTER" } },
+        fields: "userEnteredFormat(textFormat,horizontalAlignment)",
+      },
+    },
+  ];
+
+  // Find row indices for section headers and column header rows
+  let r = 3; // 0-indexed, row 0=title, 1=subtitle, 2=blank
+
+  if (sinkingFunds.length === 0 && balanced.length === 0) {
+    // empty state row at r=3
+  } else {
+    if (sinkingFunds.length > 0) {
+      // Sinking Funds section header at r
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: indigo }, backgroundColor: violetLight } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      // Column headers at r
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 6 },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: violetLighter } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      // Data rows
+      r += sinkingFunds.length;
+      r++; // blank gap
+    }
+
+    if (balanced.length > 0) {
+      // Monthly Set-Aside section header at r
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: indigo }, backgroundColor: indigoLight } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      // Column headers at r
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 4 },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: indigoLighter } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+    }
+  }
+
+  // Merge header row across all columns
+  formatRequests.push({
+    mergeCells: { range: { sheetId: savingsSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: maxCols }, mergeType: "MERGE_ALL" },
+  });
+  // Merge subtitle row
+  formatRequests.push({
+    mergeCells: { range: { sheetId: savingsSheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: maxCols }, mergeType: "MERGE_ALL" },
+  });
+
+  // Column widths
+  const colWidths = [200, 120, 160, 80, 130, 100];
+  for (let c = 0; c < Math.min(colWidths.length, maxCols); c++) {
+    formatRequests.push({
+      updateDimensionProperties: {
+        range: { sheetId: savingsSheetId, dimension: "COLUMNS", startIndex: c, endIndex: c + 1 },
+        properties: { pixelSize: colWidths[c] },
+        fields: "pixelSize",
+      },
+    });
+  }
+
+  if (formatRequests.length > 0) {
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: formatRequests },
+    });
+  }
+}
+
 router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
   const auth = getAuthedClient(req);
   if (!auth) {
@@ -1576,6 +1831,9 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
     if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
       try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
+    }
+    if (body.bills && body.bills.length > 0) {
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -1621,6 +1879,9 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
     if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
       try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
+    }
+    if (body.bills && body.bills.length > 0) {
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks); } catch { }
     }
 
     res.json({
