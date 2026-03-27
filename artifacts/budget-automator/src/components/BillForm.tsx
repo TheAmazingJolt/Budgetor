@@ -229,7 +229,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={(val) => { field.onChange(val); if (val === "yearly" && form.getValues("annualDueMonth") == null) { form.setValue("annualDueMonth", 1); } }} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
                       <SelectValue placeholder="Select type" />
