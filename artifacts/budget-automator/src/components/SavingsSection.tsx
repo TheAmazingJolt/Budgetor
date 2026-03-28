@@ -1,11 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { TrendingUp, CalendarDays, PiggyBank, Repeat2, Info, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  TrendingUp, CalendarDays, PiggyBank, Repeat2, Info, Plus, Trash2,
+  ChevronDown, ChevronUp, ClipboardCheck, CheckCircle2, XCircle,
+} from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { computeSavings } from "@/lib/savingsComputation";
-import type { WeekForSavings, ManualContribution, SinkingFundProgress, BalancedProgress } from "@/lib/savingsComputation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  computeSavings,
+  parseLabelDates,
+  deriveReferenceDate,
+} from "@/lib/savingsComputation";
+import type {
+  WeekForSavings,
+  ManualContribution,
+  WeeklyCheckIn,
+  SinkingFundProgress,
+  BalancedProgress,
+} from "@/lib/savingsComputation";
 import type { Bill } from "@workspace/api-client-react";
 
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/+$/, "");
@@ -29,6 +50,24 @@ interface SavingsSectionProps {
   onContributionChange?: () => void;
 }
 
+function dismissKey(budgetId: string, weekLabel: string) {
+  return `checkin_dismissed_${budgetId}_${weekLabel}`;
+}
+
+function isDismissed(budgetId: string, weekLabel: string): boolean {
+  try {
+    return sessionStorage.getItem(dismissKey(budgetId, weekLabel)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setDismissed(budgetId: string, weekLabel: string) {
+  try {
+    sessionStorage.setItem(dismissKey(budgetId, weekLabel), "1");
+  } catch {}
+}
+
 export function SavingsSection({ bills, weeks, budgetId, onContributionChange }: SavingsSectionProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -42,7 +81,15 @@ export function SavingsSection({ bills, weeks, budgetId, onContributionChange }:
     staleTime: 30_000,
   });
 
+  const { data: checkinData, refetch: refetchCheckins } = useQuery<{ checkins: WeeklyCheckIn[] }>({
+    queryKey: ["weekly-checkins", budgetId],
+    queryFn: () => apiFetch(`/api/budgets/${budgetId}/checkins`),
+    enabled: !!budgetId,
+    staleTime: 30_000,
+  });
+
   const contributions: ManualContribution[] = contribData?.contributions ?? [];
+  const checkins: WeeklyCheckIn[] = checkinData?.checkins ?? [];
 
   const addMutation = useMutation({
     mutationFn: (payload: { billName: string; amount: number; date: string; note?: string }) =>
@@ -66,8 +113,69 @@ export function SavingsSection({ bills, weeks, budgetId, onContributionChange }:
     },
   });
 
-  const { sinkingFunds, balanced } = computeSavings(bills, weeks, today, contributions);
+  const { sinkingFunds, balanced, referenceMonth, referenceYear } = computeSavings(
+    bills, weeks, today, contributions, checkins,
+  );
   const hasData = sinkingFunds.length > 0 || balanced.length > 0;
+
+  const refDate = deriveReferenceDate(weeks, today);
+  const refMonthStr = refDate.toLocaleString("en-US", { month: "long" });
+
+  const balancedBills = bills.filter(b => b.type === "balanced");
+
+  const currentWeekForCheckin = useCallback((): WeekForSavings | null => {
+    let best: WeekForSavings | null = null;
+    let bestDate: Date | null = null;
+    for (const w of weeks) {
+      const d = parseLabelDates(w.label);
+      if (!d) continue;
+      if (d.start > today) continue;
+      if (!bestDate || d.start > bestDate) {
+        best = w;
+        bestDate = d.start;
+      }
+    }
+    return best;
+  }, [weeks, today]);
+
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkinWeek, setCheckinWeek] = useState<WeekForSavings | null>(null);
+
+  useEffect(() => {
+    if (!budgetId || !checkinData) return;
+    if (balancedBills.length === 0) return;
+    const week = currentWeekForCheckin();
+    if (!week) return;
+    const alreadyChecked = checkins.some(c => c.weekLabel === week.label);
+    if (alreadyChecked) return;
+    if (isDismissed(budgetId, week.label)) return;
+    setCheckinWeek(week);
+    setCheckInOpen(true);
+  }, [checkinData, budgetId]);
+
+  const openCheckIn = () => {
+    const week = currentWeekForCheckin();
+    if (week) {
+      setCheckinWeek(week);
+      setCheckInOpen(true);
+    }
+  };
+
+  const handleCheckInSaved = () => {
+    refetchCheckins();
+    onContributionChange?.();
+    setCheckInOpen(false);
+  };
+
+  const handleCheckInDismiss = () => {
+    if (budgetId && checkinWeek) setDismissed(budgetId, checkinWeek.label);
+    setCheckInOpen(false);
+  };
+
+  const currentWeek = currentWeekForCheckin();
+  const currentWeekChecked = currentWeek
+    ? checkins.some(c => c.weekLabel === currentWeek.label)
+    : false;
 
   if (!hasData) {
     return (
@@ -85,68 +193,280 @@ export function SavingsSection({ bills, weeks, budgetId, onContributionChange }:
     );
   }
 
-  const currentMonthStr = today.toLocaleString("en-US", { month: "long" });
   const canLog = !!budgetId;
+  const canCheckIn = !!budgetId && !!currentWeek && balancedBills.length > 0;
 
   return (
-    <div className="space-y-6 py-2">
-      {sinkingFunds.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-violet-600" />
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-violet-700">
-              Sinking Funds
-            </h4>
+    <>
+      <div className="space-y-6 py-2">
+        {canCheckIn && (
+          <div className="flex items-center justify-between gap-2 rounded-xl border px-4 py-3 bg-indigo-50 border-indigo-200/60">
+            <div className="flex items-center gap-2 min-w-0">
+              <ClipboardCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-indigo-900 truncate">
+                  Week of {currentWeek.label.split(" to ")[0]}
+                </p>
+                {currentWeekChecked ? (
+                  <p className="text-xs text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Checked in
+                  </p>
+                ) : (
+                  <p className="text-xs text-indigo-500">Set-aside amounts not yet confirmed</p>
+                )}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant={currentWeekChecked ? "outline" : "default"}
+              className={`rounded-xl text-xs shrink-0 ${!currentWeekChecked ? "bg-indigo-600 hover:bg-indigo-700" : ""}`}
+              onClick={openCheckIn}
+            >
+              {currentWeekChecked ? "Update" : "Check in"}
+            </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {sinkingFunds.map((sf, i) => (
-              <SinkingFundCard
-                key={i}
-                data={sf}
-                contributions={contributions.filter(c => c.billName === sf.bill.name)}
-                canLog={canLog}
-                onAdd={(amount, date, note) =>
-                  addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
-                }
-                onDelete={id => deleteMutation.mutateAsync(id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {balanced.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Repeat2 className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-indigo-700">
-              Monthly Set-Aside
-            </h4>
-            <span className="text-xs text-indigo-500 font-normal normal-case tracking-normal">
-              ({currentMonthStr})
-            </span>
+        {sinkingFunds.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-violet-600" />
+              <h4 className="text-sm font-semibold uppercase tracking-wider text-violet-700">
+                Sinking Funds
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {sinkingFunds.map((sf, i) => (
+                <SinkingFundCard
+                  key={i}
+                  data={sf}
+                  contributions={contributions.filter(c => c.billName === sf.bill.name)}
+                  canLog={canLog}
+                  onAdd={(amount, date, note) =>
+                    addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
+                  }
+                  onDelete={id => deleteMutation.mutateAsync(id)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {balanced.map((b, i) => (
-              <BalancedCard
-                key={i}
-                data={b}
-                contributions={contributions.filter(c => c.billName === b.bill.name)}
-                canLog={canLog}
-                onAdd={(amount, date, note) =>
-                  addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note })
-                }
-                onDelete={id => deleteMutation.mutateAsync(id)}
-              />
-            ))}
+        )}
+
+        {balanced.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Repeat2 className="w-4 h-4 text-indigo-600" />
+              <h4 className="text-sm font-semibold uppercase tracking-wider text-indigo-700">
+                Monthly Set-Aside
+              </h4>
+              <span className="text-xs text-indigo-500 font-normal normal-case tracking-normal">
+                ({refMonthStr})
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {balanced.map((b, i) => (
+                <BalancedCard
+                  key={i}
+                  data={b}
+                  contributions={contributions.filter(c => c.billName === b.bill.name)}
+                  checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
+                  canLog={canLog}
+                  onAdd={(amount, date, note) =>
+                    addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note })
+                  }
+                  onDelete={id => deleteMutation.mutateAsync(id)}
+                />
+              ))}
+            </div>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Info className="w-3 h-3 shrink-0" />
+              Resets at the start of each month
+            </p>
           </div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info className="w-3 h-3 shrink-0" />
-            Resets at the start of each month
-          </p>
-        </div>
+        )}
+      </div>
+
+      {checkinWeek && (
+        <CheckInDialog
+          open={checkInOpen}
+          week={checkinWeek}
+          balancedBills={balancedBills}
+          existingCheckins={checkins.filter(c => c.weekLabel === checkinWeek.label)}
+          budgetId={budgetId!}
+          onSaved={handleCheckInSaved}
+          onDismiss={handleCheckInDismiss}
+        />
       )}
-    </div>
+    </>
+  );
+}
+
+interface CheckInItem {
+  billName: string;
+  plannedAmount: number;
+  actualStr: string;
+  skipped: boolean;
+}
+
+interface CheckInDialogProps {
+  open: boolean;
+  week: WeekForSavings;
+  balancedBills: Bill[];
+  existingCheckins: WeeklyCheckIn[];
+  budgetId: string;
+  onSaved: () => void;
+  onDismiss: () => void;
+}
+
+function CheckInDialog({ open, week, balancedBills, existingCheckins, budgetId, onSaved, onDismiss }: CheckInDialogProps) {
+  const initItems = (): CheckInItem[] =>
+    balancedBills.map(bill => {
+      const prefix = `Partial ${bill.name}`;
+      const planned = week.items
+        .filter(it => it.name === prefix)
+        .reduce((s, it) => s + Math.abs(it.amount), 0);
+
+      const existing = existingCheckins.find(c => c.itemName === bill.name);
+      const actual = existing ? existing.actualAmount : planned;
+
+      return {
+        billName: bill.name,
+        plannedAmount: planned,
+        actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "",
+        skipped: existing ? existing.actualAmount === 0 : false,
+      };
+    });
+
+  const [items, setItems] = useState<CheckInItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setItems(initItems());
+      setError("");
+    }
+  }, [open, week.label]);
+
+  const setActual = (idx: number, val: string) => {
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, actualStr: val, skipped: false } : it));
+  };
+
+  const toggleSkip = (idx: number) => {
+    setItems(prev => prev.map((it, i) =>
+      i === idx ? { ...it, skipped: !it.skipped, actualStr: !it.skipped ? "0.00" : (it.plannedAmount > 0 ? it.plannedAmount.toFixed(2) : "") } : it,
+    ));
+  };
+
+  const handleSave = async () => {
+    for (const it of items) {
+      if (!it.skipped) {
+        const n = parseFloat(it.actualStr);
+        if (!it.actualStr || isNaN(n) || n < 0) {
+          setError(`Enter a valid amount for "${it.billName}" or mark it as skipped.`);
+          return;
+        }
+      }
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await Promise.all(
+        items.map(it =>
+          apiFetch(`/api/budgets/${budgetId}/checkins`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              weekLabel: week.label,
+              itemName: it.billName,
+              itemType: "balanced",
+              plannedAmount: it.plannedAmount,
+              actualAmount: it.skipped ? 0 : Math.max(0, parseFloat(it.actualStr) || 0),
+            }),
+          }),
+        ),
+      );
+      onSaved();
+    } catch (e: any) {
+      setError(e.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const weekStart = week.label.split(" to ")[0] ?? week.label;
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onDismiss(); }}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="w-5 h-5 text-indigo-600" />
+            Weekly Check-In
+          </DialogTitle>
+          <DialogDescription>
+            Week of {weekStart} — how much did you actually set aside for each bill?
+            Adjust any amounts that changed due to unexpected expenses.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-1">
+          {items.map((it, idx) => (
+            <div key={it.billName} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
+                <button
+                  type="button"
+                  onClick={() => toggleSkip(idx)}
+                  className={`flex items-center gap-1 text-xs font-medium shrink-0 transition-colors ${it.skipped ? "text-red-500" : "text-muted-foreground hover:text-red-400"}`}
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  {it.skipped ? "Skipped" : "Skip"}
+                </button>
+              </div>
+              {it.plannedAmount > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Budgeted: ${it.plannedAmount.toFixed(2)}
+                </p>
+              )}
+              {!it.skipped && (
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={it.actualStr}
+                    onChange={e => setActual(idx, e.target.value)}
+                    className="pl-6 h-8 text-sm"
+                  />
+                </div>
+              )}
+              {it.skipped && (
+                <p className="text-xs text-red-500 italic">
+                  Logged as $0.00 — unexpected expense this week
+                </p>
+              )}
+            </div>
+          ))}
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="ghost" size="sm" onClick={onDismiss} className="order-last sm:order-first">
+            Remind me later
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            {saving ? "Saving…" : "Confirm & save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -364,16 +684,18 @@ function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete }: Sinki
 interface BalancedCardProps {
   data: BalancedProgress;
   contributions: ManualContribution[];
+  checkins: WeeklyCheckIn[];
   canLog: boolean;
   onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
 }
 
-function BalancedCard({ data, contributions, canLog, onAdd, onDelete }: BalancedCardProps) {
-  const { bill, monthlyGoal, savedThisMonth, manualThisMonth, progressPct } = data;
+function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }: BalancedCardProps) {
+  const { bill, monthlyGoal, savedThisMonth, manualThisMonth, checkedInThisMonth, progressPct } = data;
   const pct = Math.round(progressPct);
-  const totalSaved = savedThisMonth + manualThisMonth;
+  const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
   const isComplete = totalSaved >= monthlyGoal;
+  const hasCheckins = checkins.length > 0;
 
   return (
     <div className="rounded-xl bg-white border border-indigo-100 p-4 space-y-3 shadow-sm">
@@ -394,7 +716,15 @@ function BalancedCard({ data, contributions, canLog, onAdd, onDelete }: Balanced
           <span className="text-muted-foreground">Set aside this month</span>
           <span className="font-semibold text-foreground">${fmt(totalSaved)}</span>
         </div>
-        {manualThisMonth > 0 && (
+        {checkedInThisMonth > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground ml-2 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Confirmed
+            </span>
+            <span className="text-muted-foreground">${fmt(checkedInThisMonth)}</span>
+          </div>
+        )}
+        {savedThisMonth > 0 && (
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground ml-2">· From budget</span>
             <span className="text-muted-foreground">${fmt(savedThisMonth)}</span>

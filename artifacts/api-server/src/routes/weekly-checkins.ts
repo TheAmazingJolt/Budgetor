@@ -1,0 +1,159 @@
+import { Router, type IRouter } from "express";
+import { pool, savedBudgetsTable, db } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import { requireAuth } from "./user-auth";
+
+const router: IRouter = Router();
+
+router.get("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id as string;
+    const { budgetId } = req.params;
+    const { weekLabel } = req.query as { weekLabel?: string };
+
+    const budget = await db
+      .select({ id: savedBudgetsTable.id })
+      .from(savedBudgetsTable)
+      .where(and(eq(savedBudgetsTable.id, budgetId), eq(savedBudgetsTable.userId, userId)))
+      .limit(1);
+
+    if (!budget.length) {
+      res.status(404).json({ error: "Budget not found" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      let query = `
+        SELECT id, budget_id, week_label, item_name, item_type,
+               planned_amount::float AS planned_amount, actual_amount::float AS actual_amount,
+               created_at, updated_at
+        FROM weekly_checkins
+        WHERE budget_id = $1 AND user_id = $2
+      `;
+      const params: unknown[] = [budgetId, userId];
+      if (weekLabel) {
+        query += ` AND week_label = $3`;
+        params.push(weekLabel);
+      }
+      query += ` ORDER BY created_at`;
+      const result = await client.query(query, params);
+      res.json({ checkins: result.rows });
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    console.error("[GET checkins]", err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Internal server error" });
+  }
+});
+
+router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id as string;
+    const { budgetId } = req.params;
+    const { weekLabel, itemName, itemType, plannedAmount, actualAmount } = req.body as {
+      weekLabel?: string;
+      itemName?: string;
+      itemType?: string;
+      plannedAmount?: number;
+      actualAmount?: number;
+    };
+
+    if (!weekLabel || typeof weekLabel !== "string") {
+      res.status(400).json({ error: "Missing weekLabel" });
+      return;
+    }
+    if (!itemName || typeof itemName !== "string") {
+      res.status(400).json({ error: "Missing itemName" });
+      return;
+    }
+    if (!itemType || !["balanced", "debt"].includes(itemType)) {
+      res.status(400).json({ error: "itemType must be 'balanced' or 'debt'" });
+      return;
+    }
+    if (typeof plannedAmount !== "number" || plannedAmount < 0) {
+      res.status(400).json({ error: "plannedAmount must be a non-negative number" });
+      return;
+    }
+    if (typeof actualAmount !== "number" || actualAmount < 0) {
+      res.status(400).json({ error: "actualAmount must be a non-negative number" });
+      return;
+    }
+
+    const budget = await db
+      .select({ id: savedBudgetsTable.id })
+      .from(savedBudgetsTable)
+      .where(and(eq(savedBudgetsTable.id, budgetId), eq(savedBudgetsTable.userId, userId)))
+      .limit(1);
+
+    if (!budget.length) {
+      res.status(404).json({ error: "Budget not found" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `
+        INSERT INTO weekly_checkins (user_id, budget_id, week_label, item_name, item_type, planned_amount, actual_amount, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        ON CONFLICT (budget_id, week_label, item_name, item_type)
+        DO UPDATE SET actual_amount = EXCLUDED.actual_amount,
+                      planned_amount = EXCLUDED.planned_amount,
+                      updated_at = NOW()
+        RETURNING id, budget_id, week_label, item_name, item_type,
+                  planned_amount::float AS planned_amount, actual_amount::float AS actual_amount,
+                  created_at, updated_at
+        `,
+        [userId, budgetId, weekLabel, itemName, itemType, plannedAmount.toFixed(2), actualAmount.toFixed(2)],
+      );
+      res.status(201).json({ checkin: result.rows[0] });
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    console.error("[POST checkins]", err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Internal server error" });
+  }
+});
+
+router.delete("/budgets/:budgetId/checkins/week", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id as string;
+    const { budgetId } = req.params;
+    const { weekLabel } = req.query as { weekLabel?: string };
+
+    if (!weekLabel) {
+      res.status(400).json({ error: "Missing weekLabel query param" });
+      return;
+    }
+
+    const budget = await db
+      .select({ id: savedBudgetsTable.id })
+      .from(savedBudgetsTable)
+      .where(and(eq(savedBudgetsTable.id, budgetId), eq(savedBudgetsTable.userId, userId)))
+      .limit(1);
+
+    if (!budget.length) {
+      res.status(404).json({ error: "Budget not found" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query(
+        `DELETE FROM weekly_checkins WHERE budget_id = $1 AND user_id = $2 AND week_label = $3`,
+        [budgetId, userId, weekLabel],
+      );
+      res.json({ ok: true });
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    console.error("[DELETE checkins/week]", err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Internal server error" });
+  }
+});
+
+export default router;

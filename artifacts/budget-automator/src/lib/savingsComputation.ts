@@ -13,6 +13,15 @@ export interface ManualContribution {
   note?: string | null;
 }
 
+export interface WeeklyCheckIn {
+  id: string;
+  weekLabel: string;
+  itemName: string;
+  itemType: "balanced" | "debt";
+  plannedAmount: number;
+  actualAmount: number;
+}
+
 export interface SinkingFundProgress {
   bill: Bill;
   annualGoal: number;
@@ -30,6 +39,7 @@ export interface BalancedProgress {
   monthlyGoal: number;
   savedThisMonth: number;
   manualThisMonth: number;
+  checkedInThisMonth: number;
   progressPct: number;
   currentMonth: number;
   currentYear: number;
@@ -38,6 +48,8 @@ export interface BalancedProgress {
 export interface SavingsData {
   sinkingFunds: SinkingFundProgress[];
   balanced: BalancedProgress[];
+  referenceMonth: number;
+  referenceYear: number;
 }
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -66,19 +78,44 @@ export function getNextYearlyDueDate(from: Date, month: number, day: number): Da
 }
 
 /**
+ * Derive the reference month/year for balanced-bill tracking.
+ *
+ * Uses the most recently generated week whose start date falls within
+ * 8 days of today (7 days look-ahead so a week generated tomorrow still
+ * shows the upcoming month). Falls back to today if no such week exists.
+ */
+export function deriveReferenceDate(weeks: WeekForSavings[], today: Date): Date {
+  const lookahead = new Date(today);
+  lookahead.setDate(lookahead.getDate() + 8);
+
+  let best: Date | null = null;
+  for (const w of weeks) {
+    const d = parseLabelDates(w.label);
+    if (!d) continue;
+    if (d.start > lookahead) continue;
+    if (!best || d.start > best) best = d.start;
+  }
+  return best ?? today;
+}
+
+/**
  * Compute savings progress for yearly (sinking fund) and balanced bills.
  *
- * Accepts optional manual contributions (extra amounts logged outside weekly budgets).
- * Manual contributions are included in cycle/month totals using the same date windows.
+ * - contributions: manual extra amounts logged outside weekly budgets.
+ * - checkins: amounts the user actually confirmed setting aside each week.
+ *   For balanced bills, if a check-in exists for a week, its actualAmount
+ *   replaces the "Partial [name]" line item from the generated budget.
  */
 export function computeSavings(
   bills: Bill[],
   weeks: WeekForSavings[],
   today: Date,
   contributions: ManualContribution[] = [],
+  checkins: WeeklyCheckIn[] = [],
 ): SavingsData {
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
+  const refDate = deriveReferenceDate(weeks, today);
+  const currentMonth = refDate.getMonth();
+  const currentYear = refDate.getFullYear();
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
 
   const sinkingFunds: SinkingFundProgress[] = [];
@@ -130,16 +167,32 @@ export function computeSavings(
     } else if (bill.type === "balanced") {
       const monthlyGoal = Math.abs(bill.amount);
       const prefix = `Partial ${bill.name}`;
+
       let savedThisMonth = 0;
+      let checkedInThisMonth = 0;
 
       for (const w of weeks) {
         const dates = parseLabelDates(w.label);
         if (!dates) continue;
-        if (dates.start > today) continue;
         if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
-        for (const item of w.items) {
-          if (item.name === prefix) {
-            savedThisMonth += Math.abs(item.amount);
+
+        const weekCheckin = checkins.find(
+          c => c.weekLabel === w.label && c.itemName === bill.name && c.itemType === "balanced",
+        );
+
+        if (weekCheckin) {
+          checkedInThisMonth += weekCheckin.actualAmount;
+        } else if (dates.start <= today) {
+          for (const item of w.items) {
+            if (item.name === prefix) {
+              savedThisMonth += Math.abs(item.amount);
+            }
+          }
+        } else {
+          for (const item of w.items) {
+            if (item.name === prefix) {
+              savedThisMonth += Math.abs(item.amount);
+            }
           }
         }
       }
@@ -148,19 +201,18 @@ export function computeSavings(
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
-        if (cDate > today) continue;
         if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
         manualThisMonth += c.amount;
       }
 
-      const totalSaved = savedThisMonth + manualThisMonth;
+      const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
       const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSaved / monthlyGoal) * 100) : 0;
       balanced.push({
-        bill, monthlyGoal, savedThisMonth, manualThisMonth, progressPct,
+        bill, monthlyGoal, savedThisMonth, manualThisMonth, checkedInThisMonth, progressPct,
         currentMonth, currentYear,
       });
     }
   }
 
-  return { sinkingFunds, balanced };
+  return { sinkingFunds, balanced, referenceMonth: currentMonth, referenceYear: currentYear };
 }

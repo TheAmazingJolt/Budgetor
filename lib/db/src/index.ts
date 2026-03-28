@@ -78,6 +78,22 @@ export async function initDb(): Promise<void> {
         note TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS weekly_checkins (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        budget_id UUID NOT NULL REFERENCES saved_budgets(id) ON DELETE CASCADE,
+        week_label TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        planned_amount NUMERIC(12, 2) NOT NULL,
+        actual_amount NUMERIC(12, 2) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS weekly_checkins_unique_item
+        ON weekly_checkins (budget_id, week_label, item_name, item_type);
     `);
     console.log("[initDb] schema migrations complete");
   } finally {

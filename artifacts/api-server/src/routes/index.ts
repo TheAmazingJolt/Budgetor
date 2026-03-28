@@ -8,6 +8,7 @@ import excelRouter from "./excel";
 import userAuthRouter, { attachUser } from "./user-auth";
 import savedBudgetsRouter from "./saved-budgets";
 import savingsContributionsRouter from "./savings-contributions";
+import weeklyCheckinsRouter from "./weekly-checkins";
 
 const router: IRouter = Router();
 
@@ -21,5 +22,6 @@ router.use(excelRouter);
 router.use(userAuthRouter);
 router.use(savedBudgetsRouter);
 router.use(savingsContributionsRouter);
+router.use(weeklyCheckinsRouter);
 
 export default router;
