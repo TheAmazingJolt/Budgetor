@@ -680,10 +680,18 @@ async function writeExcelBillRows(
   rows.push([]);
   rows.push(["Bills", "", "", "", ""]);
   rows.push(["Name", "Amount", "Type", "Category", "Due Day"]);
+  const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   for (const bill of filteredBills) {
-    const dueDay = bill.dayOfMonth != null
-      ? bill.dayOfMonth
-      : bill.type === "weekly" ? "weekly" : bill.type === "biweekly" ? "biweekly" : "varies";
+    const isYearly = bill.type === "yearly" || bill.type === "yearly-flat";
+    const dueDay = bill.type === "weekly"
+      ? "Weekly"
+      : bill.type === "biweekly"
+      ? "Biweekly"
+      : isYearly && bill.annualDueMonth != null
+      ? `${MONTH_SHORT[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}`
+      : isYearly
+      ? "Yearly"
+      : bill.dayOfMonth != null ? bill.dayOfMonth : "Varies";
     rows.push([
       bill.name,
       Math.abs(bill.amount),
