@@ -89,7 +89,7 @@ import {
 } from "@workspace/api-client-react";
 import type { BudgetResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -129,7 +129,8 @@ import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
-import { SavingsSection } from "@/components/SavingsSection";
+import { SavingsSection, CheckInDialog, isDismissed, setDismissed, apiFetch } from "@/components/SavingsSection";
+import type { WeeklyCheckIn } from "@/components/SavingsSection";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
@@ -492,6 +493,9 @@ export function BudgetWizard({
   const cloudBudgetLoadedBillsRef = useRef<string>("");
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
 
+  const [checkInDialogOpen, setCheckInDialogOpen] = useState(false);
+  const [checkInWeek, setCheckInWeek] = useState<{ label: string; items: { name: string; amount: number }[] } | null>(null);
+
   const [pendingImportBills, setPendingImportBills] = useState<Bill[] | null>(null);
   const [savedBillsCountAtConflict, setSavedBillsCountAtConflict] = useState(0);
   const [isImportConflictDialogOpen, setIsImportConflictDialogOpen] = useState(false);
@@ -814,9 +818,54 @@ export function BudgetWizard({
     }
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    if (!activeCloudBudgetId || !checkinsQuery.data) return;
+    const balancedBillsList = bills.filter(b => b.type === "balanced");
+    if (balancedBillsList.length === 0) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const allAvailableWeeks = [
+      ...(cloudExistingWeeks ?? []),
+      ...(generatedWeek?.weeks ?? []),
+    ];
+
+    let bestWeek: { label: string; items: { name: string; amount: number }[] } | null = null;
+    let bestDate: Date | null = null;
+    for (const w of allAvailableWeeks) {
+      const label = w.weekLabel ?? w.label;
+      if (!label) continue;
+      const m = label.match(/(\d+)\/(\d+)\/(\d+)/);
+      if (!m) continue;
+      const yr = parseInt(m[3]); const mo = parseInt(m[1]) - 1; const dy = parseInt(m[2]);
+      const startDate = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
+      if (startDate > today) continue;
+      if (!bestDate || startDate > bestDate) {
+        bestWeek = { label, items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[] };
+        bestDate = startDate;
+      }
+    }
+
+    if (!bestWeek) return;
+    const alreadyChecked = checkinsQuery.data.checkins.some(c => c.weekLabel === bestWeek!.label);
+    if (alreadyChecked) return;
+    if (isDismissed(activeCloudBudgetId, bestWeek.label)) return;
+
+    setCheckInWeek(bestWeek);
+    setCheckInDialogOpen(true);
+  }, [activeCloudBudgetId, checkinsQuery.data]);
+
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query: { enabled: isSignedIn && !isGuest, retry: false, staleTime: 15000 } as any,
+  });
+
+  const checkinsQuery = useQuery<{ checkins: WeeklyCheckIn[] }>({
+    queryKey: ["weekly-checkins", activeCloudBudgetId],
+    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/checkins`),
+    enabled: !!activeCloudBudgetId,
+    staleTime: 30_000,
   });
 
   const googleAuth = useGoogleAuthStatus({
@@ -3891,7 +3940,37 @@ export function BudgetWizard({
                           )}
                         </div>
                         {step2Tab === "savings" && (
-                          <SavingsSection bills={bills} weeks={allWeeks} budgetId={activeCloudBudgetId ?? undefined} onContributionChange={triggerBackgroundSheetSync} />
+                          <SavingsSection
+                            bills={bills}
+                            weeks={allWeeks}
+                            budgetId={activeCloudBudgetId ?? undefined}
+                            checkins={checkinsQuery.data?.checkins}
+                            onContributionChange={triggerBackgroundSheetSync}
+                            onOpenCheckIn={() => {
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const allW = [
+                                ...(cloudExistingWeeks ?? []),
+                                ...(generatedWeek?.weeks ?? []),
+                              ];
+                              let best: { label: string; items: { name: string; amount: number }[] } | null = null;
+                              let bestDate: Date | null = null;
+                              for (const w of allW) {
+                                const lbl = w.weekLabel ?? w.label;
+                                if (!lbl) continue;
+                                const mm = lbl.match(/(\d+)\/(\d+)\/(\d+)/);
+                                if (!mm) continue;
+                                const yr = parseInt(mm[3]); const mo = parseInt(mm[1]) - 1; const dy = parseInt(mm[2]);
+                                const sd = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
+                                if (sd > today) continue;
+                                if (!bestDate || sd > bestDate) {
+                                  best = { label: lbl, items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[] };
+                                  bestDate = sd;
+                                }
+                              }
+                              if (best) { setCheckInWeek(best); setCheckInDialogOpen(true); }
+                            }}
+                          />
                         )}
                         {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
@@ -5397,6 +5476,26 @@ export function BudgetWizard({
       </AlertDialog>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      {checkInWeek && activeCloudBudgetId && (
+        <CheckInDialog
+          open={checkInDialogOpen}
+          week={checkInWeek}
+          balancedBills={bills.filter(b => b.type === "balanced")}
+          existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
+          budgetId={activeCloudBudgetId}
+          onSaved={() => {
+            setCheckInDialogOpen(false);
+            setCheckInWeek(null);
+            checkinsQuery.refetch();
+            triggerBackgroundSheetSync();
+          }}
+          onDismiss={() => {
+            if (activeCloudBudgetId && checkInWeek) setDismissed(activeCloudBudgetId, checkInWeek.label);
+            setCheckInDialogOpen(false);
+          }}
+        />
+      )}
 
       <Dialog open={isErrorLogOpen} onOpenChange={setIsErrorLogOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
