@@ -1130,14 +1130,39 @@ export function BudgetWizard({
   const handleAddAccountBills = () => {
     const accountBills = stripHeuristicColors((userBillsQuery.data?.bills ?? []) as Bill[]);
     if (accountBills.length === 0) return;
-    const existingKeys = new Set(bills.map((b: Bill) => `${b.name}|${b.amount}`));
-    const toAdd = accountBills.filter(b => !existingKeys.has(`${b.name}|${b.amount}`));
-    if (toAdd.length === 0) {
-      toast({ title: "Already added", description: "All your saved bills are already in this budget." });
+    let addedCount = 0;
+    let updatedCount = 0;
+    const next = [...bills];
+    for (const ab of accountBills) {
+      if (ab.sourceDebtId) continue;
+      const existingIdx = next.findIndex(b => b.name === ab.name && !b.sourceDebtId);
+      if (existingIdx < 0) {
+        next.push(ab);
+        addedCount++;
+      } else {
+        const ex = next[existingIdx];
+        const changed =
+          ex.type !== ab.type ||
+          ex.amount !== ab.amount ||
+          ex.dayOfMonth !== ab.dayOfMonth ||
+          (ex as any).annualDueMonth !== (ab as any).annualDueMonth ||
+          (ex as any).dayOfWeek !== (ab as any).dayOfWeek;
+        if (changed) {
+          next[existingIdx] = ab;
+          updatedCount++;
+        }
+      }
+    }
+    if (addedCount === 0 && updatedCount === 0) {
+      toast({ title: "Already up to date", description: "All your saved bills are already in this budget." });
       return;
     }
-    setBills((prev: Bill[]) => [...prev, ...toAdd]);
-    toast({ title: `${toAdd.length} bill${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved bills have been added to this budget." });
+    setBills(next);
+    const parts: string[] = [];
+    if (addedCount > 0) parts.push(`${addedCount} bill${addedCount !== 1 ? "s" : ""} added`);
+    if (updatedCount > 0) parts.push(`${updatedCount} bill${updatedCount !== 1 ? "s" : ""} updated`);
+    toast({ title: parts.join(", "), description: "Your saved bills have been synced to this budget." });
+    triggerBackgroundSheetSync();
   };
 
   const handleAddAccountDebts = () => {
