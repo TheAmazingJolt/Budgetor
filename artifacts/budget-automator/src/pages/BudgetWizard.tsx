@@ -1145,8 +1145,7 @@ export function BudgetWizard({
           ex.type !== ab.type ||
           ex.amount !== ab.amount ||
           ex.dayOfMonth !== ab.dayOfMonth ||
-          (ex as any).annualDueMonth !== (ab as any).annualDueMonth ||
-          (ex as any).dayOfWeek !== (ab as any).dayOfWeek;
+          ex.annualDueMonth !== ab.annualDueMonth;
         if (changed) {
           next[existingIdx] = ab;
           updatedCount++;
