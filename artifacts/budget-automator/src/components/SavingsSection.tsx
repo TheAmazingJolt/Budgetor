@@ -24,6 +24,8 @@ import type {
   WeekForSavings,
   ManualContribution,
   WeeklyCheckIn,
+  SinkingFundProgress,
+  BalancedProgress,
 } from "@/lib/savingsComputation";
 import type { Bill } from "@workspace/api-client-react";
 
@@ -584,8 +586,6 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
     </div>
   );
 }
-
-import type { SinkingFundProgress, BalancedProgress } from "@/lib/savingsComputation";
 
 interface SinkingCardProps {
   data: SinkingFundProgress;
