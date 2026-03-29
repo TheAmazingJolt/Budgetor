@@ -28,7 +28,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
     return { error };
   }
 
-  handleReset = () => {
+  handleReset = async () => {
     try {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -37,7 +37,15 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
       }
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { }
-    window.location.reload();
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch { }
+    const url = new URL(window.location.href);
+    url.searchParams.set("_r", Date.now().toString());
+    window.location.replace(url.toString());
   };
 
   render() {
