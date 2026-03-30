@@ -820,6 +820,13 @@ export function BudgetWizard({
     }
   }, [currentUser?.id]);
 
+  const checkinsQuery = useQuery<{ checkins: WeeklyCheckIn[] }>({
+    queryKey: ["weekly-checkins", activeCloudBudgetId],
+    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/checkins`),
+    enabled: !!activeCloudBudgetId,
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
     if (!activeCloudBudgetId || !checkinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced");
@@ -861,13 +868,6 @@ export function BudgetWizard({
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query: { enabled: isSignedIn && !isGuest, retry: false, staleTime: 15000 } as any,
-  });
-
-  const checkinsQuery = useQuery<{ checkins: WeeklyCheckIn[] }>({
-    queryKey: ["weekly-checkins", activeCloudBudgetId],
-    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/checkins`),
-    enabled: !!activeCloudBudgetId,
-    staleTime: 30_000,
   });
 
   const googleAuth = useGoogleAuthStatus({
