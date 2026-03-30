@@ -672,6 +672,11 @@ export function BudgetWizard({
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevDebtsRef = useRef<string>("");
   const debtAutoAddDoneRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setStep2Tab("budget");
+  }, [activeCloudBudgetId]);
+
   useEffect(() => {
     if (!isSignedIn || !currentUser) {
       if (debtsLoadedForUserRef.current) {
