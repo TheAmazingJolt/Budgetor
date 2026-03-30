@@ -188,13 +188,8 @@ export function computeSavings(
               savedThisMonth += Math.abs(item.amount);
             }
           }
-        } else {
-          for (const item of w.items) {
-            if (item.name === prefix) {
-              savedThisMonth += Math.abs(item.amount);
-            }
-          }
         }
+        // Future weeks (dates.start > today) are not yet set aside — skip them
       }
 
       let manualThisMonth = 0;
