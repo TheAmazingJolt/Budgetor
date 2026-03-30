@@ -129,8 +129,10 @@ import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
-import { SavingsSection, CheckInDialog, isDismissed, setDismissed, apiFetch } from "@/components/SavingsSection";
-import type { WeeklyCheckIn } from "@/components/SavingsSection";
+import { SavingsSection } from "@/components/SavingsSection";
+import { CheckInDialog } from "@/components/CheckInDialog";
+import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
+import { isDismissed, setDismissed, apiFetch } from "@/lib/checkin-utils";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
@@ -494,7 +496,7 @@ export function BudgetWizard({
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
 
   const [checkInDialogOpen, setCheckInDialogOpen] = useState(false);
-  const [checkInWeek, setCheckInWeek] = useState<{ label: string; items: { name: string; amount: number }[] } | null>(null);
+  const [checkInWeek, setCheckInWeek] = useState<WeekSnapshot | null>(null);
 
   const [pendingImportBills, setPendingImportBills] = useState<Bill[] | null>(null);
   const [savedBillsCountAtConflict, setSavedBillsCountAtConflict] = useState(0);
