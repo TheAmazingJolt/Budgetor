@@ -558,28 +558,28 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const s = bgSyncRef.current;
-      if (!s.activeLinkedSheet || !s.generatedWeek) return;
-      const colorLookup = buildBillColorLookup(s.bills);
-      const weeks = s.generatedWeek.weeks.map((w: any) => ({
+      const { activeLinkedSheet, generatedWeek, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+      if (!activeLinkedSheet || !generatedWeek) return;
+      const colorLookup = buildBillColorLookup(bills);
+      const weeks = generatedWeek.weeks.map((w: any) => ({
         ...w,
         bills: injectBillColors(w.bills, colorLookup),
       }));
       const writePayload = {
         weeks,
         startCol: 0,
-        includeRemainingAcct: !s.zeroOpeningBalance,
-        ...(s.debts.length > 0 ? { debts: s.debts } : {}),
-        ...(s.bills.length > 0 ? { bills: stripHeuristicColors(s.bills) } : {}),
-        ...(s.activeCloudBudgetId ? { budgetId: s.activeCloudBudgetId } : {}),
+        includeRemainingAcct: !zeroOpeningBalance,
+        ...(debts.length > 0 ? { debts } : {}),
+        ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+        ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
       };
       try {
-        if (s.activeLinkedSheet.type === "google") {
-          await sheetWriteMutation.mutateAsync({ id: s.activeLinkedSheet.id, data: writePayload });
+        if (activeLinkedSheet.type === "google") {
+          await sheetWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
         } else {
-          await excelWriteMutation.mutateAsync({ id: s.activeLinkedSheet.id, data: writePayload });
+          await excelWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
         }
-        toast({ title: "Sheet synced", description: `"${s.activeLinkedSheet.name}" updated.` });
+        toast({ title: "Sheet synced", description: `"${activeLinkedSheet.name}" updated.` });
       } catch (err) {
         toast({
           title: "Sheet sync failed",
