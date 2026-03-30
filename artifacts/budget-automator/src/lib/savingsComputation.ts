@@ -54,6 +54,24 @@ export interface SavingsData {
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+/**
+ * Returns the month/year a budget week "belongs to".
+ *
+ * If any day in the week's date range is the 1st of a month, that month owns
+ * the week (e.g. a week spanning 3/28–4/3 belongs to April because April 1
+ * falls inside it). Otherwise the week belongs to its start-date's month.
+ */
+export function getWeekOwnerMonth(start: Date, end: Date): { month: number; year: number } {
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    if (cursor.getDate() === 1) {
+      return { month: cursor.getMonth(), year: cursor.getFullYear() };
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return { month: start.getMonth(), year: start.getFullYear() };
+}
+
 export function parseLabelDates(label: string): { start: Date; end: Date } | null {
   const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
   if (!m) return null;
@@ -80,22 +98,44 @@ export function getNextYearlyDueDate(from: Date, month: number, day: number): Da
 /**
  * Derive the reference month/year for balanced-bill tracking.
  *
- * Uses the most recently generated week whose start date falls within
- * 8 days of today (7 days look-ahead so a week generated tomorrow still
- * shows the upcoming month). Falls back to today if no such week exists.
+ * Finds the most recent week (within 8 days look-ahead) and returns the
+ * start date of the first week whose owner month equals that week's owner
+ * month. This ensures the reference date (used for the month label) aligns
+ * with the owner-month grouping rather than raw calendar months.
+ * Falls back to today if no such week exists.
  */
 export function deriveReferenceDate(weeks: WeekForSavings[], today: Date): Date {
   const lookahead = new Date(today);
   lookahead.setDate(lookahead.getDate() + 8);
 
-  let best: Date | null = null;
-  for (const w of weeks) {
-    const d = parseLabelDates(w.label);
-    if (!d) continue;
+  // Sort weeks chronologically for deterministic first/last selection
+  const sorted = weeks
+    .map(w => ({ w, d: parseLabelDates(w.label) }))
+    .filter((x): x is { w: WeekForSavings; d: { start: Date; end: Date } } => x.d !== null)
+    .sort((a, b) => a.d.start.getTime() - b.d.start.getTime());
+
+  let bestStart: Date | null = null;
+  let bestOwner: { month: number; year: number } | null = null;
+
+  for (const { d } of sorted) {
     if (d.start > lookahead) continue;
-    if (!best || d.start > best) best = d.start;
+    if (!bestStart || d.start > bestStart) {
+      bestStart = d.start;
+      bestOwner = getWeekOwnerMonth(d.start, d.end);
+    }
   }
-  return best ?? today;
+
+  if (!bestOwner) return today;
+
+  // Return the start of the first (chronologically earliest) week in the owner month
+  for (const { d } of sorted) {
+    const owner = getWeekOwnerMonth(d.start, d.end);
+    if (owner.month === bestOwner.month && owner.year === bestOwner.year) {
+      return d.start;
+    }
+  }
+
+  return bestStart ?? today;
 }
 
 /**
@@ -171,10 +211,26 @@ export function computeSavings(
       let savedThisMonth = 0;
       let checkedInThisMonth = 0;
 
-      for (const w of weeks) {
-        const dates = parseLabelDates(w.label);
-        if (!dates) continue;
-        if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
+      // Sort weeks chronologically for deterministic cycle-range and savings scan
+      const sortedWeeks = weeks
+        .map(w => ({ w, dates: parseLabelDates(w.label) }))
+        .filter((x): x is { w: WeekForSavings; dates: { start: Date; end: Date } } => x.dates !== null)
+        .sort((a, b) => a.dates.start.getTime() - b.dates.start.getTime());
+
+      // Determine the date range of the current owner-month cycle
+      let cycleRangeStart: Date | null = null;
+      let cycleRangeEnd: Date | null = null;
+      for (const { dates } of sortedWeeks) {
+        const owner = getWeekOwnerMonth(dates.start, dates.end);
+        if (owner.month === currentMonth && owner.year === currentYear) {
+          if (!cycleRangeStart || dates.start < cycleRangeStart) cycleRangeStart = dates.start;
+          if (!cycleRangeEnd || dates.end > cycleRangeEnd) cycleRangeEnd = dates.end;
+        }
+      }
+
+      for (const { w, dates } of sortedWeeks) {
+        const owner = getWeekOwnerMonth(dates.start, dates.end);
+        if (owner.month !== currentMonth || owner.year !== currentYear) continue;
 
         const weekCheckin = checkins.find(
           c => c.weekLabel === w.label && c.itemName === bill.name && c.itemType === "balanced",
@@ -196,8 +252,13 @@ export function computeSavings(
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
-        if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
-        manualThisMonth += c.amount;
+        if (
+          cycleRangeStart && cycleRangeEnd
+            ? cDate >= cycleRangeStart && cDate <= cycleRangeEnd
+            : cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear
+        ) {
+          manualThisMonth += c.amount;
+        }
       }
 
       const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;

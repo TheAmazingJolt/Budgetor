@@ -207,7 +207,7 @@ export function SavingsSection({
           </div>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Info className="w-3 h-3 shrink-0" />
-            Resets at the start of each month
+            Resets at the first budget week of each month
           </p>
         </div>
       )}
