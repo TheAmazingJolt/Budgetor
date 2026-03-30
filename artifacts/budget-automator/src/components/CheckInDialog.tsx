@@ -17,7 +17,7 @@ export interface WeeklyCheckIn {
   id: string;
   weekLabel: string;
   itemName: string;
-  itemType: "balanced" | "debt";
+  itemType: "balanced" | "debt" | "yearly";
   plannedAmount: number;
   actualAmount: number;
 }
@@ -29,6 +29,7 @@ export interface WeekSnapshot {
 
 interface CheckInItem {
   billName: string;
+  billType: "balanced" | "yearly";
   plannedAmount: number;
   actualStr: string;
   skipped: boolean;
@@ -37,31 +38,51 @@ interface CheckInItem {
 export interface CheckInDialogProps {
   open: boolean;
   week: WeekSnapshot;
-  balancedBills: Bill[];
+  savingsBills: Bill[];
   existingCheckins: WeeklyCheckIn[];
   budgetId: string;
   onSaved: () => void;
   onDismiss: () => void;
 }
 
+function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number }[]): number {
+  if (bill.type === "balanced") {
+    const prefix = `Partial ${bill.name}`;
+    return weekItems
+      .filter(it => it.name === prefix)
+      .reduce((s, it) => s + Math.abs(it.amount), 0);
+  }
+  const prefix = `${bill.name} [annual:`;
+  return weekItems
+    .filter(it => it.name.startsWith(prefix))
+    .reduce((s, it) => s + Math.abs(it.amount), 0);
+}
+
+function getBillItemType(bill: Bill): "balanced" | "yearly" {
+  return bill.type === "balanced" ? "balanced" : "yearly";
+}
+
 export function CheckInDialog({
-  open, week, balancedBills, existingCheckins, budgetId, onSaved, onDismiss,
+  open, week, savingsBills, existingCheckins, budgetId, onSaved, onDismiss,
 }: CheckInDialogProps) {
   const buildItems = (): CheckInItem[] =>
-    balancedBills.map(bill => {
-      const prefix = `Partial ${bill.name}`;
-      const planned = week.items
-        .filter(it => it.name === prefix)
-        .reduce((s, it) => s + Math.abs(it.amount), 0);
-      const existing = existingCheckins.find(c => c.itemName === bill.name);
-      const actual = existing ? existing.actualAmount : planned;
-      return {
-        billName: bill.name,
-        plannedAmount: planned,
-        actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "",
-        skipped: existing ? existing.actualAmount === 0 : false,
-      };
-    });
+    savingsBills
+      .filter(b => b.type === "balanced" || b.type === "yearly")
+      .map(bill => {
+        const itemType = getBillItemType(bill);
+        const planned = getPlannedAmount(bill, week.items);
+        const existing = existingCheckins.find(
+          c => c.itemName === bill.name && c.itemType === itemType,
+        );
+        const actual = existing ? existing.actualAmount : planned;
+        return {
+          billName: bill.name,
+          billType: itemType,
+          plannedAmount: planned,
+          actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "",
+          skipped: existing ? existing.actualAmount === 0 : false,
+        };
+      });
 
   const [items, setItems] = useState<CheckInItem[]>(() => buildItems());
   const [saving, setSaving] = useState(false);
@@ -100,7 +121,7 @@ export function CheckInDialog({
             body: JSON.stringify({
               weekLabel: week.label,
               itemName: it.billName,
-              itemType: "balanced",
+              itemType: it.billType,
               plannedAmount: it.plannedAmount,
               actualAmount: it.skipped ? 0 : Math.max(0, parseFloat(it.actualStr) || 0),
             }),
@@ -134,9 +155,14 @@ export function CheckInDialog({
 
         <div className="space-y-3 py-1">
           {items.map((it, idx) => (
-            <div key={it.billName} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+            <div key={`${it.billName}-${it.billType}`} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {it.billType === "yearly" ? "Sinking fund" : "Balanced monthly"}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => toggleSkip(idx)}

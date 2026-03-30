@@ -87,7 +87,7 @@ export function SavingsSection({
   const refDate = deriveReferenceDate(weeks, today);
   const refMonthStr = refDate.toLocaleString("en-US", { month: "long" });
 
-  const balancedBills = bills.filter(b => b.type === "balanced");
+  const balancedBills = bills.filter(b => b.type === "balanced" || b.type === "yearly");
 
   const currentWeek = (() => {
     let best: WeekForSavings | null = null;

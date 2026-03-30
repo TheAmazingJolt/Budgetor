@@ -17,7 +17,7 @@ export interface WeeklyCheckIn {
   id: string;
   weekLabel: string;
   itemName: string;
-  itemType: "balanced" | "debt";
+  itemType: "balanced" | "debt" | "yearly";
   plannedAmount: number;
   actualAmount: number;
 }
@@ -178,9 +178,17 @@ export function computeSavings(
         const dates = parseLabelDates(w.label);
         if (!dates) continue;
         if (dates.start <= cycleStart || dates.start > today) continue;
-        for (const item of w.items) {
-          if (item.name.startsWith(prefix)) {
-            savedInCycle += Math.abs(item.amount);
+
+        const weekCheckin = checkins.find(
+          c => c.weekLabel === w.label && c.itemName === bill.name && c.itemType === "yearly",
+        );
+        if (weekCheckin) {
+          savedInCycle += weekCheckin.actualAmount;
+        } else {
+          for (const item of w.items) {
+            if (item.name.startsWith(prefix)) {
+              savedInCycle += Math.abs(item.amount);
+            }
           }
         }
       }

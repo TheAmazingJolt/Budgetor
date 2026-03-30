@@ -38,7 +38,16 @@ router.get("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise
       }
       query += ` ORDER BY created_at`;
       const result = await client.query(query, params);
-      res.json({ checkins: result.rows });
+      res.json({
+        checkins: result.rows.map((r: any) => ({
+          id: r.id,
+          weekLabel: r.week_label,
+          itemName: r.item_name,
+          itemType: r.item_type,
+          plannedAmount: r.planned_amount,
+          actualAmount: r.actual_amount,
+        })),
+      });
     } finally {
       client.release();
     }
@@ -68,8 +77,8 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
       res.status(400).json({ error: "Missing itemName" });
       return;
     }
-    if (!itemType || !["balanced", "debt"].includes(itemType)) {
-      res.status(400).json({ error: "itemType must be 'balanced' or 'debt'" });
+    if (!itemType || !["balanced", "debt", "yearly"].includes(itemType)) {
+      res.status(400).json({ error: "itemType must be 'balanced', 'debt', or 'yearly'" });
       return;
     }
     if (typeof plannedAmount !== "number" || plannedAmount < 0) {
@@ -108,7 +117,17 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
         `,
         [userId, budgetId, weekLabel, itemName, itemType, plannedAmount.toFixed(2), actualAmount.toFixed(2)],
       );
-      res.status(201).json({ checkin: result.rows[0] });
+      const r = result.rows[0];
+      res.status(201).json({
+        checkin: {
+          id: r.id,
+          weekLabel: r.week_label,
+          itemName: r.item_name,
+          itemType: r.item_type,
+          plannedAmount: r.planned_amount,
+          actualAmount: r.actual_amount,
+        },
+      });
     } finally {
       client.release();
     }

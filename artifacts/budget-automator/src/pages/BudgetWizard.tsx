@@ -834,7 +834,7 @@ export function BudgetWizard({
 
   useEffect(() => {
     if (!activeCloudBudgetId || !checkinsQuery.data) return;
-    const balancedBillsList = bills.filter(b => b.type === "balanced");
+    const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
     if (balancedBillsList.length === 0) return;
 
     const today = new Date();
@@ -5488,7 +5488,7 @@ export function BudgetWizard({
         <CheckInDialog
           open={checkInDialogOpen}
           week={checkInWeek}
-          balancedBills={bills.filter(b => b.type === "balanced")}
+          savingsBills={bills.filter(b => b.type === "balanced" || b.type === "yearly")}
           existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
           budgetId={activeCloudBudgetId}
           onSaved={() => {
