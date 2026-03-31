@@ -1707,12 +1707,19 @@ export function BudgetWizard({
       const firstWeekLabel: string = restoredWeeks[0]?.label ?? restoredWeeks[0]?.name ?? "";
       const storedPeriodType = inferPeriodTypeFromWeekLabel(firstWeekLabel);
       const periodMismatch = storedPeriodType !== null && storedPeriodType !== configuredPayPeriod;
-      if (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0 || periodMismatch) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isTodayCoveredByExistingWeeks = restoredWeeks.some((w: any) => {
+        const parsed = parseLabelDates(w.label ?? w.name ?? "");
+        if (!parsed) return false;
+        return parsed.start <= today && today <= parsed.end;
+      });
+      if (!isTodayCoveredByExistingWeeks && (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0 || periodMismatch)) {
         scheduleAutoGenerate({
           bills: billsToSet,
           openingBalance: effectiveOpeningBalance,
           paycheckAmount: s?.paycheckAmount ?? 0,
-          startDate: s?.newWeekStartDate ?? effectiveStartDate,
+          startDate: nextStartAfterLabel(restoredWeeks.at(-1)?.label ?? restoredWeeks.at(-1)?.name ?? "") ?? s?.newWeekStartDate ?? effectiveStartDate,
           endDate: s?.newWeekEndDate,
           weekCount: s?.weekCount,
           inputMode: "cloud",
