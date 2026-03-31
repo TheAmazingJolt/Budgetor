@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { google, type sheets_v4 } from "googleapis";
-import { db, usersTable, maybeEncrypt, maybeDecrypt, savingsContributionsTable } from "@workspace/db";
+import { db, usersTable, maybeEncrypt, maybeDecrypt, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -1567,12 +1567,20 @@ function getNextYearlyDueSrv(from: Date, month: number, day: number): Date {
 
 interface ManualContribRow { billName: string; amount: number; date: string; }
 
+interface SavingsGoalRow {
+  name: string;
+  targetAmount: number;
+  targetDate: string;
+  savedSoFar: number;
+}
+
 async function writeSavingsTabToSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
   bills: BillMeta[],
   weeks: WriteRequest["weeks"],
   contributions: ManualContribRow[] = [],
+  goals: SavingsGoalRow[] = [],
 ): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1704,6 +1712,22 @@ async function writeSavingsTabToSheet(
     grid.push([]);
   }
 
+  if (goals.length > 0) {
+    const msPerWeekGoal = 7 * 24 * 60 * 60 * 1000;
+    grid.push(["Savings Goals"]);
+    grid.push(["Goal Name", "Target Amount", "Saved So Far", "Progress", "Target Date", "Weeks Left", "Weekly Needed"]);
+    for (const g of goals) {
+      const targetDate = new Date(g.targetDate + "T00:00:00");
+      const weeksLeft = Math.max(0, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeekGoal));
+      const remaining = Math.max(0, g.targetAmount - g.savedSoFar);
+      const weeklyNeeded = weeksLeft > 0 ? Math.round((remaining / weeksLeft) * 100) / 100 : 0;
+      const progressPct = g.targetAmount > 0 ? Math.min(100, (g.savedSoFar / g.targetAmount) * 100) : 0;
+      const targetDateStr = `${MONTH_SHORT_SHEETS[targetDate.getMonth()]} ${targetDate.getDate()}, ${targetDate.getFullYear()}`;
+      grid.push([g.name, g.targetAmount, g.savedSoFar, `${Math.round(progressPct)}%`, targetDateStr, weeksLeft, weeklyNeeded]);
+    }
+    grid.push([]);
+  }
+
   grid.push(["Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month."]);
 
   const maxCols = Math.max(...grid.map((r) => r.length));
@@ -1793,6 +1817,32 @@ async function writeSavingsTabToSheet(
           fields: "userEnteredFormat(textFormat,backgroundColor)",
         },
       });
+      r++;
+      r += balanced.length;
+      r++; // blank gap
+    }
+
+    if (goals.length > 0) {
+      const teal = { red: 15 / 255, green: 118 / 255, blue: 110 / 255 };
+      const tealLight = { red: 204 / 255, green: 251 / 255, blue: 241 / 255 };
+      const tealLighter = { red: 240 / 255, green: 253 / 255, blue: 250 / 255 };
+      // Savings Goals section header at r
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: teal }, backgroundColor: tealLight } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      // Column headers at r
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 7 },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: tealLighter } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
     }
   }
 
@@ -1864,14 +1914,25 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     }
     if (body.bills && body.bills.length > 0) {
       let savingsContribs: ManualContribRow[] = [];
+      let savingsGoals: SavingsGoalRow[] = [];
       if (body.budgetId && (req as any).user?.id) {
         try {
           const rows = await db.select().from(savingsContributionsTable)
             .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
           savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
         } catch { }
+        try {
+          const goalRows = await db.select().from(savingsGoalsTable)
+            .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
+          savingsGoals = goalRows.map(g => ({
+            name: g.name,
+            targetAmount: Number(g.targetAmount),
+            targetDate: g.targetDate,
+            savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+          }));
+        } catch { }
       }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs); } catch { }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -1920,14 +1981,25 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     }
     if (body.bills && body.bills.length > 0) {
       let savingsContribs: ManualContribRow[] = [];
+      let savingsGoals: SavingsGoalRow[] = [];
       if (body.budgetId && (req as any).user?.id) {
         try {
           const rows = await db.select().from(savingsContributionsTable)
             .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
           savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
         } catch { }
+        try {
+          const goalRows = await db.select().from(savingsGoalsTable)
+            .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
+          savingsGoals = goalRows.map(g => ({
+            name: g.name,
+            targetAmount: Number(g.targetAmount),
+            targetDate: g.targetDate,
+            savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+          }));
+        } catch { }
       }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs); } catch { }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals); } catch { }
     }
 
     res.json({

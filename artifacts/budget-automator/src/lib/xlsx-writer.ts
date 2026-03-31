@@ -6,6 +6,13 @@ import { BILL_COLOR_HEX } from './billColors';
 import { computeSavings } from './savingsComputation';
 import type { WeekForSavings, ManualContribution } from './savingsComputation';
 
+export interface SavingsGoalForSheet {
+  name: string;
+  targetAmount: number;
+  targetDate: string;
+  savedSoFar: number;
+}
+
 const DEFAULT_STYLE: SheetStyle = {
   fontSize: 10,
   labelColWidth: 1,
@@ -62,6 +69,7 @@ function writeBillsSectionBelow(
   sheet: XLSX.WorkSheet,
   bills: Bill[],
   startRow: number,
+  goals?: SavingsGoalForSheet[],
 ): number {
   // Debt-linked bills (min payments / balanced) never appear in the Bills section.
   const filteredBills = bills.filter(b => !b.sourceDebtId);
@@ -95,14 +103,20 @@ function writeBillsSectionBelow(
 
   const billRowFont = { sz: 10, name: 'Arial' };
 
+  const goalDateMap = new Map<string, string>((goals ?? []).map(g => [g.name, g.targetDate]));
+
   let row = firstDataRow;
   for (const bill of filteredBills) {
     const nameStyle: any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'left' } };
     const amtStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'center' }, numFmt: MONEY_FMT };
     const dayStyle:  any = { font: { ...billRowFont }, fill: billFill, alignment: { horizontal: 'center' } };
     const MONTH_SHORT_W = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const goalDate = goalDateMap.get(bill.name);
+    const weeklyGoalSuffix = goalDate
+      ? ` → ${goalDate.slice(5, 7).replace(/^0/, '')}/${goalDate.slice(8, 10).replace(/^0/, '')}`
+      : '';
     const dayValue = bill.type === 'weekly'
-      ? 'Weekly'
+      ? `Weekly${weeklyGoalSuffix}`
       : bill.type === 'biweekly'
       ? 'Biweekly'
       : (bill.type === 'yearly' || bill.type === 'yearly-flat') && bill.annualDueMonth != null
@@ -647,7 +661,7 @@ function writeDebtsSection(
 
 // ── Public exports ───────────────────────────────────────────────────────────
 
-function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills: Bill[], contributions: ManualContribution[] = []): void {
+function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills: Bill[], contributions: ManualContribution[] = [], goals: SavingsGoalForSheet[] = []): void {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -761,14 +775,60 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
     row++;
   }
 
+  if (goals.length > 0) {
+    const today2 = new Date();
+    today2.setHours(0, 0, 0, 0);
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+
+    const goalSectionStyle = {
+      font: { bold: true, sz: 11, name: 'Arial', color: { rgb: '0F766E' } },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'CCFBF1' } },
+    };
+    set(ss, row, 0, makeCell('Savings Goals', goalSectionStyle));
+    addMerge(ss, row, 0, row, 6);
+    row++;
+
+    const goalColHdrStyle = {
+      font: { bold: true, sz: 10, name: 'Arial' },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'F0FDFA' } },
+      border: { bottom: { style: 'thin' as const, color: { rgb: '99F6E4' } } },
+    };
+    const goalCols = ['Goal Name', 'Target Amount', 'Saved So Far', 'Progress', 'Target Date', 'Weeks Left', 'Weekly Needed'];
+    for (let c = 0; c < goalCols.length; c++) {
+      set(ss, row, c, makeCell(goalCols[c], goalColHdrStyle));
+    }
+    row++;
+
+    for (const goal of goals) {
+      const targetDate = new Date(goal.targetDate + 'T00:00:00');
+      const weeksLeft = Math.max(0, Math.ceil((targetDate.getTime() - today2.getTime()) / msPerWeek));
+      const remaining = Math.max(0, goal.targetAmount - goal.savedSoFar);
+      const weeklyNeeded = weeksLeft > 0 ? Math.round((remaining / weeksLeft) * 100) / 100 : 0;
+      const progressPct = goal.targetAmount > 0 ? Math.min(1, goal.savedSoFar / goal.targetAmount) : 0;
+      const targetDateStr = targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      set(ss, row, 0, makeCell(goal.name));
+      set(ss, row, 1, { v: goal.targetAmount, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: goal.savedSoFar, t: 'n', z: MONEY_FMT });
+      const goalPct: any = { v: progressPct, t: 'n', z: '0%' };
+      if (progressPct >= 1) goalPct.s = { font: { color: { rgb: '059669' }, bold: true } };
+      set(ss, row, 3, goalPct);
+      set(ss, row, 4, makeCell(targetDateStr));
+      set(ss, row, 5, { v: weeksLeft, t: 'n' });
+      set(ss, row, 6, { v: weeklyNeeded, t: 'n', z: MONEY_FMT });
+      row++;
+    }
+    row++;
+  }
+
   const noteStyle = {
     font: { sz: 9, name: 'Arial', italic: true, color: { rgb: '9CA3AF' } },
   };
   set(ss, row, 0, makeCell('Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month.', noteStyle));
-  addMerge(ss, row, 0, row, 5);
+  addMerge(ss, row, 0, row, 6);
 
-  ss['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: row, c: 5 } });
-  ss['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 12 }];
+  ss['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: row, c: 6 } });
+  ss['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 12 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ss, 'Savings');
 }
 
@@ -838,6 +898,7 @@ export function appendBudgetWeeks(
   debts?: Debt[] | null,
   bills?: Bill[] | null,
   contributions?: ManualContribution[] | null,
+  goals?: SavingsGoalForSheet[] | null,
 ): Blob {
   // Re-read the original workbook to preserve any extra sheets (e.g. custom
   // tabs the user may have added), but we rebuild the Budget sheet from scratch
@@ -858,7 +919,7 @@ export function appendBudgetWeeks(
   // Write Bills section below the weeks.
   if (bills && bills.length > 0) {
     const lastRow = freshSheet['!ref'] ? XLSX.utils.decode_range(freshSheet['!ref']).e.r : 0;
-    writeBillsSectionBelow(freshSheet, bills, lastRow);
+    writeBillsSectionBelow(freshSheet, bills, lastRow, goals ?? []);
   }
 
   // Write Debts section below the Bills section.
@@ -888,7 +949,7 @@ export function appendBudgetWeeks(
     writeBillsDataSheet(newWb, bills ?? [], debts);
   }
 
-  writeSavingsSheet(newWb, weekBudgets, bills ?? [], contributions ?? []);
+  writeSavingsSheet(newWb, weekBudgets, bills ?? [], contributions ?? [], goals ?? []);
 
   const wbOut = XLSX.write(newWb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {
@@ -906,6 +967,7 @@ export function createBlankBudget(
   debts?: Debt[] | null,
   bills?: Bill[] | null,
   contributions?: ManualContribution[] | null,
+  goals?: SavingsGoalForSheet[] | null,
 ): Blob {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
@@ -918,7 +980,7 @@ export function createBlankBudget(
   const allBillsForBelow = bills ?? fallbackBills;
   if (allBillsForBelow && allBillsForBelow.length > 0) {
     const lastRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).e.r : 0;
-    writeBillsSectionBelow(ws, allBillsForBelow, lastRow);
+    writeBillsSectionBelow(ws, allBillsForBelow, lastRow, goals ?? []);
   }
 
   // Write Debts section below the Bills section.
@@ -947,7 +1009,7 @@ export function createBlankBudget(
     writeBillsDataSheet(wb, allBills ?? [], debts);
   }
 
-  writeSavingsSheet(wb, weekBudgets, allBills ?? [], contributions ?? []);
+  writeSavingsSheet(wb, weekBudgets, allBills ?? [], contributions ?? [], goals ?? []);
 
   const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbOut], {

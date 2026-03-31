@@ -41,6 +41,7 @@ import { useBudgetStore } from "@/store/use-budget-store";
 import { parseBudgetSpreadsheet } from "@/lib/xlsx-parser";
 import type { ParsedWeek } from "@/lib/xlsx-parser";
 import { appendBudgetWeeks, createBlankBudget, downloadBlob } from "@/lib/xlsx-writer";
+import type { SavingsGoalForSheet } from "@/lib/xlsx-writer";
 import {
   useGenerateBudget,
   useGoogleAuthStatus,
@@ -1976,11 +1977,20 @@ export function BudgetWizard({
             const cachedContribs = activeCloudBudgetId
               ? ((queryClient.getQueryData(["savings-contributions", activeCloudBudgetId]) as any)?.contributions ?? [])
               : [];
+            const cachedGoalsRaw = activeCloudBudgetId
+              ? ((queryClient.getQueryData(["savings-goals", activeCloudBudgetId]) as any)?.goals ?? [])
+              : [];
+            const goalsForXlsx: SavingsGoalForSheet[] = cachedGoalsRaw.map((g: any) => ({
+              name: g.name,
+              targetAmount: g.targetAmount,
+              targetDate: g.targetDate,
+              savedSoFar: cachedContribs.filter((c: any) => c.billName === g.name).reduce((s: number, c: any) => s + c.amount, 0),
+            }));
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs);
+              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
             } else if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
-              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs);
+              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
             } else {
               blob = appendBudgetWeeks(
                 parsedWorkbook!.rawBytes,
@@ -1991,6 +2001,7 @@ export function BudgetWizard({
                 debtsForExport,
                 effectiveBills,
                 cachedContribs,
+                goalsForXlsx,
               );
             }
             setGeneratedBlob(blob);
@@ -2177,14 +2188,23 @@ export function BudgetWizard({
       const cachedContribs2 = activeCloudBudgetId
         ? ((queryClient.getQueryData(["savings-contributions", activeCloudBudgetId]) as any)?.contributions ?? [])
         : [];
+      const cachedGoalsRaw2 = activeCloudBudgetId
+        ? ((queryClient.getQueryData(["savings-goals", activeCloudBudgetId]) as any)?.goals ?? [])
+        : [];
+      const goalsForXlsx2: SavingsGoalForSheet[] = cachedGoalsRaw2.map((g: any) => ({
+        name: g.name,
+        targetAmount: g.targetAmount,
+        targetDate: g.targetDate,
+        savedSoFar: cachedContribs2.filter((c: any) => c.billName === g.name).reduce((s: number, c: any) => s + c.amount, 0),
+      }));
       let freshBlob: Blob;
       if (inputMode === "google" || inputMode === "excel") {
         const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2);
+        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       } else if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
-        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2);
+        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       } else {
-        freshBlob = appendBudgetWeeks(parsedWorkbook!.rawBytes, coloredWeeks, parsedWorkbook!.nextWeekStartCol, !zeroOpeningBalance, sheetStyle, debtsForExport, bills, cachedContribs2);
+        freshBlob = appendBudgetWeeks(parsedWorkbook!.rawBytes, coloredWeeks, parsedWorkbook!.nextWeekStartCol, !zeroOpeningBalance, sheetStyle, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       }
       setGeneratedBlob(freshBlob);
       return { data, blob: freshBlob };
