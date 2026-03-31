@@ -1702,7 +1702,7 @@ export function BudgetWizard({
       );
       const debtBillsMissingFromWeeks = billsToSet
         .filter((bill: Bill) => bill.sourceDebtId)
-        .filter((bill: Bill) => !debtBillNamesInSavedWeeks.has(bill.name));
+        .filter((bill: Bill) => !debtBillNamesInSavedWeeks.has(bill.name) && !debtBillNamesInSavedWeeks.has(`Partial ${bill.name}`));
       const configuredPayPeriod = s?.payPeriod ?? "weekly";
       const firstWeekLabel: string = restoredWeeks[0]?.label ?? restoredWeeks[0]?.name ?? "";
       const storedPeriodType = inferPeriodTypeFromWeekLabel(firstWeekLabel);

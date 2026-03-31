@@ -184,7 +184,7 @@ export function computeSavings(
         );
         if (weekCheckin) {
           savedInCycle += weekCheckin.actualAmount;
-        } else {
+        } else if (dates.end < today) {
           for (const item of w.items) {
             if (item.name.startsWith(prefix)) {
               savedInCycle += Math.abs(item.amount);
@@ -246,14 +246,14 @@ export function computeSavings(
 
         if (weekCheckin) {
           checkedInThisMonth += weekCheckin.actualAmount;
-        } else if (dates.start <= today) {
+        } else if (dates.end < today) {
           for (const item of w.items) {
             if (item.name === prefix) {
               savedThisMonth += Math.abs(item.amount);
             }
           }
         }
-        // Future weeks (dates.start > today) are not yet set aside — skip them
+        // Weeks without a check-in whose end date is today or in the future are not yet set aside — skip them
       }
 
       let manualThisMonth = 0;
