@@ -833,6 +833,20 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
+  const budgetGoalsQuery = useQuery<{ goals: { name: string; targetAmount: number; targetDate: string }[] }>({
+    queryKey: ["savings-goals", activeCloudBudgetId],
+    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/goals`),
+    enabled: !!activeCloudBudgetId,
+    staleTime: 30_000,
+  });
+
+  const budgetContributionsQuery = useQuery<{ contributions: { id: string; billName: string; amount: number; date: string; note?: string | null }[] }>({
+    queryKey: ["savings-contributions", activeCloudBudgetId],
+    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/contributions`),
+    enabled: !!activeCloudBudgetId,
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
     if (!activeCloudBudgetId || !checkinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
@@ -1974,17 +1988,13 @@ export function BudgetWizard({
               ...w,
               bills: injectBillColors(w.bills, xlsxColorLookup),
             }));
-            const cachedContribs = activeCloudBudgetId
-              ? ((queryClient.getQueryData(["savings-contributions", activeCloudBudgetId]) as any)?.contributions ?? [])
-              : [];
-            const cachedGoalsRaw = activeCloudBudgetId
-              ? ((queryClient.getQueryData(["savings-goals", activeCloudBudgetId]) as any)?.goals ?? [])
-              : [];
-            const goalsForXlsx: SavingsGoalForSheet[] = cachedGoalsRaw.map((g: any) => ({
+            const cachedContribs = budgetContributionsQuery.data?.contributions ?? [];
+            const cachedGoalsRaw = budgetGoalsQuery.data?.goals ?? [];
+            const goalsForXlsx: SavingsGoalForSheet[] = cachedGoalsRaw.map((g) => ({
               name: g.name,
               targetAmount: g.targetAmount,
               targetDate: g.targetDate,
-              savedSoFar: cachedContribs.filter((c: any) => c.billName === g.name).reduce((s: number, c: any) => s + c.amount, 0),
+              savedSoFar: cachedContribs.filter((c) => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
             }));
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
@@ -2185,17 +2195,13 @@ export function BudgetWizard({
         ...w,
         bills: injectBillColors(w.bills, xlsxColorLookup),
       }));
-      const cachedContribs2 = activeCloudBudgetId
-        ? ((queryClient.getQueryData(["savings-contributions", activeCloudBudgetId]) as any)?.contributions ?? [])
-        : [];
-      const cachedGoalsRaw2 = activeCloudBudgetId
-        ? ((queryClient.getQueryData(["savings-goals", activeCloudBudgetId]) as any)?.goals ?? [])
-        : [];
-      const goalsForXlsx2: SavingsGoalForSheet[] = cachedGoalsRaw2.map((g: any) => ({
+      const cachedContribs2 = budgetContributionsQuery.data?.contributions ?? [];
+      const cachedGoalsRaw2 = budgetGoalsQuery.data?.goals ?? [];
+      const goalsForXlsx2: SavingsGoalForSheet[] = cachedGoalsRaw2.map((g) => ({
         name: g.name,
         targetAmount: g.targetAmount,
         targetDate: g.targetDate,
-        savedSoFar: cachedContribs2.filter((c: any) => c.billName === g.name).reduce((s: number, c: any) => s + c.amount, 0),
+        savedSoFar: cachedContribs2.filter((c) => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
       }));
       let freshBlob: Blob;
       if (inputMode === "google" || inputMode === "excel") {
