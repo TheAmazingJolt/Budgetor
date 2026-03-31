@@ -1834,6 +1834,7 @@ export function BudgetWizard({
       {
         onSuccess: () => {
           setCloudExistingWeeks(updatedExistingWeeks);
+          setWeekEdits({});
           setCloudSaveSuccess(true);
           cloudBudgetLoadedBillsRef.current = JSON.stringify(bills);
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
@@ -3949,6 +3950,16 @@ export function BudgetWizard({
                               >
                                 <Pencil className="w-3.5 h-3.5" /> {editModeOn ? "Done" : "Edit"}
                               </Button>
+                              {hasEdits && activeCloudBudgetId && (
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  onClick={() => handleQuickUpdate()}
+                                  disabled={cloudSaveMutation.isPending}
+                                >
+                                  <Save className="w-3.5 h-3.5" /> {cloudSaveMutation.isPending ? "Saving…" : "Save changes"}
+                                </Button>
+                              )}
                               {hasEdits && (
                                 <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setWeekEdits({})}>
                                   Reset edits
