@@ -3954,8 +3954,8 @@ export function BudgetWizard({
                                 <Button
                                   size="sm"
                                   className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  onClick={() => handleQuickUpdate()}
-                                  disabled={cloudSaveMutation.isPending}
+                                  onClick={() => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)}
+                                  disabled={cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
                                 >
                                   <Save className="w-3.5 h-3.5" /> {cloudSaveMutation.isPending ? "Saving…" : "Save changes"}
                                 </Button>
