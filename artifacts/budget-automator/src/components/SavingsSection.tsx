@@ -131,6 +131,9 @@ export function SavingsSection({
     },
   });
 
+  const [sinkingCollapsed, setSinkingCollapsed] = useState(false);
+  const [balancedCollapsed, setBalancedCollapsed] = useState(false);
+
   const { sinkingFunds, balanced } = computeSavings(
     bills, weeks, today, contributions, checkins,
   );
@@ -238,59 +241,75 @@ export function SavingsSection({
 
       {sinkingFunds.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-violet-600" />
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-violet-700">
+          <button
+            type="button"
+            className="flex items-center gap-2 w-full text-left"
+            onClick={() => setSinkingCollapsed(c => !c)}
+          >
+            <TrendingUp className="w-4 h-4 text-violet-600 shrink-0" />
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-violet-700 flex-1">
               Sinking Funds
             </h4>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {sinkingFunds.map((sf, i) => (
-              <SinkingFundCard
-                key={i}
-                data={sf}
-                contributions={contributions.filter(c => c.billName === sf.bill.name)}
-                canLog={canLog}
-                onAdd={(amount, date, note) =>
-                  addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
-                }
-                onDelete={id => deleteMutation.mutateAsync(id)}
-              />
-            ))}
-          </div>
+            <ChevronDown className={`w-4 h-4 text-violet-500 shrink-0 transition-transform duration-200 ${sinkingCollapsed ? "-rotate-90" : ""}`} />
+          </button>
+          {!sinkingCollapsed && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {sinkingFunds.map((sf, i) => (
+                <SinkingFundCard
+                  key={i}
+                  data={sf}
+                  contributions={contributions.filter(c => c.billName === sf.bill.name)}
+                  canLog={canLog}
+                  onAdd={(amount, date, note) =>
+                    addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
+                  }
+                  onDelete={id => deleteMutation.mutateAsync(id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {balanced.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Repeat2 className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-indigo-700">
+          <button
+            type="button"
+            className="flex items-center gap-2 w-full text-left"
+            onClick={() => setBalancedCollapsed(c => !c)}
+          >
+            <Repeat2 className="w-4 h-4 text-indigo-600 shrink-0" />
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-indigo-700 flex-1">
               Monthly Set-Aside
             </h4>
-            <span className="text-xs text-indigo-500 font-normal normal-case tracking-normal">
+            <span className="text-xs text-indigo-500 font-normal normal-case tracking-normal mr-1">
               ({refMonthStr})
             </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {balanced.map((b, i) => (
-              <BalancedCard
-                key={i}
-                data={b}
-                contributions={contributions.filter(c => c.billName === b.bill.name)}
-                checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
-                canLog={canLog}
-                onAdd={(amount, date, note) =>
-                  addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note })
-                }
-                onDelete={id => deleteMutation.mutateAsync(id)}
-              />
-            ))}
-          </div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info className="w-3 h-3 shrink-0" />
-            Resets at the first budget week of each month
-          </p>
+            <ChevronDown className={`w-4 h-4 text-indigo-500 shrink-0 transition-transform duration-200 ${balancedCollapsed ? "-rotate-90" : ""}`} />
+          </button>
+          {!balancedCollapsed && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {balanced.map((b, i) => (
+                  <BalancedCard
+                    key={i}
+                    data={b}
+                    contributions={contributions.filter(c => c.billName === b.bill.name)}
+                    checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
+                    canLog={canLog}
+                    onAdd={(amount, date, note) =>
+                      addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note })
+                    }
+                    onDelete={id => deleteMutation.mutateAsync(id)}
+                  />
+                ))}
+              </div>
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Info className="w-3 h-3 shrink-0" />
+                Resets at the first budget week of each month
+              </p>
+            </>
+          )}
         </div>
       )}
 

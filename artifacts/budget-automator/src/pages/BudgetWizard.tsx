@@ -4119,7 +4119,7 @@ export function BudgetWizard({
                       </div>
                     )}
 
-                    <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
+                    {step2Tab === "budget" && <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/60">
                       <CardContent className="p-5">
                         <button
                           type="button"
@@ -4148,9 +4148,9 @@ export function BudgetWizard({
                           </div>
                         )}
                       </CardContent>
-                    </Card>
+                    </Card>}
 
-                    {debts.length > 0 && (
+                    {step2Tab === "budget" && debts.length > 0 && (
                       <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60">
                         <CardContent className="p-5">
                           <button
@@ -4272,7 +4272,7 @@ export function BudgetWizard({
                       );
                     })()}
 
-                    {!generatedWeek && hasHistory && (
+                    {step2Tab === "budget" && !generatedWeek && hasHistory && (
                       <div className="flex justify-center pt-2">
                         <Button
                           size="lg"
