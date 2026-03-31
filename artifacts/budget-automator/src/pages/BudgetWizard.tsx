@@ -3339,7 +3339,7 @@ export function BudgetWizard({
                   </div>
                   <div className="flex flex-col gap-2 min-w-0 w-full sm:w-auto">
                     <div className="flex items-center gap-2">
-                      {!(inputMode === "scratch" && !activeCloudBudgetId) && (
+                      {inputMode !== "scratch" && (
                         <Button
                           variant="outline"
                           size="default"
