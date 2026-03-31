@@ -3766,8 +3766,16 @@ export function BudgetWizard({
             >
               {(() => {
                 const sourceExisting = getExistingWeeks();
+                const budgetStartDate = newWeekStartDate ? new Date(newWeekStartDate + 'T00:00:00') : null;
+                const isBeforeBudgetStart = (label: string) => {
+                  if (!budgetStartDate) return false;
+                  const parsed = parseLabelDates(label);
+                  if (!parsed) return false;
+                  return parsed.start < budgetStartDate;
+                };
                 const rawHistoryWeeks: UnifiedWeek[] = sourceExisting
                   .filter((w: any) => w.items || w.openingBalance !== undefined)
+                  .filter((w: any) => !isBeforeBudgetStart(w.label))
                   .map((w: any) => ({
                     label: w.label,
                     openingBalance: w.openingBalance as number | undefined,
@@ -3778,6 +3786,7 @@ export function BudgetWizard({
                   }));
                 const cloudOnlyWeeks = sourceExisting
                   .filter((w: any) => !w.items && w.openingBalance === undefined)
+                  .filter((w: any) => !isBeforeBudgetStart(w.label))
                   .map((w: any) => ({
                     label: w.label as string,
                     remaining: w.remaining as number,
