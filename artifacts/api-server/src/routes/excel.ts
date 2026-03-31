@@ -546,6 +546,7 @@ interface BillMeta {
   color?: string;
   sourceDebtId?: string;
   annualDueMonth?: number | null;
+  payoffDate?: string | null;
 }
 
 interface ExcelWriteRequest {
@@ -683,10 +684,17 @@ async function writeExcelBillRows(
   const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   for (const bill of filteredBills) {
     const isYearly = bill.type === "yearly" || bill.type === "yearly-flat";
+    let endingStr = "";
+    if ((bill.type === "weekly" || bill.type === "biweekly") && bill.payoffDate) {
+      const parts = bill.payoffDate.split("-");
+      const pm = parts.length >= 3 ? parseInt(parts[1], 10) : NaN;
+      const pd = parts.length >= 3 ? parseInt(parts[2], 10) : NaN;
+      if (!isNaN(pm) && !isNaN(pd)) endingStr = ` (ending ${pm}/${pd})`;
+    }
     const dueDay = bill.type === "weekly"
-      ? "Weekly"
+      ? `Weekly${endingStr}`
       : bill.type === "biweekly"
-      ? "Biweekly"
+      ? `Biweekly${endingStr}`
       : isYearly && bill.annualDueMonth != null
       ? `${MONTH_SHORT[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}`
       : isYearly

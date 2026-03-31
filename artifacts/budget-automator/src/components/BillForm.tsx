@@ -49,6 +49,7 @@ const formSchema = z.object({
   category: z.string().min(1, "Category label is required"),
   type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]),
   color: z.string().default("none"),
+  payoffDate: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.type === "yearly" || data.type === "yearly-flat") {
     if (data.annualDueMonth == null) {
@@ -135,6 +136,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           category: d.category ?? "",
           type: d.type ?? "fixed",
           color: d.color ?? "none",
+          payoffDate: d.payoffDate ?? null,
         }
       : {
           name: "",
@@ -144,6 +146,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
           category: "",
           type: "fixed",
           color: "none",
+          payoffDate: null,
         },
   });
 
@@ -183,12 +186,14 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
   }
 
   function handleSubmit(values: z.infer<typeof formSchema>) {
+    const isWeeklyOrBiweekly = values.type === "weekly" || values.type === "biweekly";
     const result: Bill = {
       ...(initialData ?? {}),
       ...values,
       category: normalizeCategory(values.category),
       userColor: values.color !== "none",
       annualDueMonth: isAnyYearly ? (values.annualDueMonth ?? 1) : undefined,
+      payoffDate: isWeeklyOrBiweekly ? (values.payoffDate || null) : undefined,
     } as Bill;
     onSubmit(result);
   }
@@ -392,6 +397,29 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                       {billType === "fixed"
                         ? "Full amount appears in the week this day falls."
                         : "Bill is only spread across weeks leading up to and including this day. \"Varies\" spreads across all weeks."}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {(billType === "weekly" || billType === "biweekly") && (
+              <FormField
+                control={form.control}
+                name="payoffDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ending Date <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        value={field.value ?? ""}
+                        onChange={e => field.onChange(e.target.value || null)}
+                        className="focus:ring-primary/20 focus:border-primary"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Bill stops after this date. Leave blank to repeat indefinitely.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

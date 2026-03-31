@@ -307,6 +307,16 @@ function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: st
   return now.getDate() >= debt.dueDay;
 }
 
+/** Format a YYYY-MM-DD payoff date as M/D (no leading zeros, timezone-safe). */
+function fmtPayoffDate(isoDate: string): string {
+  const parts = isoDate.split("-");
+  if (parts.length < 3) return isoDate;
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (isNaN(m) || isNaN(d)) return isoDate;
+  return `${m}/${d}`;
+}
+
 function nextStartAfterLabel(label: string): string | null {
   const m = label.match(/to\s+(\d{1,2})\/(\d{1,2})\/(\d{2})\s*$/i);
   if (!m) return null;
@@ -3598,7 +3608,7 @@ export function BudgetWizard({
                                 </div>
                                 <div className="flex items-center justify-between mt-3">
                                   <span className="text-xs text-muted-foreground">
-                                    {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                                    {bill.type === "weekly" ? `Weekly${bill.payoffDate ? ` (ending ${fmtPayoffDate(bill.payoffDate)})` : ""}` : bill.type === "biweekly" ? `Biweekly${bill.payoffDate ? ` (ending ${fmtPayoffDate(bill.payoffDate)})` : ""}` : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                                   </span>
                                   <div className="flex gap-1">
                                     <Button
@@ -5343,7 +5353,7 @@ export function BudgetWizard({
                             </div>
                             <div className="flex items-center justify-between mt-3">
                               <span className="text-xs text-muted-foreground">
-                                {bill.type === "weekly" ? "Weekly" : bill.type === "biweekly" ? "Biweekly" : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
+                                {bill.type === "weekly" ? `Weekly${bill.payoffDate ? ` (ending ${fmtPayoffDate(bill.payoffDate)})` : ""}` : bill.type === "biweekly" ? `Biweekly${bill.payoffDate ? ` (ending ${fmtPayoffDate(bill.payoffDate)})` : ""}` : bill.type === "yearly" ? `Annual — ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(bill.annualDueMonth ?? 1) - 1]} ${bill.dayOfMonth ?? 1}` : bill.dayOfMonth ? `Due day ${bill.dayOfMonth}` : "Varies"}
                               </span>
                               <div className="flex gap-1">
                                 <Button
