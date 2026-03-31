@@ -41,11 +41,12 @@ interface SavingsSectionProps {
   checkins?: WeeklyCheckIn[];
   onContributionChange?: () => void;
   onOpenCheckIn?: () => void;
+  onAddBill?: (bill: Bill) => void;
 }
 
 export function SavingsSection({
   bills, weeks, budgetId, checkins: externalCheckins,
-  onContributionChange, onOpenCheckIn,
+  onContributionChange, onOpenCheckIn, onAddBill,
 }: SavingsSectionProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -201,6 +202,7 @@ export function SavingsSection({
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
           onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
           onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
+          onAddBillForGoal={onAddBill ? (name, amt) => onAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       </div>
     );
@@ -264,6 +266,7 @@ export function SavingsSection({
                     addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
                   }
                   onDelete={id => deleteMutation.mutateAsync(id)}
+                  onAddAsBill={onAddBill ? (amt) => onAddBill({ name: sf.bill.name ?? "", amount: -Math.abs(amt), type: "weekly", color: "purple", category: "Savings", userColor: true }) : undefined}
                 />
               ))}
             </div>
@@ -325,6 +328,7 @@ export function SavingsSection({
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
           onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
           onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
+          onAddBillForGoal={onAddBill ? (name, amt) => onAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       )}
     </div>
@@ -481,9 +485,10 @@ interface SinkingCardProps {
   canLog: boolean;
   onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
+  onAddAsBill?: (weeklyAmount: number) => void;
 }
 
-function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete }: SinkingCardProps) {
+function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete, onAddAsBill }: SinkingCardProps) {
   const { bill, annualGoal, savedInCycle, manualInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining } = data;
   const pct = Math.round(progressPct);
   const totalSaved = savedInCycle + manualInCycle;
@@ -535,6 +540,16 @@ function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete }: Sinki
         onDelete={onDelete}
         accentClass="text-violet-600"
       />
+      {!isComplete && onAddAsBill && weeksRemaining > 0 && (
+        <button
+          type="button"
+          onClick={() => onAddAsBill(Math.round(((annualGoal - totalSaved) / weeksRemaining) * 100) / 100)}
+          className="flex items-center gap-1 text-xs font-medium text-purple-600 hover:opacity-80 transition-opacity"
+        >
+          <Plus className="w-3 h-3" />
+          Add ${fmt(Math.round(((annualGoal - totalSaved) / weeksRemaining) * 100) / 100)}/wk to bills
+        </button>
+      )}
     </div>
   );
 }
@@ -617,9 +632,10 @@ interface SavingsGoalsSectionProps {
   onCreate: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
   onUpdate: (goalId: string, payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
   onDelete: (goalId: string) => Promise<unknown>;
+  onAddBillForGoal?: (name: string, weeklyAmount: number) => void;
 }
 
-function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onCreate, onUpdate, onDelete }: SavingsGoalsSectionProps) {
+function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onCreate, onUpdate, onDelete, onAddBillForGoal }: SavingsGoalsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
   const [addAmount, setAddAmount] = useState("");
@@ -727,6 +743,7 @@ function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onC
               onDeleteContrib={onDeleteContrib}
               onUpdate={(payload) => onUpdate(goal.id, payload)}
               onDelete={() => onDelete(goal.id)}
+              onAddAsBill={onAddBillForGoal ? (amt) => onAddBillForGoal(goal.name, amt) : undefined}
             />
           ))}
         </div>
@@ -742,9 +759,10 @@ interface GoalCardProps {
   onDeleteContrib: (id: string) => Promise<unknown>;
   onUpdate: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
   onDelete: () => Promise<unknown>;
+  onAddAsBill?: (weeklyAmount: number) => void;
 }
 
-function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDelete }: GoalCardProps) {
+function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDelete, onAddAsBill }: GoalCardProps) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(goal.name);
   const [editAmount, setEditAmount] = useState(String(goal.targetAmount));
@@ -935,6 +953,16 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
         onDelete={onDeleteContrib}
         accentClass="text-teal-600"
       />
+      {!isComplete && onAddAsBill && weeklyNeeded > 0 && (
+        <button
+          type="button"
+          onClick={() => onAddAsBill(weeklyNeeded)}
+          className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:opacity-80 transition-opacity"
+        >
+          <Plus className="w-3 h-3" />
+          Add ${fmt(weeklyNeeded)}/wk to bills
+        </button>
+      )}
     </div>
   );
 }

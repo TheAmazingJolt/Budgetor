@@ -3975,6 +3975,7 @@ export function BudgetWizard({
                             budgetId={activeCloudBudgetId ?? undefined}
                             checkins={checkinsQuery.data?.checkins}
                             onContributionChange={triggerBackgroundSheetSync}
+                            onAddBill={addBill}
                             onOpenCheckIn={() => {
                               const today = new Date();
                               today.setHours(0, 0, 0, 0);
