@@ -1883,6 +1883,26 @@ export function BudgetWizard({
 
   const handleQuickUpdate = (afterSuccess?: () => void) => {
     if (!activeCloudBudgetId) return;
+
+    const mergedExistingWeeks = cloudExistingWeeks
+      .filter((w: any) => !weekEdits[w.label]?.deleted)
+      .map((w: any) => {
+        const e = weekEdits[w.label];
+        if (!e) return w;
+        const editedItems = e.items ?? w.items;
+        const editedPaycheck = e.paycheck ?? w.paycheck;
+        const editedOpening = e.openingBalance ?? w.openingBalance;
+        const recalc = (editedOpening ?? 0) + (editedPaycheck ?? 0) + (editedItems ?? []).reduce((s: number, b: any) => s + b.amount, 0);
+        const hasChange = e.paycheck !== undefined || e.openingBalance !== undefined || e.items;
+        return {
+          ...w,
+          ...(e.paycheck !== undefined ? { paycheck: e.paycheck } : {}),
+          ...(e.openingBalance !== undefined ? { openingBalance: e.openingBalance } : {}),
+          ...(e.items ? { items: e.items } : {}),
+          remaining: hasChange ? recalc : w.remaining,
+        };
+      });
+
     cloudSaveMutation.mutate(
       {
         id: activeCloudBudgetId,
@@ -1898,7 +1918,7 @@ export function BudgetWizard({
             includeBillsSummary,
             blankMode,
             inputMode: "cloud",
-            existingWeeks: cloudExistingWeeks,
+            existingWeeks: mergedExistingWeeks,
             payPeriod,
           },
           debts,
@@ -1906,6 +1926,8 @@ export function BudgetWizard({
       },
       {
         onSuccess: () => {
+          setCloudExistingWeeks(mergedExistingWeeks);
+          setWeekEdits({});
           cloudBudgetLoadedBillsRef.current = JSON.stringify(bills);
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({ title: "Budget updated", description: `"${activeCloudBudgetName}" has been updated.` });
@@ -2335,10 +2357,42 @@ export function BudgetWizard({
         payPeriod,
         bills,
       });
-      const weeks = generated.weeks.map((w: any) => ({
-        ...w,
-        bills: injectBillColors(w.bills, colorLookup),
-      }));
+      const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
+      const historicalWeeks = getExistingWeeks()
+        .filter((w: any) => !generatedLabels.has(w.label) && (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
+        .map((w: any) => {
+          const e = weekEdits[w.label];
+          const items = injectBillColors(e?.items ?? w.items ?? [], colorLookup);
+          const paycheck = e?.paycheck ?? w.paycheck ?? 0;
+          const ob = e?.openingBalance ?? w.openingBalance ?? 0;
+          const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
+          const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : (w.remaining ?? 0);
+          const dates = parseLabelDates(w.label);
+          return {
+            weekLabel: w.label,
+            startDate: dates?.start.toISOString().split("T")[0] ?? "",
+            endDate: dates?.end.toISOString().split("T")[0] ?? "",
+            openingBalance: ob,
+            paycheck,
+            bills: items,
+            totalBills,
+            closingBalance: closing,
+          };
+        });
+      const generatedWeeks = generated.weeks
+        .filter((w: any) => !weekEdits[w.weekLabel]?.deleted)
+        .map((w: any) => {
+          const e = weekEdits[w.weekLabel];
+          const items = injectBillColors(e?.items ?? w.bills, colorLookup);
+          const paycheck = e?.paycheck ?? w.paycheck;
+          const ob = e?.openingBalance ?? w.openingBalance;
+          const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
+          const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items)
+            ? (ob + paycheck + totalBills)
+            : w.closingBalance;
+          return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
+        });
+      const weeks = [...historicalWeeks, ...generatedWeeks];
       const includeRemainingAcct = !zeroOpeningBalance;
       const writePayload = {
         weeks,
