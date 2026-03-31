@@ -3305,17 +3305,19 @@ export function BudgetWizard({
                   </div>
                   <div className="flex flex-col gap-2 min-w-0 w-full sm:w-auto">
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="default"
-                        onClick={activeCloudBudgetId
-                          ? () => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)
-                          : () => setIsSaveDialogOpen(true)}
-                        disabled={bills.length === 0 || cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
-                        className="flex-1 rounded-xl"
-                      >
-                        <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
-                      </Button>
+                      {!(inputMode === "scratch" && !activeCloudBudgetId) && (
+                        <Button
+                          variant="outline"
+                          size="default"
+                          onClick={activeCloudBudgetId
+                            ? () => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)
+                            : () => setIsSaveDialogOpen(true)}
+                          disabled={bills.length === 0 || cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
+                          className="flex-1 rounded-xl"
+                        >
+                          <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
+                        </Button>
+                      )}
                       <Button
                         size="default"
                         onClick={() => handleGenerate()}
