@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, CalendarDays, PiggyBank, Repeat2, Info, Plus, Trash2,
-  ChevronDown, ChevronUp, ClipboardCheck, CheckCircle2,
+  ChevronDown, ChevronUp, ClipboardCheck, CheckCircle2, Target, Pencil,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,18 @@ import type {
 import type { Bill } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/checkin-utils";
 import type { WeeklyCheckIn } from "@/components/CheckInDialog";
+
+interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetDate: string;
+  note?: string | null;
+  budgetId: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface SavingsSectionProps {
   bills: Bill[];
@@ -54,8 +66,16 @@ export function SavingsSection({
     staleTime: 30_000,
   });
 
+  const { data: goalsData } = useQuery<{ goals: SavingsGoal[] }>({
+    queryKey: ["savings-goals", budgetId],
+    queryFn: () => apiFetch(`/api/budgets/${budgetId}/goals`),
+    enabled: !!budgetId,
+    staleTime: 30_000,
+  });
+
   const contributions: ManualContribution[] = contribData?.contributions ?? [];
   const checkins: WeeklyCheckIn[] = externalCheckins ?? checkinData?.checkins ?? [];
+  const goals: SavingsGoal[] = goalsData?.goals ?? [];
 
   const addMutation = useMutation({
     mutationFn: (payload: { billName: string; amount: number; date: string; note?: string }) =>
@@ -76,6 +96,38 @@ export function SavingsSection({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] });
       onContributionChange?.();
+    },
+  });
+
+  const createGoalMutation = useMutation({
+    mutationFn: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) =>
+      apiFetch(`/api/budgets/${budgetId}/goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+    },
+  });
+
+  const updateGoalMutation = useMutation({
+    mutationFn: ({ goalId, ...payload }: { goalId: string; name: string; targetAmount: number; targetDate: string; note?: string }) =>
+      apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+    },
+  });
+
+  const deleteGoalMutation = useMutation({
+    mutationFn: (goalId: string) =>
+      apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
     },
   });
 
@@ -105,7 +157,7 @@ export function SavingsSection({
     ? checkins.some(c => c.weekLabel === currentWeek.label)
     : false;
 
-  if (!hasData) {
+  if (!hasData && !budgetId) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-3">
         <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
@@ -117,6 +169,36 @@ export function SavingsSection({
             Add yearly (sinking fund) or balanced bills to see how much you've set aside toward each one.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (!hasData && budgetId) {
+    return (
+      <div className="space-y-6 py-2">
+        <div className="flex flex-col items-center justify-center py-10 px-6 text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
+            <PiggyBank className="w-6 h-6 text-violet-500" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">No savings to track yet</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+              Add yearly (sinking fund) or balanced bills to see how much you've set aside toward each one.
+            </p>
+          </div>
+        </div>
+        <SavingsGoalsSection
+          goals={goals}
+          contributions={contributions}
+          budgetId={budgetId}
+          onAdd={(amount, date, note, goalName) =>
+            addMutation.mutateAsync({ billName: goalName, amount, date, note })
+          }
+          onDeleteContrib={id => deleteMutation.mutateAsync(id)}
+          onCreate={payload => createGoalMutation.mutateAsync(payload)}
+          onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
+          onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
+        />
       </div>
     );
   }
@@ -210,6 +292,21 @@ export function SavingsSection({
             Resets at the first budget week of each month
           </p>
         </div>
+      )}
+
+      {budgetId && (
+        <SavingsGoalsSection
+          goals={goals}
+          contributions={contributions}
+          budgetId={budgetId}
+          onAdd={(amount, date, note, goalName) =>
+            addMutation.mutateAsync({ billName: goalName, amount, date, note })
+          }
+          onDeleteContrib={id => deleteMutation.mutateAsync(id)}
+          onCreate={payload => createGoalMutation.mutateAsync(payload)}
+          onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
+          onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
+        />
       )}
     </div>
   );
@@ -487,6 +584,337 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
         onAdd={onAdd}
         onDelete={onDelete}
         accentClass="text-indigo-600"
+      />
+    </div>
+  );
+}
+
+interface SavingsGoalsSectionProps {
+  goals: SavingsGoal[];
+  contributions: ManualContribution[];
+  budgetId: string;
+  onAdd: (amount: number, date: string, note: string | undefined, goalName: string) => Promise<unknown>;
+  onDeleteContrib: (id: string) => Promise<unknown>;
+  onCreate: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
+  onUpdate: (goalId: string, payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
+  onDelete: (goalId: string) => Promise<unknown>;
+}
+
+function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onCreate, onUpdate, onDelete }: SavingsGoalsSectionProps) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addAmount, setAddAmount] = useState("");
+  const [addDate, setAddDate] = useState("");
+  const [addNote, setAddNote] = useState("");
+  const [addError, setAddError] = useState("");
+  const [addSaving, setAddSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (!addName.trim()) { setAddError("Goal name is required."); return; }
+    const amount = parseFloat(addAmount);
+    if (!addAmount || isNaN(amount) || amount < 0) { setAddError("Enter a valid target amount."); return; }
+    if (!addDate) { setAddError("Target date is required."); return; }
+    setAddError("");
+    setAddSaving(true);
+    try {
+      await onCreate({ name: addName.trim(), targetAmount: amount, targetDate: addDate, note: addNote.trim() || undefined });
+      setAddName(""); setAddAmount(""); setAddDate(""); setAddNote("");
+      setShowAddForm(false);
+    } catch (e: any) {
+      setAddError(e.message ?? "Failed to save");
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4 text-teal-600" />
+          <h4 className="text-sm font-semibold uppercase tracking-wider text-teal-700">
+            Savings Goals
+          </h4>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setShowAddForm(f => !f); setAddError(""); }}
+          className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:opacity-80 transition-opacity"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Goal
+        </button>
+      </div>
+
+      {showAddForm && (
+        <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
+          <p className="text-xs font-semibold text-teal-800">New Savings Goal</p>
+          <Input
+            placeholder="Goal name (e.g. Vacation, Car repair)"
+            value={addName}
+            onChange={e => setAddName(e.target.value)}
+            className="h-8 text-sm"
+          />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Target amount"
+                value={addAmount}
+                onChange={e => setAddAmount(e.target.value)}
+                className="pl-6 h-8 text-sm"
+              />
+            </div>
+            <Input
+              type="date"
+              value={addDate}
+              onChange={e => setAddDate(e.target.value)}
+              className="h-8 text-sm w-36"
+            />
+          </div>
+          <Input
+            placeholder="Note (optional)"
+            value={addNote}
+            onChange={e => setAddNote(e.target.value)}
+            className="h-8 text-sm"
+          />
+          {addError && <p className="text-xs text-red-500">{addError}</p>}
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleCreate} disabled={addSaving}>
+              {addSaving ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowAddForm(false); setAddError(""); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {goals.length === 0 && !showAddForm && (
+        <p className="text-xs text-muted-foreground">No savings goals yet. Add one to get started.</p>
+      )}
+
+      {goals.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {goals.map(goal => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              contributions={contributions.filter(c => c.billName === goal.name)}
+              onAdd={(amount, date, note) => onAdd(amount, date, note, goal.name)}
+              onDeleteContrib={onDeleteContrib}
+              onUpdate={(payload) => onUpdate(goal.id, payload)}
+              onDelete={() => onDelete(goal.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface GoalCardProps {
+  goal: SavingsGoal;
+  contributions: ManualContribution[];
+  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  onDeleteContrib: (id: string) => Promise<unknown>;
+  onUpdate: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
+  onDelete: () => Promise<unknown>;
+}
+
+function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDelete }: GoalCardProps) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(goal.name);
+  const [editAmount, setEditAmount] = useState(String(goal.targetAmount));
+  const [editDate, setEditDate] = useState(goal.targetDate);
+  const [editNote, setEditNote] = useState(goal.note ?? "");
+  const [editError, setEditError] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const savedSoFar = contributions.reduce((sum, c) => sum + c.amount, 0);
+  const isComplete = savedSoFar >= goal.targetAmount;
+  const remaining = Math.max(0, goal.targetAmount - savedSoFar);
+  const progressPct = isComplete ? 100 : (goal.targetAmount > 0 ? Math.min(100, (savedSoFar / goal.targetAmount) * 100) : 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const targetDate = new Date(goal.targetDate + "T00:00:00");
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const weeksUntilDue = Math.max(0, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
+  const weeklyNeeded = weeksUntilDue > 0 ? remaining / weeksUntilDue : 0;
+
+  const formattedTargetDate = targetDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  const handleUpdate = async () => {
+    if (!editName.trim()) { setEditError("Goal name is required."); return; }
+    const amount = parseFloat(editAmount);
+    if (!editAmount || isNaN(amount) || amount < 0) { setEditError("Enter a valid target amount."); return; }
+    if (!editDate) { setEditError("Target date is required."); return; }
+    setEditError("");
+    setEditSaving(true);
+    try {
+      await onUpdate({ name: editName.trim(), targetAmount: amount, targetDate: editDate, note: editNote.trim() || undefined });
+      setEditing(false);
+    } catch (e: any) {
+      setEditError(e.message ?? "Failed to save");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    try {
+      await onDelete();
+    } catch {}
+  };
+
+  if (editing) {
+    return (
+      <div className="rounded-xl bg-white border border-teal-200 p-4 space-y-3 shadow-sm">
+        <p className="text-xs font-semibold text-teal-800">Edit Goal</p>
+        <Input
+          placeholder="Goal name"
+          value={editName}
+          onChange={e => setEditName(e.target.value)}
+          className="h-8 text-sm"
+        />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Target amount"
+              value={editAmount}
+              onChange={e => setEditAmount(e.target.value)}
+              className="pl-6 h-8 text-sm"
+            />
+          </div>
+          <Input
+            type="date"
+            value={editDate}
+            onChange={e => setEditDate(e.target.value)}
+            className="h-8 text-sm w-36"
+          />
+        </div>
+        <Input
+          placeholder="Note (optional)"
+          value={editNote}
+          onChange={e => setEditNote(e.target.value)}
+          className="h-8 text-sm"
+        />
+        {editError && <p className="text-xs text-red-500">{editError}</p>}
+        <div className="flex gap-2">
+          <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleUpdate} disabled={editSaving}>
+            {editSaving ? "Saving…" : "Save"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditing(false); setEditError(""); }}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl bg-white border border-teal-100 p-4 space-y-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground truncate">{goal.name}</p>
+          {goal.note && <p className="text-xs text-muted-foreground mt-0.5 truncate">{goal.note}</p>}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {isComplete ? (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+              Goal reached!
+            </span>
+          ) : (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+              {Math.round(progressPct)}%
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setEditName(goal.name);
+              setEditAmount(String(goal.targetAmount));
+              setEditDate(goal.targetDate);
+              setEditNote(goal.note ?? "");
+              setEditing(true);
+            }}
+            className="text-muted-foreground hover:text-teal-600 transition-colors p-0.5"
+            title="Edit goal"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="text-xs text-red-600 font-medium hover:text-red-700"
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="text-muted-foreground hover:text-red-500 transition-colors p-0.5"
+              title="Delete goal"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <Progress value={progressPct} className="h-2 bg-teal-100" />
+
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Saved so far</span>
+          <span className="font-semibold text-foreground">${fmt(savedSoFar)}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Target</span>
+          <span className="text-muted-foreground">${fmt(goal.targetAmount)}</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <CalendarDays className="w-3 h-3 shrink-0" />
+          <span>{formattedTargetDate}</span>
+          {weeksUntilDue > 0 && (
+            <span className="ml-1">· {weeksUntilDue} wk{weeksUntilDue !== 1 ? "s" : ""} away</span>
+          )}
+        </div>
+        {!isComplete && weeklyNeeded > 0 && (
+          <p className="text-xs text-teal-600 font-medium">
+            Save ${fmt(weeklyNeeded)}/wk to reach your goal
+          </p>
+        )}
+      </div>
+
+      <ContributionPanel
+        billName={goal.name}
+        canLog={true}
+        contributions={contributions}
+        onAdd={onAdd}
+        onDelete={onDeleteContrib}
+        accentClass="text-teal-600"
       />
     </div>
   );

@@ -94,6 +94,18 @@ export async function initDb(): Promise<void> {
 
       CREATE UNIQUE INDEX IF NOT EXISTS weekly_checkins_unique_item
         ON weekly_checkins (budget_id, week_label, item_name, item_type);
+
+      CREATE TABLE IF NOT EXISTS savings_goals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        budget_id UUID NOT NULL REFERENCES saved_budgets(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        target_amount NUMERIC(12, 2) NOT NULL,
+        target_date TEXT NOT NULL,
+        note TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
     `);
     console.log("[initDb] schema migrations complete");
   } finally {
