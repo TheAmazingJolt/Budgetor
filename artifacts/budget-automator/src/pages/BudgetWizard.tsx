@@ -3919,13 +3919,15 @@ export function BudgetWizard({
                             >
                               Budget
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setStep2Tab("savings")}
-                              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "savings" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                            >
-                              Savings
-                            </button>
+                            {!(inputMode === "scratch" && !activeCloudBudgetId) && (
+                              <button
+                                type="button"
+                                onClick={() => setStep2Tab("savings")}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "savings" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                              >
+                                Savings
+                              </button>
+                            )}
                           </div>
                           {step2Tab === "budget" && (
                             <>
