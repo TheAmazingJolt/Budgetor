@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, CalendarDays, PiggyBank, Repeat2, Info, Plus, Trash2,
@@ -50,6 +51,13 @@ export function SavingsSection({
 }: SavingsSectionProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const { toast } = useToast();
+
+  const handleAddBill = onAddBill ? (bill: Bill) => {
+    const rounded = { ...bill, amount: Math.round(bill.amount * 100) / 100 };
+    onAddBill(rounded);
+    toast({ title: "Bill added", description: `"${bill.name}" added to your bills.` });
+  } : undefined;
 
   const queryClient = useQueryClient();
 
@@ -202,7 +210,7 @@ export function SavingsSection({
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
           onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
           onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
-          onAddBillForGoal={onAddBill ? (name, amt) => onAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
+          onAddBillForGoal={handleAddBill ? (name, amt) => handleAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       </div>
     );
@@ -266,7 +274,7 @@ export function SavingsSection({
                     addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
                   }
                   onDelete={id => deleteMutation.mutateAsync(id)}
-                  onAddAsBill={onAddBill ? (amt) => onAddBill({ name: sf.bill.name ?? "", amount: -Math.abs(amt), type: "weekly", color: "purple", category: "Savings", userColor: true }) : undefined}
+                  onAddAsBill={handleAddBill ? (amt) => handleAddBill({ name: sf.bill.name ?? "", amount: -Math.abs(amt), type: "weekly", color: "purple", category: "Savings", userColor: true }) : undefined}
                 />
               ))}
             </div>
@@ -328,7 +336,7 @@ export function SavingsSection({
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
           onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
           onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
-          onAddBillForGoal={onAddBill ? (name, amt) => onAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
+          onAddBillForGoal={handleAddBill ? (name, amt) => handleAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       )}
     </div>
@@ -493,6 +501,7 @@ function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete, onAddAs
   const pct = Math.round(progressPct);
   const totalSaved = savedInCycle + manualInCycle;
   const isComplete = totalSaved >= annualGoal;
+  const [addedToBills, setAddedToBills] = useState(false);
 
   return (
     <div className="rounded-xl bg-white border border-violet-100 p-4 space-y-3 shadow-sm">
@@ -543,11 +552,16 @@ function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete, onAddAs
       {!isComplete && onAddAsBill && weeksRemaining > 0 && (
         <button
           type="button"
-          onClick={() => onAddAsBill(Math.round(((annualGoal - totalSaved) / weeksRemaining) * 100) / 100)}
-          className="flex items-center gap-1 text-xs font-medium text-purple-600 hover:opacity-80 transition-opacity"
+          disabled={addedToBills}
+          onClick={() => {
+            if (addedToBills) return;
+            setAddedToBills(true);
+            onAddAsBill(Math.round(((annualGoal - totalSaved) / weeksRemaining) * 100) / 100);
+          }}
+          className={`flex items-center gap-1 text-xs font-medium transition-opacity ${addedToBills ? "text-emerald-600 opacity-70 cursor-default" : "text-purple-600 hover:opacity-80"}`}
         >
           <Plus className="w-3 h-3" />
-          Add ${fmt(Math.round(((annualGoal - totalSaved) / weeksRemaining) * 100) / 100)}/wk to bills
+          {addedToBills ? "Added to bills" : `Add $${fmt(Math.round(((annualGoal - totalSaved) / weeksRemaining) * 100) / 100)}/wk to bills`}
         </button>
       )}
     </div>
@@ -764,6 +778,7 @@ interface GoalCardProps {
 
 function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDelete, onAddAsBill }: GoalCardProps) {
   const [editing, setEditing] = useState(false);
+  const [addedToBills, setAddedToBills] = useState(false);
   const [editName, setEditName] = useState(goal.name);
   const [editAmount, setEditAmount] = useState(String(goal.targetAmount));
   const [editDate, setEditDate] = useState(goal.targetDate);
@@ -956,11 +971,16 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
       {!isComplete && onAddAsBill && weeklyNeeded > 0 && (
         <button
           type="button"
-          onClick={() => onAddAsBill(weeklyNeeded)}
-          className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:opacity-80 transition-opacity"
+          disabled={addedToBills}
+          onClick={() => {
+            if (addedToBills) return;
+            setAddedToBills(true);
+            onAddAsBill(weeklyNeeded);
+          }}
+          className={`flex items-center gap-1 text-xs font-medium transition-opacity ${addedToBills ? "text-emerald-600 opacity-70 cursor-default" : "text-teal-600 hover:opacity-80"}`}
         >
           <Plus className="w-3 h-3" />
-          Add ${fmt(weeklyNeeded)}/wk to bills
+          {addedToBills ? "Added to bills" : `Add $${fmt(weeklyNeeded)}/wk to bills`}
         </button>
       )}
     </div>
