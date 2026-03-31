@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, numeric, boolean } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { savedBudgetsTable } from "./saved-budgets";
 
@@ -10,6 +10,7 @@ export const savingsGoalsTable = pgTable("savings_goals", {
   targetAmount: numeric("target_amount", { precision: 12, scale: 2 }).notNull(),
   targetDate: text("target_date").notNull(),
   note: text("note"),
+  includeInBudget: boolean("include_in_budget").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -22,4 +23,5 @@ export type InsertSavingsGoal = {
   targetAmount: string;
   targetDate: string;
   note?: string | null;
+  includeInBudget?: boolean;
 };

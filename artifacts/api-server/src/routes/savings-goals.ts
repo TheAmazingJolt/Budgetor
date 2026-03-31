@@ -36,6 +36,7 @@ router.get("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<vo
       goals: rows.map(r => ({
         ...r,
         targetAmount: parseFloat(r.targetAmount),
+        includeInBudget: r.includeInBudget,
       })),
     });
   } catch (err: any) {
@@ -48,11 +49,12 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
   try {
     const userId = (req as any).user?.id as string;
     const { budgetId } = req.params;
-    const { name, targetAmount, targetDate, note } = req.body as {
+    const { name, targetAmount, targetDate, note, includeInBudget } = req.body as {
       name?: string;
       targetAmount?: number;
       targetDate?: string;
       note?: string;
+      includeInBudget?: boolean;
     };
 
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -88,6 +90,7 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
         targetAmount: targetAmount.toFixed(2),
         targetDate: targetDate.trim(),
         note: note?.trim() || null,
+        includeInBudget: includeInBudget === true,
       })
       .returning();
 
@@ -102,11 +105,12 @@ router.put("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Pr
   try {
     const userId = (req as any).user?.id as string;
     const { budgetId, goalId } = req.params;
-    const { name, targetAmount, targetDate, note } = req.body as {
+    const { name, targetAmount, targetDate, note, includeInBudget } = req.body as {
       name?: string;
       targetAmount?: number;
       targetDate?: string;
       note?: string;
+      includeInBudget?: boolean;
     };
 
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -149,6 +153,7 @@ router.put("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Pr
         targetAmount: targetAmount.toFixed(2),
         targetDate: targetDate.trim(),
         note: note?.trim() || null,
+        includeInBudget: typeof includeInBudget === "boolean" ? includeInBudget : undefined,
         updatedAt: new Date(),
       })
       .where(
@@ -176,6 +181,41 @@ router.put("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Pr
     res.json({ goal: { ...updated[0], targetAmount: parseFloat(updated[0].targetAmount) } });
   } catch (err: any) {
     console.error("[PUT goals]", err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Internal server error" });
+  }
+});
+
+router.patch("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id as string;
+    const { budgetId, goalId } = req.params;
+    const { includeInBudget } = req.body as { includeInBudget?: boolean };
+
+    if (typeof includeInBudget !== "boolean") {
+      res.status(400).json({ error: "includeInBudget must be a boolean" });
+      return;
+    }
+
+    const updated = await db
+      .update(savingsGoalsTable)
+      .set({ includeInBudget, updatedAt: new Date() })
+      .where(
+        and(
+          eq(savingsGoalsTable.id, goalId),
+          eq(savingsGoalsTable.budgetId, budgetId),
+          eq(savingsGoalsTable.userId, userId),
+        ),
+      )
+      .returning();
+
+    if (!updated.length) {
+      res.status(404).json({ error: "Goal not found" });
+      return;
+    }
+
+    res.json({ goal: { ...updated[0], targetAmount: parseFloat(updated[0].targetAmount) } });
+  } catch (err: any) {
+    console.error("[PATCH goal]", err?.message ?? err);
     res.status(500).json({ error: err?.message ?? "Internal server error" });
   }
 });

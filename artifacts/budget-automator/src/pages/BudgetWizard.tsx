@@ -131,10 +131,11 @@ import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } f
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
 import { SavingsSection } from "@/components/SavingsSection";
+import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
 import { CheckInDialog } from "@/components/CheckInDialog";
 import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
 import { isDismissed, setDismissed, apiFetch } from "@/lib/checkin-utils";
-import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt } from "lucide-react";
+import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
 
@@ -353,6 +354,37 @@ function stripHeuristicColors(bills: Bill[]): Bill[] {
   });
 }
 
+function computeSavingsGoalBills(
+  goals: Array<{ id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }>,
+  contributions: Array<{ billName: string; amount: number }>,
+): Bill[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const result: Bill[] = [];
+  for (const g of goals) {
+    if (!g.includeInBudget) continue;
+    const targetDate = new Date(g.targetDate + "T00:00:00");
+    if (targetDate <= today) continue;
+    const savedSoFar = contributions
+      .filter(c => c.billName === g.name)
+      .reduce((sum, c) => sum + c.amount, 0);
+    const remaining = Math.max(0, g.targetAmount - savedSoFar);
+    if (remaining <= 0) continue;
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const weeksLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
+    const weeklyNeeded = Math.round((remaining / weeksLeft) * 100) / 100;
+    result.push({
+      name: g.name,
+      amount: -weeklyNeeded,
+      type: "weekly",
+      category: "Savings",
+      color: "teal",
+      sourceGoalId: g.id,
+    });
+  }
+  return result;
+}
+
 function buildBillColorLookup(bills: Bill[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const b of bills) {
@@ -418,6 +450,7 @@ export function BudgetWizard({
   const [debtsCollapsed, setDebtsCollapsed] = useState(true);
   const [isDebtManagerOpen, setIsDebtManagerOpen] = useState(false);
   const [isBillsManagerOpen, setIsBillsManagerOpen] = useState(false);
+  const [isSavingsManagerOpen, setIsSavingsManagerOpen] = useState(false);
   const [logPaymentDebtId, setLogPaymentDebtId] = useState<string | null>(null);
   const [logPaymentAmount, setLogPaymentAmount] = useState<string>("");
   const [billsDialogOrigin, setBillsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
@@ -833,7 +866,7 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
-  const budgetGoalsQuery = useQuery<{ goals: { name: string; targetAmount: number; targetDate: string }[] }>({
+  const budgetGoalsQuery = useQuery<{ goals: { id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }[] }>({
     queryKey: ["savings-goals", activeCloudBudgetId],
     queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/goals`),
     enabled: !!activeCloudBudgetId,
@@ -1958,6 +1991,13 @@ export function BudgetWizard({
       ? 0
       : (overrides?.openingBalance ?? openingBalance);
 
+    const rawBills = overrides?.bills ?? bills;
+    const savingsGoalBills = computeSavingsGoalBills(
+      budgetGoalsQuery.data?.goals ?? [],
+      budgetContributionsQuery.data?.contributions ?? [],
+    );
+    const allBillsForGeneration = [...rawBills, ...savingsGoalBills];
+
     generateMutation.mutate(
       {
         data: {
@@ -1966,7 +2006,7 @@ export function BudgetWizard({
           openingBalance: effectiveOpeningBalance,
           paycheckAmount: overrides?.paycheckAmount ?? paycheckAmount,
           numberOfWeeks: overrides?.weekCount ?? weekCount,
-          bills: overrides?.bills ?? bills,
+          bills: allBillsForGeneration,
           payPeriod,
         },
       },
@@ -1974,7 +2014,7 @@ export function BudgetWizard({
         onSuccess: (data) => {
           if (!data.weeks?.length) return;
           setGeneratedWeek(data);
-          lastGeneratedBillsFingerprintRef.current = billsFingerprint(overrides?.bills ?? bills);
+          lastGeneratedBillsFingerprintRef.current = billsFingerprint(rawBills);
           setCloudSaveSuccess(false);
 
           setNewSheetSaveSuccess(false);
@@ -2002,7 +2042,7 @@ export function BudgetWizard({
             const rawBills = includeBillsSummary
               ? (parsedWorkbook?.rawBillsSection ?? null)
               : null;
-            const effectiveBills = overrides?.bills ?? bills;
+            const effectiveBills = allBillsForGeneration;
             const fallbackBills = includeBillsSummary && !rawBills ? effectiveBills : undefined;
             const debtsForExport = debts.length > 0 ? debts : undefined;
             const xlsxColorLookup = buildBillColorLookup(effectiveBills);
@@ -2347,7 +2387,12 @@ export function BudgetWizard({
     if (!activeLinkedSheet) return;
     setIsUpdatingLinkedSheet(true);
     try {
-      const colorLookup = buildBillColorLookup(bills);
+      const savingsBillsForSync = computeSavingsGoalBills(
+        budgetGoalsQuery.data?.goals ?? [],
+        budgetContributionsQuery.data?.contributions ?? [],
+      );
+      const allBillsForSync = [...bills, ...savingsBillsForSync];
+      const colorLookup = buildBillColorLookup(allBillsForSync);
       const generated = await generateBudget({
         startDate: newWeekStartDate,
         endDate: newWeekEndDate,
@@ -2355,7 +2400,7 @@ export function BudgetWizard({
         paycheckAmount,
         numberOfWeeks: weekCount,
         payPeriod,
-        bills,
+        bills: allBillsForSync,
       });
       const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
       const historicalWeeks = getExistingWeeks()
@@ -2399,7 +2444,7 @@ export function BudgetWizard({
         startCol: 0,
         includeRemainingAcct,
         ...(debts.length > 0 ? { debts } : {}),
-        ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+        ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),
       };
       if (activeLinkedSheet.type === "google") {
         await sheetWrite(activeLinkedSheet.id, writePayload);
@@ -2567,7 +2612,7 @@ export function BudgetWizard({
   const monthlyAmount = (b: { amount: number; type: string }) =>
     Math.abs(b.amount) * (b.type === "weekly" ? 52 / 12 : b.type === "biweekly" ? 26 / 12 : (b.type === "yearly" || b.type === "yearly-flat") ? 1 / 12 : 1);
 
-  const nonDebtBills = bills.filter(b => !b.sourceDebtId);
+  const nonDebtBills = bills.filter(b => !b.sourceDebtId && !b.sourceGoalId);
   const totalAllBillsMonthly = nonDebtBills.reduce((s, b) => s + monthlyAmount(b), 0);
 
   function normalizeBillCategory(raw: string): string {
@@ -4064,7 +4109,6 @@ export function BudgetWizard({
                             budgetId={activeCloudBudgetId ?? undefined}
                             checkins={checkinsQuery.data?.checkins}
                             onContributionChange={triggerBackgroundSheetSync}
-                            onAddBill={addBill}
                             onOpenCheckIn={() => {
                               const today = new Date();
                               today.setHours(0, 0, 0, 0);
@@ -4843,6 +4887,31 @@ export function BudgetWizard({
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSavingsManagerOpen} onOpenChange={setIsSavingsManagerOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <PiggyBank className="w-6 h-6 text-teal-600" /> Your Savings Goals
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Toggle "Include in budget" to automatically add a weekly contribution to your generated budget.
+            </p>
+          </DialogHeader>
+          {activeCloudBudgetId ? (
+            <ManageSavingsDialog
+              budgetId={activeCloudBudgetId}
+              onGoalsChanged={() => {
+                queryClient.invalidateQueries({ queryKey: ["savings-goals", activeCloudBudgetId] });
+              }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Open a cloud budget to manage savings goals.
+            </p>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -5696,9 +5765,10 @@ export function BudgetWizard({
       {isSignedIn && (
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-border/50 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] flex items-stretch h-16 safe-area-bottom">
           {(() => {
-            const homeActive = !isBillsManagerOpen && !isDebtManagerOpen;
+            const homeActive = !isBillsManagerOpen && !isDebtManagerOpen && !isSavingsManagerOpen;
             const billsActive = isBillsManagerOpen;
             const debtsActive = isDebtManagerOpen;
+            const savingsActive = isSavingsManagerOpen;
             const activeClass = "text-emerald-600";
             const inactiveClass = "text-muted-foreground hover:text-primary";
             return (
@@ -5734,6 +5804,15 @@ export function BudgetWizard({
                       <DollarSign className="w-5 h-5" />
                       <span>Debts</span>
                     </button>
+                    {!!activeCloudBudgetId && (
+                      <button
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${savingsActive ? "text-teal-600" : inactiveClass}`}
+                        onClick={() => setIsSavingsManagerOpen(true)}
+                      >
+                        <PiggyBank className="w-5 h-5" />
+                        <span>Savings</span>
+                      </button>
+                    )}
                   </>
                 )}
               </>
