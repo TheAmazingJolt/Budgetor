@@ -927,8 +927,7 @@ export function BudgetWizard({
       ...(generatedWeek?.weeks ?? []),
     ];
 
-    let bestWeek: { label: string; items: { name: string; amount: number }[]; openingBalance: number } | null = null;
-    let bestDate: Date | null = null;
+    let bestWeek: { label: string; items: { name: string; amount: number }[]; openingBalance: number; startDate: Date } | null = null;
     for (const w of allAvailableWeeks) {
       const label = w.weekLabel ?? w.label;
       if (!label) continue;
@@ -936,31 +935,31 @@ export function BudgetWizard({
       if (!m) continue;
       const yr = parseInt(m[3]); const mo = parseInt(m[1]) - 1; const dy = parseInt(m[2]);
       const startDate = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
-      if (startDate > today) continue;
-      if (!bestDate || startDate > bestDate) {
-        bestWeek = {
-          label,
-          items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
-          openingBalance: w.openingBalance ?? 0,
-        };
-        bestDate = startDate;
-      }
+      if (startDate.getTime() !== today.getTime()) continue;
+      bestWeek = {
+        label,
+        items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
+        openingBalance: w.openingBalance ?? 0,
+        startDate,
+      };
+      break;
     }
 
     if (!bestWeek) return;
+    const billsOnly = bestWeek.items.filter(i => i.amount < 0);
+    if (billsOnly.length === 0) return;
     const alreadyDone = paydayCheckinsQuery.data.paydayCheckins.some(c => c.weekLabel === bestWeek!.label);
     if (alreadyDone) return;
     if (isPaydayDismissed(activeCloudBudgetId, bestWeek.label)) return;
 
     setPaydayWeekLabel(bestWeek.label);
-    setPaydayWeekItems(bestWeek.items.filter(i => i.amount < 0));
+    setPaydayWeekItems(billsOnly);
     setPaydayOpeningBalance(bestWeek.openingBalance);
     setPaydayDialogOpen(true);
   }, [activeCloudBudgetId, paydayCheckinsQuery.data]);
 
   useEffect(() => {
-    if (paydayDialogOpen) return;
-    if (!activeCloudBudgetId || !checkinsQuery.data) return;
+    if (!activeCloudBudgetId || !checkinsQuery.data || !paydayCheckinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
     if (balancedBillsList.length === 0) return;
 
@@ -989,13 +988,20 @@ export function BudgetWizard({
     }
 
     if (!bestWeek) return;
+
+    const hasBillDeductions = (bestWeek.items ?? []).some(i => i.amount < 0);
+    const paydayAlreadyDone = paydayCheckinsQuery.data.paydayCheckins.some(c => c.weekLabel === bestWeek!.label);
+    const paydaySessionDismissed = isPaydayDismissed(activeCloudBudgetId, bestWeek.label);
+    const isTodayWeekStart = bestDate !== null && bestDate.getTime() === today.getTime();
+    if (hasBillDeductions && !paydayAlreadyDone && !paydaySessionDismissed && isTodayWeekStart) return;
+
     const alreadyChecked = checkinsQuery.data.checkins.some(c => c.weekLabel === bestWeek!.label);
     if (alreadyChecked) return;
     if (isDismissed(activeCloudBudgetId, bestWeek.label)) return;
 
     setCheckInWeek(bestWeek);
     setCheckInDialogOpen(true);
-  }, [activeCloudBudgetId, checkinsQuery.data, paydayDialogOpen]);
+  }, [activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
