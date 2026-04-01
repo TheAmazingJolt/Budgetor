@@ -71,8 +71,8 @@ function writeBillsSectionBelow(
   startRow: number,
   goals?: SavingsGoalForSheet[],
 ): number {
-  // Debt-linked bills (min payments / balanced) never appear in the Bills section.
-  const filteredBills = bills.filter(b => !b.sourceDebtId);
+  // Debt-linked and savings-goal bills have their own sections below.
+  const filteredBills = bills.filter(b => !b.sourceDebtId && !b.sourceGoalId);
   if (filteredBills.length === 0) return startRow;
 
   const gapRow     = startRow + 1;
@@ -144,6 +144,79 @@ function writeBillsSectionBelow(
   sheet['!ref'] = XLSX.utils.encode_range(range);
 
   // Auto-fit the three bills columns.
+  autoFitColumns(sheet, 0, 2);
+
+  return row;
+}
+
+/**
+ * Writes a dedicated Savings Goals section below Bills/Debts.
+ * Only writes bills that have `sourceGoalId` set.
+ * Returns the row index after the last written row.
+ */
+function writeSavingsGoalsSectionBelow(
+  sheet: XLSX.WorkSheet,
+  bills: Bill[],
+  startRow: number,
+): number {
+  const savingsBills = bills.filter(b => b.sourceGoalId);
+  if (savingsBills.length === 0) return startRow;
+
+  const gapRow     = startRow + 1;
+  const headerRow  = gapRow + 1;
+  const colHdrRow  = headerRow + 1;
+  const firstDataRow = colHdrRow + 1;
+
+  const tealFill      = { patternType: 'solid' as const, fgColor: { rgb: 'CCFBF1' } }; // tealLight
+  const tealLightFill = { patternType: 'solid' as const, fgColor: { rgb: 'F0FDFB' } }; // tealLighter
+  const tealTextColor = { rgb: '0F766E' };                                              // dark teal
+
+  const sectionHeaderStyle = {
+    font: { bold: true, sz: 11, name: 'Arial', color: tealTextColor },
+    fill: tealFill,
+    alignment: { horizontal: 'center' as const },
+  };
+  set(sheet, headerRow, 0, makeCell('Savings Goals', sectionHeaderStyle));
+  set(sheet, headerRow, 1, makeCell('', sectionHeaderStyle));
+  set(sheet, headerRow, 2, makeCell('', sectionHeaderStyle));
+  addMerge(sheet, headerRow, 0, headerRow, 2);
+
+  const colHdrStyle = {
+    font: { bold: true, sz: 10, name: 'Arial' },
+    fill: tealLightFill,
+    alignment: { horizontal: 'left' as const },
+  };
+  set(sheet, colHdrRow, 0, makeCell('Goal',        colHdrStyle));
+  set(sheet, colHdrRow, 1, makeCell('Weekly $',    { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
+  set(sheet, colHdrRow, 2, makeCell('Target Date', { ...colHdrStyle, alignment: { horizontal: 'center' as const } }));
+
+  const rowFont = { sz: 10, name: 'Arial' };
+
+  let row = firstDataRow;
+  for (const bill of savingsBills) {
+    const nameStyle: any = { font: { ...rowFont }, fill: tealLightFill, alignment: { horizontal: 'left' } };
+    const amtStyle:  any = { font: { ...rowFont }, fill: tealLightFill, alignment: { horizontal: 'center' }, numFmt: MONEY_FMT };
+    const dateStyle: any = { font: { ...rowFont }, fill: tealLightFill, alignment: { horizontal: 'center' } };
+
+    const match = bill.name.match(/\[→\s*(.+?)\]$/);
+    const targetDate = match ? match[1] : '';
+    const displayName = bill.name.replace(/\s*\[→.+?\]$/, '').trim();
+
+    set(sheet, row, 0, makeCell(displayName,          nameStyle));
+    set(sheet, row, 1, makeCell(Math.abs(bill.amount), amtStyle));
+    set(sheet, row, 2, makeCell(targetDate,            dateStyle));
+    row++;
+  }
+
+  // Extend !ref
+  const existingRef = sheet['!ref'];
+  const range = existingRef
+    ? XLSX.utils.decode_range(existingRef)
+    : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  if (row - 1 > range.e.r) range.e.r = row - 1;
+  if (2 > range.e.c) range.e.c = 2;
+  sheet['!ref'] = XLSX.utils.encode_range(range);
+
   autoFitColumns(sheet, 0, 2);
 
   return row;
@@ -928,6 +1001,12 @@ export function appendBudgetWeeks(
     writeDebtsSection(freshSheet, debts, lastRow);
   }
 
+  // Write Savings Goals section below Debts (savings bills are excluded from Bills section).
+  if (bills && bills.some(b => b.sourceGoalId)) {
+    const lastRow = freshSheet['!ref'] ? XLSX.utils.decode_range(freshSheet['!ref']).e.r : 0;
+    writeSavingsGoalsSectionBelow(freshSheet, bills, lastRow);
+  }
+
   // No frozen columns — weeks start at col A.
   const lastNewWeekStartCol = (weekBudgets.length - 1) * 2;
   applySheetView(freshSheet, 0, lastNewWeekStartCol);
@@ -987,6 +1066,12 @@ export function createBlankBudget(
   if (debts && debts.length > 0) {
     const lastRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).e.r : 0;
     writeDebtsSection(ws, debts, lastRow);
+  }
+
+  // Write Savings Goals section below Debts (savings bills are excluded from Bills section).
+  if (allBillsForBelow && allBillsForBelow.some(b => b.sourceGoalId)) {
+    const lastRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).e.r : 0;
+    writeSavingsGoalsSectionBelow(ws, allBillsForBelow, lastRow);
   }
 
   // No frozen columns — weeks start at col A.

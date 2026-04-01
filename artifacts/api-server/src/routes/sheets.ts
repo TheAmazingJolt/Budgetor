@@ -627,6 +627,7 @@ interface BillMeta {
   dayOfMonth?: number | null;
   color?: string;
   sourceDebtId?: string;
+  sourceGoalId?: string;
   annualDueMonth?: number | null;
   payoffDate?: string | null;
 }
@@ -1100,8 +1101,8 @@ function buildBillRows(
   afterRow: number,
   sheetId: number,
 ) {
-  // Exclude all debt-linked bills — balanced debt bills now appear in the Debts section with "(B)".
-  const filteredBills = bills.filter((b) => !b.sourceDebtId);
+  // Exclude debt-linked and savings-goal bills — they have their own sections.
+  const filteredBills = bills.filter((b) => !b.sourceDebtId && !b.sourceGoalId);
   if (!filteredBills || filteredBills.length === 0) return { billRows: [], billRequests: [], billRowCount: 0 };
 
   const headerRow = afterRow + 1;
@@ -1276,6 +1277,95 @@ function buildBillRows(
   return { billRows, billRequests, billRowCount: billRows.length };
 }
 
+function buildSavingsGoalRows(
+  savingsBills: BillMeta[],
+  afterRow: number,
+  sheetId: number,
+) {
+  if (!savingsBills || savingsBills.length === 0) return { savingsRows: [], savingsRequests: [], savingsRowCount: 0 };
+
+  const gapRow = afterRow;
+  const headerRow = gapRow + 1;
+  const colHeaderRow = headerRow + 1;
+  const firstDataRow = colHeaderRow + 1;
+
+  const savingsRows: any[][] = [];
+  savingsRows.push([]);
+  savingsRows.push(["Savings Goals", "", ""]);
+  savingsRows.push(["Goal", "Weekly $", "Target Date"]);
+
+  for (const bill of savingsBills) {
+    // Extract target date suffix from name: "Goal Name [→ May 18]" → "May 18"
+    const match = bill.name.match(/\[→\s*(.+?)\]$/);
+    const targetDate = match ? match[1] : "";
+    // Strip the suffix for the display name
+    const displayName = bill.name.replace(/\s*\[→.+?\]$/, "").trim();
+    savingsRows.push([displayName, Math.abs(bill.amount), targetDate]);
+  }
+
+  const teal = { red: 15 / 255, green: 118 / 255, blue: 110 / 255 };
+  const tealLight = { red: 204 / 255, green: 251 / 255, blue: 241 / 255 };
+  const tealLighter = { red: 240 / 255, green: 253 / 255, blue: 250 / 255 };
+
+  const savingsRequests: sheets_v4.Schema$Request[] = [];
+
+  // Unmerge + re-merge section header
+  savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
+  savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 }, mergeType: "MERGE_ALL" } });
+
+  // Section header style
+  savingsRequests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+      cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: teal }, backgroundColor: tealLight, horizontalAlignment: "CENTER" } },
+      fields: "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)",
+    },
+  });
+
+  // Column header style
+  savingsRequests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: colHeaderRow, endRowIndex: colHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+      cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: tealLighter } },
+      fields: "userEnteredFormat(textFormat,backgroundColor)",
+    },
+  });
+
+  // Data row styles
+  for (let i = 0; i < savingsBills.length; i++) {
+    const dataRow = firstDataRow + i;
+    savingsRequests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: dataRow, endRowIndex: dataRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        cell: { userEnteredFormat: { backgroundColor: tealLighter } },
+        fields: "userEnteredFormat(backgroundColor)",
+      },
+    });
+  }
+
+  // Format Weekly $ column as currency
+  savingsRequests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: firstDataRow, endRowIndex: firstDataRow + savingsBills.length, startColumnIndex: 1, endColumnIndex: 2 },
+      cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' } } },
+      fields: "userEnteredFormat(numberFormat)",
+    },
+  });
+
+  // Center-align Weekly $ and Target Date columns
+  for (const col of [1, 2]) {
+    savingsRequests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: colHeaderRow, endRowIndex: firstDataRow + savingsBills.length, startColumnIndex: col, endColumnIndex: col + 1 },
+        cell: { userEnteredFormat: { horizontalAlignment: "CENTER" } },
+        fields: "userEnteredFormat(horizontalAlignment)",
+      },
+    });
+  }
+
+  return { savingsRows, savingsRequests, savingsRowCount: savingsRows.length };
+}
+
 async function writeBudgetToSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
@@ -1440,9 +1530,11 @@ async function writeBudgetToSheet(
     }
   }
 
+  let debtRowCount = 0;
   if (debts && debts.length > 0) {
     const debtsStartRow = totalRows + billRowCount;
     const { debtRows, debtRequests } = buildDebtRows(debts, debtsStartRow, sheetId, bills);
+    debtRowCount = debtRows.length;
 
     const debtRangeStart = `A${debtsStartRow + 1}`;
     const debtRangeEnd = `D${debtsStartRow + debtRows.length}`;
@@ -1459,6 +1551,31 @@ async function writeBudgetToSheet(
       await sheetsApi.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: { requests: debtRequests },
+      });
+    }
+  }
+
+  // Savings Goals section — bills with sourceGoalId
+  const savingsBills = (bills ?? []).filter((b) => b.sourceGoalId);
+  if (savingsBills.length > 0) {
+    const savingsStartRow = totalRows + billRowCount + debtRowCount;
+    const { savingsRows, savingsRequests } = buildSavingsGoalRows(savingsBills, savingsStartRow, sheetId);
+
+    const savingsRangeStart = `A${savingsStartRow + 1}`;
+    const savingsRangeEnd = `C${savingsStartRow + savingsRows.length}`;
+    const savingsRange = `'${escapedTitle}'!${savingsRangeStart}:${savingsRangeEnd}`;
+
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: savingsRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: savingsRows },
+    });
+
+    if (savingsRequests.length > 0) {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: savingsRequests },
       });
     }
   }
