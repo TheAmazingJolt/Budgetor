@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Banknote, ChevronRight, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,13 @@ export function PaydayCheckInDialog({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setStep(1);
+    setPaycheckStr(expectedPaycheck > 0 ? expectedPaycheck.toFixed(2) : "");
+    setSaving(false);
+    setError("");
+  }, [weekLabel, open]);
 
   const parsedPaycheck = parseFloat(paycheckStr) || 0;
 
