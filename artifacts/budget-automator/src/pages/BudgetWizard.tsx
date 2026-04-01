@@ -5814,15 +5814,13 @@ export function BudgetWizard({
                       <DollarSign className="w-5 h-5" />
                       <span>Debts</span>
                     </button>
-                    {!!activeCloudBudgetId && (
-                      <button
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${savingsActive ? "text-teal-600" : inactiveClass}`}
-                        onClick={() => setIsSavingsManagerOpen(true)}
-                      >
-                        <PiggyBank className="w-5 h-5" />
-                        <span>Savings</span>
-                      </button>
-                    )}
+                    <button
+                      className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${savingsActive ? "text-teal-600" : inactiveClass}`}
+                      onClick={() => setIsSavingsManagerOpen(true)}
+                    >
+                      <PiggyBank className="w-5 h-5" />
+                      <span>Savings</span>
+                    </button>
                   </>
                 )}
               </>
