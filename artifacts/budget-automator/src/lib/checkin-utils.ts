@@ -29,3 +29,21 @@ export function setDismissed(budgetId: string, weekLabel: string) {
     sessionStorage.setItem(checkinDismissKey(budgetId, weekLabel), "1");
   } catch {}
 }
+
+function paydayDismissKey(budgetId: string, weekLabel: string) {
+  return `payday_dismissed_${budgetId}_${weekLabel}`;
+}
+
+export function isPaydayDismissed(budgetId: string, weekLabel: string): boolean {
+  try {
+    return sessionStorage.getItem(paydayDismissKey(budgetId, weekLabel)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setPaydayDismissed(budgetId: string, weekLabel: string) {
+  try {
+    sessionStorage.setItem(paydayDismissKey(budgetId, weekLabel), "1");
+  } catch {}
+}

@@ -134,7 +134,9 @@ import { SavingsSection } from "@/components/SavingsSection";
 import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
 import { CheckInDialog } from "@/components/CheckInDialog";
 import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
-import { isDismissed, setDismissed, apiFetch } from "@/lib/checkin-utils";
+import { PaydayCheckInDialog } from "@/components/PaydayCheckInDialog";
+import type { PaydayBillItem } from "@/components/PaydayCheckInDialog";
+import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank } from "lucide-react";
 
 type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
@@ -554,6 +556,11 @@ export function BudgetWizard({
   const [checkInDialogOpen, setCheckInDialogOpen] = useState(false);
   const [checkInWeek, setCheckInWeek] = useState<WeekSnapshot | null>(null);
 
+  const [paydayDialogOpen, setPaydayDialogOpen] = useState(false);
+  const [paydayWeekLabel, setPaydayWeekLabel] = useState<string | null>(null);
+  const [paydayWeekItems, setPaydayWeekItems] = useState<PaydayBillItem[]>([]);
+  const [paydayOpeningBalance, setPaydayOpeningBalance] = useState(0);
+
   const [pendingImportBills, setPendingImportBills] = useState<Bill[] | null>(null);
   const [savedBillsCountAtConflict, setSavedBillsCountAtConflict] = useState(0);
   const [isImportConflictDialogOpen, setIsImportConflictDialogOpen] = useState(false);
@@ -888,6 +895,13 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
+  const paydayCheckinsQuery = useQuery<{ paydayCheckins: { id: string; weekLabel: string; actualPaycheck: number }[] }>({
+    queryKey: ["payday-checkins", activeCloudBudgetId],
+    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/payday-checkins`),
+    enabled: !!activeCloudBudgetId,
+    staleTime: 30_000,
+  });
+
   const budgetGoalsQuery = useQuery<{ goals: { id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }[] }>({
     queryKey: ["savings-goals", activeCloudBudgetId],
     queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/goals`),
@@ -903,6 +917,49 @@ export function BudgetWizard({
   });
 
   useEffect(() => {
+    if (!activeCloudBudgetId || !paydayCheckinsQuery.data) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const allAvailableWeeks = [
+      ...(cloudExistingWeeks ?? []),
+      ...(generatedWeek?.weeks ?? []),
+    ];
+
+    let bestWeek: { label: string; items: { name: string; amount: number }[]; openingBalance: number } | null = null;
+    let bestDate: Date | null = null;
+    for (const w of allAvailableWeeks) {
+      const label = w.weekLabel ?? w.label;
+      if (!label) continue;
+      const m = label.match(/(\d+)\/(\d+)\/(\d+)/);
+      if (!m) continue;
+      const yr = parseInt(m[3]); const mo = parseInt(m[1]) - 1; const dy = parseInt(m[2]);
+      const startDate = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
+      if (startDate > today) continue;
+      if (!bestDate || startDate > bestDate) {
+        bestWeek = {
+          label,
+          items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
+          openingBalance: w.openingBalance ?? 0,
+        };
+        bestDate = startDate;
+      }
+    }
+
+    if (!bestWeek) return;
+    const alreadyDone = paydayCheckinsQuery.data.paydayCheckins.some(c => c.weekLabel === bestWeek!.label);
+    if (alreadyDone) return;
+    if (isPaydayDismissed(activeCloudBudgetId, bestWeek.label)) return;
+
+    setPaydayWeekLabel(bestWeek.label);
+    setPaydayWeekItems(bestWeek.items.filter(i => i.amount < 0));
+    setPaydayOpeningBalance(bestWeek.openingBalance);
+    setPaydayDialogOpen(true);
+  }, [activeCloudBudgetId, paydayCheckinsQuery.data]);
+
+  useEffect(() => {
+    if (paydayDialogOpen) return;
     if (!activeCloudBudgetId || !checkinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
     if (balancedBillsList.length === 0) return;
@@ -938,7 +995,7 @@ export function BudgetWizard({
 
     setCheckInWeek(bestWeek);
     setCheckInDialogOpen(true);
-  }, [activeCloudBudgetId, checkinsQuery.data]);
+  }, [activeCloudBudgetId, checkinsQuery.data, paydayDialogOpen]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -5687,6 +5744,29 @@ export function BudgetWizard({
       </AlertDialog>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      {paydayWeekLabel && activeCloudBudgetId && (
+        <PaydayCheckInDialog
+          open={paydayDialogOpen}
+          weekLabel={paydayWeekLabel}
+          weekItems={paydayWeekItems}
+          openingBalance={paydayOpeningBalance}
+          expectedPaycheck={paycheckAmount}
+          budgetId={activeCloudBudgetId}
+          onConfirmed={(actualPaycheck) => {
+            setWeekEdits(prev => ({
+              ...prev,
+              [paydayWeekLabel]: { ...prev[paydayWeekLabel], paycheck: actualPaycheck },
+            }));
+            setPaydayDialogOpen(false);
+            paydayCheckinsQuery.refetch();
+          }}
+          onDismiss={() => {
+            if (activeCloudBudgetId && paydayWeekLabel) setPaydayDismissed(activeCloudBudgetId, paydayWeekLabel);
+            setPaydayDialogOpen(false);
+          }}
+        />
+      )}
 
       {checkInWeek && activeCloudBudgetId && (
         <CheckInDialog

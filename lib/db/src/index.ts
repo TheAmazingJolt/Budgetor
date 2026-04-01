@@ -108,6 +108,19 @@ export async function initDb(): Promise<void> {
       );
 
       ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT false;
+
+      CREATE TABLE IF NOT EXISTS payday_checkins (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        budget_id UUID NOT NULL REFERENCES saved_budgets(id) ON DELETE CASCADE,
+        week_label TEXT NOT NULL,
+        actual_paycheck NUMERIC(12, 2) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS payday_checkins_unique_week
+        ON payday_checkins (budget_id, week_label);
     `);
     console.log("[initDb] schema migrations complete");
   } finally {
