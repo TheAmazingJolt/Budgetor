@@ -1140,20 +1140,7 @@ function buildBillRows(
 
   const billRequests: sheets_v4.Schema$Request[] = [];
 
-  // Unmerge all cells in the bills section (header + col header + data rows)
-  // to prevent the Due Day column from appearing merged from prior writes.
-  billRequests.push({
-    unmergeCells: {
-      range: {
-        sheetId,
-        startRowIndex: headerRow,
-        endRowIndex: firstDataRow + filteredBills.length,
-        startColumnIndex: 0,
-        endColumnIndex: 3,
-      },
-    },
-  });
-
+  // Unmerge the header row before re-merging it, so stale merge state is cleared.
   billRequests.push({
     unmergeCells: {
       range: {
