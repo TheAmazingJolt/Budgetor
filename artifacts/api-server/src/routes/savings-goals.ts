@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, savingsGoalsTable, savedBudgetsTable, savingsContributionsTable } from "@workspace/db";
+import { db, pool, savingsGoalsTable, savedBudgetsTable, savingsContributionsTable } from "@workspace/db";
 import { eq, and, asc } from "drizzle-orm";
 import { requireAuth } from "./user-auth";
 
@@ -81,23 +81,32 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
       return;
     }
 
-    const [row] = await db
-      .insert(savingsGoalsTable)
-      .values({
-        userId,
-        budgetId,
-        name: name.trim(),
-        targetAmount: targetAmount.toFixed(2),
-        targetDate: targetDate.trim(),
-        note: note?.trim() || null,
-        includeInBudget: includeInBudget === true,
-      })
-      .returning();
+    await pool.query(`ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT false`);
 
-    res.status(201).json({ goal: { ...row, targetAmount: parseFloat(row.targetAmount) } });
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO savings_goals (user_id, budget_id, name, target_amount, target_date, note, include_in_budget)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, user_id, budget_id, name, target_amount, target_date, note, include_in_budget, created_at, updated_at`,
+      [userId, budgetId, name.trim(), targetAmount.toFixed(2), targetDate.trim(), note?.trim() || null, includeInBudget === true]
+    );
+
+    res.status(201).json({
+      goal: {
+        id: row.id,
+        userId: row.user_id,
+        budgetId: row.budget_id,
+        name: row.name,
+        targetAmount: parseFloat(row.target_amount),
+        targetDate: row.target_date,
+        note: row.note,
+        includeInBudget: row.include_in_budget,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }
+    });
   } catch (err: any) {
-    console.error("[POST goals]", err?.message ?? err);
-    res.status(500).json({ error: err?.message ?? "Internal server error" });
+    console.error("[POST goals]", err?.message ?? err, err?.detail ?? "", err?.code ?? "");
+    res.status(500).json({ error: `${err?.message ?? "Internal server error"}${err?.detail ? ` — ${err.detail}` : ""}${err?.code ? ` (${err.code})` : ""}` });
   }
 });
 
