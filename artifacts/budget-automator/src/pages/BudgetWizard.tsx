@@ -364,6 +364,17 @@ function stripHeuristicColors(bills: Bill[]): Bill[] {
   });
 }
 
+const GOAL_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtGoalTargetDate(isoDate: string): string {
+  const parts = isoDate.split("-");
+  if (parts.length < 3) return isoDate;
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (isNaN(m) || isNaN(d)) return isoDate;
+  return `${GOAL_MONTH_SHORT[(m - 1) % 12]} ${d}`;
+}
+
 function computeSavingsGoalBills(
   goals: Array<{ id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }>,
   contributions: Array<{ billName: string; amount: number }>,
@@ -383,8 +394,9 @@ function computeSavingsGoalBills(
     const msPerWeek = 7 * 24 * 60 * 60 * 1000;
     const weeksLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
     const weeklyNeeded = Math.round((remaining / weeksLeft) * 100) / 100;
+    const dateLabel = fmtGoalTargetDate(g.targetDate);
     result.push({
-      name: g.name,
+      name: `${g.name} [→ ${dateLabel}]`,
       amount: -weeklyNeeded,
       type: "weekly",
       category: "Savings",
