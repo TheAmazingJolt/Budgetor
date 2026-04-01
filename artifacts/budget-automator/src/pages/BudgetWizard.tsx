@@ -917,6 +917,7 @@ export function BudgetWizard({
   });
 
   useEffect(() => {
+    if (inputMode !== "cloud") return;
     if (!activeCloudBudgetId || !paydayCheckinsQuery.data) return;
 
     const today = new Date();
@@ -956,9 +957,10 @@ export function BudgetWizard({
     setPaydayWeekItems(billsOnly);
     setPaydayOpeningBalance(bestWeek.openingBalance);
     setPaydayDialogOpen(true);
-  }, [activeCloudBudgetId, paydayCheckinsQuery.data, cloudExistingWeeks, generatedWeek]);
+  }, [inputMode, activeCloudBudgetId, paydayCheckinsQuery.data, cloudExistingWeeks, generatedWeek]);
 
   useEffect(() => {
+    if (inputMode !== "cloud") return;
     if (paydayDialogOpen) return;
     if (!activeCloudBudgetId || !checkinsQuery.data || !paydayCheckinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
@@ -1002,7 +1004,7 @@ export function BudgetWizard({
 
     setCheckInWeek(bestWeek);
     setCheckInDialogOpen(true);
-  }, [activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data, paydayDialogOpen]);
+  }, [inputMode, activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data, paydayDialogOpen]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
