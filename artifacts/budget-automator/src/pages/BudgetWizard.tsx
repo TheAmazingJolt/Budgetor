@@ -2465,6 +2465,7 @@ export function BudgetWizard({
         weeks,
         startCol: 0,
         includeRemainingAcct,
+        ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
         ...(debts.length > 0 ? { debts } : {}),
         ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),
       };
