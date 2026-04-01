@@ -352,7 +352,7 @@ function GoalForm({ form, onChange, error, onSave, onCancel, saving }: GoalFormP
         <Input
           value={form.name}
           onChange={set("name")}
-          placeholder="e.g. Madison Appt, Vacation Fund"
+          placeholder="e.g. Doctor Appt, Vacation Fund"
           className="h-9 rounded-xl"
           autoFocus
         />

@@ -106,6 +106,8 @@ export async function initDb(): Promise<void> {
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT false;
     `);
     console.log("[initDb] schema migrations complete");
   } finally {
