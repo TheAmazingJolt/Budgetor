@@ -77,8 +77,8 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
       res.status(400).json({ error: "Missing itemName" });
       return;
     }
-    if (!itemType || !["balanced", "debt", "yearly"].includes(itemType)) {
-      res.status(400).json({ error: "itemType must be 'balanced', 'debt', or 'yearly'" });
+    if (!itemType || !["balanced", "debt", "yearly", "goal"].includes(itemType)) {
+      res.status(400).json({ error: "itemType must be 'balanced', 'debt', 'yearly', or 'goal'" });
       return;
     }
     if (typeof plannedAmount !== "number" || plannedAmount < 0) {

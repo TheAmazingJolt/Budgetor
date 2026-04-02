@@ -964,7 +964,11 @@ export function BudgetWizard({
     if (paydayDialogOpen) return;
     if (!activeCloudBudgetId || !checkinsQuery.data || !paydayCheckinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
-    if (balancedBillsList.length === 0) return;
+    const savingsGoalBillsList = computeSavingsGoalBills(
+      budgetGoalsQuery.data?.goals ?? [],
+      budgetContributionsQuery.data?.contributions ?? [],
+    );
+    if (balancedBillsList.length === 0 && savingsGoalBillsList.length === 0) return;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1004,7 +1008,7 @@ export function BudgetWizard({
 
     setCheckInWeek(bestWeek);
     setCheckInDialogOpen(true);
-  }, [inputMode, activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data, paydayDialogOpen]);
+  }, [inputMode, activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data, paydayDialogOpen, budgetGoalsQuery.data, budgetContributionsQuery.data]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -5781,7 +5785,13 @@ export function BudgetWizard({
         <CheckInDialog
           open={checkInDialogOpen}
           week={checkInWeek}
-          savingsBills={bills.filter(b => b.type === "balanced" || b.type === "yearly")}
+          savingsBills={[
+            ...bills.filter(b => b.type === "balanced" || b.type === "yearly"),
+            ...computeSavingsGoalBills(
+              budgetGoalsQuery.data?.goals ?? [],
+              budgetContributionsQuery.data?.contributions ?? [],
+            ),
+          ]}
           existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
           budgetId={activeCloudBudgetId}
           onSaved={() => {

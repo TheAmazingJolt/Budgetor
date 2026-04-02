@@ -17,7 +17,7 @@ export interface WeeklyCheckIn {
   id: string;
   weekLabel: string;
   itemName: string;
-  itemType: "balanced" | "debt" | "yearly";
+  itemType: "balanced" | "debt" | "yearly" | "goal";
   plannedAmount: number;
   actualAmount: number;
 }
@@ -29,7 +29,7 @@ export interface WeekSnapshot {
 
 interface CheckInItem {
   billName: string;
-  billType: "balanced" | "yearly";
+  billType: "balanced" | "yearly" | "goal";
   plannedAmount: number;
   actualStr: string;
   skipped: boolean;
@@ -52,14 +52,21 @@ function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number 
       .filter(it => it.name === prefix)
       .reduce((s, it) => s + Math.abs(it.amount), 0);
   }
+  if (bill.type === "weekly") {
+    return weekItems
+      .filter(it => it.name === bill.name)
+      .reduce((s, it) => s + Math.abs(it.amount), 0);
+  }
   const prefix = `${bill.name} [annual:`;
   return weekItems
     .filter(it => it.name.startsWith(prefix))
     .reduce((s, it) => s + Math.abs(it.amount), 0);
 }
 
-function getBillItemType(bill: Bill): "balanced" | "yearly" {
-  return bill.type === "balanced" ? "balanced" : "yearly";
+function getBillItemType(bill: Bill): "balanced" | "yearly" | "goal" {
+  if (bill.type === "balanced") return "balanced";
+  if (bill.type === "weekly") return "goal";
+  return "yearly";
 }
 
 export function CheckInDialog({
@@ -67,7 +74,7 @@ export function CheckInDialog({
 }: CheckInDialogProps) {
   const buildItems = (): CheckInItem[] =>
     savingsBills
-      .filter(b => b.type === "balanced" || b.type === "yearly")
+      .filter(b => b.type === "balanced" || b.type === "yearly" || b.type === "weekly")
       .map(bill => {
         const itemType = getBillItemType(bill);
         const planned = getPlannedAmount(bill, week.items);
@@ -160,7 +167,7 @@ export function CheckInDialog({
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {it.billType === "yearly" ? "Sinking fund" : "Balanced monthly"}
+                    {it.billType === "goal" ? "Savings goal" : it.billType === "yearly" ? "Sinking fund" : "Balanced monthly"}
                   </p>
                 </div>
                 <button
