@@ -4788,6 +4788,19 @@ export function BudgetWizard({
                   </Button>
                 )}
 
+                {activeLinkedSheet && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => triggerBackgroundSheetSync()}
+                    disabled={sheetWriteMutation.isPending || excelWriteMutation.isPending}
+                    className="sm:w-auto h-14 rounded-2xl border-border/60"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-1 ${(sheetWriteMutation.isPending || excelWriteMutation.isPending) ? "animate-spin" : ""}`} />
+                    Sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"}
+                  </Button>
+                )}
+
                 {(inputMode === "google" && selectedSheetId) || (inputMode === "excel" && selectedExcelFileId) ? (
                   <Button
                     size="lg"
