@@ -5830,6 +5830,7 @@ export function BudgetWizard({
             setCheckInDialogOpen(false);
             setCheckInWeek(null);
             checkinsQuery.refetch();
+            budgetContributionsQuery.refetch();
             triggerBackgroundSheetSync();
           }}
           onDismiss={() => {

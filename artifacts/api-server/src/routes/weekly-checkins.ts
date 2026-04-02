@@ -3,6 +3,23 @@ import { pool, savedBudgetsTable, db } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "./user-auth";
 
+function weekLabelToStartDate(weekLabel: string): string | null {
+  try {
+    const yearMatch = weekLabel.match(/\b(\d{4})\b/);
+    if (!yearMatch) return null;
+    const year = yearMatch[1];
+    const startPart = weekLabel.split(" to ")[0]?.trim();
+    if (!startPart) return null;
+    const d = new Date(`${startPart} ${year}`);
+    if (isNaN(d.getTime())) return null;
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${m}-${day}`;
+  } catch {
+    return null;
+  }
+}
+
 const router: IRouter = Router();
 
 router.get("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise<void> => {
@@ -118,6 +135,24 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
         [userId, budgetId, weekLabel, itemName, itemType, plannedAmount.toFixed(2), actualAmount.toFixed(2)],
       );
       const r = result.rows[0];
+
+      if (itemType === "goal") {
+        const goalName = itemName.replace(/\s*\[→[^\]]+\]\s*$/, "").trim();
+        const startDate = weekLabelToStartDate(weekLabel);
+        const contribNote = `checkin:${weekLabel}`;
+        await client.query(
+          `DELETE FROM savings_contributions WHERE budget_id = $1 AND user_id = $2 AND bill_name = $3 AND note = $4`,
+          [budgetId, userId, goalName, contribNote],
+        );
+        if (actualAmount > 0 && startDate) {
+          await client.query(
+            `INSERT INTO savings_contributions (user_id, budget_id, bill_name, amount, date, note)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [userId, budgetId, goalName, actualAmount.toFixed(2), startDate, contribNote],
+          );
+        }
+      }
+
       res.status(201).json({
         checkin: {
           id: r.id,

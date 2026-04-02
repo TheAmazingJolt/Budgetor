@@ -82,12 +82,13 @@ export function CheckInDialog({
           c => c.itemName === bill.name && c.itemType === itemType,
         );
         const actual = existing ? existing.actualAmount : planned;
+        const autoSkip = !existing && planned === 0;
         return {
           billName: bill.name,
           billType: itemType,
           plannedAmount: planned,
           actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
-          skipped: existing ? existing.actualAmount === 0 : false,
+          skipped: existing ? existing.actualAmount === 0 : autoSkip,
         };
       });
 
@@ -102,7 +103,7 @@ export function CheckInDialog({
   const toggleSkip = (idx: number) => {
     setItems(prev => prev.map((it, i) =>
       i === idx
-        ? { ...it, skipped: !it.skipped, actualStr: !it.skipped ? "0.00" : (it.plannedAmount > 0 ? it.plannedAmount.toFixed(2) : "") }
+        ? { ...it, skipped: !it.skipped, actualStr: !it.skipped ? "0.00" : (it.plannedAmount > 0 ? it.plannedAmount.toFixed(2) : "0.00") }
         : it,
     ));
   };
