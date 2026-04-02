@@ -611,6 +611,7 @@ export function BudgetWizard({
   const [exportNameInput, setExportNameInput] = useState("");
   const [activeLinkedSheet, setActiveLinkedSheet] = useState<{ id: string; type: string; name: string } | null>(null);
   const [isUpdatingLinkedSheet, setIsUpdatingLinkedSheet] = useState(false);
+  const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
   const [syncOnUpdate, setSyncOnUpdate] = useState(false);
 
   const [editModeOn, setEditModeOn] = useState(false);
@@ -686,6 +687,46 @@ export function BudgetWizard({
         });
       }
     }, 0);
+  }, [sheetWriteMutation, excelWriteMutation, toast]);
+
+  const handleManualSheetSync = useCallback(async () => {
+    const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+    if (!activeLinkedSheet) return;
+    const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
+    if (!rawWeeks?.length) {
+      toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
+      return;
+    }
+    setIsSyncingToSheet(true);
+    const colorLookup = buildBillColorLookup(bills);
+    const weeks = rawWeeks.map((w: any) => ({
+      ...w,
+      bills: injectBillColors(w.bills, colorLookup),
+    }));
+    const writePayload = {
+      weeks,
+      startCol: 0,
+      includeRemainingAcct: !zeroOpeningBalance,
+      ...(debts.length > 0 ? { debts } : {}),
+      ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+      ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
+    };
+    try {
+      if (activeLinkedSheet.type === "google") {
+        await sheetWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
+      } else {
+        await excelWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
+      }
+      toast({ title: "Synced!", description: `"${activeLinkedSheet.name}" is up to date.` });
+    } catch (err) {
+      toast({
+        title: "Sync failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingToSheet(false);
+    }
   }, [sheetWriteMutation, excelWriteMutation, toast]);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -3607,12 +3648,12 @@ export function BudgetWizard({
                         </label>
                         <button
                           type="button"
-                          onClick={() => triggerBackgroundSheetSync()}
-                          disabled={sheetWriteMutation.isPending || excelWriteMutation.isPending}
+                          onClick={handleManualSheetSync}
+                          disabled={isSyncingToSheet}
                           className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                         >
-                          <RefreshCw className={`w-3 h-3 ${(sheetWriteMutation.isPending || excelWriteMutation.isPending) ? "animate-spin" : ""}`} />
-                          Sync now
+                          <RefreshCw className={`w-3 h-3 ${isSyncingToSheet ? "animate-spin" : ""}`} />
+                          {isSyncingToSheet ? "Syncing…" : "Sync now"}
                         </button>
                       </div>
                     )}
@@ -4796,12 +4837,12 @@ export function BudgetWizard({
                   <Button
                     size="lg"
                     variant="outline"
-                    onClick={() => triggerBackgroundSheetSync()}
-                    disabled={sheetWriteMutation.isPending || excelWriteMutation.isPending}
+                    onClick={handleManualSheetSync}
+                    disabled={isSyncingToSheet}
                     className="sm:w-auto h-14 rounded-2xl border-border/60"
                   >
-                    <RefreshCw className={`w-4 h-4 mr-1 ${(sheetWriteMutation.isPending || excelWriteMutation.isPending) ? "animate-spin" : ""}`} />
-                    Sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"}
+                    <RefreshCw className={`w-4 h-4 mr-1 ${isSyncingToSheet ? "animate-spin" : ""}`} />
+                    {isSyncingToSheet ? "Syncing…" : `Sync to ${activeLinkedSheet.type === "google" ? "Sheets" : "Excel"}`}
                   </Button>
                 )}
 
