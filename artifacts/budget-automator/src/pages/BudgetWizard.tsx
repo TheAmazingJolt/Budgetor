@@ -3589,17 +3589,28 @@ export function BudgetWizard({
                       </Button>
                     </div>
                     {activeLinkedSheet && (inputMode === "cloud" || newCloudSaveSuccess) && (
-                      <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={syncOnUpdate}
-                          onChange={e => setSyncOnUpdate(e.target.checked)}
-                          className="accent-primary w-3.5 h-3.5"
-                        />
-                        <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                        Also sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"} on update
-                        {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
-                      </label>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={syncOnUpdate}
+                            onChange={e => setSyncOnUpdate(e.target.checked)}
+                            className="accent-primary w-3.5 h-3.5"
+                          />
+                          <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                          Also sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"} on update
+                          {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => triggerBackgroundSheetSync()}
+                          disabled={sheetWriteMutation.isPending || excelWriteMutation.isPending}
+                          className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${(sheetWriteMutation.isPending || excelWriteMutation.isPending) ? "animate-spin" : ""}`} />
+                          Sync now
+                        </button>
+                      </div>
                     )}
                   </div>
                 </CardContent>
@@ -5831,6 +5842,9 @@ export function BudgetWizard({
             setCheckInWeek(null);
             checkinsQuery.refetch();
             budgetContributionsQuery.refetch().then(() => {
+              if (activeCloudBudgetId) {
+                queryClient.invalidateQueries({ queryKey: ["savings-contributions", activeCloudBudgetId] });
+              }
               triggerBackgroundSheetSync();
             });
           }}
