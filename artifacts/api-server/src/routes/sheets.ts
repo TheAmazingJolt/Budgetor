@@ -1446,22 +1446,17 @@ async function writeBudgetToSheet(
     requestBody: { values: paddedRows },
   });
 
-  if (requests.length > 0) {
+  // Merge formatting + width into a single batchUpdate
+  const allFormatRequests = [...requests, ...widthRequests];
+  if (allFormatRequests.length > 0) {
     await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
-      requestBody: { requests },
+      requestBody: { requests: allFormatRequests },
     });
   }
 
-  if (widthRequests.length > 0) {
-    await sheetsApi.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: { requests: widthRequests },
-    });
-  }
-
-  // Auto-resize week columns so the "Budget from … to …" label is never clipped.
-  await sheetsApi.spreadsheets.batchUpdate({
+  // Auto-resize in background — it's slow and non-critical
+  sheetsApi.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
       requests: [{
@@ -1475,7 +1470,7 @@ async function writeBudgetToSheet(
         },
       }],
     },
-  });
+  }).catch(() => {});
 
   // Clear the bills+debts row range before writing to prevent stale rows/formatting
   // from previous writes bleeding through when the number of rows changes.
@@ -1515,19 +1510,17 @@ async function writeBudgetToSheet(
     const billRangeEnd = `E${totalRows + billRows.length}`;
     const billRange = `'${escapedTitle}'!${billRangeStart}:${billRangeEnd}`;
 
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId,
-      range: billRange,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: billRows },
-    });
-
-    if (billRequests.length > 0) {
-      await sheetsApi.spreadsheets.batchUpdate({
+    await Promise.all([
+      sheetsApi.spreadsheets.values.update({
         spreadsheetId,
-        requestBody: { requests: billRequests },
-      });
-    }
+        range: billRange,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: billRows },
+      }),
+      billRequests.length > 0
+        ? sheetsApi.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: billRequests } })
+        : Promise.resolve(),
+    ]);
   }
 
   let debtRowCount = 0;
@@ -1540,19 +1533,17 @@ async function writeBudgetToSheet(
     const debtRangeEnd = `D${debtsStartRow + debtRows.length}`;
     const debtRange = `'${escapedTitle}'!${debtRangeStart}:${debtRangeEnd}`;
 
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId,
-      range: debtRange,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: debtRows },
-    });
-
-    if (debtRequests.length > 0) {
-      await sheetsApi.spreadsheets.batchUpdate({
+    await Promise.all([
+      sheetsApi.spreadsheets.values.update({
         spreadsheetId,
-        requestBody: { requests: debtRequests },
-      });
-    }
+        range: debtRange,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: debtRows },
+      }),
+      debtRequests.length > 0
+        ? sheetsApi.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: debtRequests } })
+        : Promise.resolve(),
+    ]);
   }
 
   // Savings Goals section — bills with sourceGoalId
@@ -1565,19 +1556,17 @@ async function writeBudgetToSheet(
     const savingsRangeEnd = `C${savingsStartRow + savingsRows.length}`;
     const savingsRange = `'${escapedTitle}'!${savingsRangeStart}:${savingsRangeEnd}`;
 
-    await sheetsApi.spreadsheets.values.update({
-      spreadsheetId,
-      range: savingsRange,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: savingsRows },
-    });
-
-    if (savingsRequests.length > 0) {
-      await sheetsApi.spreadsheets.batchUpdate({
+    await Promise.all([
+      sheetsApi.spreadsheets.values.update({
         spreadsheetId,
-        requestBody: { requests: savingsRequests },
-      });
-    }
+        range: savingsRange,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: savingsRows },
+      }),
+      savingsRequests.length > 0
+        ? sheetsApi.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: savingsRequests } })
+        : Promise.resolve(),
+    ]);
   }
 
 }
@@ -2102,13 +2091,14 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
-    if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
-      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
-    }
     res.json({
       ok: true,
       message: `Wrote ${weeks.length} budget weeks starting at column ${columnToLetter(startCol)}`,
     });
+
+    if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
+      writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts).catch(() => {});
+    }
 
     if (body.bills && body.bills.length > 0) {
       (async () => {
