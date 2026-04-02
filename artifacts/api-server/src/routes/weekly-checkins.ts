@@ -136,19 +136,21 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
       );
       const r = result.rows[0];
 
-      if (itemType === "goal") {
-        const goalName = itemName.replace(/\s*\[→[^\]]+\]\s*$/, "").trim();
+      if (itemType === "goal" || itemType === "yearly") {
+        const contribName = itemType === "goal"
+          ? itemName.replace(/\s*\[→[^\]]+\]\s*$/, "").trim()
+          : itemName.trim();
         const startDate = weekLabelToStartDate(weekLabel);
         const contribNote = `checkin:${weekLabel}`;
         await client.query(
           `DELETE FROM savings_contributions WHERE budget_id = $1 AND user_id = $2 AND bill_name = $3 AND note = $4`,
-          [budgetId, userId, goalName, contribNote],
+          [budgetId, userId, contribName, contribNote],
         );
         if (actualAmount > 0 && startDate) {
           await client.query(
             `INSERT INTO savings_contributions (user_id, budget_id, bill_name, amount, date, note)
              VALUES ($1, $2, $3, $4, $5, $6)`,
-            [userId, budgetId, goalName, actualAmount.toFixed(2), startDate, contribNote],
+            [userId, budgetId, contribName, actualAmount.toFixed(2), startDate, contribNote],
           );
         }
       }

@@ -5830,8 +5830,9 @@ export function BudgetWizard({
             setCheckInDialogOpen(false);
             setCheckInWeek(null);
             checkinsQuery.refetch();
-            budgetContributionsQuery.refetch();
-            triggerBackgroundSheetSync();
+            budgetContributionsQuery.refetch().then(() => {
+              triggerBackgroundSheetSync();
+            });
           }}
           onDismiss={() => {
             if (activeCloudBudgetId && checkInWeek) setDismissed(activeCloudBudgetId, checkInWeek.label);
