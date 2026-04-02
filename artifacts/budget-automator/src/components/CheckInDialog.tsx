@@ -86,7 +86,7 @@ export function CheckInDialog({
           billName: bill.name,
           billType: itemType,
           plannedAmount: planned,
-          actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "",
+          actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
           skipped: existing ? existing.actualAmount === 0 : false,
         };
       });

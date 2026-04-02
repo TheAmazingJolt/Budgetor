@@ -409,6 +409,37 @@ function computeSavingsGoalBills(
   return result;
 }
 
+function computeGoalBillsForCheckin(
+  goals: Array<{ id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }>,
+  contributions: Array<{ billName: string; amount: number }>,
+): Bill[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const result: Bill[] = [];
+  for (const g of goals) {
+    const targetDate = new Date(g.targetDate + "T00:00:00");
+    if (targetDate <= today) continue;
+    const savedSoFar = contributions
+      .filter(c => c.billName === g.name)
+      .reduce((sum, c) => sum + c.amount, 0);
+    const remaining = Math.max(0, g.targetAmount - savedSoFar);
+    if (remaining <= 0) continue;
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const weeksLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
+    const weeklyNeeded = Math.round((remaining / weeksLeft) * 100) / 100;
+    const dateLabel = fmtGoalTargetDate(g.targetDate);
+    result.push({
+      name: `${g.name} [→ ${dateLabel}]`,
+      amount: -weeklyNeeded,
+      type: "weekly",
+      category: "Savings",
+      color: "teal",
+      sourceGoalId: g.id,
+    });
+  }
+  return result;
+}
+
 function buildBillColorLookup(bills: Bill[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const b of bills) {
@@ -964,7 +995,7 @@ export function BudgetWizard({
     if (paydayDialogOpen) return;
     if (!activeCloudBudgetId || !checkinsQuery.data || !paydayCheckinsQuery.data) return;
     const balancedBillsList = bills.filter(b => b.type === "balanced" || b.type === "yearly");
-    const savingsGoalBillsList = computeSavingsGoalBills(
+    const savingsGoalBillsList = computeGoalBillsForCheckin(
       budgetGoalsQuery.data?.goals ?? [],
       budgetContributionsQuery.data?.contributions ?? [],
     );
@@ -5783,11 +5814,12 @@ export function BudgetWizard({
 
       {checkInWeek && activeCloudBudgetId && (
         <CheckInDialog
+          key={`${checkInWeek.label}-${checkInDialogOpen}`}
           open={checkInDialogOpen}
           week={checkInWeek}
           savingsBills={[
             ...bills.filter(b => b.type === "balanced" || b.type === "yearly"),
-            ...computeSavingsGoalBills(
+            ...computeGoalBillsForCheckin(
               budgetGoalsQuery.data?.goals ?? [],
               budgetContributionsQuery.data?.contributions ?? [],
             ),
