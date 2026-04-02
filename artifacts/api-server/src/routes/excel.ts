@@ -1328,27 +1328,32 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts, body.bills);
     }
 
-    if (body.bills && body.bills.length > 0 && body.budgetId && (req as any).user?.id) {
-      try {
-        const contribRows = await db.select().from(savingsContributionsTable)
-          .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
-        const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
-        const goalRows = await db.select().from(savingsGoalsTable)
-          .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
-        const goals = goalRows.map(g => ({
-          name: g.name,
-          targetAmount: Number(g.targetAmount),
-          targetDate: g.targetDate,
-          savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
-        }));
-        await writeSavingsTabToExcel(token, fileId, body.bills, weeks, contribs, goals);
-      } catch { /* non-fatal */ }
-    }
-
     res.json({
       ok: true,
       message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} starting at column ${colLetter(startCol)}`,
     });
+
+    if (body.bills && body.bills.length > 0 && body.budgetId && (req as any).user?.id) {
+      const userId = (req as any).user.id;
+      const budgetId = body.budgetId;
+      const bills = body.bills;
+      ;(async () => {
+        try {
+          const contribRows = await db.select().from(savingsContributionsTable)
+            .where(and(eq(savingsContributionsTable.budgetId, budgetId), eq(savingsContributionsTable.userId, userId)));
+          const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+          const goalRows = await db.select().from(savingsGoalsTable)
+            .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
+          const goals = goalRows.map(g => ({
+            name: g.name,
+            targetAmount: Number(g.targetAmount),
+            targetDate: g.targetDate,
+            savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+          }));
+          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals);
+        } catch { /* non-fatal */ }
+      })().catch(() => {});
+    }
   } catch (err: any) {
     handleGraphError(err, req, res, "write Excel file");
   }

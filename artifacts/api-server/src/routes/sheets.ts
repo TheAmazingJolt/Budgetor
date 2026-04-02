@@ -2105,33 +2105,35 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
       try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
     }
-    if (body.bills && body.bills.length > 0) {
-      let savingsContribs: ManualContribRow[] = [];
-      let savingsGoals: SavingsGoalRow[] = [];
-      if (body.budgetId && (req as any).user?.id) {
-        try {
-          const rows = await db.select().from(savingsContributionsTable)
-            .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
-          savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
-        } catch { }
-        try {
-          const goalRows = await db.select().from(savingsGoalsTable)
-            .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
-          savingsGoals = goalRows.map(g => ({
-            name: g.name,
-            targetAmount: Number(g.targetAmount),
-            targetDate: g.targetDate,
-            savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
-          }));
-        } catch { }
-      }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals); } catch { }
-    }
-
     res.json({
       ok: true,
       message: `Wrote ${weeks.length} budget weeks starting at column ${columnToLetter(startCol)}`,
     });
+
+    if (body.bills && body.bills.length > 0) {
+      (async () => {
+        let savingsContribs: ManualContribRow[] = [];
+        let savingsGoals: SavingsGoalRow[] = [];
+        if (body.budgetId && (req as any).user?.id) {
+          try {
+            const rows = await db.select().from(savingsContributionsTable)
+              .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
+            savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+          } catch { }
+          try {
+            const goalRows = await db.select().from(savingsGoalsTable)
+              .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
+            savingsGoals = goalRows.map(g => ({
+              name: g.name,
+              targetAmount: Number(g.targetAmount),
+              targetDate: g.targetDate,
+              savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+            }));
+          } catch { }
+        }
+        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals); } catch { }
+      })().catch(() => {});
+    }
   } catch (err: any) {
     if (err.code === 401) {
       req.session.googleTokens = undefined;
