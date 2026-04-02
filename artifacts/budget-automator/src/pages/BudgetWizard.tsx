@@ -638,6 +638,7 @@ export function BudgetWizard({
   const bgSyncRef = useRef({
     activeLinkedSheet: null as { id: string; type: string; name: string } | null,
     generatedWeek: null as typeof generatedWeek,
+    cloudExistingWeeks: [] as any[],
     bills: [] as typeof bills,
     debts: [] as typeof debts,
     zeroOpeningBalance: true,
@@ -645,6 +646,7 @@ export function BudgetWizard({
   });
   bgSyncRef.current.activeLinkedSheet = activeLinkedSheet;
   bgSyncRef.current.generatedWeek = generatedWeek;
+  bgSyncRef.current.cloudExistingWeeks = cloudExistingWeeks;
   bgSyncRef.current.bills = bills;
   bgSyncRef.current.debts = debts;
   bgSyncRef.current.zeroOpeningBalance = zeroOpeningBalance;
@@ -652,10 +654,12 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const { activeLinkedSheet, generatedWeek, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
-      if (!activeLinkedSheet || !generatedWeek) return;
+      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+      if (!activeLinkedSheet) return;
+      const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
+      if (!rawWeeks?.length) return;
       const colorLookup = buildBillColorLookup(bills);
-      const weeks = generatedWeek.weeks.map((w: any) => ({
+      const weeks = rawWeeks.map((w: any) => ({
         ...w,
         bills: injectBillColors(w.bills, colorLookup),
       }));
