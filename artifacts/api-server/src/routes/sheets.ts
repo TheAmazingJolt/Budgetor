@@ -1379,8 +1379,10 @@ async function writeBudgetToSheet(
   existingLastCol?: number,
   bills?: BillMeta[],
 ) {
+  console.log(`[writeBudgetToSheet] start — totalRows will be computed, startCol=${startCol} weeks=${weeks.length}`);
   const { requests, widthRequests, paddedRows, totalRows, totalCols } =
     buildBudgetWriteData(weeks, startCol, includeRemainingAcct, sheetId, sheetColumnCount, bills);
+  console.log(`[writeBudgetToSheet] buildBudgetWriteData OK — totalRows=${totalRows} totalCols=${totalCols}`);
 
   // Expand sheet columns if the new budget weeks need more than currently exist
   if (totalCols > sheetColumnCount) {
@@ -2066,6 +2068,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
 router.post("/sheets/:id/write", async (req, res): Promise<void> => {
   const auth = getAuthedClient(req);
   if (!auth) {
+    console.log("[sheets/write] no auth — returning 401");
     res.status(401).json({ error: "Not authenticated with Google" });
     return;
   }
@@ -2079,10 +2082,22 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     return;
   }
 
+  console.log(`[sheets/write] start — spreadsheetId=${spreadsheetId} weeks=${weeks.length}`);
+
+  // Hard 25-second timeout so the spinner always stops
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      console.log("[sheets/write] TIMEOUT after 25 s");
+      res.status(504).json({ error: "Google Sheets is taking too long to respond. Please try again." });
+    }
+  }, 25000);
+
   try {
     const sheetsApi = google.sheets({ version: "v4", auth });
 
+    console.log("[sheets/write] calling spreadsheets.get");
     const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
+    console.log("[sheets/write] spreadsheets.get OK");
     const sheet =
       meta.data.sheets?.find((s) => s.properties?.title === (sheetTitle ?? "Budget")) ??
       meta.data.sheets?.[0];
@@ -2090,7 +2105,11 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
     const sheetTitleStr = sheetTitle ?? "Budget";
     const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
+    console.log("[sheets/write] calling writeBudgetToSheet");
     await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
+    console.log("[sheets/write] writeBudgetToSheet OK");
+    clearTimeout(timeout);
+    if (res.headersSent) return;
     res.json({
       ok: true,
       message: `Wrote ${weeks.length} budget weeks starting at column ${columnToLetter(startCol)}`,
@@ -2125,6 +2144,9 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
       })().catch(() => {});
     }
   } catch (err: any) {
+    clearTimeout(timeout);
+    console.log("[sheets/write] ERROR:", err?.code, err?.message);
+    if (res.headersSent) return;
     if (err.code === 401) {
       req.session.googleTokens = undefined;
       res.status(401).json({ error: "Google session expired. Please reconnect." });
