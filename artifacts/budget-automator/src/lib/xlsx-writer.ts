@@ -143,7 +143,20 @@ function writeBillsSectionBelow(
   if (2 > range.e.c) range.e.c = 2;
   sheet['!ref'] = XLSX.utils.encode_range(range);
 
-  // Auto-fit the three bills columns.
+  // Guarantee minimum widths for the three bills columns before auto-fitting,
+  // so they are never collapsed below a readable size regardless of what the
+  // weekly-budget columns above already set.
+  if (!sheet['!cols']) sheet['!cols'] = [];
+  while ((sheet['!cols'] as any[]).length <= 2) (sheet['!cols'] as any[]).push({});
+  const MIN_BILLS_WIDTHS = [24, 10, 10];
+  for (let c = 0; c <= 2; c++) {
+    const cur = ((sheet['!cols'] as any[])[c]?.wch as number | undefined) ?? 0;
+    if (cur < MIN_BILLS_WIDTHS[c]) {
+      (sheet['!cols'] as any[])[c] = { ...((sheet['!cols'] as any[])[c] ?? {}), wch: MIN_BILLS_WIDTHS[c] };
+    }
+  }
+
+  // Auto-fit the three bills columns (only widens beyond the minimums above).
   autoFitColumns(sheet, 0, 2);
 
   return row;
@@ -687,23 +700,27 @@ function writeDebtsSection(
   set(sheet, headerRow, 1, makeCell('', headerStyle));
   set(sheet, headerRow, 2, makeCell('', headerStyle));
   set(sheet, headerRow, 3, makeCell('', headerStyle));
-  addMerge(sheet, headerRow, 0, headerRow, 3);
+  set(sheet, headerRow, 4, makeCell('', headerStyle));
+  addMerge(sheet, headerRow, 0, headerRow, 4);
 
   const colHeaderRow = headerRow + 1;
   const colHeaderStyle = {
     font: { bold: true, sz: 10, name: 'Arial' },
     fill: debtFill,
+    alignment: { horizontal: 'left' as const },
   };
-  set(sheet, colHeaderRow, 0, makeCell('Name', colHeaderStyle));
+  set(sheet, colHeaderRow, 0, makeCell('Name',        colHeaderStyle));
   set(sheet, colHeaderRow, 1, makeCell('Balance',     { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
   set(sheet, colHeaderRow, 2, makeCell('APR %',       { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
-  set(sheet, colHeaderRow, 3, makeCell('Payment', { ...colHeaderStyle, alignment: { horizontal: 'right' as const } }));
+  set(sheet, colHeaderRow, 3, makeCell('Min Payment', { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
+  set(sheet, colHeaderRow, 4, makeCell('Due Day',     { ...colHeaderStyle, alignment: { horizontal: 'center' as const } }));
 
   const bodyFont = { sz: 10, name: 'Arial' };
-  const nameStyle    = { font: bodyFont, fill: debtFill };
+  const nameStyle    = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'left' as const } };
   const moneyStyle   = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const }, numFmt: MONEY_FMT };
   const aprStyle     = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const } };
-  const minPayStyle  = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'right' as const }, numFmt: MONEY_FMT };
+  const minPayStyle  = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const }, numFmt: MONEY_FMT };
+  const dueDayStyle  = { font: bodyFont, fill: debtFill, alignment: { horizontal: 'center' as const } };
 
   let currentRow = colHeaderRow + 1;
   for (const debt of debts) {
@@ -711,6 +728,7 @@ function writeDebtsSection(
     set(sheet, currentRow, 1, makeCell(debt.balance, moneyStyle));
     set(sheet, currentRow, 2, makeCell(debt.interestRate != null ? `${debt.interestRate}%` : '', aprStyle));
     set(sheet, currentRow, 3, makeCell(debt.minimumPayment, minPayStyle));
+    set(sheet, currentRow, 4, makeCell(debt.dueDay != null ? debt.dueDay : '', dueDayStyle));
     currentRow++;
   }
 
@@ -719,18 +737,25 @@ function writeDebtsSection(
     ? XLSX.utils.decode_range(existingRef)
     : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
   if (currentRow - 1 > existingRange.e.r) existingRange.e.r = currentRow - 1;
-  if (3 > existingRange.e.c) existingRange.e.c = 3;
+  if (4 > existingRange.e.c) existingRange.e.c = 4;
   sheet['!ref'] = XLSX.utils.encode_range(existingRange);
 
+  // Guarantee minimum widths for all five debts columns so sub-headers and
+  // data are always fully visible, regardless of what the weekly-budget
+  // columns above may have set.
   if (!sheet['!cols']) sheet['!cols'] = [];
-  while (sheet['!cols']!.length <= 3) sheet['!cols']!.push({});
-  if ((sheet['!cols']![0] as any)?.wch == null || (sheet['!cols']![0] as any).wch < 20) {
-    sheet['!cols']![0] = { wch: 20 };
+  while ((sheet['!cols'] as any[]).length <= 4) (sheet['!cols'] as any[]).push({});
+  const MIN_DEBTS_WIDTHS = [24, 12, 8, 14, 9];
+  for (let c = 0; c <= 4; c++) {
+    const cur = ((sheet['!cols'] as any[])[c]?.wch as number | undefined) ?? 0;
+    if (cur < MIN_DEBTS_WIDTHS[c]) {
+      (sheet['!cols'] as any[])[c] = { ...((sheet['!cols'] as any[])[c] ?? {}), wch: MIN_DEBTS_WIDTHS[c] };
+    }
   }
 
-  // Expand columns 1–3 to fit their widest cell (Balance, APR%, Min Payment).
-  // autoFitColumns only widens, so narrow weekly-budget columns can't shrink them.
-  autoFitColumns(sheet, 0, 3);
+  // Expand columns 0–4 to fit their widest cell.
+  // autoFitColumns only widens, so minimums above are preserved.
+  autoFitColumns(sheet, 0, 4);
 
   return currentRow;
 }
