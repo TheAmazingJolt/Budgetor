@@ -197,8 +197,11 @@ export function CheckInDialog({
                   />
                 </div>
               )}
-              {it.skipped && (
+              {it.skipped && it.plannedAmount > 0 && (
                 <p className="text-xs text-red-500 italic">Logged as $0.00 — unexpected expense this week</p>
+              )}
+              {it.skipped && it.plannedAmount === 0 && (
+                <p className="text-xs text-muted-foreground italic">Not budgeted this week</p>
               )}
             </div>
           ))}

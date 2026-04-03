@@ -5,11 +5,23 @@ import { requireAuth } from "./user-auth";
 
 function weekLabelToStartDate(weekLabel: string): string | null {
   try {
+    const startPart = weekLabel.split(" to ")[0]?.trim();
+    if (!startPart) return null;
+    // Handle M/D/YY and M/D/YYYY formats (e.g. "4/2/26" or "4/2/2026")
+    const slashParts = startPart.split("/");
+    if (slashParts.length === 3) {
+      const [mo, dy, yr] = slashParts;
+      const year = yr.length === 2 ? 2000 + parseInt(yr, 10) : parseInt(yr, 10);
+      const month = String(parseInt(mo, 10)).padStart(2, "0");
+      const day = String(parseInt(dy, 10)).padStart(2, "0");
+      if (!isNaN(year) && !isNaN(Number(month)) && !isNaN(Number(day))) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+    // Fallback: look for 4-digit year (e.g. "Jan 2 2026 to ...")
     const yearMatch = weekLabel.match(/\b(\d{4})\b/);
     if (!yearMatch) return null;
     const year = yearMatch[1];
-    const startPart = weekLabel.split(" to ")[0]?.trim();
-    if (!startPart) return null;
     const d = new Date(`${startPart} ${year}`);
     if (isNaN(d.getTime())) return null;
     const m = String(d.getMonth() + 1).padStart(2, "0");
