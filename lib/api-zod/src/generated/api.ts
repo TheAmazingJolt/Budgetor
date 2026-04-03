@@ -25,7 +25,9 @@ export const GenerateBudgetBody = zod.object({
     .string()
     .describe("ISO date string for the last day of the final week"),
   openingBalance: zod.number().describe("Starting account balance"),
-  paycheckAmount: zod.number().describe("Weekly paycheck amount"),
+  paycheckAmount: zod
+    .number()
+    .describe("Weekly paycheck amount (used when incomeSources is empty)"),
   numberOfWeeks: zod
     .number()
     .describe("Number of weeks to generate (calculated from date range)"),
@@ -34,6 +36,22 @@ export const GenerateBudgetBody = zod.object({
     .optional()
     .describe(
       "Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)",
+    ),
+  incomeSources: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        amount: zod.number(),
+        frequency: zod.enum(["weekly", "biweekly", "monthly"]),
+        nextPayDate: zod
+          .string()
+          .describe("ISO date string for the next pay date of this source"),
+      }),
+    )
+    .optional()
+    .describe(
+      "Multiple income sources. When provided and non-empty, overrides paycheckAmount.",
     ),
   bills: zod.array(
     zod.object({
@@ -47,22 +65,28 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
 });
@@ -80,7 +104,21 @@ export const GenerateBudgetResponse = zod.object({
       openingBalance: zod
         .number()
         .describe("Amount remaining from previous week"),
-      paycheck: zod.number().describe("Paycheck received this week"),
+      paycheck: zod
+        .number()
+        .describe(
+          "Paycheck received this week (combined total from all sources)",
+        ),
+      paycheckBreakdown: zod
+        .array(
+          zod.object({
+            sourceId: zod.string(),
+            sourceName: zod.string(),
+            amount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe("Per-source breakdown of the paycheck total"),
       bills: zod.array(
         zod.object({
           name: zod.string(),
@@ -222,11 +260,57 @@ export const SavedBudgetListResponse = zod.object({
               .max(savedBudgetListResponseBudgetsItemDebtsItemDueDayMax)
               .nullish()
               .describe("Day of month the payment is due (1-31, optional)"),
-            paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-            billAsBalanced: zod.boolean().nullish(),
+            billAsBalanced: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+              ),
+            excludeFromBill: zod
+              .boolean()
+              .nullish()
+              .describe(
+                "When true, the user has opted this debt out of auto-generating a bill",
+              ),
+            lastPaymentDate: zod
+              .string()
+              .nullish()
+              .describe(
+                "ISO date string of the most recent logged payment (optional)",
+              ),
+            lastPaymentAmount: zod
+              .number()
+              .nullish()
+              .describe("Amount of the most recent logged payment (optional)"),
+            createdAt: zod
+              .string()
+              .nullish()
+              .describe(
+                "ISO date string when the debt was created (optional, used for payment-due nudge)",
+              ),
+            paymentFrequency: zod
+              .enum(["monthly", "weekly", "biweekly"])
+              .nullish()
+              .describe(
+                "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+              ),
           }),
         )
         .optional(),
+      linkedSheetId: zod
+        .string()
+        .nullish()
+        .describe(
+          "ID of the linked Google Sheet or Excel file (null if no link)",
+        ),
+      linkedSheetName: zod
+        .string()
+        .nullish()
+        .describe("Display name of the linked sheet\/file"),
+      linkedSheetType: zod
+        .enum(["google", "excel"])
+        .nullish()
+        .describe("Type of linked sheet ('google' or 'excel')"),
       createdAt: zod.date(),
       updatedAt: zod.date(),
     }),
@@ -277,8 +361,40 @@ export const SavedBudgetCreateBody = zod.object({
           .max(savedBudgetCreateBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
-        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-        billAsBalanced: zod.boolean().nullish(),
+        billAsBalanced: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+          ),
+        excludeFromBill: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "When true, the user has opted this debt out of auto-generating a bill",
+          ),
+        lastPaymentDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent logged payment (optional)",
+          ),
+        lastPaymentAmount: zod
+          .number()
+          .nullish()
+          .describe("Amount of the most recent logged payment (optional)"),
+        createdAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string when the debt was created (optional, used for payment-due nudge)",
+          ),
+        paymentFrequency: zod
+          .enum(["monthly", "weekly", "biweekly"])
+          .nullish()
+          .describe(
+            "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
       }),
     )
     .optional(),
@@ -330,11 +446,57 @@ export const SavedBudgetCreateResponse = zod.object({
             .max(savedBudgetCreateResponseBudgetDebtsItemDueDayMax)
             .nullish()
             .describe("Day of month the payment is due (1-31, optional)"),
-          paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-          billAsBalanced: zod.boolean().nullish(),
+          billAsBalanced: zod
+            .boolean()
+            .nullish()
+            .describe(
+              'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+            ),
+          excludeFromBill: zod
+            .boolean()
+            .nullish()
+            .describe(
+              "When true, the user has opted this debt out of auto-generating a bill",
+            ),
+          lastPaymentDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string of the most recent logged payment (optional)",
+            ),
+          lastPaymentAmount: zod
+            .number()
+            .nullish()
+            .describe("Amount of the most recent logged payment (optional)"),
+          createdAt: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string when the debt was created (optional, used for payment-due nudge)",
+            ),
+          paymentFrequency: zod
+            .enum(["monthly", "weekly", "biweekly"])
+            .nullish()
+            .describe(
+              "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+            ),
         }),
       )
       .optional(),
+    linkedSheetId: zod
+      .string()
+      .nullish()
+      .describe(
+        "ID of the linked Google Sheet or Excel file (null if no link)",
+      ),
+    linkedSheetName: zod
+      .string()
+      .nullish()
+      .describe("Display name of the linked sheet\/file"),
+    linkedSheetType: zod
+      .enum(["google", "excel"])
+      .nullish()
+      .describe("Type of linked sheet ('google' or 'excel')"),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -388,11 +550,57 @@ export const SavedBudgetUpdateBody = zod.object({
           .max(savedBudgetUpdateBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
-        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-        billAsBalanced: zod.boolean().nullish(),
+        billAsBalanced: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+          ),
+        excludeFromBill: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "When true, the user has opted this debt out of auto-generating a bill",
+          ),
+        lastPaymentDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent logged payment (optional)",
+          ),
+        lastPaymentAmount: zod
+          .number()
+          .nullish()
+          .describe("Amount of the most recent logged payment (optional)"),
+        createdAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string when the debt was created (optional, used for payment-due nudge)",
+          ),
+        paymentFrequency: zod
+          .enum(["monthly", "weekly", "biweekly"])
+          .nullish()
+          .describe(
+            "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
       }),
     )
     .optional(),
+  linkedSheetId: zod
+    .string()
+    .nullish()
+    .describe(
+      "ID of the linked Google Sheet or Excel file (null clears the link)",
+    ),
+  linkedSheetName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the linked sheet\/file"),
+  linkedSheetType: zod
+    .enum(["google", "excel"])
+    .nullish()
+    .describe("Type of linked sheet ('google' or 'excel')"),
 });
 
 export const savedBudgetUpdateResponseBudgetDebtsItemDueDayMax = 31;
@@ -441,11 +649,57 @@ export const SavedBudgetUpdateResponse = zod.object({
             .max(savedBudgetUpdateResponseBudgetDebtsItemDueDayMax)
             .nullish()
             .describe("Day of month the payment is due (1-31, optional)"),
-          paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-          billAsBalanced: zod.boolean().nullish(),
+          billAsBalanced: zod
+            .boolean()
+            .nullish()
+            .describe(
+              'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+            ),
+          excludeFromBill: zod
+            .boolean()
+            .nullish()
+            .describe(
+              "When true, the user has opted this debt out of auto-generating a bill",
+            ),
+          lastPaymentDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string of the most recent logged payment (optional)",
+            ),
+          lastPaymentAmount: zod
+            .number()
+            .nullish()
+            .describe("Amount of the most recent logged payment (optional)"),
+          createdAt: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string when the debt was created (optional, used for payment-due nudge)",
+            ),
+          paymentFrequency: zod
+            .enum(["monthly", "weekly", "biweekly"])
+            .nullish()
+            .describe(
+              "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+            ),
         }),
       )
       .optional(),
+    linkedSheetId: zod
+      .string()
+      .nullish()
+      .describe(
+        "ID of the linked Google Sheet or Excel file (null if no link)",
+      ),
+    linkedSheetName: zod
+      .string()
+      .nullish()
+      .describe("Display name of the linked sheet\/file"),
+    linkedSheetType: zod
+      .enum(["google", "excel"])
+      .nullish()
+      .describe("Type of linked sheet ('google' or 'excel')"),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -521,22 +775,28 @@ export const SheetReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -575,22 +835,28 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -631,11 +897,26 @@ export const SheetWriteBody = zod.object({
       openingBalance: zod
         .number()
         .describe("Amount remaining from previous week"),
-      paycheck: zod.number().describe("Paycheck received this week"),
+      paycheck: zod
+        .number()
+        .describe(
+          "Paycheck received this week (combined total from all sources)",
+        ),
+      paycheckBreakdown: zod
+        .array(
+          zod.object({
+            sourceId: zod.string(),
+            sourceName: zod.string(),
+            amount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe("Per-source breakdown of the paycheck total"),
       bills: zod.array(
         zod.object({
           name: zod.string(),
           amount: zod.number(),
+          color: zod.string().optional(),
         }),
       ),
       totalBills: zod
@@ -657,22 +938,28 @@ export const SheetWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
           .optional()
           .describe("Color key for UI display, e.g. blue, green, orange"),
+        userColor: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+          ),
         sourceDebtId: zod
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
-        sourceGoalId: zod
+        payoffDate: zod
           .string()
-          .optional()
-          .describe("ID of the savings goal this bill was generated from (if any)"),
-        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+          .nullish()
+          .describe(
+            "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
       }),
     )
     .optional(),
@@ -714,8 +1001,40 @@ export const SheetWriteBody = zod.object({
           .max(sheetWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
-        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-        billAsBalanced: zod.boolean().nullish(),
+        billAsBalanced: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+          ),
+        excludeFromBill: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "When true, the user has opted this debt out of auto-generating a bill",
+          ),
+        lastPaymentDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent logged payment (optional)",
+          ),
+        lastPaymentAmount: zod
+          .number()
+          .nullish()
+          .describe("Amount of the most recent logged payment (optional)"),
+        createdAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string when the debt was created (optional, used for payment-due nudge)",
+          ),
+        paymentFrequency: zod
+          .enum(["monthly", "weekly", "biweekly"])
+          .nullish()
+          .describe(
+            "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
       }),
     )
     .optional(),
@@ -757,11 +1076,26 @@ export const SheetCreateAndWriteBody = zod.object({
       openingBalance: zod
         .number()
         .describe("Amount remaining from previous week"),
-      paycheck: zod.number().describe("Paycheck received this week"),
+      paycheck: zod
+        .number()
+        .describe(
+          "Paycheck received this week (combined total from all sources)",
+        ),
+      paycheckBreakdown: zod
+        .array(
+          zod.object({
+            sourceId: zod.string(),
+            sourceName: zod.string(),
+            amount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe("Per-source breakdown of the paycheck total"),
       bills: zod.array(
         zod.object({
           name: zod.string(),
           amount: zod.number(),
+          color: zod.string().optional(),
         }),
       ),
       totalBills: zod
@@ -806,8 +1140,40 @@ export const SheetCreateAndWriteBody = zod.object({
           .max(sheetCreateAndWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
-        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-        billAsBalanced: zod.boolean().nullish(),
+        billAsBalanced: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+          ),
+        excludeFromBill: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "When true, the user has opted this debt out of auto-generating a bill",
+          ),
+        lastPaymentDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent logged payment (optional)",
+          ),
+        lastPaymentAmount: zod
+          .number()
+          .nullish()
+          .describe("Amount of the most recent logged payment (optional)"),
+        createdAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string when the debt was created (optional, used for payment-due nudge)",
+          ),
+        paymentFrequency: zod
+          .enum(["monthly", "weekly", "biweekly"])
+          .nullish()
+          .describe(
+            "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
       }),
     )
     .optional(),
@@ -824,22 +1190,28 @@ export const SheetCreateAndWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
           .optional()
           .describe("Color key for UI display, e.g. blue, green, orange"),
+        userColor: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+          ),
         sourceDebtId: zod
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
-        sourceGoalId: zod
+        payoffDate: zod
           .string()
-          .optional()
-          .describe("ID of the savings goal this bill was generated from (if any)"),
-        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+          .nullish()
+          .describe(
+            "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
       }),
     )
     .optional(),
@@ -910,22 +1282,28 @@ export const ExcelReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -964,22 +1342,28 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -1020,11 +1404,26 @@ export const ExcelWriteBody = zod.object({
       openingBalance: zod
         .number()
         .describe("Amount remaining from previous week"),
-      paycheck: zod.number().describe("Paycheck received this week"),
+      paycheck: zod
+        .number()
+        .describe(
+          "Paycheck received this week (combined total from all sources)",
+        ),
+      paycheckBreakdown: zod
+        .array(
+          zod.object({
+            sourceId: zod.string(),
+            sourceName: zod.string(),
+            amount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe("Per-source breakdown of the paycheck total"),
       bills: zod.array(
         zod.object({
           name: zod.string(),
           amount: zod.number(),
+          color: zod.string().optional(),
         }),
       ),
       totalBills: zod
@@ -1071,8 +1470,40 @@ export const ExcelWriteBody = zod.object({
           .max(excelWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
-        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-        billAsBalanced: zod.boolean().nullish(),
+        billAsBalanced: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+          ),
+        excludeFromBill: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "When true, the user has opted this debt out of auto-generating a bill",
+          ),
+        lastPaymentDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent logged payment (optional)",
+          ),
+        lastPaymentAmount: zod
+          .number()
+          .nullish()
+          .describe("Amount of the most recent logged payment (optional)"),
+        createdAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string when the debt was created (optional, used for payment-due nudge)",
+          ),
+        paymentFrequency: zod
+          .enum(["monthly", "weekly", "biweekly"])
+          .nullish()
+          .describe(
+            "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
       }),
     )
     .optional(),
@@ -1089,22 +1520,28 @@ export const ExcelWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
           .optional()
           .describe("Color key for UI display, e.g. blue, green, orange"),
+        userColor: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+          ),
         sourceDebtId: zod
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
-        sourceGoalId: zod
+        payoffDate: zod
           .string()
-          .optional()
-          .describe("ID of the savings goal this bill was generated from (if any)"),
-        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+          .nullish()
+          .describe(
+            "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
       }),
     )
     .optional(),
@@ -1145,11 +1582,26 @@ export const ExcelCreateAndWriteBody = zod.object({
       openingBalance: zod
         .number()
         .describe("Amount remaining from previous week"),
-      paycheck: zod.number().describe("Paycheck received this week"),
+      paycheck: zod
+        .number()
+        .describe(
+          "Paycheck received this week (combined total from all sources)",
+        ),
+      paycheckBreakdown: zod
+        .array(
+          zod.object({
+            sourceId: zod.string(),
+            sourceName: zod.string(),
+            amount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe("Per-source breakdown of the paycheck total"),
       bills: zod.array(
         zod.object({
           name: zod.string(),
           amount: zod.number(),
+          color: zod.string().optional(),
         }),
       ),
       totalBills: zod
@@ -1194,8 +1646,40 @@ export const ExcelCreateAndWriteBody = zod.object({
           .max(excelCreateAndWriteBodyDebtsItemDueDayMax)
           .nullish()
           .describe("Day of month the payment is due (1-31, optional)"),
-        paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-        billAsBalanced: zod.boolean().nullish(),
+        billAsBalanced: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+          ),
+        excludeFromBill: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "When true, the user has opted this debt out of auto-generating a bill",
+          ),
+        lastPaymentDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent logged payment (optional)",
+          ),
+        lastPaymentAmount: zod
+          .number()
+          .nullish()
+          .describe("Amount of the most recent logged payment (optional)"),
+        createdAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string when the debt was created (optional, used for payment-due nudge)",
+          ),
+        paymentFrequency: zod
+          .enum(["monthly", "weekly", "biweekly"])
+          .nullish()
+          .describe(
+            "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
       }),
     )
     .optional(),
@@ -1212,22 +1696,28 @@ export const ExcelCreateAndWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly"])
+          .enum(["balanced", "fixed", "weekly", "biweekly"])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
           .optional()
           .describe("Color key for UI display, e.g. blue, green, orange"),
+        userColor: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+          ),
         sourceDebtId: zod
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
-        sourceGoalId: zod
+        payoffDate: zod
           .string()
-          .optional()
-          .describe("ID of the savings goal this bill was generated from (if any)"),
-        payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+          .nullish()
+          .describe(
+            "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
       }),
     )
     .optional(),
@@ -1255,22 +1745,28 @@ export const GetUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
 });
@@ -1292,22 +1788,28 @@ export const UpdateUserBillsBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
 });
@@ -1325,22 +1827,28 @@ export const UpdateUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum(["balanced", "fixed", "weekly", "biweekly"])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
         .optional()
         .describe("Color key for UI display, e.g. blue, green, orange"),
+      userColor: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the user explicitly chose this color (not auto-assigned by a heuristic)",
+        ),
       sourceDebtId: zod
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
-      sourceGoalId: zod
+      payoffDate: zod
         .string()
-        .optional()
-        .describe("ID of the savings goal this bill was generated from (if any)"),
-      payoffDate: zod.string().nullish().describe("ISO date string after which this bill should stop appearing (debt payoff date)"),
-      annualDueMonth: zod.number().min(1).max(12).nullish().describe("For yearly bills: the month (1–12) when the annual bill is due"),
+        .nullish()
+        .describe(
+          "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
     }),
   ),
 });
@@ -1384,8 +1892,40 @@ export const GetUserDebtsResponse = zod.object({
         .max(getUserDebtsResponseDebtsItemDueDayMax)
         .nullish()
         .describe("Day of month the payment is due (1-31, optional)"),
-      paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-      billAsBalanced: zod.boolean().nullish(),
+      billAsBalanced: zod
+        .boolean()
+        .nullish()
+        .describe(
+          'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+        ),
+      excludeFromBill: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "When true, the user has opted this debt out of auto-generating a bill",
+        ),
+      lastPaymentDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent logged payment (optional)",
+        ),
+      lastPaymentAmount: zod
+        .number()
+        .nullish()
+        .describe("Amount of the most recent logged payment (optional)"),
+      createdAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string when the debt was created (optional, used for payment-due nudge)",
+        ),
+      paymentFrequency: zod
+        .enum(["monthly", "weekly", "biweekly"])
+        .nullish()
+        .describe(
+          "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+        ),
     }),
   ),
 });
@@ -1429,8 +1969,40 @@ export const UpdateUserDebtsBody = zod.object({
         .max(updateUserDebtsBodyDebtsItemDueDayMax)
         .nullish()
         .describe("Day of month the payment is due (1-31, optional)"),
-      paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-      billAsBalanced: zod.boolean().nullish(),
+      billAsBalanced: zod
+        .boolean()
+        .nullish()
+        .describe(
+          'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+        ),
+      excludeFromBill: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "When true, the user has opted this debt out of auto-generating a bill",
+        ),
+      lastPaymentDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent logged payment (optional)",
+        ),
+      lastPaymentAmount: zod
+        .number()
+        .nullish()
+        .describe("Amount of the most recent logged payment (optional)"),
+      createdAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string when the debt was created (optional, used for payment-due nudge)",
+        ),
+      paymentFrequency: zod
+        .enum(["monthly", "weekly", "biweekly"])
+        .nullish()
+        .describe(
+          "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+        ),
     }),
   ),
 });
@@ -1470,8 +2042,40 @@ export const UpdateUserDebtsResponse = zod.object({
         .max(updateUserDebtsResponseDebtsItemDueDayMax)
         .nullish()
         .describe("Day of month the payment is due (1-31, optional)"),
-      paymentFrequency: zod.enum(["monthly", "weekly", "biweekly"]).nullish(),
-      billAsBalanced: zod.boolean().nullish(),
+      billAsBalanced: zod
+        .boolean()
+        .nullish()
+        .describe(
+          'When true, the auto-generated linked bill uses \"Balanced\" type (spread evenly across weeks)',
+        ),
+      excludeFromBill: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "When true, the user has opted this debt out of auto-generating a bill",
+        ),
+      lastPaymentDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent logged payment (optional)",
+        ),
+      lastPaymentAmount: zod
+        .number()
+        .nullish()
+        .describe("Amount of the most recent logged payment (optional)"),
+      createdAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string when the debt was created (optional, used for payment-due nudge)",
+        ),
+      paymentFrequency: zod
+        .enum(["monthly", "weekly", "biweekly"])
+        .nullish()
+        .describe(
+          "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+        ),
     }),
   ),
 });
@@ -1484,6 +2088,7 @@ export const GetUserPreferencesResponse = zod.object({
   preferences: zod.object({
     autoOpenLastSheet: zod.boolean().optional(),
     skipOpeningScreen: zod.boolean().optional(),
+    showPaymentReminders: zod.boolean().optional(),
   }),
 });
 
@@ -1495,6 +2100,7 @@ export const UpdateUserPreferencesBody = zod.object({
   preferences: zod.object({
     autoOpenLastSheet: zod.boolean().optional(),
     skipOpeningScreen: zod.boolean().optional(),
+    showPaymentReminders: zod.boolean().optional(),
   }),
 });
 
@@ -1502,5 +2108,6 @@ export const UpdateUserPreferencesResponse = zod.object({
   preferences: zod.object({
     autoOpenLastSheet: zod.boolean().optional(),
     skipOpeningScreen: zod.boolean().optional(),
+    showPaymentReminders: zod.boolean().optional(),
   }),
 });

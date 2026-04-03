@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Bill, BudgetResponse, Debt } from '@workspace/api-client-react';
+import type { Bill, BudgetResponse, Debt, IncomeSource } from '@workspace/api-client-react';
 import type { ParsedWorkbook, SheetStyle } from '@/lib/xlsx-parser';
 
 function toISO(d: Date): string {
@@ -13,6 +13,8 @@ function addDaysISO(dateStr: string, days: number): string {
 }
 
 type PayPeriod = "weekly" | "biweekly" | "monthly";
+
+export type { IncomeSource };
 
 function computeEndDate(startDate: string, weekCount: number, payPeriod: PayPeriod): string {
   if (payPeriod === "monthly") {
@@ -46,6 +48,7 @@ interface BudgetState {
   paycheckAmount: number;
   zeroOpeningBalance: boolean;
   payPeriod: PayPeriod;
+  incomeSources: IncomeSource[];
 
   generatedWeek: BudgetResponse | null;
 
@@ -70,6 +73,10 @@ interface BudgetState {
   setPaycheckAmount: (val: number) => void;
   setZeroOpeningBalance: (val: boolean) => void;
   setPayPeriod: (val: PayPeriod) => void;
+  setIncomeSources: (sources: IncomeSource[]) => void;
+  addIncomeSource: (source: IncomeSource) => void;
+  updateIncomeSource: (index: number, source: IncomeSource) => void;
+  removeIncomeSource: (index: number) => void;
   restorePayPeriodSettings: (payPeriod: PayPeriod, weekCount: number, startDate: string, endDate: string) => void;
   setGeneratedWeek: (budget: BudgetResponse | null) => void;
   reset: () => void;
@@ -100,6 +107,7 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   paycheckAmount: 0,
   zeroOpeningBalance: true,
   payPeriod: "weekly",
+  incomeSources: [],
   generatedWeek: null,
 
   setUploadedFile: (file) => set({ uploadedFile: file }),
@@ -244,6 +252,16 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   setOpeningBalance: (val) => set({ openingBalance: val }),
   setPaycheckAmount: (val) => set({ paycheckAmount: val }),
   setZeroOpeningBalance: (val) => set({ zeroOpeningBalance: val }),
+  setIncomeSources: (sources) => set({ incomeSources: sources }),
+  addIncomeSource: (source) => set((state) => ({ incomeSources: [...state.incomeSources, source] })),
+  updateIncomeSource: (index, source) =>
+    set((state) => {
+      const newSources = [...state.incomeSources];
+      newSources[index] = source;
+      return { incomeSources: newSources };
+    }),
+  removeIncomeSource: (index) =>
+    set((state) => ({ incomeSources: state.incomeSources.filter((_, i) => i !== index) })),
   setGeneratedWeek: (generatedWeek) => set({ generatedWeek }),
   reset: () =>
     set({
@@ -257,5 +275,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
       zeroOpeningBalance: true,
       weekCount: 1,
       payPeriod: "weekly",
+      incomeSources: [],
     }),
 }));

@@ -26,8 +26,9 @@ export interface Bill {
   userColor?: boolean;
   /** ID of the debt this bill was imported from (if any) */
   sourceDebtId?: string;
-  /** ISO date string after which this bill should stop appearing (debt payoff date) */
+  /**
+   * ISO date string after which this bill should stop appearing (debt payoff date)
+   * @nullable
+   */
   payoffDate?: string | null;
-  /** For yearly bills: the month (1–12) when the annual bill is due */
-  annualDueMonth?: number | null;
 }

@@ -639,6 +639,7 @@ interface WriteRequest {
     endDate: string;
     openingBalance: number;
     paycheck: number;
+    paycheckBreakdown?: Array<{ sourceId: string; sourceName: string; amount: number }>;
     bills: Array<{ name: string; amount: number; color?: string }>;
     totalBills: number;
     closingBalance: number;
@@ -771,7 +772,10 @@ function buildBudgetWriteData(
       nextRow++;
     }
 
-    valueRows[nextRow][labelCol] = "Paycheck";
+    const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+      ? "Paycheck (" + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ") + ")"
+      : "Paycheck";
+    valueRows[nextRow][labelCol] = paycheckLabel;
     valueRows[nextRow][valCol] = week.paycheck;
     nextRow++;
 

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DebtPaymentFrequency } from "./debtPaymentFrequency";
 import type { DebtType } from "./debtType";
 
 export interface Debt {
@@ -35,6 +36,6 @@ export interface Debt {
   lastPaymentAmount?: number | null;
   /** ISO date string when the debt was created (optional, used for payment-due nudge) */
   createdAt?: string | null;
-  /** Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable period. */
-  paymentFrequency?: "monthly" | "weekly" | "biweekly" | null;
+  /** Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable budget period. */
+  paymentFrequency?: DebtPaymentFrequency;
 }

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PaycheckBreakdownItem } from "./paycheckBreakdownItem";
 import type { WeeklyBill } from "./weeklyBill";
 
 export interface WeeklyBudget {
@@ -16,8 +17,10 @@ export interface WeeklyBudget {
   endDate: string;
   /** Amount remaining from previous week */
   openingBalance: number;
-  /** Paycheck received this week */
+  /** Paycheck received this week (combined total from all sources) */
   paycheck: number;
+  /** Per-source breakdown of the paycheck total */
+  paycheckBreakdown?: PaycheckBreakdownItem[];
   bills: WeeklyBill[];
   /** Sum of all bill line items for this week */
   totalBills: number;

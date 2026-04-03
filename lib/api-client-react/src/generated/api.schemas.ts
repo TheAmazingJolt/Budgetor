@@ -23,8 +23,6 @@ export const BillType = {
   fixed: "fixed",
   weekly: "weekly",
   biweekly: "biweekly",
-  yearly: "yearly",
-  "yearly-flat": "yearly-flat",
 } as const;
 
 export interface Bill {
@@ -46,18 +44,23 @@ export interface Bill {
   userColor?: boolean;
   /** ID of the debt this bill was imported from (if any) */
   sourceDebtId?: string;
-  /** ID of the savings goal this bill was generated from (if any) */
-  sourceGoalId?: string;
-  /** ISO date string after which this bill should stop appearing (debt payoff date) */
+  /**
+   * ISO date string after which this bill should stop appearing (debt payoff date)
+   * @nullable
+   */
   payoffDate?: string | null;
-  /** For yearly bills: the month (1–12) when the annual bill is due */
-  annualDueMonth?: number | null;
 }
 
 export interface WeeklyBill {
   name: string;
   amount: number;
   color?: string;
+}
+
+export interface PaycheckBreakdownItem {
+  sourceId: string;
+  sourceName: string;
+  amount: number;
 }
 
 export interface WeeklyBudget {
@@ -69,13 +72,33 @@ export interface WeeklyBudget {
   endDate: string;
   /** Amount remaining from previous week */
   openingBalance: number;
-  /** Paycheck received this week */
+  /** Paycheck received this week (combined total from all sources) */
   paycheck: number;
+  /** Per-source breakdown of the paycheck total */
+  paycheckBreakdown?: PaycheckBreakdownItem[];
   bills: WeeklyBill[];
   /** Sum of all bill line items for this week */
   totalBills: number;
   /** Amount remaining after all bills */
   closingBalance: number;
+}
+
+export type IncomeSourceFrequency =
+  (typeof IncomeSourceFrequency)[keyof typeof IncomeSourceFrequency];
+
+export const IncomeSourceFrequency = {
+  weekly: "weekly",
+  biweekly: "biweekly",
+  monthly: "monthly",
+} as const;
+
+export interface IncomeSource {
+  id: string;
+  name: string;
+  amount: number;
+  frequency: IncomeSourceFrequency;
+  /** ISO date string for the next pay date of this source */
+  nextPayDate: string;
 }
 
 /**
@@ -97,12 +120,14 @@ export interface BudgetRequest {
   endDate: string;
   /** Starting account balance */
   openingBalance: number;
-  /** Weekly paycheck amount */
+  /** Weekly paycheck amount (used when incomeSources is empty) */
   paycheckAmount: number;
   /** Number of weeks to generate (calculated from date range) */
   numberOfWeeks: number;
   /** Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month) */
   payPeriod?: BudgetRequestPayPeriod;
+  /** Multiple income sources. When provided and non-empty, overrides paycheckAmount. */
+  incomeSources?: IncomeSource[];
   bills: Bill[];
 }
 
@@ -146,6 +171,19 @@ export const DebtType = {
   collections: "collections",
 } as const;
 
+/**
+ * Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable budget period.
+ */
+export type DebtPaymentFrequency =
+  | (typeof DebtPaymentFrequency)[keyof typeof DebtPaymentFrequency]
+  | null;
+
+export const DebtPaymentFrequency = {
+  monthly: "monthly",
+  weekly: "weekly",
+  biweekly: "biweekly",
+} as const;
+
 export interface Debt {
   id: string;
   name: string;
@@ -174,11 +212,23 @@ export interface Debt {
   lastPaymentAmount?: number | null;
   /** ISO date string when the debt was created (optional, used for payment-due nudge) */
   createdAt?: string | null;
-  /** Payment frequency: 'weekly' or 'biweekly' (optional) */
-  paymentFrequency?: string | null;
+  /** Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable budget period. */
+  paymentFrequency?: DebtPaymentFrequency;
 }
 
 export type SavedBudgetSettings = { [key: string]: unknown };
+
+/**
+ * Type of linked sheet ('google' or 'excel')
+ */
+export type SavedBudgetLinkedSheetType =
+  | (typeof SavedBudgetLinkedSheetType)[keyof typeof SavedBudgetLinkedSheetType]
+  | null;
+
+export const SavedBudgetLinkedSheetType = {
+  google: "google",
+  excel: "excel",
+} as const;
 
 export interface SavedBudget {
   id: string;
@@ -187,9 +237,12 @@ export interface SavedBudget {
   bills: unknown[];
   settings: SavedBudgetSettings;
   debts?: Debt[];
+  /** ID of the linked Google Sheet or Excel file (null if no link) */
   linkedSheetId?: string | null;
+  /** Display name of the linked sheet/file */
   linkedSheetName?: string | null;
-  linkedSheetType?: string | null;
+  /** Type of linked sheet ('google' or 'excel') */
+  linkedSheetType?: SavedBudgetLinkedSheetType;
   createdAt: string;
   updatedAt: string;
 }
@@ -213,14 +266,29 @@ export interface SavedBudgetCreateRequest {
 
 export type SavedBudgetUpdateRequestSettings = { [key: string]: unknown };
 
+/**
+ * Type of linked sheet ('google' or 'excel')
+ */
+export type SavedBudgetUpdateRequestLinkedSheetType =
+  | (typeof SavedBudgetUpdateRequestLinkedSheetType)[keyof typeof SavedBudgetUpdateRequestLinkedSheetType]
+  | null;
+
+export const SavedBudgetUpdateRequestLinkedSheetType = {
+  google: "google",
+  excel: "excel",
+} as const;
+
 export interface SavedBudgetUpdateRequest {
   name?: string;
   bills?: unknown[];
   settings?: SavedBudgetUpdateRequestSettings;
   debts?: Debt[];
+  /** ID of the linked Google Sheet or Excel file (null clears the link) */
   linkedSheetId?: string | null;
+  /** Display name of the linked sheet/file */
   linkedSheetName?: string | null;
-  linkedSheetType?: string | null;
+  /** Type of linked sheet ('google' or 'excel') */
+  linkedSheetType?: SavedBudgetUpdateRequestLinkedSheetType;
 }
 
 export interface GoogleAuthStatus {
@@ -365,6 +433,7 @@ export interface UpdateUserDebtsRequest {
 export type UserPreferencesResponsePreferences = {
   autoOpenLastSheet?: boolean;
   skipOpeningScreen?: boolean;
+  showPaymentReminders?: boolean;
   [key: string]: unknown;
 };
 
@@ -375,6 +444,7 @@ export interface UserPreferencesResponse {
 export type UpdateUserPreferencesRequestPreferences = {
   autoOpenLastSheet?: boolean;
   skipOpeningScreen?: boolean;
+  showPaymentReminders?: boolean;
   [key: string]: unknown;
 };
 

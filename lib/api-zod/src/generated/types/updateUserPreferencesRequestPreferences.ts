@@ -9,5 +9,6 @@
 export type UpdateUserPreferencesRequestPreferences = {
   autoOpenLastSheet?: boolean;
   skipOpeningScreen?: boolean;
+  showPaymentReminders?: boolean;
   [key: string]: unknown;
 };

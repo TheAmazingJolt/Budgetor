@@ -278,7 +278,10 @@ function writeWeeksToSheet(
     }
 
     // Paycheck
-    set(sheet, nextRow, labelCol, makeCell('Paycheck', bodyStyle));
+    const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+      ? 'Paycheck (' + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(' + ') + ')'
+      : 'Paycheck';
+    set(sheet, nextRow, labelCol, makeCell(paycheckLabel, bodyStyle));
     set(sheet, nextRow, valCol,   makeCell(week.paycheck, bodyValStyle));
     nextRow++;
 

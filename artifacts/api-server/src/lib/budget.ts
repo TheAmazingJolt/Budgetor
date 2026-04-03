@@ -47,6 +47,75 @@ function getNextYearlyDueDate(fromDate: Date, dueMonth: number, dueDay: number):
   return dueDate;
 }
 
+export interface IncomeSource {
+  id: string;
+  name: string;
+  amount: number;
+  frequency: "weekly" | "biweekly" | "monthly";
+  nextPayDate: string;
+}
+
+interface PaycheckBreakdownItem {
+  sourceId: string;
+  sourceName: string;
+  amount: number;
+}
+
+function computePaychecksForPeriod(
+  sources: IncomeSource[],
+  periodStart: Date,
+  periodEnd: Date,
+): PaycheckBreakdownItem[] {
+  const breakdown: PaycheckBreakdownItem[] = [];
+
+  for (const source of sources) {
+    let total = 0;
+    let payDate = new Date(source.nextPayDate + "T12:00:00");
+
+    if (source.frequency === "weekly") {
+      while (payDate <= periodEnd) {
+        if (payDate >= periodStart) {
+          total += source.amount;
+        }
+        payDate = addDays(payDate, 7);
+      }
+      if (total === 0 && periodStart <= new Date(source.nextPayDate + "T12:00:00") && new Date(source.nextPayDate + "T12:00:00") <= periodEnd) {
+        total = source.amount;
+      }
+    } else if (source.frequency === "biweekly") {
+      while (payDate <= periodEnd) {
+        if (payDate >= periodStart) {
+          total += source.amount;
+        }
+        payDate = addDays(payDate, 14);
+      }
+    } else {
+      const originalDay = payDate.getDate();
+      while (payDate <= periodEnd) {
+        if (payDate >= periodStart) {
+          total += source.amount;
+        }
+        const yr = payDate.getFullYear();
+        const mo = payDate.getMonth() + 1;
+        const targetYear = mo > 11 ? yr + 1 : yr;
+        const targetMonth = mo > 11 ? 0 : mo;
+        const maxDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+        payDate = new Date(targetYear, targetMonth, Math.min(originalDay, maxDay));
+      }
+    }
+
+    if (total > 0) {
+      breakdown.push({
+        sourceId: source.id,
+        sourceName: source.name,
+        amount: Math.round(total * 100) / 100,
+      });
+    }
+  }
+
+  return breakdown;
+}
+
 export function generateWeeklyBudgets(
   startDate: Date,
   endDate: Date,
@@ -54,7 +123,8 @@ export function generateWeeklyBudgets(
   paycheckAmount: number,
   numberOfWeeks: number,
   bills: Bill[],
-  payPeriod: "weekly" | "biweekly" | "monthly" = "weekly"
+  payPeriod: "weekly" | "biweekly" | "monthly" = "weekly",
+  incomeSources?: IncomeSource[],
 ): WeeklyBudget[] {
   const balancedBills = bills.filter((b) => b.type === "balanced");
   const fixedBills = bills.filter((b) => b.type === "fixed");
@@ -71,6 +141,8 @@ export function generateWeeklyBudgets(
   const alwaysTotal = alwaysBills.reduce((s, b) => s + Math.abs(b.amount), 0);
 
   // ── Build week date windows ─────────────────────────────────────────────
+  const useMultiSource = Array.isArray(incomeSources) && incomeSources.length > 0;
+
   interface WeekData {
     start: Date;
     end: Date;
@@ -78,6 +150,7 @@ export function generateWeeklyBudgets(
     fixedWeeklyBills: WeeklyBill[];
     largeBills: WeeklyBill[];
     paycheck: number;
+    paycheckBreakdown?: PaycheckBreakdownItem[];
   }
 
   const weeks: WeekData[] = [];
@@ -86,13 +159,21 @@ export function generateWeeklyBudgets(
     let periodStart = new Date(startDate);
     for (let i = 0; i < numberOfWeeks; i++) {
       const end = i === numberOfWeeks - 1 ? endDate : getMonthEnd(periodStart);
+      const start = new Date(periodStart);
+      let paycheck = paycheckAmount;
+      let breakdown: PaycheckBreakdownItem[] | undefined;
+      if (useMultiSource) {
+        breakdown = computePaychecksForPeriod(incomeSources!, start, end);
+        paycheck = breakdown.reduce((s, b) => s + b.amount, 0);
+      }
       weeks.push({
-        start: new Date(periodStart),
+        start,
         end,
         month: monthKey(periodStart),
         fixedWeeklyBills: [],
         largeBills: [],
-        paycheck: paycheckAmount,
+        paycheck,
+        paycheckBreakdown: breakdown,
       });
       periodStart = getNextMonthStart(periodStart);
     }
@@ -101,13 +182,20 @@ export function generateWeeklyBudgets(
     for (let i = 0; i < numberOfWeeks; i++) {
       const start = addDays(startDate, i * daysPerPeriod);
       const end = i === numberOfWeeks - 1 ? endDate : addDays(start, daysPerPeriod - 1);
+      let paycheck = paycheckAmount;
+      let breakdown: PaycheckBreakdownItem[] | undefined;
+      if (useMultiSource) {
+        breakdown = computePaychecksForPeriod(incomeSources!, start, end);
+        paycheck = breakdown.reduce((s, b) => s + b.amount, 0);
+      }
       weeks.push({
         start,
         end,
         month: monthKey(start),
         fixedWeeklyBills: [],
         largeBills: [],
-        paycheck: paycheckAmount,
+        paycheck,
+        paycheckBreakdown: breakdown,
       });
     }
   }
@@ -435,12 +523,12 @@ export function generateWeeklyBudgets(
   const result: WeeklyBudget[] = [];
 
   for (let i = 0; i < weeks.length; i++) {
-    const { start, end, largeBills, fixedWeeklyBills, paycheck } = weeks[i];
+    const { start, end, largeBills, fixedWeeklyBills, paycheck, paycheckBreakdown } = weeks[i];
     const allBills = [...largeBills, ...fixedWeeklyBills];
     const totalBills = allBills.reduce((s, b) => s + b.amount, 0);
     const closingBalance = openingBalance + paycheck + totalBills;
 
-    result.push({
+    const weekResult: WeeklyBudget = {
       weekLabel: formatLabel(start, end),
       startDate: formatDate(start),
       endDate: formatDate(end),
@@ -449,7 +537,11 @@ export function generateWeeklyBudgets(
       bills: allBills,
       totalBills: Math.round(totalBills * 100) / 100,
       closingBalance: Math.round(closingBalance * 100) / 100,
-    });
+    };
+    if (paycheckBreakdown && paycheckBreakdown.length > 0) {
+      weekResult.paycheckBreakdown = paycheckBreakdown;
+    }
+    result.push(weekResult);
   }
 
   return result;

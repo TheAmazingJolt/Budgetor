@@ -153,6 +153,13 @@ interface SavedBudgetSettings {
   inputMode?: InputMode;
   existingWeeks?: any[];
   payPeriod?: "weekly" | "biweekly" | "monthly";
+  incomeSources?: Array<{
+    id: string;
+    name: string;
+    amount: number;
+    frequency: "weekly" | "biweekly" | "monthly";
+    nextPayDate: string;
+  }>;
 }
 
 interface GenerateOverrides {
@@ -172,10 +179,13 @@ type WeekEdit = {
   deleted?: boolean;
 };
 
+type PaycheckBreakdown = { sourceId: string; sourceName: string; amount: number };
+
 type UnifiedWeek = {
   label: string;
   openingBalance?: number;
   paycheck?: number;
+  paycheckBreakdown?: PaycheckBreakdown[];
   items: { name: string; amount: number }[];
   remaining: number;
   isNew: boolean;
@@ -571,6 +581,11 @@ export function BudgetWizard({
     generatedWeek,
     payPeriod,
     setPayPeriod,
+    incomeSources,
+    setIncomeSources,
+    addIncomeSource,
+    updateIncomeSource,
+    removeIncomeSource,
     restorePayPeriodSettings,
     reset,
   } = useBudgetStore();
@@ -591,6 +606,8 @@ export function BudgetWizard({
   const [paydayWeekLabel, setPaydayWeekLabel] = useState<string | null>(null);
   const [paydayWeekItems, setPaydayWeekItems] = useState<PaydayBillItem[]>([]);
   const [paydayOpeningBalance, setPaydayOpeningBalance] = useState(0);
+  const [paydayBreakdown, setPaydayBreakdown] = useState<Array<{ sourceId: string; sourceName: string; amount: number }>>([]);
+  const [paydayExpectedPaycheck, setPaydayExpectedPaycheck] = useState(0);
 
   const [pendingImportBills, setPendingImportBills] = useState<Bill[] | null>(null);
   const [savedBillsCountAtConflict, setSavedBillsCountAtConflict] = useState(0);
@@ -1024,7 +1041,7 @@ export function BudgetWizard({
       ...(generatedWeek?.weeks ?? []),
     ];
 
-    let bestWeek: { label: string; items: { name: string; amount: number }[]; openingBalance: number; startDate: Date } | null = null;
+    let bestWeek: { label: string; items: { name: string; amount: number }[]; openingBalance: number; paycheck?: number; startDate: Date; paycheckBreakdown?: PaycheckBreakdown[] } | null = null;
     for (const w of allAvailableWeeks) {
       const label = w.weekLabel ?? w.label;
       if (!label) continue;
@@ -1037,7 +1054,9 @@ export function BudgetWizard({
         label,
         items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
         openingBalance: w.openingBalance ?? 0,
+        paycheck: (w as Record<string, unknown>).paycheck as number | undefined,
         startDate,
+        paycheckBreakdown: (w as Record<string, unknown>).paycheckBreakdown as PaycheckBreakdown[] | undefined,
       };
       break;
     }
@@ -1052,6 +1071,8 @@ export function BudgetWizard({
     setPaydayWeekLabel(bestWeek.label);
     setPaydayWeekItems(billsOnly);
     setPaydayOpeningBalance(bestWeek.openingBalance);
+    setPaydayBreakdown(bestWeek.paycheckBreakdown ?? []);
+    setPaydayExpectedPaycheck(bestWeek.paycheck ?? paycheckAmount);
     setPaydayDialogOpen(true);
   }, [inputMode, activeCloudBudgetId, paydayCheckinsQuery.data, cloudExistingWeeks, generatedWeek]);
 
@@ -1768,6 +1789,7 @@ export function BudgetWizard({
               inputMode,
               existingWeeks: getExistingWeeks(),
               payPeriod,
+              incomeSources: incomeSources.length > 0 ? incomeSources : undefined,
             },
             debts,
           },
@@ -1902,6 +1924,19 @@ export function BudgetWizard({
     setDebtBillImports(importedIds);
     if (s?.openingBalance !== undefined) setOpeningBalance(s.openingBalance);
     if (s?.paycheckAmount !== undefined) setPaycheckAmount(s.paycheckAmount);
+    if (Array.isArray(s?.incomeSources) && s.incomeSources.length > 0) {
+      setIncomeSources(s.incomeSources);
+    } else if (s?.paycheckAmount !== undefined && s?.payPeriod && s?.newWeekStartDate) {
+      setIncomeSources([{
+        id: crypto.randomUUID(),
+        name: "Primary Income",
+        amount: s.paycheckAmount,
+        frequency: s.payPeriod,
+        nextPayDate: s.newWeekStartDate,
+      }]);
+    } else {
+      setIncomeSources([]);
+    }
     setZeroOpeningBalance(true);
     if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
     if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
@@ -2064,6 +2099,7 @@ export function BudgetWizard({
             inputMode: "cloud",
             existingWeeks: updatedExistingWeeks,
             payPeriod,
+            incomeSources: incomeSources.length > 0 ? incomeSources : undefined,
           },
           debts,
         },
@@ -2142,6 +2178,7 @@ export function BudgetWizard({
             inputMode: "cloud",
             existingWeeks: mergedExistingWeeks,
             payPeriod,
+            incomeSources: incomeSources.length > 0 ? incomeSources : undefined,
           },
           debts,
         },
@@ -2187,16 +2224,27 @@ export function BudgetWizard({
     );
     const allBillsForGeneration = [...rawBills, ...savingsGoalBills];
 
+    const effectiveIncomeSources = incomeSources.length > 0
+      ? incomeSources.length === 1
+        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: overrides?.startDate ?? newWeekStartDate }]
+        : incomeSources
+      : undefined;
+
+    const anchoredStartDate = effectiveIncomeSources && effectiveIncomeSources.length > 1
+      ? effectiveIncomeSources[0].nextPayDate
+      : overrides?.startDate ?? newWeekStartDate;
+
     generateMutation.mutate(
       {
         data: {
-          startDate: overrides?.startDate ?? newWeekStartDate,
+          startDate: anchoredStartDate,
           endDate: overrides?.endDate ?? newWeekEndDate,
           openingBalance: effectiveOpeningBalance,
           paycheckAmount: overrides?.paycheckAmount ?? paycheckAmount,
           numberOfWeeks: overrides?.weekCount ?? weekCount,
           bills: allBillsForGeneration,
           payPeriod,
+          incomeSources: effectiveIncomeSources,
         },
       },
       {
@@ -2433,15 +2481,21 @@ export function BudgetWizard({
     setIsRegeneratingForExport(true);
     try {
       const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
+      const exportIncomeSources = incomeSources.length === 1
+        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
+        : incomeSources.length > 0 ? incomeSources : undefined;
+      const exportStartDate = exportIncomeSources && exportIncomeSources.length > 1
+        ? exportIncomeSources[0].nextPayDate : newWeekStartDate;
       const data = await generateMutation.mutateAsync({
         data: {
-          startDate: newWeekStartDate,
+          startDate: exportStartDate,
           endDate: newWeekEndDate,
           openingBalance: effectiveOpeningBalance,
           paycheckAmount,
           numberOfWeeks: weekCount,
           bills,
           payPeriod,
+          incomeSources: exportIncomeSources,
         },
       });
       if (!data.weeks?.length) throw new Error("Generation returned no weeks");
@@ -2599,13 +2653,19 @@ export function BudgetWizard({
       );
       const allBillsForSync = [...bills, ...savingsBillsForSync];
       const colorLookup = buildBillColorLookup(allBillsForSync);
+      const syncIncomeSources = incomeSources.length === 1
+        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
+        : incomeSources.length > 0 ? incomeSources : undefined;
+      const syncStartDate = syncIncomeSources && syncIncomeSources.length > 1
+        ? syncIncomeSources[0].nextPayDate : newWeekStartDate;
       const generated = await generateBudget({
-        startDate: newWeekStartDate,
+        startDate: syncStartDate,
         endDate: newWeekEndDate,
         openingBalance: zeroOpeningBalance ? 0 : openingBalance,
         paycheckAmount,
         numberOfWeeks: weekCount,
         payPeriod,
+        incomeSources: syncIncomeSources,
         bills: allBillsForSync,
       });
       const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
@@ -3552,20 +3612,160 @@ export function BudgetWizard({
                       className="h-11 rounded-xl"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-muted-foreground">
-                      Paycheck Amount
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={paycheckAmount}
-                        onChange={(e) => setPaycheckAmount(parseFloat(e.target.value) || 0)}
-                        className="pl-7 h-11 rounded-xl"
-                      />
+                  <div className="space-y-3 sm:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-muted-foreground">
+                        {incomeSources.length > 1 ? "Income Sources" : "Paycheck Amount"}
+                      </Label>
+                      {incomeSources.length <= 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            if (incomeSources.length === 0) {
+                              const defaultSource = {
+                                id: crypto.randomUUID(),
+                                name: "Main Job",
+                                amount: paycheckAmount,
+                                frequency: payPeriod as "weekly" | "biweekly" | "monthly",
+                                nextPayDate: newWeekStartDate,
+                              };
+                              setIncomeSources([
+                                defaultSource,
+                                {
+                                  id: crypto.randomUUID(),
+                                  name: "Side Income",
+                                  amount: 0,
+                                  frequency: "weekly" as const,
+                                  nextPayDate: newWeekStartDate,
+                                },
+                              ]);
+                            } else {
+                              addIncomeSource({
+                                id: crypto.randomUUID(),
+                                name: "",
+                                amount: 0,
+                                frequency: "weekly" as const,
+                                nextPayDate: newWeekStartDate,
+                              });
+                            }
+                          }}
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add income source
+                        </Button>
+                      )}
                     </div>
+
+                    {incomeSources.length <= 1 ? (
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={incomeSources.length === 1 ? incomeSources[0].amount : paycheckAmount}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            if (incomeSources.length === 1) {
+                              updateIncomeSource(0, { ...incomeSources[0], amount: val });
+                            }
+                            setPaycheckAmount(val);
+                          }}
+                          className="pl-7 h-11 rounded-xl"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {incomeSources.map((source, idx) => (
+                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
+                            <div className="flex items-center justify-between gap-2">
+                              <Input
+                                type="text"
+                                placeholder="Income name"
+                                value={source.name}
+                                onChange={(e) => updateIncomeSource(idx, { ...source, name: e.target.value })}
+                                className="h-8 text-sm rounded-lg flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  removeIncomeSource(idx);
+                                  if (incomeSources.length === 2) {
+                                    const remaining = incomeSources[idx === 0 ? 1 : 0];
+                                    setPaycheckAmount(remaining.amount);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Amount"
+                                  value={source.amount}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    updateIncomeSource(idx, { ...source, amount: val });
+                                  }}
+                                  className="pl-6 h-8 text-sm rounded-lg"
+                                />
+                              </div>
+                              <Select
+                                value={source.frequency}
+                                onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
+                              >
+                                <SelectTrigger className="h-8 text-xs rounded-lg">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="weekly">Weekly</SelectItem>
+                                  <SelectItem value="biweekly">Biweekly</SelectItem>
+                                  <SelectItem value="monthly">Monthly</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="date"
+                                value={source.nextPayDate}
+                                onChange={(e) => {
+                                  updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
+                                  if (idx === 0 && incomeSources.length > 1 && e.target.value) {
+                                    setStartDatePreserveCount(e.target.value);
+                                  }
+                                }}
+                                className="h-8 text-xs rounded-lg"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-8 text-xs gap-1"
+                          onClick={() =>
+                            addIncomeSource({
+                              id: crypto.randomUUID(),
+                              name: "",
+                              amount: 0,
+                              frequency: "weekly" as const,
+                              nextPayDate: newWeekStartDate,
+                            })
+                          }
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add another income source
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -4103,6 +4303,7 @@ export function BudgetWizard({
                     label: w.label,
                     openingBalance: w.openingBalance as number | undefined,
                     paycheck: w.paycheck as number | undefined,
+                    paycheckBreakdown: w.paycheckBreakdown as PaycheckBreakdown[] | undefined,
                     items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
                     remaining: w.remaining as number,
                     isNew: false,
@@ -4118,6 +4319,7 @@ export function BudgetWizard({
                   label: w.weekLabel,
                   openingBalance: w.openingBalance as number | undefined,
                   paycheck: w.paycheck as number | undefined,
+                  paycheckBreakdown: w.paycheckBreakdown as PaycheckBreakdown[] | undefined,
                   items: (w.bills ?? []) as { name: string; amount: number }[],
                   remaining: w.closingBalance,
                   isNew: true,
@@ -4404,12 +4606,13 @@ export function BudgetWizard({
                                   rows.push(
                                     <tr key={r} className={r % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                                       {allWeeks.map((week, wi) => {
-                                        let rowItems: { label: string; value: number; style?: string }[] = [];
+                                        let rowItems: { label: string; value: number; style?: string; breakdown?: Array<{ sourceName: string; amount: number }> }[] = [];
                                         if (week.openingBalance !== undefined) {
                                           rowItems.push({ label: "Remaining Acct", value: week.openingBalance });
                                         }
                                         if (week.paycheck !== undefined) {
-                                          rowItems.push({ label: "Paycheck", value: week.paycheck });
+                                          const bd = week.paycheckBreakdown;
+                                          rowItems.push({ label: "Paycheck", value: week.paycheck, breakdown: bd && bd.length > 1 ? bd : undefined });
                                         }
                                         for (const bill of week.items) {
                                           const billStyle =
@@ -4434,8 +4637,9 @@ export function BudgetWizard({
                                           <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
                                             {item.label}
                                           </td>,
-                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
+                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick} title={item.breakdown ? item.breakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(' + ') : undefined}>
                                             ${item.value.toFixed(2)}
+                                            {item.breakdown && <span className="ml-1 text-[10px] text-muted-foreground">*</span>}
                                           </td>,
                                         ];
                                       })}
@@ -5902,7 +6106,8 @@ export function BudgetWizard({
           weekLabel={paydayWeekLabel}
           weekItems={paydayWeekItems}
           openingBalance={paydayOpeningBalance}
-          expectedPaycheck={paycheckAmount}
+          expectedPaycheck={paydayExpectedPaycheck}
+          expectedBreakdown={paydayBreakdown.length > 0 ? paydayBreakdown : undefined}
           budgetId={activeCloudBudgetId}
           onConfirmed={(actualPaycheck) => {
             setWeekEdits(prev => ({

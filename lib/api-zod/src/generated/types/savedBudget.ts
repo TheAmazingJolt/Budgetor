@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Debt } from "./debt";
+import type { SavedBudgetLinkedSheetType } from "./savedBudgetLinkedSheetType";
 import type { SavedBudgetSettings } from "./savedBudgetSettings";
 
 export interface SavedBudget {
@@ -15,9 +16,12 @@ export interface SavedBudget {
   bills: unknown[];
   settings: SavedBudgetSettings;
   debts?: Debt[];
+  /** ID of the linked Google Sheet or Excel file (null if no link) */
   linkedSheetId?: string | null;
+  /** Display name of the linked sheet/file */
   linkedSheetName?: string | null;
-  linkedSheetType?: string | null;
+  /** Type of linked sheet ('google' or 'excel') */
+  linkedSheetType?: SavedBudgetLinkedSheetType;
   createdAt: Date;
   updatedAt: Date;
 }

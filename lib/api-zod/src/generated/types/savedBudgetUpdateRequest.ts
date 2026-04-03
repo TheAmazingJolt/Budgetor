@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Debt } from "./debt";
+import type { SavedBudgetUpdateRequestLinkedSheetType } from "./savedBudgetUpdateRequestLinkedSheetType";
 import type { SavedBudgetUpdateRequestSettings } from "./savedBudgetUpdateRequestSettings";
 
 export interface SavedBudgetUpdateRequest {
@@ -13,7 +14,10 @@ export interface SavedBudgetUpdateRequest {
   bills?: unknown[];
   settings?: SavedBudgetUpdateRequestSettings;
   debts?: Debt[];
+  /** ID of the linked Google Sheet or Excel file (null clears the link) */
   linkedSheetId?: string | null;
+  /** Display name of the linked sheet/file */
   linkedSheetName?: string | null;
-  linkedSheetType?: string | null;
+  /** Type of linked sheet ('google' or 'excel') */
+  linkedSheetType?: SavedBudgetUpdateRequestLinkedSheetType;
 }

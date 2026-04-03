@@ -556,6 +556,7 @@ interface ExcelWriteRequest {
     endDate: string;
     openingBalance: number;
     paycheck: number;
+    paycheckBreakdown?: Array<{ sourceId: string; sourceName: string; amount: number }>;
     bills: Array<{ name: string; amount: number; color?: string }>;
     totalBills: number;
     closingBalance: number;
@@ -930,7 +931,9 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
         row++;
       }
 
-      grid[row][lc] = "Paycheck";
+      grid[row][lc] = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+        ? "Paycheck (" + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ") + ")"
+        : "Paycheck";
       grid[row][vc] = week.paycheck;
       row++;
 
@@ -1271,7 +1274,9 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
         row++;
       }
 
-      grid[row][lc] = "Paycheck";
+      grid[row][lc] = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+        ? "Paycheck (" + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ") + ")"
+        : "Paycheck";
       grid[row][vc] = week.paycheck;
       row++;
 

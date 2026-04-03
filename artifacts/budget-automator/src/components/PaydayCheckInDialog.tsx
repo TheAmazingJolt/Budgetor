@@ -17,12 +17,19 @@ export interface PaydayBillItem {
   amount: number;
 }
 
+export interface PaycheckSourceExpected {
+  sourceId: string;
+  sourceName: string;
+  amount: number;
+}
+
 export interface PaydayCheckInDialogProps {
   open: boolean;
   weekLabel: string;
   weekItems: PaydayBillItem[];
   openingBalance: number;
   expectedPaycheck: number;
+  expectedBreakdown?: PaycheckSourceExpected[];
   budgetId: string;
   onConfirmed: (actualPaycheck: number) => void;
   onDismiss: () => void;
@@ -40,25 +47,39 @@ export function PaydayCheckInDialog({
   weekItems,
   openingBalance,
   expectedPaycheck,
+  expectedBreakdown,
   budgetId,
   onConfirmed,
   onDismiss,
 }: PaydayCheckInDialogProps) {
+  const hasMultipleSources = expectedBreakdown && expectedBreakdown.length > 1;
   const [step, setStep] = useState<1 | 2>(1);
   const [paycheckStr, setPaycheckStr] = useState(
     expectedPaycheck > 0 ? expectedPaycheck.toFixed(2) : "",
   );
+  const [sourceAmounts, setSourceAmounts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setStep(1);
     setPaycheckStr(expectedPaycheck > 0 ? expectedPaycheck.toFixed(2) : "");
+    if (expectedBreakdown && expectedBreakdown.length > 1) {
+      const initial: Record<string, string> = {};
+      for (const src of expectedBreakdown) {
+        initial[src.sourceId] = src.amount > 0 ? src.amount.toFixed(2) : "";
+      }
+      setSourceAmounts(initial);
+    } else {
+      setSourceAmounts({});
+    }
     setSaving(false);
     setError("");
   }, [weekLabel, open]);
 
-  const parsedPaycheck = parseFloat(paycheckStr) || 0;
+  const parsedPaycheck = hasMultipleSources
+    ? Object.values(sourceAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+    : (parseFloat(paycheckStr) || 0);
 
   const weekStart = weekLabel.split(" to ")[0] ?? weekLabel;
 
@@ -74,10 +95,18 @@ export function PaydayCheckInDialog({
   const finalBalance = openingBalance + parsedPaycheck + billsOnly.reduce((s, i) => s + i.amount, 0);
 
   const handleNext = () => {
-    const n = parseFloat(paycheckStr);
-    if (!paycheckStr || isNaN(n) || n < 0) {
-      setError("Please enter a valid paycheck amount.");
-      return;
+    if (hasMultipleSources) {
+      const total = Object.values(sourceAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+      if (total <= 0) {
+        setError("Please enter valid paycheck amounts.");
+        return;
+      }
+    } else {
+      const n = parseFloat(paycheckStr);
+      if (!paycheckStr || isNaN(n) || n < 0) {
+        setError("Please enter a valid paycheck amount.");
+        return;
+      }
     }
     setError("");
     setStep(2);
@@ -120,27 +149,61 @@ export function PaydayCheckInDialog({
             </DialogHeader>
 
             <div className="py-2 space-y-4">
-              <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4 space-y-3">
-                <p className="text-sm font-medium text-teal-800">Paycheck received</p>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={paycheckStr}
-                    onChange={e => { setPaycheckStr(e.target.value); setError(""); }}
-                    className="pl-7 text-base h-11 font-semibold"
-                    autoFocus
-                  />
+              {hasMultipleSources ? (
+                <div className="space-y-3">
+                  {expectedBreakdown!.map((src) => (
+                    <div key={src.sourceId} className="rounded-xl border border-teal-100 bg-teal-50/50 p-3 space-y-2">
+                      <p className="text-sm font-medium text-teal-800">{src.sourceName}</p>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={sourceAmounts[src.sourceId] ?? ""}
+                          onChange={e => {
+                            setSourceAmounts(prev => ({ ...prev, [src.sourceId]: e.target.value }));
+                            setError("");
+                          }}
+                          className="pl-7 text-base h-10 font-semibold"
+                        />
+                      </div>
+                      {src.amount > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Expected: {fmt(src.amount)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 flex justify-between items-center">
+                    <span className="text-sm font-semibold text-teal-800">Total</span>
+                    <span className="text-sm font-bold text-teal-700">{fmt(parsedPaycheck)}</span>
+                  </div>
                 </div>
-                {expectedPaycheck > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Expected: {fmt(expectedPaycheck)}
-                  </p>
-                )}
-              </div>
+              ) : (
+                <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4 space-y-3">
+                  <p className="text-sm font-medium text-teal-800">Paycheck received</p>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={paycheckStr}
+                      onChange={e => { setPaycheckStr(e.target.value); setError(""); }}
+                      className="pl-7 text-base h-11 font-semibold"
+                      autoFocus
+                    />
+                  </div>
+                  {expectedPaycheck > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Expected: {fmt(expectedPaycheck)}
+                    </p>
+                  )}
+                </div>
+              )}
               {error && <p className="text-xs text-red-500">{error}</p>}
             </div>
 
@@ -175,10 +238,24 @@ export function PaydayCheckInDialog({
                 <span className="text-sm font-bold text-teal-700">{fmt(openingBalance)}</span>
               </div>
 
-              <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex justify-between items-center">
-                <span className="text-sm font-semibold text-teal-800">+ Paycheck</span>
-                <span className="text-sm font-bold text-teal-700">+{fmt(parsedPaycheck)}</span>
-              </div>
+              {hasMultipleSources ? (
+                <div className="space-y-1">
+                  {expectedBreakdown!.map((src) => {
+                    const actual = parseFloat(sourceAmounts[src.sourceId] ?? "0") || 0;
+                    return (
+                      <div key={src.sourceId} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 flex justify-between items-center">
+                        <span className="text-sm font-medium text-teal-800">+ {src.sourceName}</span>
+                        <span className="text-sm font-bold text-teal-700">+{fmt(actual)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex justify-between items-center">
+                  <span className="text-sm font-semibold text-teal-800">+ Paycheck</span>
+                  <span className="text-sm font-bold text-teal-700">+{fmt(parsedPaycheck)}</span>
+                </div>
+              )}
 
               {runningRows.length === 0 ? (
                 <div className="rounded-xl border border-muted bg-muted/30 px-4 py-3">

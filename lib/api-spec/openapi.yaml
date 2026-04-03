@@ -868,7 +868,12 @@ components:
           description: Amount remaining from previous week
         paycheck:
           type: number
-          description: Paycheck received this week
+          description: Paycheck received this week (combined total from all sources)
+        paycheckBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaycheckBreakdownItem"
+          description: Per-source breakdown of the paycheck total
         bills:
           type: array
           items:
@@ -889,6 +894,42 @@ components:
         - totalBills
         - closingBalance
 
+    IncomeSource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+          enum: [weekly, biweekly, monthly]
+        nextPayDate:
+          type: string
+          description: ISO date string for the next pay date of this source
+      required:
+        - id
+        - name
+        - amount
+        - frequency
+        - nextPayDate
+
+    PaycheckBreakdownItem:
+      type: object
+      properties:
+        sourceId:
+          type: string
+        sourceName:
+          type: string
+        amount:
+          type: number
+      required:
+        - sourceId
+        - sourceName
+        - amount
+
     BudgetRequest:
       type: object
       properties:
@@ -903,7 +944,7 @@ components:
           description: Starting account balance
         paycheckAmount:
           type: number
-          description: Weekly paycheck amount
+          description: Weekly paycheck amount (used when incomeSources is empty)
         numberOfWeeks:
           type: integer
           description: Number of weeks to generate (calculated from date range)
@@ -911,6 +952,11 @@ components:
           type: string
           enum: [weekly, biweekly, monthly]
           description: "Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month)"
+        incomeSources:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeSource"
+          description: Multiple income sources. When provided and non-empty, overrides paycheckAmount.
         bills:
           type: array
           items:

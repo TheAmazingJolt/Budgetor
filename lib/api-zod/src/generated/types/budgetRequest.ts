@@ -7,6 +7,7 @@
  */
 import type { Bill } from "./bill";
 import type { BudgetRequestPayPeriod } from "./budgetRequestPayPeriod";
+import type { IncomeSource } from "./incomeSource";
 
 export interface BudgetRequest {
   /** ISO date string for first week start */
@@ -15,11 +16,13 @@ export interface BudgetRequest {
   endDate: string;
   /** Starting account balance */
   openingBalance: number;
-  /** Weekly paycheck amount */
+  /** Weekly paycheck amount (used when incomeSources is empty) */
   paycheckAmount: number;
   /** Number of weeks to generate (calculated from date range) */
   numberOfWeeks: number;
   /** Budget period length: weekly (7 days), biweekly (14 days), or monthly (calendar month) */
   payPeriod?: BudgetRequestPayPeriod;
+  /** Multiple income sources. When provided and non-empty, overrides paycheckAmount. */
+  incomeSources?: IncomeSource[];
   bills: Bill[];
 }
