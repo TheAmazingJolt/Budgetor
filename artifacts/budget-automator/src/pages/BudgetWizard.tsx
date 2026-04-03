@@ -698,20 +698,22 @@ export function BudgetWizard({
       return;
     }
     setIsSyncingToSheet(true);
-    const colorLookup = buildBillColorLookup(bills);
-    const weeks = rawWeeks.map((w: any) => ({
-      ...w,
-      bills: injectBillColors(w.bills, colorLookup),
-    }));
-    const writePayload = {
-      weeks,
-      startCol: 0,
-      includeRemainingAcct: !zeroOpeningBalance,
-      ...(debts.length > 0 ? { debts } : {}),
-      ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
-      ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
-    };
     try {
+      const safeBills = bills ?? [];
+      const safeDebts = debts ?? [];
+      const colorLookup = buildBillColorLookup(safeBills);
+      const weeks = rawWeeks.map((w: any) => ({
+        ...w,
+        bills: injectBillColors(w.bills ?? [], colorLookup),
+      }));
+      const writePayload = {
+        weeks,
+        startCol: 0,
+        includeRemainingAcct: !zeroOpeningBalance,
+        ...(safeDebts.length > 0 ? { debts: safeDebts } : {}),
+        ...(safeBills.length > 0 ? { bills: stripHeuristicColors(safeBills) } : {}),
+        ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
+      };
       if (activeLinkedSheet.type === "google") {
         await sheetWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
       } else {
