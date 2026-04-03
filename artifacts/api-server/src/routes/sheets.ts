@@ -650,6 +650,7 @@ interface WriteRequest {
   bills?: BillMeta[];
   existingLastCol?: number;
   budgetId?: string;
+  tz?: string;
 }
 
 interface CreateAndWriteRequest {
@@ -659,6 +660,7 @@ interface CreateAndWriteRequest {
   debts?: DebtItem[];
   bills?: BillMeta[];
   budgetId?: string;
+  tz?: string;
 }
 
 function buildBudgetWriteData(
@@ -1698,8 +1700,9 @@ async function writeSavingsTabToSheet(
   weeks: WriteRequest["weeks"],
   contributions: ManualContribRow[] = [],
   goals: SavingsGoalRow[] = [],
+  tz?: string,
 ): Promise<void> {
-  const today = new Date();
+  const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const currentMonth = today.getMonth();
@@ -2079,7 +2082,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
           }));
         } catch { }
       }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals); } catch { }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -2170,7 +2173,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
             }));
           } catch { }
         }
-        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals); } catch { }
+        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz); } catch { }
       })().catch(() => {});
     }
   } catch (err: any) {

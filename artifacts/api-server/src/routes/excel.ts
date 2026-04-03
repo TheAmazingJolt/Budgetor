@@ -566,6 +566,7 @@ interface ExcelWriteRequest {
   debts?: DebtItem[];
   bills?: BillMeta[];
   budgetId?: string;
+  tz?: string;
 }
 
 interface ExcelCreateAndWriteRequest {
@@ -1040,8 +1041,9 @@ async function writeSavingsTabToExcel(
   weeks: ExcelWriteRequest["weeks"],
   contributions: { billName: string; amount: number; date: string }[],
   goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
+  tz?: string,
 ): Promise<void> {
-  const today = new Date();
+  const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const currentMonth = today.getMonth();
@@ -1384,7 +1386,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
             targetDate: g.targetDate,
             savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
           }));
-          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals);
+          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals, body.tz);
         } catch { /* non-fatal */ }
       })().catch(() => {});
     }
