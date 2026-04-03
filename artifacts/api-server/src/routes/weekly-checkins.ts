@@ -149,13 +149,10 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
       );
       const r = result.rows[0];
 
-      if (itemType === "goal" || itemType === "yearly") {
-        const contribName = itemType === "goal"
-          ? itemName.replace(/\s*\[→[^\]]+\]\s*$/, "").trim()
-          : itemName.trim();
+      if (itemType === "goal") {
+        const contribName = itemName.replace(/\s*\[→[^\]]+\]\s*$/, "").trim();
         const startDate = weekLabelToStartDate(weekLabel);
         const contribNote = `checkin:${weekLabel}`;
-        console.log(`[POST checkin] type=${itemType} contribName="${contribName}" weekLabel="${weekLabel}" startDate=${startDate} actualAmount=${actualAmount}`);
         await client.query(
           `DELETE FROM savings_contributions WHERE budget_id = $1 AND user_id = $2 AND bill_name = $3 AND note = $4`,
           [budgetId, userId, contribName, contribNote],
