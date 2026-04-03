@@ -74,10 +74,12 @@ function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number 
 }
 
 function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: number }[]): number {
-  const exact = weekItems
-    .filter(it => it.name === bill.name)
-    .reduce((s, it) => s + Math.abs(it.amount), 0);
-  if (exact > 0) return exact;
+  const matchingItems = weekItems.filter(it => it.name === bill.name);
+  if (matchingItems.length > 0) {
+    const exactMatch = matchingItems.find(it => Math.abs(it.amount) === Math.abs(bill.amount));
+    if (exactMatch) return Math.abs(exactMatch.amount);
+    return Math.abs(bill.amount);
+  }
   if (bill.type === "balanced") {
     const prefix = `Partial ${bill.name}`;
     return weekItems
@@ -237,73 +239,92 @@ export function CheckInDialog({
         </DialogHeader>
 
         <div className="space-y-3 py-1">
-          {budgetedItems.map(it => {
-            const idx = items.findIndex(x =>
-              x.billType === it.billType &&
-              (it.billType === "debt" && it.debtId
-                ? x.debtId === it.debtId
-                : x.billName === it.billName)
-            );
-            const isDebt = it.billType === "debt";
-            return (
-              <div
-                key={it.billType === "debt" && it.debtId ? `debt-${it.debtId}` : `${it.billName}-${it.billType}`}
-                className={`rounded-xl border p-3 space-y-2 ${
-                  isDebt
-                    ? "border-red-200 bg-red-50/40"
-                    : "border-indigo-100 bg-indigo-50/40"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
-                    <p className={`text-xs ${isDebt ? "text-red-600" : "text-muted-foreground"}`}>
-                      {isDebt
-                        ? "Debt payment"
-                        : it.billType === "goal"
-                          ? "Savings goal"
-                          : it.billType === "yearly"
-                            ? "Sinking fund"
-                            : "Balanced monthly"}
+          {(() => {
+            const debtBudgeted = budgetedItems.filter(x => x.billType === "debt");
+            const debtNameTotals = new Map<string, number>();
+            for (const x of debtBudgeted) {
+              debtNameTotals.set(x.billName, (debtNameTotals.get(x.billName) ?? 0) + 1);
+            }
+            const debtNamePositions = new Map<string, number>();
+            return budgetedItems.map(it => {
+              const idx = items.findIndex(x =>
+                x.billType === it.billType &&
+                (it.billType === "debt" && it.debtId
+                  ? x.debtId === it.debtId
+                  : x.billName === it.billName)
+              );
+              const isDebt = it.billType === "debt";
+              let debtPositionLabel: string | null = null;
+              if (isDebt) {
+                const total = debtNameTotals.get(it.billName) ?? 1;
+                if (total > 1) {
+                  const pos = (debtNamePositions.get(it.billName) ?? 0) + 1;
+                  debtNamePositions.set(it.billName, pos);
+                  debtPositionLabel = `Debt ${pos} of ${total}`;
+                }
+              }
+              return (
+                <div
+                  key={it.billType === "debt" && it.debtId ? `debt-${it.debtId}` : `${it.billName}-${it.billType}`}
+                  className={`rounded-xl border p-3 space-y-2 ${
+                    isDebt
+                      ? "border-red-200 bg-red-50/40"
+                      : "border-indigo-100 bg-indigo-50/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
+                      <p className={`text-xs ${isDebt ? "text-red-600" : "text-muted-foreground"}`}>
+                        {isDebt
+                          ? debtPositionLabel
+                            ? `Debt payment · ${debtPositionLabel}`
+                            : "Debt payment"
+                          : it.billType === "goal"
+                            ? "Savings goal"
+                            : it.billType === "yearly"
+                              ? "Sinking fund"
+                              : "Balanced monthly"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSkip(idx)}
+                      className={`flex items-center gap-1 text-xs font-medium shrink-0 transition-colors ${it.skipped ? "text-red-500" : "text-muted-foreground hover:text-red-400"}`}
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      {it.skipped ? "Skipped" : "Skip"}
+                    </button>
+                  </div>
+                  {it.plannedAmount > 0 && (
+                    <p className="text-xs text-muted-foreground">Budgeted: ${it.plannedAmount.toFixed(2)}</p>
+                  )}
+                  {isDebt && it.currentBalance != null && (
+                    <p className="text-xs text-red-500/80">Balance: ${(it.currentBalance).toFixed(2)}</p>
+                  )}
+                  {!it.skipped && (
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={it.actualStr}
+                        onChange={e => setActual(idx, e.target.value)}
+                        className="pl-6 h-8 text-sm"
+                      />
+                    </div>
+                  )}
+                  {it.skipped && it.plannedAmount > 0 && (
+                    <p className={`text-xs italic ${isDebt ? "text-red-500" : "text-red-500"}`}>
+                      {isDebt ? "Logged as $0.00 — payment skipped this week" : "Logged as $0.00 — unexpected expense this week"}
                     </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleSkip(idx)}
-                    className={`flex items-center gap-1 text-xs font-medium shrink-0 transition-colors ${it.skipped ? "text-red-500" : "text-muted-foreground hover:text-red-400"}`}
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    {it.skipped ? "Skipped" : "Skip"}
-                  </button>
+                  )}
                 </div>
-                {it.plannedAmount > 0 && (
-                  <p className="text-xs text-muted-foreground">Budgeted: ${it.plannedAmount.toFixed(2)}</p>
-                )}
-                {isDebt && it.currentBalance != null && it.currentBalance > 0 && (
-                  <p className="text-xs text-red-500/80">Balance: ${it.currentBalance.toFixed(2)}</p>
-                )}
-                {!it.skipped && (
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={it.actualStr}
-                      onChange={e => setActual(idx, e.target.value)}
-                      className="pl-6 h-8 text-sm"
-                    />
-                  </div>
-                )}
-                {it.skipped && it.plannedAmount > 0 && (
-                  <p className={`text-xs italic ${isDebt ? "text-red-500" : "text-red-500"}`}>
-                    {isDebt ? "Logged as $0.00 — payment skipped this week" : "Logged as $0.00 — unexpected expense this week"}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
 
           {notBudgetedItems.length > 0 && (
             <div className="border border-dashed border-muted-foreground/25 rounded-xl overflow-hidden">

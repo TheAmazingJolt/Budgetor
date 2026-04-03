@@ -6147,7 +6147,10 @@ export function BudgetWizard({
                 debtId: debt?.id ?? b.sourceDebtId ?? "",
                 currentBalance: debt?.balance ?? 0,
               };
-            })}
+            })
+            .filter((entry, index, arr) =>
+              !entry.debtId || arr.findIndex(e => e.debtId === entry.debtId) === index
+            )}
           existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
           budgetId={activeCloudBudgetId}
           onDebtPayments={(payments) => {
