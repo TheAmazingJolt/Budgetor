@@ -1167,6 +1167,40 @@ async function writeSavingsTabToExcel(
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='A1:${endColLetter}${numRows}')`,
     { values: paddedGrid },
   );
+
+  let cr = 3;
+  const fmtCurrency = [["$#,##0.00"]];
+  const fmtCurrency2 = [["$#,##0.00", "$#,##0.00"]];
+  if (sinkingFunds.length > 0) {
+    cr += 2;
+    for (let i = 0; i < sinkingFunds.length; i++) {
+      const row1 = cr + i + 1;
+      try {
+        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:C${row1}')`, { numberFormat: fmtCurrency2 });
+      } catch {}
+    }
+    cr += sinkingFunds.length + 1;
+  }
+  if (balanced.length > 0) {
+    cr += 2;
+    for (let i = 0; i < balanced.length; i++) {
+      const row1 = cr + i + 1;
+      try {
+        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:C${row1}')`, { numberFormat: fmtCurrency2 });
+      } catch {}
+    }
+    cr += balanced.length + 1;
+  }
+  if (goals.length > 0) {
+    cr += 2;
+    for (let i = 0; i < goals.length; i++) {
+      const row1 = cr + i + 1;
+      try {
+        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:C${row1}')`, { numberFormat: fmtCurrency2 });
+        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='G${row1}:G${row1}')`, { numberFormat: fmtCurrency });
+      } catch {}
+    }
+  }
 }
 
 router.post("/excel/:id/write", async (req, res): Promise<void> => {

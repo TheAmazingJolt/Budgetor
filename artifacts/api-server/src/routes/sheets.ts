@@ -1889,11 +1889,12 @@ async function writeSavingsTabToSheet(
   // Find row indices for section headers and column header rows
   let r = 3; // 0-indexed, row 0=title, 1=subtitle, 2=blank
 
+  const currencyFmt = { numberFormat: { type: "NUMBER" as const, pattern: "$#,##0.00" } };
+
   if (sinkingFunds.length === 0 && balanced.length === 0) {
     // empty state row at r=3
   } else {
     if (sinkingFunds.length > 0) {
-      // Sinking Funds section header at r
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
@@ -1902,7 +1903,6 @@ async function writeSavingsTabToSheet(
         },
       });
       r++;
-      // Column headers at r
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 6 },
@@ -1911,13 +1911,20 @@ async function writeSavingsTabToSheet(
         },
       });
       r++;
-      // Data rows
-      r += sinkingFunds.length;
+      const sfDataStart = r;
+      const sfDataEnd = r + sinkingFunds.length;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: sfDataStart, endRowIndex: sfDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
+          cell: { userEnteredFormat: currencyFmt },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      });
+      r = sfDataEnd;
       r++; // blank gap
     }
 
     if (balanced.length > 0) {
-      // Monthly Set-Aside section header at r
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
@@ -1926,7 +1933,6 @@ async function writeSavingsTabToSheet(
         },
       });
       r++;
-      // Column headers at r
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 4 },
@@ -1935,7 +1941,16 @@ async function writeSavingsTabToSheet(
         },
       });
       r++;
-      r += balanced.length;
+      const balDataStart = r;
+      const balDataEnd = r + balanced.length;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: balDataStart, endRowIndex: balDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
+          cell: { userEnteredFormat: currencyFmt },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      });
+      r = balDataEnd;
       r++; // blank gap
     }
 
@@ -1943,7 +1958,6 @@ async function writeSavingsTabToSheet(
       const teal = { red: 15 / 255, green: 118 / 255, blue: 110 / 255 };
       const tealLight = { red: 204 / 255, green: 251 / 255, blue: 241 / 255 };
       const tealLighter = { red: 240 / 255, green: 253 / 255, blue: 250 / 255 };
-      // Savings Goals section header at r
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
@@ -1952,12 +1966,28 @@ async function writeSavingsTabToSheet(
         },
       });
       r++;
-      // Column headers at r
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 7 },
           cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: tealLighter } },
           fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      const goalDataStart = r;
+      const goalDataEnd = r + goals.length;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: goalDataStart, endRowIndex: goalDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
+          cell: { userEnteredFormat: currencyFmt },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      });
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: goalDataStart, endRowIndex: goalDataEnd, startColumnIndex: 6, endColumnIndex: 7 },
+          cell: { userEnteredFormat: currencyFmt },
+          fields: "userEnteredFormat.numberFormat",
         },
       });
     }
