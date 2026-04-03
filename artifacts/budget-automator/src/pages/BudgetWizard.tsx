@@ -414,6 +414,7 @@ function computeSavingsGoalBills(
       category: "Savings",
       color: "teal",
       sourceGoalId: g.id,
+      payoffDate: g.targetDate,
     });
   }
   return result;
@@ -445,6 +446,7 @@ function computeGoalBillsForCheckin(
       category: "Savings",
       color: "teal",
       sourceGoalId: g.id,
+      payoffDate: g.targetDate,
     });
   }
   return result;
