@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { Bill, BudgetResponse, Debt, IncomeSource } from '@workspace/api-client-react';
-import type { ParsedWorkbook, SheetStyle } from '@/lib/xlsx-parser';
 
 function toISO(d: Date): string {
   return d.toISOString().split('T')[0];
@@ -33,12 +32,6 @@ function monthDiff(startStr: string, endStr: string): number {
 }
 
 interface BudgetState {
-  uploadedFile: File | null;
-  parsedWorkbook: ParsedWorkbook | null;
-  blankMode: boolean;
-  includeBillsSummary: boolean;
-  sheetStyle: SheetStyle | null;
-
   bills: Bill[];
   debts: Debt[];
   newWeekStartDate: string;
@@ -52,10 +45,6 @@ interface BudgetState {
 
   generatedWeek: BudgetResponse | null;
 
-  setUploadedFile: (file: File | null) => void;
-  setParsedWorkbook: (wb: ParsedWorkbook | null) => void;
-  setBlankMode: (val: boolean) => void;
-  setIncludeBillsSummary: (val: boolean) => void;
   setBills: (bills: Bill[] | ((prev: Bill[]) => Bill[])) => void;
   addBill: (bill: Bill) => void;
   updateBill: (index: number, bill: Bill) => void;
@@ -93,11 +82,6 @@ const getThisFriday = () => {
 const friday = getThisFriday();
 
 export const useBudgetStore = create<BudgetState>()((set) => ({
-  uploadedFile: null,
-  parsedWorkbook: null,
-  blankMode: false,
-  includeBillsSummary: false,
-  sheetStyle: null,
   bills: [],
   debts: [],
   newWeekStartDate: friday,
@@ -110,16 +94,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   incomeSources: [],
   generatedWeek: null,
 
-  setUploadedFile: (file) => set({ uploadedFile: file }),
-  setParsedWorkbook: (wb) =>
-    set((state) => ({
-      parsedWorkbook: wb,
-      bills: wb?.bills ?? state.bills,
-      openingBalance: wb?.lastRemaining ?? state.openingBalance,
-      sheetStyle: wb?.sheetStyle ?? state.sheetStyle,
-    })),
-  setBlankMode: (val) => set({ blankMode: val }),
-  setIncludeBillsSummary: (val) => set({ includeBillsSummary: val }),
   setBills: (billsOrUpdater) => set((state) => ({
     bills: typeof billsOrUpdater === 'function' ? billsOrUpdater(state.bills) : billsOrUpdater,
   })),
@@ -265,10 +239,6 @@ export const useBudgetStore = create<BudgetState>()((set) => ({
   setGeneratedWeek: (generatedWeek) => set({ generatedWeek }),
   reset: () =>
     set({
-      uploadedFile: null,
-      parsedWorkbook: null,
-      blankMode: false,
-      sheetStyle: null,
       generatedWeek: null,
       openingBalance: 0,
       paycheckAmount: 0,

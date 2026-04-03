@@ -1,8 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  UploadCloud,
   FileSpreadsheet,
   Settings2,
   Download,
@@ -16,8 +14,8 @@ import {
   Plus,
   Edit2,
   Eye,
-  FastForward,
   FilePlus2,
+  PlusCircle,
   Sheet,
   LogOut,
   CloudUpload,
@@ -38,9 +36,8 @@ import {
 import { format, parseISO } from "date-fns";
 
 import { useBudgetStore } from "@/store/use-budget-store";
-import { parseBudgetSpreadsheet } from "@/lib/xlsx-parser";
 import type { ParsedWeek } from "@/lib/xlsx-parser";
-import { appendBudgetWeeks, createBlankBudget, downloadBlob } from "@/lib/xlsx-writer";
+import { createBlankBudget, downloadBlob } from "@/lib/xlsx-writer";
 import type { SavingsGoalForSheet } from "@/lib/xlsx-writer";
 import {
   useGenerateBudget,
@@ -139,7 +136,7 @@ import type { PaydayBillItem } from "@/components/PaydayCheckInDialog";
 import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank } from "lucide-react";
 
-type InputMode = "upload" | "scratch" | "google" | "excel" | "cloud";
+type InputMode = "scratch" | "google" | "excel" | "cloud";
 
 interface SavedBudgetSettings {
   openingBalance?: number;
@@ -148,8 +145,6 @@ interface SavedBudgetSettings {
   newWeekStartDate?: string;
   newWeekEndDate?: string;
   zeroOpeningBalance?: boolean;
-  includeBillsSummary?: boolean;
-  blankMode?: boolean;
   inputMode?: InputMode;
   existingWeeks?: any[];
   payPeriod?: "weekly" | "biweekly" | "monthly";
@@ -533,7 +528,7 @@ export function BudgetWizard({
   appleLoginAvailable,
 }: BudgetWizardProps) {
   const [step, setStep] = useState(0);
-  const [isParsing, setIsParsing] = useState(false);
+
   const [isBillDialogOpen, setIsBillDialogOpen] = useState(false);
   const [editingBillIndex, setEditingBillIndex] = useState<number | null>(null);
   const [isDebtDialogOpen, setIsDebtDialogOpen] = useState(false);
@@ -551,7 +546,7 @@ export function BudgetWizard({
   const [isBillManagerFormOpen, setIsBillManagerFormOpen] = useState(false);
   const [debtBillImports, setDebtBillImports] = useState<Set<string>>(new Set());
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
-  const [inputMode, setInputMode] = useState<InputMode>("upload");
+  const [inputMode, setInputMode] = useState<InputMode>("scratch");
 
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
   const [selectedSheetName, setSelectedSheetName] = useState<string | null>(null);
@@ -566,17 +561,12 @@ export function BudgetWizard({
   const [excelSheetTitle, setExcelSheetTitle] = useState<string>("Budget");
   const [excelNextCol, setExcelNextCol] = useState(2);
   const [sheetsListOpen, setSheetsListOpen] = useState(false);
-  const [savedBudgetsOpen, setSavedBudgetsOpen] = useState(false);
+
   const [isWritingToExcel, setIsWritingToExcel] = useState(false);
   const [excelWriteSuccess, setExcelWriteSuccess] = useState(false);
   const [scratchExistingWeeks, setScratchExistingWeeks] = useState<any[]>([]);
 
   const {
-    uploadedFile,
-    parsedWorkbook,
-    blankMode,
-    includeBillsSummary,
-    sheetStyle,
     bills: _bills,
     newWeekStartDate,
     newWeekEndDate,
@@ -584,10 +574,6 @@ export function BudgetWizard({
     openingBalance,
     paycheckAmount,
     zeroOpeningBalance,
-    setUploadedFile,
-    setParsedWorkbook,
-    setBlankMode,
-    setIncludeBillsSummary,
     setBills,
     debts: _debts,
     setDebts,
@@ -935,7 +921,7 @@ export function BudgetWizard({
   useEffect(() => {
     if (!isSignedIn) return;
     if (!debtsLoadedForUserRef.current) return;
-    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0) || inputMode === "cloud";
+    const isAccountMode = inputMode === "scratch" || inputMode === "cloud";
     if (!isAccountMode) return;
     const serialized = JSON.stringify(debts);
     if (serialized === prevDebtsRef.current) return;
@@ -1011,7 +997,7 @@ export function BudgetWizard({
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
     if (billsFromImportPendingRef.current) return;
-    const isAccountMode = inputMode === "scratch" || (inputMode === "upload" && step === 0) || inputMode === "cloud";
+    const isAccountMode = inputMode === "scratch" || inputMode === "cloud";
     if (!isAccountMode) return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
@@ -1296,7 +1282,7 @@ export function BudgetWizard({
     const sheets = sheetListQuery.data?.sheets;
     if (!sheets || sheets.length === 0) return;
     if (selectedSheetId) return;
-    if (inputMode !== "upload") return;
+    if (step !== 0) return;
     const first = sheets[0] as { id: string; name: string };
     handleSelectSheet(first.id, first.name);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1342,92 +1328,6 @@ export function BudgetWizard({
     }
   }, [excelReadQuery.data, selectedExcelFileId]);
 
-  const suggestedNextStart = parsedWorkbook?.existingWeeks.length
-    ? nextStartAfterLabel(parsedWorkbook.existingWeeks.at(-1)?.label ?? '')
-    : null;
-
-  const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0];
-      if (!file) return;
-      setIsParsing(true);
-      try {
-        const parsed = await parseBudgetSpreadsheet(file);
-        setUploadedFile(file);
-        setParsedWorkbook(parsed);
-        setInputMode("upload");
-        const uploadBills = stripHeuristicColors(stripDebtMinPayments(parsed.bills));
-        const lastWeek = parsed.existingWeeks.at(-1);
-        const uploadNextStart = lastWeek ? nextStartAfterLabel(lastWeek.label ?? "") : null;
-        const uploadOpeningBalance = lastWeek?.remaining ?? openingBalance;
-        if (lastWeek?.remaining !== undefined) setOpeningBalance(lastWeek.remaining);
-        if (uploadNextStart) setStartDatePreserveCount(uploadNextStart);
-        toast({
-          title: "Spreadsheet loaded",
-          description: `Found ${parsed.bills.length} bills and ${parsed.existingWeeks.length} existing budget weeks.`,
-        });
-
-        const applyUploadBills = (billsToUse: Bill[]) => {
-          if (isGuest && parsed.debts.length > 0) {
-            setDebts(parsed.debts);
-            const existingDebtIds = new Set(billsToUse.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
-            const debtBillsFromFile = parsed.debts
-              .filter(d => !existingDebtIds.has(d.id))
-              .map(d => ({
-                name: `${d.name} (min payment)`,
-                amount: -Math.abs(d.minimumPayment),
-                dayOfMonth: debtBillDayOfMonth(d),
-                category: "Debt Payment",
-                type: debtBillType(d),
-                color: "red",
-                sourceDebtId: d.id,
-                payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
-              }));
-            const allUploadBills = [...billsToUse, ...debtBillsFromFile];
-            setBills(allUploadBills);
-            prevBillsRef.current = JSON.stringify(allUploadBills);
-            setDebtBillImports(new Set(parsed.debts.map(d => d.id)));
-          } else {
-            if (isGuest) setDebts([]);
-            setBills(billsToUse);
-          }
-
-          if (parsed.existingWeeks.length > 0) {
-            setStep(2);
-          } else {
-            scheduleAutoGenerate({
-              inputMode: "upload",
-              bills: billsToUse,
-              openingBalance: uploadOpeningBalance,
-              startDate: uploadNextStart ?? newWeekStartDate,
-            });
-          }
-        };
-
-        handleImportBillsRef.current!(uploadBills, applyUploadBills);
-      } catch (err) {
-        toast({
-          title: "Failed to read file",
-          description: err instanceof Error ? err.message : "Unknown error",
-          variant: "destructive",
-        });
-      } finally {
-        setIsParsing(false);
-      }
-    },
-    [setUploadedFile, setParsedWorkbook, setDebts, isGuest, toast]
-  );
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-      "application/vnd.ms-excel": [".xls"],
-    },
-    maxFiles: 1,
-    disabled: isParsing,
-  });
-
   const handleStartFromScratch = () => {
     reset();
     prevBillsRef.current = "[]";
@@ -1465,8 +1365,6 @@ export function BudgetWizard({
     }
     setActiveLinkedSheet(null);
     setInputMode("scratch");
-    setBlankMode(true);
-    setIncludeBillsSummary(true);
     setVisitedStep1(true);
     setStep(1);
   };
@@ -1502,7 +1400,7 @@ export function BudgetWizard({
     setWeekEdits({});
     setEditModeOn(false);
     setSelectedWeekIdx(null);
-    setInputMode("upload");
+    setInputMode("scratch");
     setVisitedStep1(false);
     setStep(0);
   };
@@ -1804,7 +1702,7 @@ export function BudgetWizard({
         setWeekEdits({});
         setEditModeOn(false);
         setSelectedWeekIdx(null);
-        setInputMode("upload");
+        setInputMode("scratch");
         setVisitedStep1(false);
         setStep(0);
         toast({ title: "Signed out" });
@@ -1816,7 +1714,6 @@ export function BudgetWizard({
     if (inputMode === "google") return sheetReadQuery.data?.existingWeeks ?? [];
     if (inputMode === "excel") return excelReadQuery.data?.existingWeeks ?? [];
     if (inputMode === "cloud") return cloudExistingWeeks;
-    if (inputMode === "upload") return parsedWorkbook?.existingWeeks ?? [];
     if (inputMode === "scratch") return scratchExistingWeeks;
     return [];
   };
@@ -1850,8 +1747,6 @@ export function BudgetWizard({
               newWeekStartDate,
               newWeekEndDate,
               zeroOpeningBalance,
-              includeBillsSummary,
-              blankMode,
               inputMode,
               existingWeeks: getExistingWeeks(),
               payPeriod,
@@ -2004,8 +1899,6 @@ export function BudgetWizard({
       setIncomeSources([]);
     }
     setZeroOpeningBalance(true);
-    if (s?.includeBillsSummary !== undefined) setIncludeBillsSummary(s.includeBillsSummary);
-    if (s?.blankMode !== undefined) setBlankMode(s.blankMode);
     setInputMode("cloud");
     setActiveCloudBudgetId(budget.id);
     setActiveCloudBudgetName(budget.name);
@@ -2160,8 +2053,6 @@ export function BudgetWizard({
             newWeekStartDate,
             newWeekEndDate,
             zeroOpeningBalance,
-            includeBillsSummary,
-            blankMode,
             inputMode: "cloud",
             existingWeeks: updatedExistingWeeks,
             payPeriod,
@@ -2239,8 +2130,6 @@ export function BudgetWizard({
             newWeekStartDate,
             newWeekEndDate,
             zeroOpeningBalance,
-            includeBillsSummary,
-            blankMode,
             inputMode: "cloud",
             existingWeeks: mergedExistingWeeks,
             payPeriod,
@@ -2273,7 +2162,6 @@ export function BudgetWizard({
 
   const handleGenerate = (overrides?: GenerateOverrides) => {
     const effectiveInputMode = overrides?.inputMode ?? inputMode;
-    if (effectiveInputMode === "upload" && !parsedWorkbook) return;
     if (step === 1) setVisitedStep1(true);
     setEditModeOn(false);
     setSelectedWeekIdx(null);
@@ -2341,12 +2229,7 @@ export function BudgetWizard({
           }
 
           {
-            let blob: Blob;
-            const rawBills = includeBillsSummary
-              ? (parsedWorkbook?.rawBillsSection ?? null)
-              : null;
             const effectiveBills = allBillsForGeneration;
-            const fallbackBills = includeBillsSummary && !rawBills ? effectiveBills : undefined;
             const debtsForExport = debts.length > 0 ? debts : undefined;
             const xlsxColorLookup = buildBillColorLookup(effectiveBills);
             const coloredWeeks = data.weeks.map(w => ({
@@ -2361,23 +2244,12 @@ export function BudgetWizard({
               targetDate: g.targetDate,
               savedSoFar: cachedContribs.filter((c) => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
             }));
+            let blob: Blob;
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
               const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
-              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
-            } else if (blankMode || effectiveInputMode === "scratch" || effectiveInputMode === "cloud") {
-              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
+              blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, null, effectiveBills, null, null, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
             } else {
-              blob = appendBudgetWeeks(
-                parsedWorkbook!.rawBytes,
-                coloredWeeks,
-                parsedWorkbook!.nextWeekStartCol,
-                !zeroOpeningBalance,
-                sheetStyle,
-                debtsForExport,
-                effectiveBills,
-                cachedContribs,
-                goalsForXlsx,
-              );
+              blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, null, effectiveBills, null, null, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
             }
             setGeneratedBlob(blob);
           }
@@ -2573,8 +2445,6 @@ export function BudgetWizard({
       setNewExcelSaveSuccess(false);
       setNewExcelUrl(null);
 
-      const rawBills = includeBillsSummary ? (parsedWorkbook?.rawBillsSection ?? null) : null;
-      const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
       const debtsForExport = debts.length > 0 ? debts : undefined;
       const xlsxColorLookup = buildBillColorLookup(bills);
       const xlsxCheckins = checkinsQuery.data?.checkins ?? [];
@@ -2601,11 +2471,9 @@ export function BudgetWizard({
           xlsxCheckins,
           debtIdToBillName,
         );
-        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
-      } else if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
-        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
+        freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, null, bills, null, null, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       } else {
-        freshBlob = appendBudgetWeeks(parsedWorkbook!.rawBytes, coloredWeeks, parsedWorkbook!.nextWeekStartCol, !zeroOpeningBalance, sheetStyle, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
+        freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, null, bills, null, null, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       }
       setGeneratedBlob(freshBlob);
       return { data, blob: freshBlob };
@@ -2816,13 +2684,8 @@ export function BudgetWizard({
     if (inputMode === "cloud" && activeCloudBudgetName) {
       return `${activeCloudBudgetName.replace(/[/\\?%*:|"<>]/g, "_")}.xlsx`;
     }
-    if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
-      const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
-      return `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
-    } else {
-      const today = new Date().toISOString().split("T")[0].replace(/-/g, ".");
-      return `Budget_Updated_${today}.xlsx`;
-    }
+    const fmt = (d: string) => { const [,m,day] = d.split("-"); return `${m}-${day}`; };
+    return `Budget_${fmt(newWeekStartDate)}_to_${fmt(newWeekEndDate)}.xlsx`;
   };
 
   const handleDownload = async (customFilename?: string) => {
@@ -2864,7 +2727,7 @@ export function BudgetWizard({
       setWeekEdits({});
       setEditModeOn(false);
       setSelectedWeekIdx(null);
-      setInputMode("upload");
+      setInputMode("scratch");
       setStep(0);
     } catch (err: any) {
       const message = err?.data?.error || err?.message || "An unexpected error occurred.";
@@ -3211,48 +3074,156 @@ export function BudgetWizard({
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div
-              key="upload"
+              key="home"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
               className="space-y-5"
             >
               <div>
-                <h2 className="text-3xl font-bold text-foreground mb-2">Get started</h2>
+                <h2 className="text-3xl font-bold text-foreground mb-2">Welcome</h2>
                 <p className="text-muted-foreground">
-                  Choose how you'd like to set up your budget.
+                  Pick up where you left off, or start a fresh budget.
                 </p>
               </div>
 
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 ${
-                  isDragActive
-                    ? "border-primary bg-primary/5 scale-[1.01]"
-                    : "border-border/60 hover:border-primary/50 hover:bg-emerald-50/40 bg-white/60"
-                } ${isParsing ? "pointer-events-none opacity-60" : ""}`}
-              >
-                <input {...getInputProps()} />
-                <div className="flex flex-col items-center gap-4">
-                  {isParsing ? (
-                    <RefreshCw className="w-10 h-10 text-primary animate-spin" />
-                  ) : (
-                    <UploadCloud
-                      className={`w-10 h-10 ${isDragActive ? "text-primary" : "text-emerald-500"}`}
-                    />
-                  )}
-                  <div>
-                    <p className="text-lg font-semibold text-foreground">
-                      {isParsing ? "Reading spreadsheet…" : isDragActive ? "Drop it here!" : "Upload your .xlsx file"}
-                    </p>
-                    {!isParsing && (
-                      <p className="text-sm text-muted-foreground mt-1">Drop here or click to browse</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* My Budgets card */}
+                <div className="rounded-2xl border-2 border-border/50 bg-white/60 p-5 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-emerald-100">
+                      <FolderOpen className="w-5 h-5 text-emerald-700" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">My Budgets</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Open a saved budget to continue where you left off.</p>
+                    </div>
+                  </div>
+
+                  {isSignedIn && !isGuest ? (
+                    <>
+                      {savedBudgetsQuery.isLoading && (
+                        <p className="text-sm text-muted-foreground">Loading...</p>
+                      )}
+                      {savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 ? (
+                        <div className="space-y-2">
+                          {savedBudgetsQuery.data.budgets.map((budget) => (
+                            <Card
+                              key={budget.id}
+                              className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl border-border/40"
+                            >
+                              <CardContent className="p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    className="flex-1 text-left"
+                                    onClick={() => handleLoadSavedBudget(budget)}
+                                  >
+                                    <p className="font-semibold text-sm text-foreground">{budget.name}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
+                                      {(() => {
+                                        const debtCount = Array.isArray(budget.debts) ? budget.debts.length : 0;
+                                        return debtCount > 0 ? ` \u00b7 ${debtCount} debts` : "";
+                                      })()}
+                                      {(() => {
+                                        const ewCount = ((budget.settings as any)?.existingWeeks?.length ?? 0);
+                                        return ewCount > 0 ? ` \u00b7 ${ewCount} saved weeks` : "";
+                                      })()}
+                                      {" \u00b7 "}
+                                      Saved {new Date(budget.updatedAt).toLocaleDateString()}
+                                    </p>
+                                  </button>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                                      title="Configure budget"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleLoadSavedBudget(budget, 1);
+                                        window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+                                      }}
+                                    >
+                                      <Settings2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRenameBudgetId(budget.id);
+                                        setRenameBudgetValue(budget.name);
+                                        setIsRenameDialogOpen(true);
+                                      }}
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteBudgetTarget({ id: budget.id, name: budget.name });
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                {budget.linkedSheetId && budget.linkedSheetType && (
+                                  <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-1.5 min-w-0">
+                                    {budget.linkedSheetType === "google" ? (
+                                      <Sheet className="w-3 h-3 text-blue-500 shrink-0" />
+                                    ) : (
+                                      <FileSpreadsheet className="w-3 h-3 text-teal-500 shrink-0" />
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      {budget.linkedSheetType === "google" ? "Linked to Google Sheets" : "Linked to Excel"}
+                                    </span>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : savedBudgetsQuery.data ? (
+                        <p className="text-sm text-muted-foreground">No saved budgets yet. Create a new budget and save it to access it here.</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Sign in to save budgets and access them from any device.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {googleLoginAvailable && (
+                          <Button size="sm" variant="outline" onClick={handleAccountGoogleLogin} className="gap-2 justify-center">
+                            <LogIn className="w-4 h-4" /> Sign in with Google
+                          </Button>
+                        )}
+                        {appleLoginAvailable && (
+                          <Button size="sm" variant="outline" onClick={handleAccountAppleLogin} className="gap-2 justify-center">
+                            <LogIn className="w-4 h-4" /> Sign in with Apple
+                          </Button>
+                        )}
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors text-center pt-1"
+                          onClick={handleStartFromScratch}
+                        >
+                          Continue without account
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* New Budget card */}
                 <button
                   type="button"
                   onClick={handleStartFromScratch}
@@ -3260,327 +3231,16 @@ export function BudgetWizard({
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 p-2 rounded-xl bg-violet-100 group-hover:bg-violet-200 transition-colors">
-                      <FilePlus2 className="w-5 h-5 text-violet-600" />
+                      <PlusCircle className="w-5 h-5 text-violet-600" />
                     </div>
                     <div>
-                      <p className="font-semibold text-sm text-foreground">Start from scratch</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Create a new budget without an existing spreadsheet. Enter your bills manually.</p>
+                      <p className="font-semibold text-sm text-foreground">New budget</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Start fresh. Enter your bills and dates to generate a new budget — no account required.</p>
                     </div>
                   </div>
                 </button>
 
-                {microsoftConfigured && (
-                  <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-blue-50/30 p-5 transition-all">
-                    {microsoftAuthenticated ? (
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 p-2 rounded-xl bg-blue-100">
-                            <FileSpreadsheet className="w-5 h-5 text-blue-700" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-sm text-foreground">Excel Online</p>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-xs text-muted-foreground"
-                                onClick={handleDisconnectMicrosoft}
-                              >
-                                <LogOut className="w-3 h-3 mr-1" /> Disconnect
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">Select an Excel file from OneDrive to read and write directly.</p>
-                          </div>
-                        </div>
-
-                        {excelListQuery.isLoading && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                            <RefreshCw className="w-4 h-4 animate-spin" /> Loading your Excel files…
-                          </div>
-                        )}
-
-                        {excelListQuery.isError && (
-                          <p className="text-sm text-destructive">Failed to load files. Try disconnecting and reconnecting.</p>
-                        )}
-
-                        {excelListQuery.data && (
-                          <div className="max-h-48 overflow-y-auto space-y-1">
-                            {excelListQuery.data.files.length === 0 ? (
-                              <p className="text-sm text-muted-foreground py-2">No .xlsx files found in OneDrive.</p>
-                            ) : (
-                              excelListQuery.data.files.map((f) => (
-                                <button
-                                  key={f.id}
-                                  type="button"
-                                  onClick={() => handleSelectExcelFile(f.id, f.name, f.webUrl ?? undefined)}
-                                  disabled={excelReadQuery.isLoading}
-                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
-                                    selectedExcelFileId === f.id && excelReadQuery.isLoading
-                                      ? "bg-primary/10"
-                                      : ""
-                                  }`}
-                                >
-                                  <span className="font-medium text-foreground">{f.name}</span>
-                                  {f.modifiedTime && (
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                      {new Date(f.modifiedTime).toLocaleDateString()}
-                                    </span>
-                                  )}
-                                  {selectedExcelFileId === f.id && excelReadQuery.isLoading && (
-                                    <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
-                                  )}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleConnectMicrosoft}
-                        className="w-full text-left group"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 p-2 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-colors">
-                            <FileSpreadsheet className="w-5 h-5 text-blue-700" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-sm text-foreground">Connect Excel Online</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">Sign in with Microsoft to read and write budget data directly in your OneDrive Excel files.</p>
-                          </div>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {googleConfigured && (
-                  <div className="rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 hover:bg-green-50/30 p-5 transition-all">
-                    {googleAuthenticated ? (
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 p-2 rounded-xl bg-green-100">
-                            <Sheet className="w-5 h-5 text-green-700" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-sm text-foreground">Google Sheets</p>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">Select a spreadsheet from your Google Drive to read and write directly.</p>
-                          </div>
-                        </div>
-
-                        {sheetListQuery.isLoading && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                            <RefreshCw className="w-4 h-4 animate-spin" /> Loading your Google Sheets…
-                          </div>
-                        )}
-
-                        {sheetListQuery.isError && (
-                          <p className="text-sm text-destructive">Failed to load sheets. Try disconnecting and reconnecting.</p>
-                        )}
-
-                        {sheetListQuery.data && (
-                          <div>
-                            <button
-                              type="button"
-                              className="flex items-center justify-between w-full text-sm text-muted-foreground py-1 hover:text-foreground transition-colors"
-                              onClick={() => setSheetsListOpen(v => !v)}
-                            >
-                              <span>
-                                {selectedSheetId
-                                  ? sheetListQuery.data.sheets.find((s: { id: string; name: string }) => s.id === selectedSheetId)?.name ?? "Google Sheets"
-                                  : `${sheetListQuery.data.sheets.length} spreadsheet${sheetListQuery.data.sheets.length !== 1 ? "s" : ""}`}
-                              </span>
-                              <ChevronDown className={`w-4 h-4 transition-transform ${sheetsListOpen ? "rotate-180" : ""}`} />
-                            </button>
-                            {sheetsListOpen && (
-                              <div className="max-h-48 overflow-y-auto space-y-1 mt-1">
-                                {sheetListQuery.data.sheets.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground py-2">No spreadsheets found in Google Drive.</p>
-                                ) : (
-                                  sheetListQuery.data.sheets.map((s: { id: string; name: string; modifiedTime?: string }) => (
-                                    <button
-                                      key={s.id}
-                                      type="button"
-                                      onClick={() => handleSelectSheet(s.id, s.name)}
-                                      disabled={sheetReadQuery.isLoading}
-                                      className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-primary/5 transition-colors ${
-                                        selectedSheetId === s.id && sheetReadQuery.isLoading
-                                          ? "bg-primary/10"
-                                          : ""
-                                      }`}
-                                    >
-                                      <span className="font-medium text-foreground">{s.name}</span>
-                                      {s.modifiedTime && (
-                                        <span className="text-xs text-muted-foreground ml-2">
-                                          {new Date(s.modifiedTime).toLocaleDateString()}
-                                        </span>
-                                      )}
-                                      {selectedSheetId === s.id && sheetReadQuery.isLoading && (
-                                        <RefreshCw className="w-3 h-3 inline ml-2 animate-spin" />
-                                      )}
-                                    </button>
-                                  ))
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleConnectGoogle}
-                        className="w-full text-left group"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 p-2 rounded-xl bg-green-100 group-hover:bg-green-200 transition-colors">
-                            <Sheet className="w-5 h-5 text-green-700" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-sm text-foreground">Connect Google Sheets</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">Sign in with Google to read and write budget data directly in your Google Sheets.</p>
-                          </div>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                )}
-
               </div>
-
-              {isSignedIn && !isGuest && (
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    className="flex items-center justify-between w-full group"
-                    onClick={() => setSavedBudgetsOpen(v => !v)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4 text-muted-foreground" />
-                      <h3 className="text-lg font-semibold text-foreground">My Saved Budgets</h3>
-                      {savedBudgetsQuery.data && (
-                        <span className="text-sm text-muted-foreground font-normal">
-                          ({savedBudgetsQuery.data.budgets.length})
-                        </span>
-                      )}
-                    </div>
-                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${savedBudgetsOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  {savedBudgetsOpen && (savedBudgetsQuery.isLoading ? (
-                    <p className="text-sm text-muted-foreground">Loading...</p>
-                  ) : savedBudgetsQuery.data && savedBudgetsQuery.data.budgets.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {savedBudgetsQuery.data.budgets.map((budget) => (
-                        <Card
-                          key={budget.id}
-                          className="hover:border-primary/30 hover:shadow-sm transition-all rounded-2xl border-border/40"
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between gap-2">
-                              <button
-                                type="button"
-                                className="flex-1 text-left"
-                                onClick={() => handleLoadSavedBudget(budget)}
-                              >
-                                <p className="font-semibold text-sm text-foreground">{budget.name}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {Array.isArray(budget.bills) ? budget.bills.length : 0} bills
-                                  {(() => {
-                                    const debtCount = Array.isArray(budget.debts) ? budget.debts.length : 0;
-                                    return debtCount > 0 ? ` \u00b7 ${debtCount} debts` : "";
-                                  })()}
-                                  {(() => {
-                                    const ewCount = ((budget.settings as any)?.existingWeeks?.length ?? 0);
-                                    return ewCount > 0 ? ` \u00b7 ${ewCount} saved weeks` : "";
-                                  })()}
-                                  {" \u00b7 "}
-                                  Saved {new Date(budget.updatedAt).toLocaleDateString()}
-                                </p>
-                              </button>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
-                                  title="Configure budget"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleLoadSavedBudget(budget, 1);
-                                    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-                                  }}
-                                >
-                                  <Settings2 className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRenameBudgetId(budget.id);
-                                    setRenameBudgetValue(budget.name);
-                                    setIsRenameDialogOpen(true);
-                                  }}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteBudgetTarget({ id: budget.id, name: budget.name });
-                                  }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                            {budget.linkedSheetId && budget.linkedSheetType && (
-                              <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-1.5 min-w-0">
-                                {budget.linkedSheetType === "google" ? (
-                                  <Sheet className="w-3 h-3 text-blue-500 shrink-0" />
-                                ) : (
-                                  <FileSpreadsheet className="w-3 h-3 text-teal-500 shrink-0" />
-                                )}
-                                <span className="text-xs text-muted-foreground">
-                                  {budget.linkedSheetType === "google" ? "Linked to Google Sheets" : "Linked to Excel"}
-                                </span>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No saved budgets yet. Configure a budget and save it to access it here.</p>
-                  ))}
-                </div>
-              )}
-
-              {!isSignedIn && (
-                <div className="rounded-2xl border-2 border-dashed border-border/50 bg-white/40 p-5 text-center">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Sign in to save your budgets and access them from anywhere.
-                  </p>
-                  <div className="flex items-center justify-center gap-2">
-                    {googleLoginAvailable && (
-                      <Button size="sm" variant="outline" onClick={handleAccountGoogleLogin} className="gap-2">
-                        <LogIn className="w-4 h-4" /> Sign in with Google
-                      </Button>
-                    )}
-                    {appleLoginAvailable && (
-                      <Button size="sm" variant="outline" onClick={handleAccountAppleLogin} className="gap-2">
-                        <LogIn className="w-4 h-4" /> Sign in with Apple
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
 
             </motion.div>
           )}
@@ -3646,18 +3306,6 @@ export function BudgetWizard({
                       <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                         <Settings2 className="w-4 h-4" /> Start Date
                       </Label>
-                      {suggestedNextStart && inputMode === "upload" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-6 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
-                          onClick={() => setStartDate(suggestedNextStart)}
-                        >
-                          <FastForward className="w-3 h-3" />
-                          Jump to next week
-                        </Button>
-                      )}
                     </div>
                     <Input
                       type="date"
@@ -3849,67 +3497,6 @@ export function BudgetWizard({
                 </CardContent>
               </Card>
 
-              {inputMode === "upload" && (
-                <div className="space-y-3">
-                  <h3 className="text-base font-semibold text-foreground">Output format</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setBlankMode(false)}
-                      className={`text-left rounded-2xl border-2 p-4 transition-all ${
-                        !blankMode
-                          ? "border-primary bg-primary/5"
-                          : "border-border/50 bg-white/60 hover:border-primary/40"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${!blankMode ? "border-primary" : "border-border"}`}>
-                          {!blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm text-foreground">Append to my spreadsheet</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">New budget columns are added to your uploaded file.</p>
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBlankMode(true)}
-                      className={`text-left rounded-2xl border-2 p-4 transition-all ${
-                        blankMode
-                          ? "border-primary bg-primary/5"
-                          : "border-border/50 bg-white/60 hover:border-primary/40"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${blankMode ? "border-primary" : "border-border"}`}>
-                          {blankMode && <div className="w-2 h-2 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm text-foreground">New file — budget only</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Download a fresh spreadsheet with only the new budget columns.</p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-
-                  <label className="flex items-start gap-3 cursor-pointer p-4 rounded-2xl border-2 border-border/50 bg-white/60 hover:border-primary/40 transition-all select-none">
-                    <Checkbox
-                      checked={includeBillsSummary}
-                      onCheckedChange={(v) => setIncludeBillsSummary(!!v)}
-                      id="include-bills"
-                      className="mt-0.5 rounded"
-                    />
-                    <div>
-                      <p className="font-semibold text-sm text-foreground">Include bills list in spreadsheet</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Adds a color-coded bills summary (columns A–B) to the output file, matching the original format. Budget weeks shift right.
-                      </p>
-                    </div>
-                  </label>
-
-                </div>
-              )}
 
 
               <Card className="border-primary/20 bg-primary/5">
@@ -5017,7 +4604,7 @@ export function BudgetWizard({
                   </Button>
                 )}
 
-                {(inputMode === "upload" || inputMode === "scratch") && (!activeCloudBudgetId || newCloudSaveSuccess) && generatedWeek && (
+                {inputMode === "scratch" && (!activeCloudBudgetId || newCloudSaveSuccess) && generatedWeek && (
                   newCloudSaveSuccess ? (
                     <div className="flex-1 h-14 flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-white text-base font-medium shadow-lg animate-in fade-in zoom-in-95 duration-300">
                       <Check className="w-5 h-5" /> Saved to Cloud
@@ -5440,7 +5027,7 @@ export function BudgetWizard({
 
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              {isSignedIn && !(inputMode === "scratch" || (inputMode === "upload" && step === 0)) && (userDebtsQuery.data?.debts?.length ?? 0) > 0 && (
+              {isSignedIn && inputMode !== "scratch" && (userDebtsQuery.data?.debts?.length ?? 0) > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -5728,7 +5315,7 @@ export function BudgetWizard({
 
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
-              {isSignedIn && !(inputMode === "scratch" || (inputMode === "upload" && step === 0)) && (userBillsQuery.data?.bills?.length ?? 0) > 0 && (
+              {isSignedIn && inputMode !== "scratch" && (userBillsQuery.data?.bills?.length ?? 0) > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
