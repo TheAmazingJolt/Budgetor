@@ -6215,10 +6215,15 @@ export function BudgetWizard({
           onSaved={() => {
             setCheckInDialogOpen(false);
             setCheckInWeek(null);
-            checkinsQuery.refetch();
-            budgetContributionsQuery.refetch().then(() => {
+            Promise.all([
+              checkinsQuery.refetch(),
+              budgetContributionsQuery.refetch(),
+            ]).then(([checkinsResult]) => {
               if (activeCloudBudgetId) {
                 queryClient.invalidateQueries({ queryKey: ["savings-contributions", activeCloudBudgetId] });
+              }
+              if (checkinsResult.data?.checkins) {
+                bgSyncRef.current.weeklyCheckins = checkinsResult.data.checkins;
               }
               triggerBackgroundSheetSync();
             });
