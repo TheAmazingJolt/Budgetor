@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardCheck, XCircle } from "lucide-react";
+import { ClipboardCheck, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -140,6 +140,16 @@ export function CheckInDialog({
   const [items, setItems] = useState<CheckInItem[]>(() => buildItems());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [notBudgetedOpen, setNotBudgetedOpen] = useState(false);
+
+  const budgetedItems = items.filter(it => {
+    const existing = existingCheckins.find(c => c.itemName === it.billName && c.itemType === it.billType);
+    return it.plannedAmount > 0 || !!existing;
+  });
+  const notBudgetedItems = items.filter(it => {
+    const existing = existingCheckins.find(c => c.itemName === it.billName && c.itemType === it.billType);
+    return it.plannedAmount === 0 && !existing;
+  });
 
   const setActual = (idx: number, val: string) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, actualStr: val, skipped: false } : it));
@@ -221,7 +231,8 @@ export function CheckInDialog({
         </DialogHeader>
 
         <div className="space-y-3 py-1">
-          {items.map((it, idx) => {
+          {budgetedItems.map(it => {
+            const idx = items.findIndex(x => x.billName === it.billName && x.billType === it.billType);
             const isDebt = it.billType === "debt";
             return (
               <div
@@ -279,12 +290,58 @@ export function CheckInDialog({
                     {isDebt ? "Logged as $0.00 — payment skipped this week" : "Logged as $0.00 — unexpected expense this week"}
                   </p>
                 )}
-                {it.skipped && it.plannedAmount === 0 && (
-                  <p className="text-xs text-muted-foreground italic">Not budgeted this week</p>
-                )}
               </div>
             );
           })}
+
+          {notBudgetedItems.length > 0 && (
+            <div className="border border-dashed border-muted-foreground/25 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setNotBudgetedOpen(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+              >
+                <span className="font-medium">
+                  Not budgeted this week ({notBudgetedItems.length})
+                </span>
+                {notBudgetedOpen
+                  ? <ChevronDown className="w-3.5 h-3.5" />
+                  : <ChevronRight className="w-3.5 h-3.5" />
+                }
+              </button>
+              {notBudgetedOpen && (
+                <div className="space-y-2 px-3 pb-3 pt-1">
+                  <p className="text-xs text-muted-foreground italic">
+                    These bills aren't in this week's budget. They'll be logged as $0.00 automatically.
+                  </p>
+                  {notBudgetedItems.map(it => {
+                    const isDebt = it.billType === "debt";
+                    return (
+                      <div
+                        key={`${it.billName}-${it.billType}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-muted/40 bg-muted/20 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground/70 truncate">{it.billName}</p>
+                          <p className={`text-xs ${isDebt ? "text-red-400" : "text-muted-foreground"}`}>
+                            {isDebt
+                              ? "Debt payment"
+                              : it.billType === "goal"
+                                ? "Savings goal"
+                                : it.billType === "yearly"
+                                  ? "Sinking fund"
+                                  : "Balanced monthly"}
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">$0.00</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 
