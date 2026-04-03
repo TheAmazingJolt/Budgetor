@@ -589,8 +589,8 @@ function buildExcelDebtGrid(debts: DebtItem[], bills?: BillMeta[]): (string | nu
 
   const rows: (string | number)[][] = [];
   rows.push([]);
-  rows.push(["Debts", "", "", ""]);
-  rows.push(["Name", "Balance", "APR %", "Min Payment"]);
+  rows.push(["Debts", "", "", "", ""]);
+  rows.push(["Name", "Balance", "APR %", "Min Payment", "Due Day"]);
   for (const debt of debts) {
     const debtDisplayName = balancedDebtIds.has(debt.id) ? `${debt.name} (B)` : debt.name;
     rows.push([
@@ -598,6 +598,7 @@ function buildExcelDebtGrid(debts: DebtItem[], bills?: BillMeta[]): (string | nu
       debt.balance,
       debt.interestRate != null ? `${debt.interestRate}%` : "",
       debt.minimumPayment,
+      debt.dueDay != null ? debt.dueDay : "",
     ]);
   }
   return rows;
@@ -613,7 +614,7 @@ async function writeExcelDebtRows(
 ) {
   const debtGrid = buildExcelDebtGrid(debts, bills);
   const debtStartAddr = `A${startRow + 1}`;
-  const debtEndAddr = `D${startRow + debtGrid.length}`;
+  const debtEndAddr = `E${startRow + debtGrid.length}`;
   const debtRange = `${debtStartAddr}:${debtEndAddr}`;
 
   await graphPatch(
@@ -623,37 +624,39 @@ async function writeExcelDebtRows(
   );
 
   const headerRow = startRow + 1;
-  const headerRange = `A${headerRow + 1}:D${headerRow + 1}`;
+  const headerRange = `A${headerRow + 1}:E${headerRow + 1}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
     { bold: true, name: "Arial", size: 11 }
   );
 
-  const colHeaderRange = `A${headerRow + 2}:D${headerRow + 2}`;
+  const colHeaderRange = `A${headerRow + 2}:E${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
     { bold: true, name: "Arial", size: 10 }
   );
 
-  const allDebtRange = `A${headerRow + 1}:D${startRow + debtGrid.length}`;
+  const allDebtRange = `A${headerRow + 1}:E${startRow + debtGrid.length}`;
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
     { color: "#F9E9E9" }
   );
 
-  // Center Balance (B) and APR % (C) from column header row through data rows.
-  const debtCenterRange = `B${headerRow + 2}:C${startRow + debtGrid.length}`;
-  await graphPost(
-    token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${debtCenterRange}')/format`,
-    { horizontalAlignment: "Center" }
-  );
+  // Center Balance (B), APR % (C), and Due Day (E) from column header row through data rows.
+  const lastDebtRow = startRow + debtGrid.length;
+  for (const col of ["B", "C", "E"]) {
+    await graphPost(
+      token,
+      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${col}${headerRow + 2}:${col}${lastDebtRow}')/format`,
+      { horizontalAlignment: "Center" }
+    );
+  }
 
   // Right-align Min Payment (D) from column header row through data rows.
-  const minPayRange = `D${headerRow + 2}:D${startRow + debtGrid.length}`;
+  const minPayRange = `D${headerRow + 2}:D${lastDebtRow}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${minPayRange}')/format`,
@@ -666,6 +669,7 @@ async function writeExcelDebtRows(
     graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B1')/format`, { columnWidth: 90 }),
     graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='C1')/format`, { columnWidth: 75 }),
     graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='D1')/format`, { columnWidth: 100 }),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='E1')/format`, { columnWidth: 80 }),
   ]);
 }
 

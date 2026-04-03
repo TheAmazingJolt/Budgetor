@@ -929,8 +929,8 @@ function buildDebtRows(
   const debtRows: any[][] = [];
 
   debtRows.push([]);
-  debtRows.push(["Debts", "", "", ""]);
-  debtRows.push(["Name", "Balance", "APR %", "Min Payment"]);
+  debtRows.push(["Debts", "", "", "", ""]);
+  debtRows.push(["Name", "Balance", "APR %", "Min Payment", "Due Day"]);
 
   for (const debt of debts) {
     const debtDisplayName = balancedDebtIds.has(debt.id) ? `${debt.name} (B)` : debt.name;
@@ -939,19 +939,22 @@ function buildDebtRows(
       debt.balance,
       debt.interestRate != null ? `${debt.interestRate}%` : "",
       debt.minimumPayment,
+      debt.dueDay != null ? debt.dueDay : "",
     ]);
   }
 
   const debtRequests: sheets_v4.Schema$Request[] = [];
 
+  // Unmerge covers 2 rows (header + sub-header) to clear any stale multi-row merges
+  // from older syncs that had a different layout (no sub-header row).
   debtRequests.push({
     unmergeCells: {
       range: {
         sheetId,
         startRowIndex: headerRow,
-        endRowIndex: headerRow + 1,
+        endRowIndex: colHeaderRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 4,
+        endColumnIndex: 5,
       },
     },
   });
@@ -962,7 +965,7 @@ function buildDebtRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 4,
+        endColumnIndex: 5,
       },
       mergeType: "MERGE_ALL",
     },
@@ -977,7 +980,7 @@ function buildDebtRows(
         startRowIndex: headerRow,
         endRowIndex: headerRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 4,
+        endColumnIndex: 5,
       },
       cell: {
         userEnteredFormat: {
@@ -1000,7 +1003,7 @@ function buildDebtRows(
         startRowIndex: colHeaderRow,
         endRowIndex: colHeaderRow + 1,
         startColumnIndex: 0,
-        endColumnIndex: 4,
+        endColumnIndex: 5,
       },
       cell: {
         userEnteredFormat: {
@@ -1023,7 +1026,7 @@ function buildDebtRows(
         startRowIndex: firstDataRow,
         endRowIndex: firstDataRow + debts.length,
         startColumnIndex: 0,
-        endColumnIndex: 4,
+        endColumnIndex: 5,
       },
       cell: {
         userEnteredFormat: {
@@ -1059,8 +1062,8 @@ function buildDebtRows(
     });
   }
 
-  // Center-align Balance (col 1) and APR % (col 2) from column header row through data rows.
-  for (const col of [1, 2]) {
+  // Center-align Balance (col 1), APR % (col 2), and Due Day (col 4) from column header row through data rows.
+  for (const col of [1, 2, 4]) {
     debtRequests.push({
       repeatCell: {
         range: {
@@ -1138,22 +1141,24 @@ function buildBillRows(
       : isYearly
       ? "Yearly"
       : bill.dayOfMonth != null ? bill.dayOfMonth : "Varies";
+    const safeAmount = typeof bill.amount === "number" && isFinite(bill.amount) ? Math.abs(bill.amount) : 0;
     billRows.push([
-      bill.name,
-      Math.abs(bill.amount),
+      bill.name ?? "",
+      safeAmount,
       dueDay,
     ]);
   }
 
   const billRequests: sheets_v4.Schema$Request[] = [];
 
-  // Unmerge the header row before re-merging it, so stale merge state is cleared.
+  // Unmerge covers 2 rows (header + sub-header) to clear any stale multi-row merges
+  // from older syncs that had a different layout (no sub-header row).
   billRequests.push({
     unmergeCells: {
       range: {
         sheetId,
         startRowIndex: headerRow,
-        endRowIndex: headerRow + 1,
+        endRowIndex: colHeaderRow + 1,
         startColumnIndex: 0,
         endColumnIndex: 3,
       },
@@ -1315,8 +1320,8 @@ function buildSavingsGoalRows(
 
   const savingsRequests: sheets_v4.Schema$Request[] = [];
 
-  // Unmerge + re-merge section header
-  savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
+  // Unmerge covers 2 rows (header + sub-header) to clear any stale multi-row merges.
+  savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: colHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
   savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 }, mergeType: "MERGE_ALL" } });
 
   // Section header style
@@ -1538,7 +1543,7 @@ async function writeBudgetToSheet(
     debtRowCount = debtRows.length;
 
     const debtRangeStart = `A${debtsStartRow + 1}`;
-    const debtRangeEnd = `D${debtsStartRow + debtRows.length}`;
+    const debtRangeEnd = `E${debtsStartRow + debtRows.length}`;
     const debtRange = `'${escapedTitle}'!${debtRangeStart}:${debtRangeEnd}`;
 
     await Promise.all([
