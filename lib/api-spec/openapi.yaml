@@ -832,6 +832,9 @@ components:
         payoffDate:
           type: ["string", "null"]
           description: ISO date string after which this bill should stop appearing (debt payoff date)
+        annualDueMonth:
+          type: ["integer", "null"]
+          description: Month (1-12) in which a yearly bill is due (null for non-yearly bills)
       required:
         - name
         - amount

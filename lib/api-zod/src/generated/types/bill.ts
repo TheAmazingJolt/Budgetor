@@ -31,4 +31,9 @@ export interface Bill {
    * @nullable
    */
   payoffDate?: string | null;
+  /**
+   * Month (1-12) in which a yearly bill is due (null for non-yearly bills)
+   * @nullable
+   */
+  annualDueMonth?: number | null;
 }

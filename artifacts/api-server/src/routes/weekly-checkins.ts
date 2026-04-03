@@ -38,7 +38,7 @@ const router: IRouter = Router();
 router.get("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
     const { weekLabel } = req.query as { weekLabel?: string };
 
     const budget = await db
@@ -90,7 +90,7 @@ router.get("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise
 router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
     const { weekLabel, itemName, itemType, plannedAmount, actualAmount } = req.body as {
       weekLabel?: string;
       itemName?: string;
@@ -188,7 +188,7 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
 router.delete("/budgets/:budgetId/checkins/week", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
     const { weekLabel } = req.query as { weekLabel?: string };
 
     if (!weekLabel) {

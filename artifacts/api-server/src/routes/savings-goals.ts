@@ -8,7 +8,7 @@ const router: IRouter = Router();
 router.get("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
 
     const budget = await db
       .select({ id: savedBudgetsTable.id })
@@ -48,7 +48,7 @@ router.get("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<vo
 router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
     const { name, targetAmount, targetDate, note, includeInBudget } = req.body as {
       name?: string;
       targetAmount?: number;
@@ -113,7 +113,7 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
 router.put("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId, goalId } = req.params;
+    const { budgetId, goalId } = req.params as { budgetId: string; goalId: string };
     const { name, targetAmount, targetDate, note, includeInBudget } = req.body as {
       name?: string;
       targetAmount?: number;
@@ -197,7 +197,7 @@ router.put("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Pr
 router.patch("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId, goalId } = req.params;
+    const { budgetId, goalId } = req.params as { budgetId: string; goalId: string };
     const { includeInBudget } = req.body as { includeInBudget?: boolean };
 
     if (typeof includeInBudget !== "boolean") {
@@ -232,7 +232,7 @@ router.patch("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): 
 router.delete("/budgets/:budgetId/goals/:goalId", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId, goalId } = req.params;
+    const { budgetId, goalId } = req.params as { budgetId: string; goalId: string };
 
     const deleted = await db
       .delete(savingsGoalsTable)

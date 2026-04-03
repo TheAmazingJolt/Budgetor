@@ -8,7 +8,7 @@ const router: IRouter = Router();
 router.get("/budgets/:budgetId/contributions", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
 
     const budget = await db
       .select({ id: savedBudgetsTable.id })
@@ -42,7 +42,7 @@ router.get("/budgets/:budgetId/contributions", requireAuth, async (req, res): Pr
 router.post("/budgets/:budgetId/contributions", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId } = req.params;
+    const { budgetId } = req.params as { budgetId: string };
     const { billName, amount, date, note } = req.body as {
       billName?: string;
       amount?: number;
@@ -96,7 +96,7 @@ router.post("/budgets/:budgetId/contributions", requireAuth, async (req, res): P
 router.delete("/budgets/:budgetId/contributions/:id", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;
-    const { budgetId, id } = req.params;
+    const { budgetId, id } = req.params as { budgetId: string; id: string };
 
     const deleted = await db
       .delete(savingsContributionsTable)

@@ -87,6 +87,12 @@ export const GenerateBudgetBody = zod.object({
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
         ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+        ),
     }),
   ),
 });
