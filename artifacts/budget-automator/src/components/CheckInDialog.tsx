@@ -27,22 +27,32 @@ export interface WeekSnapshot {
   items: { name: string; amount: number }[];
 }
 
+export interface DebtBillInfo {
+  bill: Bill;
+  debtId: string;
+  currentBalance: number;
+}
+
 interface CheckInItem {
   billName: string;
-  billType: "balanced" | "yearly" | "goal";
+  billType: "balanced" | "yearly" | "goal" | "debt";
   plannedAmount: number;
   actualStr: string;
   skipped: boolean;
+  debtId?: string;
+  currentBalance?: number;
 }
 
 export interface CheckInDialogProps {
   open: boolean;
   week: WeekSnapshot;
   savingsBills: Bill[];
+  debtBills?: DebtBillInfo[];
   existingCheckins: WeeklyCheckIn[];
   budgetId: string;
   onSaved: () => void;
   onDismiss: () => void;
+  onDebtPayments?: (payments: { debtId: string; amount: number }[]) => void;
 }
 
 function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number }[]): number {
@@ -63,6 +73,20 @@ function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number 
     .reduce((s, it) => s + Math.abs(it.amount), 0);
 }
 
+function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: number }[]): number {
+  const exact = weekItems
+    .filter(it => it.name === bill.name)
+    .reduce((s, it) => s + Math.abs(it.amount), 0);
+  if (exact > 0) return exact;
+  if (bill.type === "balanced") {
+    const prefix = `Partial ${bill.name}`;
+    return weekItems
+      .filter(it => it.name === prefix)
+      .reduce((s, it) => s + Math.abs(it.amount), 0);
+  }
+  return 0;
+}
+
 function getBillItemType(bill: Bill): "balanced" | "yearly" | "goal" {
   if (bill.type === "balanced") return "balanced";
   if (bill.type === "weekly") return "goal";
@@ -70,10 +94,10 @@ function getBillItemType(bill: Bill): "balanced" | "yearly" | "goal" {
 }
 
 export function CheckInDialog({
-  open, week, savingsBills, existingCheckins, budgetId, onSaved, onDismiss,
+  open, week, savingsBills, debtBills, existingCheckins, budgetId, onSaved, onDismiss, onDebtPayments,
 }: CheckInDialogProps) {
-  const buildItems = (): CheckInItem[] =>
-    savingsBills
+  const buildItems = (): CheckInItem[] => {
+    const savingsItems: CheckInItem[] = savingsBills
       .filter(b => b.type === "balanced" || b.type === "yearly" || b.type === "weekly")
       .map(bill => {
         const itemType = getBillItemType(bill);
@@ -91,6 +115,27 @@ export function CheckInDialog({
           skipped: existing ? existing.actualAmount === 0 : autoSkip,
         };
       });
+
+    const debtItems: CheckInItem[] = (debtBills ?? []).map(({ bill, debtId, currentBalance }) => {
+      const planned = getDebtPlannedAmount(bill, week.items);
+      const existing = existingCheckins.find(
+        c => c.itemName === bill.name && c.itemType === "debt",
+      );
+      const actual = existing ? existing.actualAmount : planned;
+      const autoSkip = !existing && planned === 0;
+      return {
+        billName: bill.name,
+        billType: "debt" as const,
+        plannedAmount: planned,
+        actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
+        skipped: existing ? existing.actualAmount === 0 : autoSkip,
+        debtId,
+        currentBalance,
+      };
+    });
+
+    return [...savingsItems, ...debtItems];
+  };
 
   const [items, setItems] = useState<CheckInItem[]>(() => buildItems());
   const [saving, setSaving] = useState(false);
@@ -136,6 +181,20 @@ export function CheckInDialog({
           }),
         ),
       );
+
+      if (onDebtPayments) {
+        const debtPayments = items
+          .filter(it => it.billType === "debt" && it.debtId && !it.skipped)
+          .map(it => ({
+            debtId: it.debtId!,
+            amount: Math.max(0, parseFloat(it.actualStr) || 0),
+          }))
+          .filter(p => p.amount > 0);
+        if (debtPayments.length > 0) {
+          onDebtPayments(debtPayments);
+        }
+      }
+
       setItems(buildItems());
       onSaved();
     } catch (e: any) {
@@ -162,49 +221,70 @@ export function CheckInDialog({
         </DialogHeader>
 
         <div className="space-y-3 py-1">
-          {items.map((it, idx) => (
-            <div key={`${it.billName}-${it.billType}`} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {it.billType === "goal" ? "Savings goal" : it.billType === "yearly" ? "Sinking fund" : "Balanced monthly"}
+          {items.map((it, idx) => {
+            const isDebt = it.billType === "debt";
+            return (
+              <div
+                key={`${it.billName}-${it.billType}`}
+                className={`rounded-xl border p-3 space-y-2 ${
+                  isDebt
+                    ? "border-red-200 bg-red-50/40"
+                    : "border-indigo-100 bg-indigo-50/40"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{it.billName}</p>
+                    <p className={`text-xs ${isDebt ? "text-red-600" : "text-muted-foreground"}`}>
+                      {isDebt
+                        ? "Debt payment"
+                        : it.billType === "goal"
+                          ? "Savings goal"
+                          : it.billType === "yearly"
+                            ? "Sinking fund"
+                            : "Balanced monthly"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSkip(idx)}
+                    className={`flex items-center gap-1 text-xs font-medium shrink-0 transition-colors ${it.skipped ? "text-red-500" : "text-muted-foreground hover:text-red-400"}`}
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    {it.skipped ? "Skipped" : "Skip"}
+                  </button>
+                </div>
+                {it.plannedAmount > 0 && (
+                  <p className="text-xs text-muted-foreground">Budgeted: ${it.plannedAmount.toFixed(2)}</p>
+                )}
+                {isDebt && it.currentBalance != null && it.currentBalance > 0 && (
+                  <p className="text-xs text-red-500/80">Balance: ${it.currentBalance.toFixed(2)}</p>
+                )}
+                {!it.skipped && (
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={it.actualStr}
+                      onChange={e => setActual(idx, e.target.value)}
+                      className="pl-6 h-8 text-sm"
+                    />
+                  </div>
+                )}
+                {it.skipped && it.plannedAmount > 0 && (
+                  <p className={`text-xs italic ${isDebt ? "text-red-500" : "text-red-500"}`}>
+                    {isDebt ? "Logged as $0.00 — payment skipped this week" : "Logged as $0.00 — unexpected expense this week"}
                   </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleSkip(idx)}
-                  className={`flex items-center gap-1 text-xs font-medium shrink-0 transition-colors ${it.skipped ? "text-red-500" : "text-muted-foreground hover:text-red-400"}`}
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                  {it.skipped ? "Skipped" : "Skip"}
-                </button>
+                )}
+                {it.skipped && it.plannedAmount === 0 && (
+                  <p className="text-xs text-muted-foreground italic">Not budgeted this week</p>
+                )}
               </div>
-              {it.plannedAmount > 0 && (
-                <p className="text-xs text-muted-foreground">Budgeted: ${it.plannedAmount.toFixed(2)}</p>
-              )}
-              {!it.skipped && (
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={it.actualStr}
-                    onChange={e => setActual(idx, e.target.value)}
-                    className="pl-6 h-8 text-sm"
-                  />
-                </div>
-              )}
-              {it.skipped && it.plannedAmount > 0 && (
-                <p className="text-xs text-red-500 italic">Logged as $0.00 — unexpected expense this week</p>
-              )}
-              {it.skipped && it.plannedAmount === 0 && (
-                <p className="text-xs text-muted-foreground italic">Not budgeted this week</p>
-              )}
-            </div>
-          ))}
+            );
+          })}
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 

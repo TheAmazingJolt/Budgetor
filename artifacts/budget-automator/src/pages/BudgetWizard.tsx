@@ -1064,7 +1064,8 @@ export function BudgetWizard({
       budgetGoalsQuery.data?.goals ?? [],
       budgetContributionsQuery.data?.contributions ?? [],
     );
-    if (balancedBillsList.length === 0 && savingsGoalBillsList.length === 0) return;
+    const debtBillsList = bills.filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"));
+    if (balancedBillsList.length === 0 && savingsGoalBillsList.length === 0 && debtBillsList.length === 0) return;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -5924,14 +5925,40 @@ export function BudgetWizard({
           open={checkInDialogOpen}
           week={checkInWeek}
           savingsBills={[
-            ...bills.filter(b => b.type === "balanced" || b.type === "yearly"),
+            ...bills.filter(b => (b.type === "balanced" || b.type === "yearly") && !b.sourceDebtId && !b.name.endsWith(" (min payment)")),
             ...computeGoalBillsForCheckin(
               budgetGoalsQuery.data?.goals ?? [],
               budgetContributionsQuery.data?.contributions ?? [],
             ),
           ]}
+          debtBills={bills
+            .filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"))
+            .map(b => {
+              const debt = b.sourceDebtId
+                ? debts.find(d => d.id === b.sourceDebtId)
+                : debts.find(d => b.name === `${d.name} (min payment)`);
+              return {
+                bill: b,
+                debtId: debt?.id ?? b.sourceDebtId ?? "",
+                currentBalance: debt?.balance ?? 0,
+              };
+            })}
           existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
           budgetId={activeCloudBudgetId}
+          onDebtPayments={(payments) => {
+            for (const { debtId, amount } of payments) {
+              const idx = debts.findIndex(d => d.id === debtId);
+              if (idx >= 0) {
+                const d = debts[idx];
+                updateDebt(idx, {
+                  ...d,
+                  balance: Math.max(0, d.balance - amount),
+                  lastPaymentDate: new Date().toISOString().split("T")[0],
+                  lastPaymentAmount: amount,
+                });
+              }
+            }
+          }}
           onSaved={() => {
             setCheckInDialogOpen(false);
             setCheckInWeek(null);
