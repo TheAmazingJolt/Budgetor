@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -473,6 +473,25 @@ function injectBillColors<T extends { name: string; amount: number }>(
   });
 }
 
+function applyCheckinMarks<W extends { weekLabel: string; bills: { name: string; amount: number }[] }>(
+  weeks: W[],
+  checkins: { weekLabel: string; itemName: string; actualAmount: number }[],
+): W[] {
+  if (!checkins.length) return weeks;
+  const confirmed = new Set(
+    checkins
+      .filter(c => c.actualAmount > 0)
+      .map(c => `${c.weekLabel}||${c.itemName}`),
+  );
+  if (!confirmed.size) return weeks;
+  return weeks.map(w => ({
+    ...w,
+    bills: w.bills.map(b =>
+      confirmed.has(`${w.weekLabel}||${b.name}`) ? { ...b, name: `${b.name} \u2713` } : b,
+    ),
+  }));
+}
+
 function parsedWeekToWeeklyBudget(w: ParsedWeek): WeeklyBudget {
   return {
     weekLabel: w.label,
@@ -664,6 +683,7 @@ export function BudgetWizard({
     googleFirstBudgetCol: 0 as number,
     excelFirstBudgetCol: 0 as number,
     buildWriteWeeks: null as (() => any[]) | null,
+    weeklyCheckins: [] as { weekLabel: string; itemName: string; actualAmount: number }[],
   });
   bgSyncRef.current.activeLinkedSheet = activeLinkedSheet;
   bgSyncRef.current.generatedWeek = generatedWeek;
@@ -677,15 +697,18 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins } = bgSyncRef.current;
       if (!activeLinkedSheet) return;
       const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
       if (!rawWeeks?.length) return;
       const colorLookup = buildBillColorLookup(bills);
-      const weeks = rawWeeks.map((w: any) => ({
-        ...w,
-        bills: injectBillColors(w.bills, colorLookup),
-      }));
+      const weeks = applyCheckinMarks(
+        rawWeeks.map((w: any) => ({
+          ...w,
+          bills: injectBillColors(w.bills ?? w.items ?? [], colorLookup),
+        })),
+        weeklyCheckins,
+      );
       const writePayload = {
         weeks,
         startCol: 0,
@@ -1007,6 +1030,15 @@ export function BudgetWizard({
     enabled: !!activeCloudBudgetId,
     staleTime: 30_000,
   });
+
+  const confirmedCheckins = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of checkinsQuery.data?.checkins ?? []) {
+      if (c.actualAmount > 0) s.add(`${c.weekLabel}||${c.itemName}`);
+    }
+    return s;
+  }, [checkinsQuery.data?.checkins]);
+  bgSyncRef.current.weeklyCheckins = checkinsQuery.data?.checkins ?? [];
 
   const paydayCheckinsQuery = useQuery<{ paydayCheckins: { id: string; weekLabel: string; actualPaycheck: number }[] }>({
     queryKey: ["payday-checkins", activeCloudBudgetId],
@@ -2394,7 +2426,7 @@ export function BudgetWizard({
         const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : w.closingBalance;
         return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
       });
-    return [...source, ...gen];
+    return applyCheckinMarks([...source, ...gen], checkinsQuery.data?.checkins ?? []);
   };
   bgSyncRef.current.buildWriteWeeks = buildAllWriteWeeks;
 
@@ -2511,10 +2543,14 @@ export function BudgetWizard({
       const fallbackBills = includeBillsSummary && !rawBills ? bills : undefined;
       const debtsForExport = debts.length > 0 ? debts : undefined;
       const xlsxColorLookup = buildBillColorLookup(bills);
-      const coloredWeeks = data.weeks.map(w => ({
-        ...w,
-        bills: injectBillColors(w.bills, xlsxColorLookup),
-      }));
+      const xlsxCheckins = checkinsQuery.data?.checkins ?? [];
+      const coloredWeeks = applyCheckinMarks(
+        data.weeks.map(w => ({
+          ...w,
+          bills: injectBillColors(w.bills, xlsxColorLookup),
+        })),
+        xlsxCheckins,
+      );
       const cachedContribs2 = budgetContributionsQuery.data?.contributions ?? [];
       const cachedGoalsRaw2 = budgetGoalsQuery.data?.goals ?? [];
       const goalsForXlsx2: SavingsGoalForSheet[] = cachedGoalsRaw2.map((g) => ({
@@ -2525,7 +2561,10 @@ export function BudgetWizard({
       }));
       let freshBlob: Blob;
       if (inputMode === "google" || inputMode === "excel") {
-        const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
+        const existingConverted = applyCheckinMarks(
+          (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
+          xlsxCheckins,
+        );
         freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       } else if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
         freshBlob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
@@ -4617,7 +4656,8 @@ export function BudgetWizard({
                                         for (const bill of week.items) {
                                           const billStyle =
                                             bill.name.startsWith("Partial ") ? "bg-amber-50 text-amber-900" : "";
-                                          rowItems.push({ label: bill.name, value: bill.amount, style: billStyle });
+                                          const isConfirmed = confirmedCheckins.has(`${week.label}||${bill.name}`);
+                                          rowItems.push({ label: isConfirmed ? `${bill.name} \u2713` : bill.name, value: bill.amount, style: billStyle });
                                         }
 
                                         const item = rowItems[r];
