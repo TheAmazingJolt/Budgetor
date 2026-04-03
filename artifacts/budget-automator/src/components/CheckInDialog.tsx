@@ -211,10 +211,14 @@ export function CheckInDialog({
       if (onDebtPayments) {
         const debtPayments = items
           .filter(it => it.billType === "debt" && it.debtId && !it.skipped)
-          .map(it => ({
-            debtId: it.debtId!,
-            amount: Math.max(0, parseFloat(it.actualStr) || 0),
-          }))
+          .map(it => {
+            const newAmount = Math.max(0, parseFloat(it.actualStr) || 0);
+            const prevRecord =
+              existingCheckins.find(c => c.itemName === it.debtId && c.itemType === "debt") ??
+              existingCheckins.find(c => c.itemName === it.billName && c.itemType === "debt");
+            const prevAmount = prevRecord ? prevRecord.actualAmount : 0;
+            return { debtId: it.debtId!, amount: newAmount - prevAmount };
+          })
           .filter(p => p.amount > 0);
         if (debtPayments.length > 0) {
           onDebtPayments(debtPayments);
