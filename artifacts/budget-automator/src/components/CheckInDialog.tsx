@@ -116,23 +116,25 @@ export function CheckInDialog({
         };
       });
 
-    const debtItems: CheckInItem[] = (debtBills ?? []).map(({ bill, debtId, currentBalance }) => {
-      const planned = getDebtPlannedAmount(bill, week.items);
-      const existing = existingCheckins.find(
-        c => c.itemName === bill.name && c.itemType === "debt",
-      );
-      const actual = existing ? existing.actualAmount : planned;
-      const autoSkip = !existing && planned === 0;
-      return {
-        billName: bill.name,
-        billType: "debt" as const,
-        plannedAmount: planned,
-        actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
-        skipped: existing ? existing.actualAmount === 0 : autoSkip,
-        debtId,
-        currentBalance,
-      };
-    });
+    const debtItems: CheckInItem[] = (debtBills ?? [])
+      .filter(({ debtId }) => !!debtId)
+      .map(({ bill, debtId, currentBalance }) => {
+        const planned = getDebtPlannedAmount(bill, week.items);
+        const existing =
+          existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
+          existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
+        const actual = existing ? existing.actualAmount : planned;
+        const autoSkip = !existing && planned === 0;
+        return {
+          billName: bill.name,
+          billType: "debt" as const,
+          plannedAmount: planned,
+          actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
+          skipped: existing ? existing.actualAmount === 0 : autoSkip,
+          debtId,
+          currentBalance,
+        };
+      });
 
     return [...savingsItems, ...debtItems];
   };
@@ -142,14 +144,18 @@ export function CheckInDialog({
   const [error, setError] = useState("");
   const [notBudgetedOpen, setNotBudgetedOpen] = useState(false);
 
-  const budgetedItems = items.filter(it => {
-    const existing = existingCheckins.find(c => c.itemName === it.billName && c.itemType === it.billType);
-    return it.plannedAmount > 0 || !!existing;
-  });
-  const notBudgetedItems = items.filter(it => {
-    const existing = existingCheckins.find(c => c.itemName === it.billName && c.itemType === it.billType);
-    return it.plannedAmount === 0 && !existing;
-  });
+  const findExisting = (it: CheckInItem) => {
+    if (it.billType === "debt" && it.debtId) {
+      return (
+        existingCheckins.find(c => c.itemName === it.debtId && c.itemType === "debt") ??
+        existingCheckins.find(c => c.itemName === it.billName && c.itemType === "debt")
+      );
+    }
+    return existingCheckins.find(c => c.itemName === it.billName && c.itemType === it.billType);
+  };
+
+  const budgetedItems = items.filter(it => it.plannedAmount > 0 || !!findExisting(it));
+  const notBudgetedItems = items.filter(it => it.plannedAmount === 0 && !findExisting(it));
 
   const setActual = (idx: number, val: string) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, actualStr: val, skipped: false } : it));
@@ -183,7 +189,7 @@ export function CheckInDialog({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               weekLabel: week.label,
-              itemName: it.billName,
+              itemName: it.billType === "debt" && it.debtId ? it.debtId : it.billName,
               itemType: it.billType,
               plannedAmount: it.plannedAmount,
               actualAmount: it.skipped ? 0 : Math.max(0, parseFloat(it.actualStr) || 0),
@@ -232,11 +238,16 @@ export function CheckInDialog({
 
         <div className="space-y-3 py-1">
           {budgetedItems.map(it => {
-            const idx = items.findIndex(x => x.billName === it.billName && x.billType === it.billType);
+            const idx = items.findIndex(x =>
+              x.billType === it.billType &&
+              (it.billType === "debt" && it.debtId
+                ? x.debtId === it.debtId
+                : x.billName === it.billName)
+            );
             const isDebt = it.billType === "debt";
             return (
               <div
-                key={`${it.billName}-${it.billType}`}
+                key={it.billType === "debt" && it.debtId ? `debt-${it.debtId}` : `${it.billName}-${it.billType}`}
                 className={`rounded-xl border p-3 space-y-2 ${
                   isDebt
                     ? "border-red-200 bg-red-50/40"
@@ -318,7 +329,7 @@ export function CheckInDialog({
                     const isDebt = it.billType === "debt";
                     return (
                       <div
-                        key={`${it.billName}-${it.billType}`}
+                        key={it.billType === "debt" && it.debtId ? `debt-${it.debtId}` : `${it.billName}-${it.billType}`}
                         className="flex items-center justify-between gap-2 rounded-lg border border-muted/40 bg-muted/20 px-3 py-2"
                       >
                         <div className="min-w-0">
