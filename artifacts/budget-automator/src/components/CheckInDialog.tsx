@@ -210,7 +210,7 @@ export function CheckInDialog({
 
       if (onDebtPayments) {
         const debtPayments = items
-          .filter(it => it.billType === "debt" && it.debtId && !it.skipped)
+          .filter(it => it.billType === "debt" && it.debtId && !it.skipped && it.plannedAmount > 0)
           .map(it => {
             const newAmount = Math.max(0, parseFloat(it.actualStr) || 0);
             const prevRecord =

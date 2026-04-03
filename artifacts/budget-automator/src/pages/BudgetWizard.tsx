@@ -712,6 +712,7 @@ export function BudgetWizard({
       const weeks = applyCheckinMarks(
         rawWeeks.map((w: any) => ({
           ...w,
+          weekLabel: w.weekLabel ?? w.label,
           bills: injectBillColors(w.bills ?? w.items ?? [], colorLookup),
         })),
         weeklyCheckins,
@@ -6224,15 +6225,19 @@ export function BudgetWizard({
           existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
           budgetId={activeCloudBudgetId}
           onDebtPayments={(payments) => {
+            const totals = new Map<string, number>();
             for (const { debtId, amount } of payments) {
+              totals.set(debtId, (totals.get(debtId) ?? 0) + amount);
+            }
+            for (const [debtId, totalAmount] of totals) {
               const idx = debts.findIndex(d => d.id === debtId);
               if (idx >= 0) {
                 const d = debts[idx];
                 updateDebt(idx, {
                   ...d,
-                  balance: Math.max(0, d.balance - amount),
+                  balance: Math.max(0, d.balance - totalAmount),
                   lastPaymentDate: new Date().toISOString().split("T")[0],
-                  lastPaymentAmount: amount,
+                  lastPaymentAmount: totalAmount,
                 });
               }
             }
