@@ -78,7 +78,7 @@ function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: num
   if (matchingItems.length > 0) {
     const exactMatch = matchingItems.find(it => Math.abs(it.amount) === Math.abs(bill.amount));
     if (exactMatch) return Math.abs(exactMatch.amount);
-    return Math.abs(bill.amount);
+    return 0;
   }
   if (bill.type === "balanced") {
     const prefix = `Partial ${bill.name}`;
