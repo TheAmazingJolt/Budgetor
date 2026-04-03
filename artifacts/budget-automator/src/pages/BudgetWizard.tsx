@@ -697,10 +697,6 @@ export function BudgetWizard({
   bgSyncRef.current.generatedWeek = generatedWeek;
   bgSyncRef.current.cloudExistingWeeks = cloudExistingWeeks;
   bgSyncRef.current.bills = bills;
-  bgSyncRef.current.savingsGoalBills = computeSavingsGoalBills(
-    budgetGoalsQuery.data?.goals ?? [],
-    budgetContributionsQuery.data?.contributions ?? [],
-  );
   bgSyncRef.current.debts = debts;
   bgSyncRef.current.zeroOpeningBalance = zeroOpeningBalance;
   bgSyncRef.current.activeCloudBudgetId = activeCloudBudgetId;
@@ -1091,6 +1087,11 @@ export function BudgetWizard({
     enabled: !!activeCloudBudgetId,
     staleTime: 30_000,
   });
+
+  bgSyncRef.current.savingsGoalBills = computeSavingsGoalBills(
+    budgetGoalsQuery.data?.goals ?? [],
+    budgetContributionsQuery.data?.contributions ?? [],
+  );
 
   useEffect(() => {
     if (inputMode !== "cloud") return;
