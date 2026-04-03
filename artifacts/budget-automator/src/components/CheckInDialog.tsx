@@ -156,8 +156,16 @@ export function CheckInDialog({
     return existingCheckins.find(c => c.itemName === it.billName && c.itemType === it.billType);
   };
 
-  const budgetedItems = items.filter(it => it.plannedAmount > 0 || !!findExisting(it));
-  const notBudgetedItems = items.filter(it => it.plannedAmount === 0 && !findExisting(it));
+  const budgetedItems = items.filter(it => {
+    if (it.plannedAmount > 0) return true;
+    const ex = findExisting(it);
+    return !!ex && ex.actualAmount > 0;
+  });
+  const notBudgetedItems = items.filter(it => {
+    if (it.plannedAmount > 0) return false;
+    const ex = findExisting(it);
+    return !ex || ex.actualAmount === 0;
+  });
 
   const setActual = (idx: number, val: string) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, actualStr: val, skipped: false } : it));
