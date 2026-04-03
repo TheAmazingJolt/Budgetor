@@ -692,8 +692,12 @@ export function BudgetWizard({
   const handleManualSheetSync = useCallback(async () => {
     const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
     if (!activeLinkedSheet) return;
-    const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
-    if (!rawWeeks?.length) {
+    // For manual sync always prefer cloudExistingWeeks (all stored weeks) over
+    // generatedWeek.weeks which may only contain the most recently generated batch.
+    const rawWeeks: any[] = (cloudExistingWeeks?.length ? cloudExistingWeeks : null)
+      ?? (generatedWeek ? generatedWeek.weeks : null)
+      ?? [];
+    if (!rawWeeks.length) {
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
     }
