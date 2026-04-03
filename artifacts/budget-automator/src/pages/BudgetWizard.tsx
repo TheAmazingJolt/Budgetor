@@ -683,6 +683,7 @@ export function BudgetWizard({
     generatedWeek: null as typeof generatedWeek,
     cloudExistingWeeks: [] as any[],
     bills: [] as typeof bills,
+    savingsGoalBills: [] as typeof bills,
     debts: [] as typeof debts,
     zeroOpeningBalance: true,
     activeCloudBudgetId: null as string | null,
@@ -696,6 +697,10 @@ export function BudgetWizard({
   bgSyncRef.current.generatedWeek = generatedWeek;
   bgSyncRef.current.cloudExistingWeeks = cloudExistingWeeks;
   bgSyncRef.current.bills = bills;
+  bgSyncRef.current.savingsGoalBills = computeSavingsGoalBills(
+    budgetGoalsQuery.data?.goals ?? [],
+    budgetContributionsQuery.data?.contributions ?? [],
+  );
   bgSyncRef.current.debts = debts;
   bgSyncRef.current.zeroOpeningBalance = zeroOpeningBalance;
   bgSyncRef.current.activeCloudBudgetId = activeCloudBudgetId;
@@ -704,7 +709,8 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins, debtIdToBillName: syncDebtMap } = bgSyncRef.current;
+      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins, debtIdToBillName: syncDebtMap } = bgSyncRef.current;
+      const allBillsForSync = [...bills, ...savingsGoalBills];
       if (!activeLinkedSheet) return;
       const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
       if (!rawWeeks?.length) return;
@@ -724,7 +730,7 @@ export function BudgetWizard({
         includeRemainingAcct: !zeroOpeningBalance,
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(debts.length > 0 ? { debts } : {}),
-        ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+        ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),
         ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
       };
       try {
@@ -760,7 +766,7 @@ export function BudgetWizard({
     }
     setIsSyncingToSheet(true);
     try {
-      const safeBills = bills ?? [];
+      const safeBills = [...(bills ?? []), ...(bgSyncRef.current.savingsGoalBills ?? [])];
       const safeDebts = debts ?? [];
       // Manual sync always rewrites ALL weeks starting at column A (index 0).
       // googleFirstBudgetCol/excelFirstBudgetCol track the sheet-read column for
