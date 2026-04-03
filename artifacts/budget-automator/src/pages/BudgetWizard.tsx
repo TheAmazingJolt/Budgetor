@@ -486,9 +486,10 @@ function applyCheckinMarks<W extends { weekLabel: string; bills: { name: string;
   if (!confirmed.size) return weeks;
   return weeks.map(w => ({
     ...w,
-    bills: w.bills.map(b =>
-      confirmed.has(`${w.weekLabel}||${b.name}`) ? { ...b, name: `${b.name} \u2713` } : b,
-    ),
+    bills: w.bills.map(b => {
+      if (b.name.endsWith(" \u2713")) return b;
+      return confirmed.has(`${w.weekLabel}||${b.name}`) ? { ...b, name: `${b.name} \u2713` } : b;
+    }),
   }));
 }
 
@@ -2596,10 +2597,10 @@ export function BudgetWizard({
       const result = await sheetCreateAndWriteMutation.mutateAsync({
         data: {
           title,
-          weeks: weeksToExport.map((w) => ({
+          weeks: applyCheckinMarks(weeksToExport.map((w) => ({
             ...w,
             bills: injectBillColors(w.bills, colorLookup),
-          })),
+          })), checkinsQuery.data?.checkins ?? []),
           includeRemainingAcct: !zeroOpeningBalance,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(debts.length > 0 ? { debts } : {}),
@@ -2647,10 +2648,14 @@ export function BudgetWizard({
         weeksToExport = fresh.data.weeks;
       }
 
+      const excelColorLookup = buildBillColorLookup(bills);
       const result = await excelCreateAndWriteMutation.mutateAsync({
         data: {
           title,
-          weeks: weeksToExport,
+          weeks: applyCheckinMarks(weeksToExport.map((w) => ({
+            ...w,
+            bills: injectBillColors(w.bills, excelColorLookup),
+          })), checkinsQuery.data?.checkins ?? []),
           includeRemainingAcct: !zeroOpeningBalance,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(debts.length > 0 ? { debts } : {}),
@@ -2742,7 +2747,7 @@ export function BudgetWizard({
             : w.closingBalance;
           return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
         });
-      const weeks = [...historicalWeeks, ...generatedWeeks];
+      const weeks = applyCheckinMarks([...historicalWeeks, ...generatedWeeks], checkinsQuery.data?.checkins ?? []);
       const includeRemainingAcct = !zeroOpeningBalance;
       const writePayload = {
         weeks,
