@@ -36,7 +36,7 @@ function paydayDismissKey(budgetId: string, weekLabel: string) {
 
 export function isPaydayDismissed(budgetId: string, weekLabel: string): boolean {
   try {
-    return sessionStorage.getItem(paydayDismissKey(budgetId, weekLabel)) === "1";
+    return localStorage.getItem(paydayDismissKey(budgetId, weekLabel)) === "1";
   } catch {
     return false;
   }
@@ -44,6 +44,6 @@ export function isPaydayDismissed(budgetId: string, weekLabel: string): boolean 
 
 export function setPaydayDismissed(budgetId: string, weekLabel: string) {
   try {
-    sessionStorage.setItem(paydayDismissKey(budgetId, weekLabel), "1");
+    localStorage.setItem(paydayDismissKey(budgetId, weekLabel), "1");
   } catch {}
 }
