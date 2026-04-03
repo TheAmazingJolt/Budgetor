@@ -644,6 +644,9 @@ export function BudgetWizard({
     debts: [] as typeof debts,
     zeroOpeningBalance: true,
     activeCloudBudgetId: null as string | null,
+    googleFirstBudgetCol: 0 as number,
+    excelFirstBudgetCol: 0 as number,
+    buildWriteWeeks: null as (() => any[]) | null,
   });
   bgSyncRef.current.activeLinkedSheet = activeLinkedSheet;
   bgSyncRef.current.generatedWeek = generatedWeek;
@@ -652,6 +655,8 @@ export function BudgetWizard({
   bgSyncRef.current.debts = debts;
   bgSyncRef.current.zeroOpeningBalance = zeroOpeningBalance;
   bgSyncRef.current.activeCloudBudgetId = activeCloudBudgetId;
+  bgSyncRef.current.googleFirstBudgetCol = googleFirstBudgetCol;
+  bgSyncRef.current.excelFirstBudgetCol = excelFirstBudgetCol;
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
@@ -690,14 +695,16 @@ export function BudgetWizard({
   }, [sheetWriteMutation, excelWriteMutation, toast]);
 
   const handleManualSheetSync = useCallback(async () => {
-    const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+    const { activeLinkedSheet, buildWriteWeeks, googleFirstBudgetCol, excelFirstBudgetCol, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
     if (!activeLinkedSheet) return;
-    // For manual sync always prefer cloudExistingWeeks (all stored weeks) over
-    // generatedWeek.weeks which may only contain the most recently generated batch.
-    const rawWeeks: any[] = (cloudExistingWeeks?.length ? cloudExistingWeeks : null)
-      ?? (generatedWeek ? generatedWeek.weeks : null)
-      ?? [];
-    if (!rawWeeks.length) {
+    if (!buildWriteWeeks) {
+      toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
+      return;
+    }
+    // buildWriteWeeks combines all historical (cloud) weeks + new generated weeks in the
+    // exact format writeBudgetToSheet expects (bills as arrays with injected colors).
+    const weeks = buildWriteWeeks();
+    if (!weeks.length) {
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
     }
@@ -705,15 +712,19 @@ export function BudgetWizard({
     try {
       const safeBills = bills ?? [];
       const safeDebts = debts ?? [];
-      const colorLookup = buildBillColorLookup(safeBills);
-      const weeks = rawWeeks.map((w: any) => ({
-        ...w,
-        bills: injectBillColors(w.bills ?? [], colorLookup),
-      }));
+      // Determine the correct first column (where weeks live on the sheet) and
+      // existingLastCol so the clear range covers all pre-existing week columns.
+      const isGoogle = activeLinkedSheet.type === "google";
+      const startCol = isGoogle ? googleFirstBudgetCol : excelFirstBudgetCol;
+      const lastExisting = (cloudExistingWeeks ?? []).at(-1);
+      const existingLastCol: number | undefined = lastExisting?.startCol != null
+        ? (lastExisting.startCol as number) + 1
+        : undefined;
       const writePayload = {
         weeks,
-        startCol: 0,
+        startCol,
         includeRemainingAcct: !zeroOpeningBalance,
+        ...(existingLastCol != null ? { existingLastCol } : {}),
         ...(safeDebts.length > 0 ? { debts: safeDebts } : {}),
         ...(safeBills.length > 0 ? { bills: stripHeuristicColors(safeBills) } : {}),
         ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
@@ -2319,6 +2330,7 @@ export function BudgetWizard({
       });
     return [...source, ...gen];
   };
+  bgSyncRef.current.buildWriteWeeks = buildAllWriteWeeks;
 
   const hasHistoricalEdits = () => {
     const sourceLabels = new Set(
