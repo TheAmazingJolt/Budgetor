@@ -7,11 +7,12 @@ function weekLabelToStartDate(weekLabel: string): string | null {
   try {
     const startPart = weekLabel.split(" to ")[0]?.trim();
     if (!startPart) return null;
-    // Handle M/D/YY and M/D/YYYY formats (e.g. "4/2/26" or "4/2/2026")
-    const slashParts = startPart.split("/");
-    if (slashParts.length === 3) {
-      const [mo, dy, yr] = slashParts;
-      const year = yr.length === 2 ? 2000 + parseInt(yr, 10) : parseInt(yr, 10);
+    // Extract M/D/YY or M/D/YYYY from anywhere in the start portion
+    // (handles prefixes like "Budget from 4/2/26")
+    const dateMatch = startPart.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (dateMatch) {
+      const [, mo, dy, yr] = dateMatch;
+      const year = yr.length <= 2 ? 2000 + parseInt(yr, 10) : parseInt(yr, 10);
       const month = String(parseInt(mo, 10)).padStart(2, "0");
       const day = String(parseInt(dy, 10)).padStart(2, "0");
       if (!isNaN(year) && !isNaN(Number(month)) && !isNaN(Number(day))) {
@@ -154,6 +155,7 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
           : itemName.trim();
         const startDate = weekLabelToStartDate(weekLabel);
         const contribNote = `checkin:${weekLabel}`;
+        console.log(`[POST checkin] type=${itemType} contribName="${contribName}" weekLabel="${weekLabel}" startDate=${startDate} actualAmount=${actualAmount}`);
         await client.query(
           `DELETE FROM savings_contributions WHERE budget_id = $1 AND user_id = $2 AND bill_name = $3 AND note = $4`,
           [budgetId, userId, contribName, contribNote],
