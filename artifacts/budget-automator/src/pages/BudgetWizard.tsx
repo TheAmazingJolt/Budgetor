@@ -475,14 +475,19 @@ function injectBillColors<T extends { name: string; amount: number }>(
 
 function applyCheckinMarks<W extends { weekLabel: string; bills: { name: string; amount: number }[] }>(
   weeks: W[],
-  checkins: { weekLabel: string; itemName: string; actualAmount: number }[],
+  checkins: { weekLabel: string; itemName: string; itemType?: string; actualAmount: number }[],
+  debtIdToBillName?: Map<string, string>,
 ): W[] {
   if (!checkins.length) return weeks;
-  const confirmed = new Set(
-    checkins
-      .filter(c => c.actualAmount > 0)
-      .map(c => `${c.weekLabel}||${c.itemName}`),
-  );
+  const confirmed = new Set<string>();
+  for (const c of checkins) {
+    if (c.actualAmount <= 0) continue;
+    confirmed.add(`${c.weekLabel}||${c.itemName}`);
+    if (c.itemType === "debt" && debtIdToBillName) {
+      const billName = debtIdToBillName.get(c.itemName);
+      if (billName) confirmed.add(`${c.weekLabel}||${billName}`);
+    }
+  }
   if (!confirmed.size) return weeks;
   return weeks.map(w => ({
     ...w,
@@ -684,7 +689,8 @@ export function BudgetWizard({
     googleFirstBudgetCol: 0 as number,
     excelFirstBudgetCol: 0 as number,
     buildWriteWeeks: null as (() => any[]) | null,
-    weeklyCheckins: [] as { weekLabel: string; itemName: string; actualAmount: number }[],
+    weeklyCheckins: [] as { weekLabel: string; itemName: string; itemType?: string; actualAmount: number }[],
+    debtIdToBillName: new Map<string, string>(),
   });
   bgSyncRef.current.activeLinkedSheet = activeLinkedSheet;
   bgSyncRef.current.generatedWeek = generatedWeek;
@@ -698,7 +704,7 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins } = bgSyncRef.current;
+      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins, debtIdToBillName: syncDebtMap } = bgSyncRef.current;
       if (!activeLinkedSheet) return;
       const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
       if (!rawWeeks?.length) return;
@@ -709,6 +715,7 @@ export function BudgetWizard({
           bills: injectBillColors(w.bills ?? w.items ?? [], colorLookup),
         })),
         weeklyCheckins,
+        syncDebtMap,
       );
       const writePayload = {
         weeks,
@@ -1032,14 +1039,30 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
+  const debtIdToBillName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of bills) {
+      const debtId = b.sourceDebtId ?? debts.find(d => b.name === `${d.name} (min payment)`)?.id;
+      if (debtId) map.set(debtId, b.name);
+    }
+    return map;
+  }, [bills, debts]);
+
   const confirmedCheckins = useMemo(() => {
     const s = new Set<string>();
     for (const c of checkinsQuery.data?.checkins ?? []) {
-      if (c.actualAmount > 0) s.add(`${c.weekLabel}||${c.itemName}`);
+      if (c.actualAmount > 0) {
+        s.add(`${c.weekLabel}||${c.itemName}`);
+        if (c.itemType === "debt") {
+          const billName = debtIdToBillName.get(c.itemName);
+          if (billName) s.add(`${c.weekLabel}||${billName}`);
+        }
+      }
     }
     return s;
-  }, [checkinsQuery.data?.checkins]);
+  }, [checkinsQuery.data?.checkins, debtIdToBillName]);
   bgSyncRef.current.weeklyCheckins = checkinsQuery.data?.checkins ?? [];
+  bgSyncRef.current.debtIdToBillName = debtIdToBillName;
 
   const paydayCheckinsQuery = useQuery<{ paydayCheckins: { id: string; weekLabel: string; actualPaycheck: number }[] }>({
     queryKey: ["payday-checkins", activeCloudBudgetId],
@@ -2427,7 +2450,7 @@ export function BudgetWizard({
         const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : w.closingBalance;
         return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
       });
-    return applyCheckinMarks([...source, ...gen], checkinsQuery.data?.checkins ?? []);
+    return applyCheckinMarks([...source, ...gen], checkinsQuery.data?.checkins ?? [], debtIdToBillName);
   };
   bgSyncRef.current.buildWriteWeeks = buildAllWriteWeeks;
 
@@ -2551,6 +2574,7 @@ export function BudgetWizard({
           bills: injectBillColors(w.bills, xlsxColorLookup),
         })),
         xlsxCheckins,
+        debtIdToBillName,
       );
       const cachedContribs2 = budgetContributionsQuery.data?.contributions ?? [];
       const cachedGoalsRaw2 = budgetGoalsQuery.data?.goals ?? [];
@@ -2565,6 +2589,7 @@ export function BudgetWizard({
         const existingConverted = applyCheckinMarks(
           (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
           xlsxCheckins,
+          debtIdToBillName,
         );
         freshBlob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, rawBills, fallbackBills, sheetStyle, parsedWorkbook?.rawBytes, debtsForExport, bills, cachedContribs2, goalsForXlsx2);
       } else if (blankMode || inputMode === "scratch" || inputMode === "cloud") {
@@ -2600,7 +2625,7 @@ export function BudgetWizard({
           weeks: applyCheckinMarks(weeksToExport.map((w) => ({
             ...w,
             bills: injectBillColors(w.bills, colorLookup),
-          })), checkinsQuery.data?.checkins ?? []),
+          })), checkinsQuery.data?.checkins ?? [], debtIdToBillName),
           includeRemainingAcct: !zeroOpeningBalance,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(debts.length > 0 ? { debts } : {}),
@@ -2655,7 +2680,7 @@ export function BudgetWizard({
           weeks: applyCheckinMarks(weeksToExport.map((w) => ({
             ...w,
             bills: injectBillColors(w.bills, excelColorLookup),
-          })), checkinsQuery.data?.checkins ?? []),
+          })), checkinsQuery.data?.checkins ?? [], debtIdToBillName),
           includeRemainingAcct: !zeroOpeningBalance,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(debts.length > 0 ? { debts } : {}),
@@ -2747,7 +2772,7 @@ export function BudgetWizard({
             : w.closingBalance;
           return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
         });
-      const weeks = applyCheckinMarks([...historicalWeeks, ...generatedWeeks], checkinsQuery.data?.checkins ?? []);
+      const weeks = applyCheckinMarks([...historicalWeeks, ...generatedWeeks], checkinsQuery.data?.checkins ?? [], debtIdToBillName);
       const includeRemainingAcct = !zeroOpeningBalance;
       const writePayload = {
         weeks,
