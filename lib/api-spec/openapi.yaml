@@ -818,7 +818,7 @@ components:
           description: User-defined label for this bill, e.g. Rent, Phone Bill
         type:
           type: string
-          enum: [balanced, fixed, weekly, biweekly]
+          enum: [balanced, fixed, weekly, biweekly, yearly, yearly-flat]
           description: How the bill is distributed across weeks
         color:
           type: string
