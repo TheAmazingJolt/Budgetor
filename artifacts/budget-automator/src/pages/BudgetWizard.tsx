@@ -712,10 +712,11 @@ export function BudgetWizard({
     try {
       const safeBills = bills ?? [];
       const safeDebts = debts ?? [];
-      // Determine the correct first column (where weeks live on the sheet) and
-      // existingLastCol so the clear range covers all pre-existing week columns.
+      // Manual sync always rewrites ALL weeks starting at column A (index 0).
+      // googleFirstBudgetCol/excelFirstBudgetCol track the sheet-read column for
+      // partial-append writes, but for a full overwrite we always start at A.
       const isGoogle = activeLinkedSheet.type === "google";
-      const startCol = isGoogle ? googleFirstBudgetCol : excelFirstBudgetCol;
+      const startCol = 0;
       const lastExisting = (cloudExistingWeeks ?? []).at(-1);
       const existingLastCol: number | undefined = lastExisting?.startCol != null
         ? (lastExisting.startCol as number) + 1
@@ -2296,6 +2297,20 @@ export function BudgetWizard({
 
   const buildAllWriteWeeks = () => {
     const colorLookup = buildBillColorLookup(bills);
+    // Savings goals are NOT in the `bills` state, so they're missing from colorLookup.
+    // Add them explicitly — using both the full name (e.g. "Madison Appt [→ May 18]")
+    // and the base name (e.g. "Madison Appt") so that legacy cloud-stored items whose
+    // names predate the date-suffix format also get the teal color.
+    const goalBills = computeSavingsGoalBills(
+      budgetGoalsQuery.data?.goals ?? [],
+      budgetContributionsQuery.data?.contributions ?? [],
+    );
+    for (const gb of goalBills) {
+      const goalColor = (gb as any).color ?? "teal";
+      colorLookup.set(gb.name, goalColor);
+      const baseName = gb.name.replace(/\s*\[→[^\]]*\]$/, "");
+      if (baseName !== gb.name) colorLookup.set(baseName, goalColor);
+    }
     const source = getExistingWeeks()
       .filter((w: any) => (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
       .map((w: any) => {
