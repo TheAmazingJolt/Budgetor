@@ -735,42 +735,35 @@ export function BudgetWizard({
   }, [sheetWriteMutation, excelWriteMutation, toast]);
 
   const handleManualSheetSync = useCallback(async () => {
-    const { activeLinkedSheet, buildWriteWeeks, googleFirstBudgetCol, excelFirstBudgetCol, cloudExistingWeeks, bills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+    const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins, debtIdToBillName: syncDebtMap } = bgSyncRef.current;
     if (!activeLinkedSheet) return;
-    if (!buildWriteWeeks) {
+    const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
+    if (!rawWeeks?.length) {
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
     }
-    // buildWriteWeeks combines all historical (cloud) weeks + new generated weeks in the
-    // exact format writeBudgetToSheet expects (bills as arrays with injected colors).
-    const weeks = buildWriteWeeks();
-    if (!weeks.length) {
-      toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
-      return;
-    }
+    const allBillsForSync = [...bills, ...savingsGoalBills];
+    const colorLookup = buildBillColorLookup(bills);
+    const weeks = applyCheckinMarks(
+      rawWeeks.map((w: any) => ({
+        ...w,
+        weekLabel: w.weekLabel ?? w.label,
+        bills: injectBillColors(w.bills ?? w.items ?? [], colorLookup),
+      })),
+      weeklyCheckins,
+      syncDebtMap,
+    );
+    const writePayload = {
+      weeks,
+      startCol: 0,
+      includeRemainingAcct: !zeroOpeningBalance,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ...(debts.length > 0 ? { debts } : {}),
+      ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),
+      ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
+    };
     setIsSyncingToSheet(true);
     try {
-      const safeBills = [...(bills ?? []), ...(bgSyncRef.current.savingsGoalBills ?? [])];
-      const safeDebts = debts ?? [];
-      // Manual sync always rewrites ALL weeks starting at column A (index 0).
-      // googleFirstBudgetCol/excelFirstBudgetCol track the sheet-read column for
-      // partial-append writes, but for a full overwrite we always start at A.
-      const isGoogle = activeLinkedSheet.type === "google";
-      const startCol = 0;
-      const lastExisting = (cloudExistingWeeks ?? []).at(-1);
-      const existingLastCol: number | undefined = lastExisting?.startCol != null
-        ? (lastExisting.startCol as number) + 1
-        : undefined;
-      const writePayload = {
-        weeks,
-        startCol,
-        includeRemainingAcct: !zeroOpeningBalance,
-        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        ...(existingLastCol != null ? { existingLastCol } : {}),
-        ...(safeDebts.length > 0 ? { debts: safeDebts } : {}),
-        ...(safeBills.length > 0 ? { bills: stripHeuristicColors(safeBills) } : {}),
-        ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
-      };
       if (activeLinkedSheet.type === "google") {
         await sheetWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
       } else {
