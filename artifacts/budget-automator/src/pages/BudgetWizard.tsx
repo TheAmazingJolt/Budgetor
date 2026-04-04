@@ -129,6 +129,7 @@ import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } f
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
 import { BugReportDialog } from "@/components/BugReportDialog";
+import { ReferralDialog } from "@/components/ReferralDialog";
 import { SavingsSection } from "@/components/SavingsSection";
 import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
 import { CheckInDialog } from "@/components/CheckInDialog";
@@ -136,7 +137,7 @@ import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
 import { PaydayCheckInDialog } from "@/components/PaydayCheckInDialog";
 import type { PaydayBillItem } from "@/components/PaydayCheckInDialog";
 import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
-import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank } from "lucide-react";
+import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank, Gift } from "lucide-react";
 
 type InputMode = "scratch" | "google" | "excel" | "cloud";
 
@@ -897,6 +898,9 @@ export function BudgetWizard({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
+  const [isReferralDialogOpen, setIsReferralDialogOpen] = useState(false);
+  const [referralInfo, setReferralInfo] = useState<{ referralCode: string; referralLink: string; totalReferred: number; totalConverted: number; totalRewarded: number } | null>(null);
+  const [referralLoading, setReferralLoading] = useState(false);
   const [isGenerateDateDialogOpen, setIsGenerateDateDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [bugReportOpen, setBugReportOpen] = useState(false);
@@ -1806,6 +1810,20 @@ export function BudgetWizard({
         toast({ title: "Signed in as guest" });
       },
     });
+  };
+
+  const handleOpenReferral = async () => {
+    setIsReferralDialogOpen(true);
+    if (referralInfo) return;
+    setReferralLoading(true);
+    try {
+      const data = await apiFetch<{ referralCode: string; referralLink: string; totalReferred: number; totalConverted: number; totalRewarded: number }>("/api/referral/info");
+      setReferralInfo(data);
+    } catch (err) {
+      console.error("Failed to load referral info:", err);
+    } finally {
+      setReferralLoading(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -3258,6 +3276,9 @@ export function BudgetWizard({
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
                         <Settings2 className="w-4 h-4 mr-2" /> Preferences
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleOpenReferral}>
+                        <Gift className="w-4 h-4 mr-2" /> Refer a friend
                       </DropdownMenuItem>
                     </>
                   )}
@@ -5988,6 +6009,13 @@ export function BudgetWizard({
       </AlertDialog>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      <ReferralDialog
+        open={isReferralDialogOpen}
+        onOpenChange={setIsReferralDialogOpen}
+        referralInfo={referralInfo}
+        isLoading={referralLoading}
+      />
 
       <BugReportDialog
         open={bugReportOpen}

@@ -11,6 +11,7 @@ const router: IRouter = Router();
 declare module "express-session" {
   interface SessionData {
     userId?: string;
+    pendingReferralCode?: string | null;
     googleTokens?: {
       access_token?: string | null;
       refresh_token?: string | null;
@@ -130,6 +131,39 @@ router.get("/auth/me", (req: Request, res: Response) => {
   res.json({ user: serializeUser(req.user) });
 });
 
+router.post("/auth/referral-code", async (req: Request, res: Response): Promise<void> => {
+  const { code } = req.body as { code?: string };
+  if (!code || typeof code !== "string") {
+    res.status(400).json({ error: "Missing code" });
+    return;
+  }
+  const sanitized = code.trim().toUpperCase().slice(0, 20);
+
+  if (req.user) {
+    if (req.user.referralCode === sanitized) {
+      res.status(400).json({ error: "You cannot use your own referral code" });
+      return;
+    }
+    res.json({ ok: true, skipped: "already_signed_in" });
+    return;
+  }
+
+  const [owner] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.referralCode, sanitized))
+    .limit(1);
+
+  if (!owner) {
+    res.status(404).json({ error: "Referral code not found" });
+    return;
+  }
+
+  req.session.pendingReferralCode = sanitized;
+  await saveSession(req);
+  res.json({ ok: true });
+});
+
 router.post("/auth/exchange", async (req: Request, res: Response): Promise<void> => {
   const code = (req.body as Record<string, unknown>)?.code as string | undefined;
   if (!code) {
@@ -159,13 +193,20 @@ router.post("/auth/exchange", async (req: Request, res: Response): Promise<void>
 
 router.post("/auth/guest", async (req: Request, res: Response): Promise<void> => {
   try {
+    const pendingReferralCode = req.session?.pendingReferralCode ?? null;
+
     await new Promise<void>((resolve, reject) => {
       req.session.regenerate((err) => (err ? reject(err) : resolve()));
     });
 
     const [user] = await db
       .insert(usersTable)
-      .values({ name: "Guest", provider: "guest" })
+      .values({
+        name: "Guest",
+        provider: "guest",
+        referralCode: crypto.randomBytes(5).toString("hex").toUpperCase(),
+        referredBy: pendingReferralCode || null,
+      })
       .returning();
 
     req.session.userId = user.id;
@@ -221,12 +262,18 @@ async function upsertOrUpgradeUser(
     : null;
 
   if (existingUser) {
+    if (req.session?.pendingReferralCode) {
+      req.session.pendingReferralCode = null;
+      await saveSession(req).catch(() => {});
+    }
+
     await db
       .update(usersTable)
       .set({
         name: profile.name || existingUser.name,
         email: profile.email || existingUser.email,
         avatarUrl: profile.avatarUrl || existingUser.avatarUrl,
+        referralCode: existingUser.referralCode || crypto.randomBytes(5).toString("hex").toUpperCase(),
         updatedAt: new Date(),
       })
       .where(eq(usersTable.id, existingUser.id));
@@ -243,6 +290,13 @@ async function upsertOrUpgradeUser(
   }
 
   if (currentGuestUser) {
+    const pendingReferralCode = req.session?.pendingReferralCode ?? null;
+    const referredBy =
+      currentGuestUser.referredBy ?? (pendingReferralCode || null);
+    if (pendingReferralCode) {
+      req.session.pendingReferralCode = null;
+      await saveSession(req).catch(() => {});
+    }
     await db
       .update(usersTable)
       .set({
@@ -251,10 +305,17 @@ async function upsertOrUpgradeUser(
         email: profile.email || null,
         name: profile.name || currentGuestUser.name,
         avatarUrl: profile.avatarUrl || null,
+        referredBy,
         updatedAt: new Date(),
       })
       .where(eq(usersTable.id, currentGuestUser.id));
     return currentGuestUser.id;
+  }
+
+  const pendingReferralCode = req.session?.pendingReferralCode ?? null;
+  if (pendingReferralCode) {
+    req.session.pendingReferralCode = null;
+    await saveSession(req).catch(() => {});
   }
 
   const [newUser] = await db
@@ -265,6 +326,8 @@ async function upsertOrUpgradeUser(
       email: profile.email || null,
       name: profile.name || (provider === "google" ? "Google User" : "Apple User"),
       avatarUrl: profile.avatarUrl || null,
+      referralCode: crypto.randomBytes(5).toString("hex").toUpperCase(),
+      referredBy: pendingReferralCode || null,
     })
     .returning();
   return newUser.id;

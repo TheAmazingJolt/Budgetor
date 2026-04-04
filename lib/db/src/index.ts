@@ -41,6 +41,30 @@ export async function initDb(): Promise<void> {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS bills JSONB DEFAULT '[]'::jsonb;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
 
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMP;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_credits_owed TEXT DEFAULT '0';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_reward_granted_at TIMESTAMP;
+
+      CREATE TABLE IF NOT EXISTS referral_rewards (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        referrer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referred_user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        applied_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS referral_rewards_referrer_idx ON referral_rewards (referrer_id);
+      CREATE INDEX IF NOT EXISTS referral_rewards_status_idx ON referral_rewards (status);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_unique
+        ON users (referral_code)
+        WHERE referral_code IS NOT NULL;
+
       CREATE UNIQUE INDEX IF NOT EXISTS users_provider_provider_id_unique
         ON users (provider, provider_id)
         WHERE provider_id IS NOT NULL;

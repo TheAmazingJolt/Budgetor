@@ -16,7 +16,15 @@ app.use(cors({
   origin: allowedOrigins ?? true,
   credentials: true,
 }));
-app.use(express.json({ limit: "5mb" }));
+
+const STRIPE_WEBHOOK_PATH = "/api/referral/stripe-webhook";
+app.use((req, res, next) => {
+  if (req.path === STRIPE_WEBHOOK_PATH) {
+    express.raw({ type: "application/json", limit: "1mb" })(req, res, next);
+  } else {
+    express.json({ limit: "5mb" })(req, res, next);
+  }
+});
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
 const sessionSecret = process.env["SESSION_SECRET"];

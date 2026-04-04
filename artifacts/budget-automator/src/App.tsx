@@ -131,6 +131,33 @@ function AppRouting() {
   const googleLoginAvailable = providersQuery.data?.google ?? false;
   const appleLoginAvailable = providersQuery.data?.apple ?? false;
 
+  const initialRefCode = new URLSearchParams(window.location.search).get("ref");
+  const [referralReady, setReferralReady] = useState<boolean>(!initialRefCode);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get("ref");
+    if (!refCode) {
+      setReferralReady(true);
+      return;
+    }
+    params.delete("ref");
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+    window.history.replaceState({}, "", newUrl);
+
+    const apiBase = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/+$/, "");
+    fetch(`${apiBase}/api/auth/referral-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code: refCode }),
+    })
+      .catch(() => {})
+      .finally(() => setReferralReady(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const authCode = params.get("auth_code");
@@ -209,7 +236,7 @@ function AppRouting() {
     });
   };
 
-  if (authQuery.isLoading || providersQuery.isLoading) {
+  if (authQuery.isLoading || providersQuery.isLoading || !referralReady) {
     return <SplashScreen />;
   }
 

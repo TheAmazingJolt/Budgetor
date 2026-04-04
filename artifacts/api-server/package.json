@@ -20,7 +20,8 @@
     "express-session": "^1.19.0",
     "googleapis": "^171.4.0",
     "jose": "^6.2.1",
-    "nodemailer": "^8.0.4"
+    "nodemailer": "^8.0.4",
+    "stripe": "^22.0.0"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
