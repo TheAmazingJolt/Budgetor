@@ -121,6 +121,18 @@ export async function initDb(): Promise<void> {
 
       CREATE UNIQUE INDEX IF NOT EXISTS payday_checkins_unique_week
         ON payday_checkins (budget_id, week_label);
+
+      CREATE TABLE IF NOT EXISTS bug_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        description TEXT NOT NULL,
+        error_message TEXT,
+        error_stack TEXT,
+        page_url TEXT NOT NULL,
+        user_agent TEXT NOT NULL,
+        app_version TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
     `);
     console.log("[initDb] schema migrations complete");
   } finally {

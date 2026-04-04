@@ -20,6 +20,8 @@ tags:
     description: Google Sheets operations
   - name: excel
     description: Microsoft Excel Online operations
+  - name: bugReports
+    description: Bug reporting operations
 paths:
   /healthz:
     get:
@@ -651,6 +653,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExcelCreateAndWriteResponse"
+
+  /bug-reports:
+    post:
+      operationId: createBugReport
+      tags: [bugReports]
+      summary: Submit a bug report
+      description: Saves a bug report to the database and sends an email notification to the admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BugReportRequest"
+      responses:
+        "200":
+          description: Bug report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugReportResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /user/bills:
     get:
@@ -1602,3 +1630,43 @@ components:
           additionalProperties: true
       required:
         - preferences
+
+    BugReportRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          description: User-provided description of the bug
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error message from caught exception (if applicable)
+        errorStack:
+          type: string
+          nullable: true
+          description: Error stack trace from caught exception (if applicable)
+        pageUrl:
+          type: string
+          description: URL of the page where the bug occurred
+        userAgent:
+          type: string
+          description: Browser user agent string
+        appVersion:
+          type: string
+          description: App version or build identifier
+      required:
+        - description
+        - pageUrl
+        - userAgent
+        - appVersion
+
+    BugReportResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+      required:
+        - ok
+        - id

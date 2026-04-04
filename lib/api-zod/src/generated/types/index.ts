@@ -20,6 +20,8 @@ export * from "./billType";
 export * from "./budgetRequest";
 export * from "./budgetRequestPayPeriod";
 export * from "./budgetResponse";
+export * from "./bugReportRequest";
+export * from "./bugReportResponse";
 export * from "./debt";
 export * from "./debtPaymentFrequency";
 export * from "./debtType";

@@ -65,7 +65,14 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -302,11 +309,10 @@ export const SavedBudgetListResponse = zod.object({
               ),
             paymentsRemaining: zod
               .number()
-              .int()
-              .gte(1)
+              .min(1)
               .nullish()
               .describe(
-                "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+                "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
               ),
           }),
         )
@@ -411,11 +417,10 @@ export const SavedBudgetCreateBody = zod.object({
           ),
         paymentsRemaining: zod
           .number()
-          .int()
-          .gte(1)
+          .min(1)
           .nullish()
           .describe(
-            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
       }),
     )
@@ -504,11 +509,10 @@ export const SavedBudgetCreateResponse = zod.object({
             ),
           paymentsRemaining: zod
             .number()
-            .int()
-            .gte(1)
+            .min(1)
             .nullish()
             .describe(
-              "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+              "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
             ),
         }),
       )
@@ -616,11 +620,10 @@ export const SavedBudgetUpdateBody = zod.object({
           ),
         paymentsRemaining: zod
           .number()
-          .int()
-          .gte(1)
+          .min(1)
           .nullish()
           .describe(
-            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
       }),
     )
@@ -723,11 +726,10 @@ export const SavedBudgetUpdateResponse = zod.object({
             ),
           paymentsRemaining: zod
             .number()
-            .int()
-            .gte(1)
+            .min(1)
             .nullish()
             .describe(
-              "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+              "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
             ),
         }),
       )
@@ -821,7 +823,14 @@ export const SheetReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -842,6 +851,12 @@ export const SheetReadResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -881,7 +896,14 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -902,6 +924,12 @@ export const SheetReadByUrlResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -984,7 +1012,14 @@ export const SheetWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+          .enum([
+            "balanced",
+            "fixed",
+            "weekly",
+            "biweekly",
+            "yearly",
+            "yearly-flat",
+          ])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -1005,6 +1040,12 @@ export const SheetWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
+        annualDueMonth: zod
+          .number()
+          .nullish()
+          .describe(
+            "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
           ),
       }),
     )
@@ -1083,11 +1124,10 @@ export const SheetWriteBody = zod.object({
           ),
         paymentsRemaining: zod
           .number()
-          .int()
-          .gte(1)
+          .min(1)
           .nullish()
           .describe(
-            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
       }),
     )
@@ -1230,11 +1270,10 @@ export const SheetCreateAndWriteBody = zod.object({
           ),
         paymentsRemaining: zod
           .number()
-          .int()
-          .gte(1)
+          .min(1)
           .nullish()
           .describe(
-            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
       }),
     )
@@ -1252,7 +1291,14 @@ export const SheetCreateAndWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+          .enum([
+            "balanced",
+            "fixed",
+            "weekly",
+            "biweekly",
+            "yearly",
+            "yearly-flat",
+          ])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -1273,6 +1319,12 @@ export const SheetCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
+        annualDueMonth: zod
+          .number()
+          .nullish()
+          .describe(
+            "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
           ),
       }),
     )
@@ -1344,7 +1396,14 @@ export const ExcelReadResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1365,6 +1424,12 @@ export const ExcelReadResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -1404,7 +1469,14 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1425,6 +1497,12 @@ export const ExcelReadByUrlResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -1568,11 +1646,10 @@ export const ExcelWriteBody = zod.object({
           ),
         paymentsRemaining: zod
           .number()
-          .int()
-          .gte(1)
+          .min(1)
           .nullish()
           .describe(
-            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
       }),
     )
@@ -1590,7 +1667,14 @@ export const ExcelWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+          .enum([
+            "balanced",
+            "fixed",
+            "weekly",
+            "biweekly",
+            "yearly",
+            "yearly-flat",
+          ])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -1611,6 +1695,12 @@ export const ExcelWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string after which this bill should stop appearing (debt payoff date)",
+          ),
+        annualDueMonth: zod
+          .number()
+          .nullish()
+          .describe(
+            "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
           ),
       }),
     )
@@ -1752,11 +1842,10 @@ export const ExcelCreateAndWriteBody = zod.object({
           ),
         paymentsRemaining: zod
           .number()
-          .int()
-          .gte(1)
+          .min(1)
           .nullish()
           .describe(
-            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
       }),
     )
@@ -1774,7 +1863,14 @@ export const ExcelCreateAndWriteBody = zod.object({
           .string()
           .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
         type: zod
-          .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+          .enum([
+            "balanced",
+            "fixed",
+            "weekly",
+            "biweekly",
+            "yearly",
+            "yearly-flat",
+          ])
           .describe("How the bill is distributed across weeks"),
         color: zod
           .string()
@@ -1796,6 +1892,12 @@ export const ExcelCreateAndWriteBody = zod.object({
           .describe(
             "ISO date string after which this bill should stop appearing (debt payoff date)",
           ),
+        annualDueMonth: zod
+          .number()
+          .nullish()
+          .describe(
+            "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+          ),
       }),
     )
     .optional(),
@@ -1804,6 +1906,30 @@ export const ExcelCreateAndWriteBody = zod.object({
 export const ExcelCreateAndWriteResponse = zod.object({
   fileId: zod.string(),
   webUrl: zod.string(),
+});
+
+/**
+ * Saves a bug report to the database and sends an email notification to the admin
+ * @summary Submit a bug report
+ */
+export const CreateBugReportBody = zod.object({
+  description: zod.string().describe("User-provided description of the bug"),
+  errorMessage: zod
+    .string()
+    .nullish()
+    .describe("Error message from caught exception (if applicable)"),
+  errorStack: zod
+    .string()
+    .nullish()
+    .describe("Error stack trace from caught exception (if applicable)"),
+  pageUrl: zod.string().describe("URL of the page where the bug occurred"),
+  userAgent: zod.string().describe("Browser user agent string"),
+  appVersion: zod.string().describe("App version or build identifier"),
+});
+
+export const CreateBugReportResponse = zod.object({
+  ok: zod.boolean(),
+  id: zod.string(),
 });
 
 /**
@@ -1823,7 +1949,14 @@ export const GetUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1844,6 +1977,12 @@ export const GetUserBillsResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -1866,7 +2005,14 @@ export const UpdateUserBillsBody = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1887,6 +2033,12 @@ export const UpdateUserBillsBody = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -1905,7 +2057,14 @@ export const UpdateUserBillsResponse = zod.object({
         .string()
         .describe("User-defined label for this bill, e.g. Rent, Phone Bill"),
       type: zod
-        .enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"])
+        .enum([
+          "balanced",
+          "fixed",
+          "weekly",
+          "biweekly",
+          "yearly",
+          "yearly-flat",
+        ])
         .describe("How the bill is distributed across weeks"),
       color: zod
         .string()
@@ -1926,6 +2085,12 @@ export const UpdateUserBillsResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string after which this bill should stop appearing (debt payoff date)",
+        ),
+      annualDueMonth: zod
+        .number()
+        .nullish()
+        .describe(
+          "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
     }),
   ),
@@ -2006,11 +2171,10 @@ export const GetUserDebtsResponse = zod.object({
         ),
       paymentsRemaining: zod
         .number()
-        .int()
-        .gte(1)
+        .min(1)
         .nullish()
         .describe(
-          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
         ),
     }),
   ),
@@ -2091,11 +2255,10 @@ export const UpdateUserDebtsBody = zod.object({
         ),
       paymentsRemaining: zod
         .number()
-        .int()
-        .gte(1)
+        .min(1)
         .nullish()
         .describe(
-          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
         ),
     }),
   ),
@@ -2172,11 +2335,10 @@ export const UpdateUserDebtsResponse = zod.object({
         ),
       paymentsRemaining: zod
         .number()
-        .int()
-        .gte(1)
+        .min(1)
         .nullish()
         .describe(
-          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
         ),
     }),
   ),

@@ -32,6 +32,7 @@ import {
   Banknote,
   ArrowUpDown,
   SlidersHorizontal,
+  MessageSquareWarning,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -127,6 +128,7 @@ import { Switch } from "@/components/ui/switch";
 import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } from "@workspace/api-client-react";
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
+import { BugReportDialog } from "@/components/BugReportDialog";
 import { SavingsSection } from "@/components/SavingsSection";
 import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
 import { CheckInDialog } from "@/components/CheckInDialog";
@@ -897,6 +899,7 @@ export function BudgetWizard({
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
   const [isGenerateDateDialogOpen, setIsGenerateDateDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const [errorLog, setErrorLog] = useState<Array<{ time: string; label: string; detail: string }>>(() => {
     try { return JSON.parse(localStorage.getItem("budgify_error_log") ?? "[]"); } catch { return []; }
@@ -3146,6 +3149,16 @@ export function BudgetWizard({
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500" />
               </Button>
             )}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl w-8 h-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setBugReportOpen(true)}
+              title="Report a Bug"
+            >
+              <MessageSquareWarning className="w-4.5 h-4.5" />
+            </Button>
 
             <Button
               variant="ghost"
@@ -5975,6 +5988,13 @@ export function BudgetWizard({
       </AlertDialog>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      <BugReportDialog
+        open={bugReportOpen}
+        onOpenChange={setBugReportOpen}
+        userName={currentUser?.name ?? null}
+        userEmail={currentUser?.email ?? null}
+      />
 
       {paydayWeekLabel && activeCloudBudgetId && (
         <PaydayCheckInDialog

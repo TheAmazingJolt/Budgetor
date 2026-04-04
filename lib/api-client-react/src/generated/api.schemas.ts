@@ -51,6 +51,11 @@ export interface Bill {
    * @nullable
    */
   payoffDate?: string | null;
+  /**
+   * Month (1-12) in which a yearly bill is due (null for non-yearly bills)
+   * @nullable
+   */
+  annualDueMonth?: number | null;
 }
 
 export interface WeeklyBill {
@@ -457,6 +462,26 @@ export type UpdateUserPreferencesRequestPreferences = {
 
 export interface UpdateUserPreferencesRequest {
   preferences: UpdateUserPreferencesRequestPreferences;
+}
+
+export interface BugReportRequest {
+  /** User-provided description of the bug */
+  description: string;
+  /** Error message from caught exception (if applicable) */
+  errorMessage?: string | null;
+  /** Error stack trace from caught exception (if applicable) */
+  errorStack?: string | null;
+  /** URL of the page where the bug occurred */
+  pageUrl: string;
+  /** Browser user agent string */
+  userAgent: string;
+  /** App version or build identifier */
+  appVersion: string;
+}
+
+export interface BugReportResponse {
+  ok: boolean;
+  id: string;
 }
 
 export type AuthLogout200 = {

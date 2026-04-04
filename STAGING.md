@@ -7,6 +7,8 @@ tested changes are merged to `master` (which Railway auto-deploys to production)
 The `develop` branch already exists on GitHub (`origin/develop`). All Railway
 configuration is in `railway.toml` at the repo root.
 
+Once pushed, Railway can watch `develop` and deploy to staging automatically.
+
 ---
 
 ## 1. Create a Staging environment in Railway

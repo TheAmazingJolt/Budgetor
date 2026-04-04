@@ -27,6 +27,8 @@ import type {
   AuthUserResponse,
   BudgetRequest,
   BudgetResponse,
+  BugReportRequest,
+  BugReportResponse,
   ErrorResponse,
   ExcelCreateAndWriteRequest,
   ExcelCreateAndWriteResponse,
@@ -2567,6 +2569,93 @@ export const useExcelCreateAndWrite = <
   TContext
 > => {
   return useMutation(getExcelCreateAndWriteMutationOptions(options));
+};
+
+/**
+ * Saves a bug report to the database and sends an email notification to the admin
+ * @summary Submit a bug report
+ */
+export const getCreateBugReportUrl = () => {
+  return `/api/bug-reports`;
+};
+
+export const createBugReport = async (
+  bugReportRequest: BugReportRequest,
+  options?: RequestInit,
+): Promise<BugReportResponse> => {
+  return customFetch<BugReportResponse>(getCreateBugReportUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bugReportRequest),
+  });
+};
+
+export const getCreateBugReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBugReport>>,
+    TError,
+    { data: BodyType<BugReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBugReport>>,
+  TError,
+  { data: BodyType<BugReportRequest> },
+  TContext
+> => {
+  const mutationKey = ["createBugReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBugReport>>,
+    { data: BodyType<BugReportRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createBugReport(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBugReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBugReport>>
+>;
+export type CreateBugReportMutationBody = BodyType<BugReportRequest>;
+export type CreateBugReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit a bug report
+ */
+export const useCreateBugReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBugReport>>,
+    TError,
+    { data: BodyType<BugReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBugReport>>,
+  TError,
+  { data: BodyType<BugReportRequest> },
+  TContext
+> => {
+  return useMutation(getCreateBugReportMutationOptions(options));
 };
 
 /**

@@ -1,4 +1,4 @@
-import { useEffect, Component } from "react";
+import { useEffect, useState, Component } from "react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { BudgetWizard } from "@/pages/BudgetWizard";
 import { SignInPage } from "@/pages/SignInPage";
+import { BugReportDialog } from "@/components/BugReportDialog";
 import type { AuthUser } from "@workspace/api-client-react";
 import {
   useAuthMe,
@@ -16,12 +17,17 @@ import {
   getAuthMeQueryKey,
   getAuthProvidersQueryKey,
 } from "@workspace/api-client-react";
-import { DollarSign, Loader2, RefreshCw } from "lucide-react";
+import { DollarSign, Loader2, RefreshCw, Bug } from "lucide-react";
 
-class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+interface ErrorBoundaryState {
+  error: Error | null;
+  bugReportOpen: boolean;
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, bugReportOpen: false };
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -50,28 +56,48 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 
   render() {
     if (this.state.error) {
+      const error = this.state.error;
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-emerald-50 p-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center mb-6 shadow-lg shadow-primary/20">
-            <DollarSign className="w-7 h-7 text-white" />
+        <QueryClientProvider client={new QueryClient()}>
+          <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-emerald-50 p-6">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center mb-6 shadow-lg shadow-primary/20">
+              <DollarSign className="w-7 h-7 text-white" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground mb-2">Something went wrong</h1>
+            <p className="text-muted-foreground text-sm text-center mb-6 max-w-xs">
+              Cached app data may be out of date. Clearing it and reloading usually fixes this.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={this.handleReset}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" /> Clear cache &amp; reload
+              </button>
+              <button
+                onClick={() => this.setState({ bugReportOpen: true })}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"
+              >
+                <Bug className="w-4 h-4 text-amber-500" /> Report this issue
+              </button>
+            </div>
+            <details className="mt-6 max-w-sm w-full">
+              <summary className="text-xs text-muted-foreground cursor-pointer">Error details</summary>
+              <pre className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg p-3 overflow-auto whitespace-pre-wrap break-all">
+                {error.message}
+              </pre>
+            </details>
           </div>
-          <h1 className="text-xl font-bold text-foreground mb-2">Something went wrong</h1>
-          <p className="text-muted-foreground text-sm text-center mb-6 max-w-xs">
-            Cached app data may be out of date. Clearing it and reloading usually fixes this.
-          </p>
-          <button
-            onClick={this.handleReset}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" /> Clear cache &amp; reload
-          </button>
-          <details className="mt-6 max-w-sm w-full">
-            <summary className="text-xs text-muted-foreground cursor-pointer">Error details</summary>
-            <pre className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg p-3 overflow-auto whitespace-pre-wrap break-all">
-              {this.state.error.message}
-            </pre>
-          </details>
-        </div>
+
+          <BugReportDialog
+            open={this.state.bugReportOpen}
+            onOpenChange={(open) => this.setState({ bugReportOpen: open })}
+            prefillDescription={`I encountered an error: ${error.message}`}
+            prefillErrorMessage={error.message}
+            prefillErrorStack={error.stack ?? null}
+          />
+          <Toaster />
+        </QueryClientProvider>
       );
     }
     return this.props.children;

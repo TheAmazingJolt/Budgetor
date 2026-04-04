@@ -11,6 +11,7 @@ import savingsContributionsRouter from "./savings-contributions";
 import weeklyCheckinsRouter from "./weekly-checkins";
 import savingsGoalsRouter from "./savings-goals";
 import paydayCheckinsRouter from "./payday-checkins";
+import bugReportsRouter from "./bug-reports";
 
 const router: IRouter = Router();
 
@@ -27,5 +28,6 @@ router.use(savingsContributionsRouter);
 router.use(weeklyCheckinsRouter);
 router.use(savingsGoalsRouter);
 router.use(paydayCheckinsRouter);
+router.use(bugReportsRouter);
 
 export default router;

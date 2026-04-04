@@ -1,5 +1,7 @@
 export * from "./generated/api";
 export type {
+  BugReportRequest,
+  BugReportResponse,
   AuthLoginApple200,
   AuthLoginAppleParams,
   AuthLoginGoogle200,
