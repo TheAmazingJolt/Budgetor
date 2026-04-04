@@ -7,6 +7,16 @@ tested changes are merged to `master` (which Railway auto-deploys to production)
 The `develop` branch already exists on GitHub (`origin/develop`). All Railway
 configuration is in `railway.toml` at the repo root.
 
+## Before you start — push the `develop` branch to GitHub
+
+> **This is the only manual step you need to do right now.**
+> A local `develop` branch already exists in the repository. Run this command
+> once in a terminal that is authenticated with GitHub to make it visible to Railway:
+
+```bash
+git push -u origin develop
+```
+
 Once pushed, Railway can watch `develop` and deploy to staging automatically.
 
 ---
