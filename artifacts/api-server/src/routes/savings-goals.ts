@@ -82,6 +82,7 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
     }
 
     await pool.query(`ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT true`);
+    await pool.query(`ALTER TABLE savings_goals ALTER COLUMN include_in_budget SET DEFAULT true`);
 
     const { rows: [row] } = await pool.query(
       `INSERT INTO savings_goals (user_id, budget_id, name, target_amount, target_date, note, include_in_budget)

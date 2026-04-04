@@ -253,6 +253,15 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged }: ManageSavingsD
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5 mr-1">
+                            <span className="text-xs text-muted-foreground">In budget</span>
+                            <Switch
+                              checked={goal.includeInBudget}
+                              onCheckedChange={v => toggleMutation.mutate({ goalId: goal.id, value: v })}
+                              disabled={toggleMutation.isPending}
+                              className="data-[state=checked]:bg-teal-500 scale-90"
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() => openEditForm(goal)}
@@ -280,21 +289,10 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged }: ManageSavingsD
                           Past due
                         </Badge>
                       ) : (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-teal-700 flex items-center gap-1.5">
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            ${fmt(weeklyNeeded)}/wk needed
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">Include in budget</span>
-                            <Switch
-                              checked={goal.includeInBudget}
-                              onCheckedChange={v => toggleMutation.mutate({ goalId: goal.id, value: v })}
-                              disabled={toggleMutation.isPending}
-                              className="data-[state=checked]:bg-teal-500"
-                            />
-                          </div>
-                        </div>
+                        <span className="text-sm font-medium text-teal-700 flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          ${fmt(weeklyNeeded)}/wk needed
+                        </span>
                       )}
                     </div>
                   )}
