@@ -4426,12 +4426,14 @@ export function BudgetWizard({
                               {!hasEdits && generatedWeek && activeCloudBudgetId && (
                                 <Button
                                   size="sm"
-                                  className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  onClick={() => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)}
+                                  className={`h-8 text-xs gap-1.5 text-white transition-colors ${cloudSaveMutation.isSuccess ? "bg-emerald-500 hover:bg-emerald-500 cursor-default" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                                  onClick={() => { if (!cloudSaveMutation.isSuccess) handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined); }}
                                   disabled={cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
                                 >
                                   {cloudSaveMutation.isPending ? (
                                     <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                                  ) : cloudSaveMutation.isSuccess ? (
+                                    <><Check className="w-3.5 h-3.5" /> Saved</>
                                   ) : (
                                     <><Save className="w-3.5 h-3.5" /> Save</>
                                   )}
