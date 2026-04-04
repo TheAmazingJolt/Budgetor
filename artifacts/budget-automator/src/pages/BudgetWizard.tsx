@@ -4423,9 +4423,38 @@ export function BudgetWizard({
                                   <Save className="w-3.5 h-3.5" /> {cloudSaveMutation.isPending ? "Saving…" : "Save changes"}
                                 </Button>
                               )}
+                              {!hasEdits && generatedWeek && activeCloudBudgetId && (
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  onClick={() => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)}
+                                  disabled={cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
+                                >
+                                  {cloudSaveMutation.isPending ? (
+                                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                                  ) : (
+                                    <><Save className="w-3.5 h-3.5" /> Save</>
+                                  )}
+                                </Button>
+                              )}
                               {hasEdits && (
                                 <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setWeekEdits({})}>
                                   Reset edits
+                                </Button>
+                              )}
+                              {generatedBlob && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5"
+                                  onClick={() => {
+                                    setExportNameInput(buildDefaultXlsxFilename().replace(/\.xlsx$/, ""));
+                                    setPendingExportType("xlsx");
+                                  }}
+                                  disabled={isRegeneratingForExport}
+                                  title="Download spreadsheet"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
                                 </Button>
                               )}
                             </>
@@ -4738,22 +4767,6 @@ export function BudgetWizard({
                       );
                     })()}
 
-                    {step2Tab === "budget" && !generatedWeek && hasHistory && (
-                      <div className="flex justify-center pt-2">
-                        <Button
-                          size="lg"
-                          onClick={() => setIsGenerateDateDialogOpen(true)}
-                          disabled={!canGenerate}
-                          className="rounded-2xl px-8 bg-gradient-to-r from-primary to-emerald-600 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                        >
-                          {generateMutation.isPending ? (
-                            <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Generating…</>
-                          ) : (
-                            <><Plus className="w-5 h-5 mr-2" /> Generate next week(s)</>
-                          )}
-                        </Button>
-                      </div>
-                    )}
                   </>
                 );
               })()}
@@ -4941,25 +4954,6 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {generatedBlob && (
-                  <Button
-                    size="lg"
-                    onClick={() => {
-                      setExportNameInput(buildDefaultXlsxFilename().replace(/\.xlsx$/, ""));
-                      setPendingExportType("xlsx");
-                    }}
-                    disabled={!generatedBlob || isRegeneratingForExport}
-                    className={`flex-1 h-14 text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all ${
-                      inputMode === "google" || inputMode === "excel" || inputMode === "cloud" || googleAuthenticated ? "bg-gradient-to-r from-slate-600 to-slate-500" : "bg-gradient-to-r from-primary to-emerald-600"
-                    }`}
-                  >
-                    {isRegeneratingForExport ? (
-                      <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Regenerating…</>
-                    ) : (
-                      <><Download className="w-5 h-5 mr-2" /> Download Spreadsheet</>
-                    )}
-                  </Button>
-                )}
 
               </div>
               )}
@@ -4985,18 +4979,6 @@ export function BudgetWizard({
                   </Button>
                 )}
 
-                {activeLinkedSheet && (
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={handleManualSheetSync}
-                    disabled={isSyncingToSheet}
-                    className="sm:w-auto h-14 rounded-2xl border-border/60"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-1 ${isSyncingToSheet ? "animate-spin" : ""}`} />
-                    {isSyncingToSheet ? "Syncing…" : `Sync to ${activeLinkedSheet.type === "google" ? "Sheets" : "Excel"}`}
-                  </Button>
-                )}
 
                 {(inputMode === "google" && selectedSheetId) || (inputMode === "excel" && selectedExcelFileId) ? (
                   <Button
