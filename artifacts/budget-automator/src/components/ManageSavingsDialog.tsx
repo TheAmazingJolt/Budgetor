@@ -105,7 +105,7 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged }: ManageSavingsD
   });
 
   const createMutation = useMutation({
-    mutationFn: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) =>
+    mutationFn: (payload: { name: string; targetAmount: number; targetDate: string; note?: string; includeInBudget: boolean }) =>
       apiFetch(`/api/budgets/${budgetId}/goals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -183,6 +183,7 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged }: ManageSavingsD
       targetAmount: parseFloat(form.targetAmount),
       targetDate: form.targetDate,
       note: form.note.trim() || undefined,
+      includeInBudget: true,
     });
   }
 

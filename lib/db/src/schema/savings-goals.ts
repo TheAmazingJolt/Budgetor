@@ -10,7 +10,7 @@ export const savingsGoalsTable = pgTable("savings_goals", {
   targetAmount: numeric("target_amount", { precision: 12, scale: 2 }).notNull(),
   targetDate: text("target_date").notNull(),
   note: text("note"),
-  includeInBudget: boolean("include_in_budget").notNull().default(false),
+  includeInBudget: boolean("include_in_budget").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

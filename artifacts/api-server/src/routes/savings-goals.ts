@@ -81,13 +81,13 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
       return;
     }
 
-    await pool.query(`ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT false`);
+    await pool.query(`ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT true`);
 
     const { rows: [row] } = await pool.query(
       `INSERT INTO savings_goals (user_id, budget_id, name, target_amount, target_date, note, include_in_budget)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, user_id, budget_id, name, target_amount, target_date, note, include_in_budget, created_at, updated_at`,
-      [userId, budgetId, name.trim(), targetAmount.toFixed(2), targetDate.trim(), note?.trim() || null, includeInBudget === true]
+      [userId, budgetId, name.trim(), targetAmount.toFixed(2), targetDate.trim(), note?.trim() || null, includeInBudget !== false]
     );
 
     res.status(201).json({
