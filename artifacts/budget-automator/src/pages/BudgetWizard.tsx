@@ -2432,12 +2432,22 @@ export function BudgetWizard({
       goalCutoffMap.set(gb.name, entry); // also register the full "[→ date]" form
     }
 
-    // Build a map from debt-linked bill name → payoffDate so we can filter bills that
-    // appear in cloud-stored weeks past their computed payoff date.
+    // Build two complementary debt-cutoff lookup tables so we can filter debt-linked
+    // bill items that appear in cloud-stored weeks past their computed payoff date
+    // regardless of whether the item was saved with the current bill name or an older
+    // legacy name:
+    //   debtIdCutoffMap  – keyed by sourceDebtId (the debt's DB id).  Handles items
+    //                      that carry a sourceDebtId field, even if the bill has since
+    //                      been renamed (e.g. after a debt-linked bill name change).
+    //   debtBillCutoffMap – keyed by current bill name.  Fallback for items that lack
+    //                       sourceDebtId but whose name still matches the current bill.
+    const debtIdCutoffMap = new Map<string, Date>();
     const debtBillCutoffMap = new Map<string, Date>();
     for (const b of bills) {
-      if ((b as any).sourceDebtId && b.payoffDate) {
-        debtBillCutoffMap.set(b.name, new Date(b.payoffDate + "T00:00:00"));
+      if (b.sourceDebtId && b.payoffDate) {
+        const cutoff = new Date(b.payoffDate + "T00:00:00");
+        debtIdCutoffMap.set(b.sourceDebtId, cutoff);
+        debtBillCutoffMap.set(b.name, cutoff);
       }
     }
 
@@ -2457,7 +2467,10 @@ export function BudgetWizard({
             if (weekStart && weekStart >= goalInfo.cutoffDate) return [];
             return [{ ...item, name: goalInfo.currentName }];
           }
-          const debtCutoff = debtBillCutoffMap.get(item.name);
+          // Resolve debt cutoff: prefer sourceDebtId lookup (handles renamed bills),
+          // then fall back to current-name lookup for items without sourceDebtId.
+          const debtCutoff = (item.sourceDebtId ? debtIdCutoffMap.get(item.sourceDebtId) : undefined)
+            ?? debtBillCutoffMap.get(item.name);
           if (debtCutoff && weekStart && weekStart >= debtCutoff) return [];
           return [item];
         });
