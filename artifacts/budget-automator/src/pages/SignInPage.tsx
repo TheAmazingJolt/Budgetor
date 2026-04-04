@@ -291,23 +291,6 @@ export function SignInPage({
         </button>
       </section>
 
-      {/* Stats bar */}
-      <section className="bg-slate-50 border-y border-border/30 px-4 sm:px-8 py-8">
-        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
-          {[
-            { value: "10,000+", label: "Active budgeters" },
-            { value: "$2.4M", label: "Debt tracked & paid off" },
-            { value: "4.8★", label: "Average rating" },
-            { value: "5 min", label: "Setup time" },
-          ].map((stat) => (
-            <div key={stat.label}>
-              <div className="text-2xl sm:text-3xl font-extrabold text-foreground">{stat.value}</div>
-              <div className="text-xs sm:text-sm text-muted-foreground mt-1">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Features */}
       <section className="px-4 sm:px-8 py-20 sm:py-28 max-w-5xl mx-auto">
         <div className="text-center mb-14">
