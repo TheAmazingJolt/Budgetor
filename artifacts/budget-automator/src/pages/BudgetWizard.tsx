@@ -800,21 +800,11 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins, debtIdToBillName: syncDebtMap } = bgSyncRef.current;
+      const { activeLinkedSheet, buildWriteWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+      if (!activeLinkedSheet || !buildWriteWeeks) return;
+      const weeks = buildWriteWeeks();
+      if (!weeks?.length) return;
       const allBillsForSync = [...bills, ...savingsGoalBills];
-      if (!activeLinkedSheet) return;
-      const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
-      if (!rawWeeks?.length) return;
-      const colorLookup = buildBillColorLookup(bills);
-      const weeks = applyCheckinMarks(
-        rawWeeks.map((w: any) => ({
-          ...w,
-          weekLabel: w.weekLabel ?? w.label,
-          bills: injectBillColors(w.bills ?? w.items ?? [], colorLookup),
-        })),
-        weeklyCheckins,
-        syncDebtMap,
-      );
       const writePayload = {
         weeks,
         startCol: 0,
@@ -842,24 +832,18 @@ export function BudgetWizard({
   }, [sheetWriteMutation, excelWriteMutation, toast]);
 
   const handleManualSheetSync = useCallback(async () => {
-    const { activeLinkedSheet, generatedWeek, cloudExistingWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId, weeklyCheckins, debtIdToBillName: syncDebtMap } = bgSyncRef.current;
+    const { activeLinkedSheet, buildWriteWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
     if (!activeLinkedSheet) return;
-    const rawWeeks: any[] = generatedWeek ? generatedWeek.weeks : cloudExistingWeeks;
-    if (!rawWeeks?.length) {
+    if (!buildWriteWeeks) {
+      toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
+      return;
+    }
+    const weeks = buildWriteWeeks();
+    if (!weeks?.length) {
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
     }
     const allBillsForSync = [...bills, ...savingsGoalBills];
-    const colorLookup = buildBillColorLookup(bills);
-    const weeks = applyCheckinMarks(
-      rawWeeks.map((w: any) => ({
-        ...w,
-        weekLabel: w.weekLabel ?? w.label,
-        bills: injectBillColors(w.bills ?? w.items ?? [], colorLookup),
-      })),
-      weeklyCheckins,
-      syncDebtMap,
-    );
     const writePayload = {
       weeks,
       startCol: 0,
@@ -2434,16 +2418,54 @@ export function BudgetWizard({
       const baseName = gb.name.replace(/\s*\[→[^\]]*\]$/, "");
       if (baseName !== gb.name) colorLookup.set(baseName, goalColor);
     }
+
+    // Build a map from savings goal base name → { cutoffDate, currentName } so we can
+    // re-apply payoff cutoffs and update names on cloud-stored week items that were saved
+    // before the "[→ date]" suffix feature existed.
+    const goalCutoffMap = new Map<string, { cutoffDate: Date; currentName: string }>();
+    for (const gb of goalBills) {
+      if (!gb.payoffDate) continue;
+      const cutoffDate = new Date(gb.payoffDate + "T00:00:00");
+      const baseName = gb.name.replace(/\s*\[→[^\]]*\]$/, "");
+      const entry = { cutoffDate, currentName: gb.name };
+      goalCutoffMap.set(baseName, entry);
+      goalCutoffMap.set(gb.name, entry); // also register the full "[→ date]" form
+    }
+
+    // Build a map from debt-linked bill name → payoffDate so we can filter bills that
+    // appear in cloud-stored weeks past their computed payoff date.
+    const debtBillCutoffMap = new Map<string, Date>();
+    for (const b of bills) {
+      if ((b as any).sourceDebtId && b.payoffDate) {
+        debtBillCutoffMap.set(b.name, new Date(b.payoffDate + "T00:00:00"));
+      }
+    }
+
     const source = getExistingWeeks()
       .filter((w: any) => (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
       .map((w: any) => {
         const e = weekEdits[w.label];
-        const items = injectBillColors(e?.items ?? w.items ?? [], colorLookup);
+        const dates = parseLabelDates(w.label);
+        const weekStart = dates?.start ?? null;
+        // Re-apply savings goal and debt bill payoff cutoffs to cloud-stored items.
+        // Items stored before the "[→ date]" suffix feature get their names updated;
+        // items in weeks on/after their cutoff date are removed.
+        const rawItems: any[] = (e?.items ?? w.items ?? []).flatMap((item: any) => {
+          const baseName = (item.name as string).replace(/\s*\[→[^\]]*\]$/, "");
+          const goalInfo = goalCutoffMap.get(baseName) ?? goalCutoffMap.get(item.name);
+          if (goalInfo) {
+            if (weekStart && weekStart >= goalInfo.cutoffDate) return [];
+            return [{ ...item, name: goalInfo.currentName }];
+          }
+          const debtCutoff = debtBillCutoffMap.get(item.name);
+          if (debtCutoff && weekStart && weekStart >= debtCutoff) return [];
+          return [item];
+        });
+        const items = injectBillColors(rawItems, colorLookup);
         const paycheck = e?.paycheck ?? w.paycheck ?? 0;
         const ob = e?.openingBalance ?? w.openingBalance ?? 0;
         const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
         const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : (w.remaining ?? 0);
-        const dates = parseLabelDates(w.label);
         return {
           weekLabel: w.label,
           startDate: dates?.start.toISOString().split("T")[0] ?? "",
@@ -2455,8 +2477,13 @@ export function BudgetWizard({
           closingBalance: closing,
         };
       });
+
+    // Deduplicate: exclude generated weeks whose label is already covered by a cloud-stored
+    // week. This ensures the stored paycheck/opening balance takes priority for overlapping
+    // weeks (preventing the UI paycheck field value from overwriting the stored one).
+    const sourceLabels = new Set(source.map(w => w.weekLabel));
     const gen = (generatedWeek?.weeks ?? [])
-      .filter((w) => !weekEdits[w.weekLabel]?.deleted)
+      .filter((w) => !weekEdits[w.weekLabel]?.deleted && !sourceLabels.has(w.weekLabel))
       .map((w) => {
         const e = weekEdits[w.weekLabel];
         const items = injectBillColors(e?.items ?? w.bills, colorLookup);
