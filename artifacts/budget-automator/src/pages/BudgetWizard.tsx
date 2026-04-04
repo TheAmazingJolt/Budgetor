@@ -225,6 +225,20 @@ function debtTypeLeftBar(type: string): string {
   return "bg-amber-500";
 }
 
+function capPaymentsRemaining(paymentsRemaining: number, balance: number, minimumPayment: number, interestRate: number | null | undefined, freq: number): number {
+  const annualRate = interestRate ?? 0;
+  let maxPeriods: number;
+  if (annualRate > 0) {
+    const periodicRate = annualRate / 100 / freq;
+    if (minimumPayment <= balance * periodicRate) return paymentsRemaining;
+    maxPeriods = Math.ceil(-Math.log(1 - (balance * periodicRate) / minimumPayment) / Math.log(1 + periodicRate));
+    if (!isFinite(maxPeriods) || maxPeriods <= 0) return paymentsRemaining;
+  } else {
+    maxPeriods = Math.ceil(balance / minimumPayment);
+  }
+  return Math.min(paymentsRemaining, maxPeriods);
+}
+
 function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: number | null, paymentFrequency?: string | null, paymentsRemaining?: number | null): string | null {
   if (balance <= 0 || minimumPayment <= 0) return null;
   const isWeekly = paymentFrequency === "weekly";
@@ -232,10 +246,12 @@ function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: 
   const payoffDate = new Date();
 
   if (paymentsRemaining != null && paymentsRemaining > 0) {
-    if (isWeekly) payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 7);
-    else if (isBiweekly) payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 14);
-    else payoffDate.setMonth(payoffDate.getMonth() + paymentsRemaining);
-    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })} (${paymentsRemaining} payment${paymentsRemaining === 1 ? "" : "s"} left)`;
+    const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
+    const effective = capPaymentsRemaining(paymentsRemaining, balance, minimumPayment, interestRate, freq);
+    if (isWeekly) payoffDate.setDate(payoffDate.getDate() + effective * 7);
+    else if (isBiweekly) payoffDate.setDate(payoffDate.getDate() + effective * 14);
+    else payoffDate.setMonth(payoffDate.getMonth() + effective);
+    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })} (${effective} payment${effective === 1 ? "" : "s"} left)`;
   }
 
   const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
@@ -271,14 +287,18 @@ function calcDebtPayoffDate(
   const isBiweekly = paymentFrequency === "biweekly";
   const payoffDate = new Date();
 
-  // When paymentsRemaining is provided, derive the payoff date from count × frequency directly
+  // When paymentsRemaining is provided, derive the payoff date from count × frequency directly.
+  // Cap it by the balance-based count so stale stored values don't push the cutoff further
+  // out than the current balance warrants.
   if (paymentsRemaining != null && paymentsRemaining > 0) {
+    const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
+    const effective = capPaymentsRemaining(paymentsRemaining, balance, minimumPayment, interestRate, freq);
     if (isWeekly) {
-      payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 7);
+      payoffDate.setDate(payoffDate.getDate() + effective * 7);
     } else if (isBiweekly) {
-      payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 14);
+      payoffDate.setDate(payoffDate.getDate() + effective * 14);
     } else {
-      payoffDate.setMonth(payoffDate.getMonth() + paymentsRemaining);
+      payoffDate.setMonth(payoffDate.getMonth() + effective);
     }
     return payoffDate.toISOString().split("T")[0];
   }
@@ -2792,6 +2812,12 @@ export function BudgetWizard({
         bills: allBillsForSync,
       });
       const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
+      // Build a paycheck lookup from currently stored weeks so that weeks which already
+      // have a valid paycheck (>0) keep that value even if paycheckAmount in the UI is $0.
+      const storedPaycheckMap = new Map<string, number>();
+      for (const sw of getExistingWeeks()) {
+        if ((sw.paycheck ?? 0) > 0) storedPaycheckMap.set(sw.label, sw.paycheck);
+      }
       const historicalWeeks = getExistingWeeks()
         .filter((w: any) => !generatedLabels.has(w.label) && (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
         .map((w: any) => {
@@ -2818,12 +2844,16 @@ export function BudgetWizard({
         .map((w: any) => {
           const e = weekEdits[w.weekLabel];
           const items = injectBillColors(e?.items ?? w.bills, colorLookup);
-          const paycheck = e?.paycheck ?? w.paycheck;
+          // Prefer the edit override, then any stored paycheck for this week label
+          // (preserves $638.15 etc. when paycheckAmount in the UI is temporarily $0),
+          // then fall back to the freshly generated value.
+          const storedPaycheck = storedPaycheckMap.get(w.weekLabel);
+          const paycheck = e?.paycheck ?? storedPaycheck ?? w.paycheck;
           const ob = e?.openingBalance ?? w.openingBalance;
           const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
-          const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items)
-            ? (ob + paycheck + totalBills)
-            : w.closingBalance;
+          // Recalculate closing when any override was applied (edit, stored paycheck, or items).
+          const needsRecalc = e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items || (storedPaycheck !== undefined && storedPaycheck !== w.paycheck);
+          const closing = needsRecalc ? (ob + paycheck + totalBills) : w.closingBalance;
           return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
         });
       const weeks = applyCheckinMarks([...historicalWeeks, ...generatedWeeks], checkinsQuery.data?.checkins ?? [], debtIdToBillName);
