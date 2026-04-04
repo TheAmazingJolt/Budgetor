@@ -2812,11 +2812,11 @@ export function BudgetWizard({
         bills: allBillsForSync,
       });
       const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
-      // Build a paycheck lookup from currently stored weeks so that weeks which already
-      // have a valid paycheck (>0) keep that value even if paycheckAmount in the UI is $0.
+      // Build a paycheck lookup from currently stored weeks (including explicit $0 values)
+      // so we can selectively restore them when the generated paycheck is $0.
       const storedPaycheckMap = new Map<string, number>();
       for (const sw of getExistingWeeks()) {
-        if ((sw.paycheck ?? 0) > 0) storedPaycheckMap.set(sw.label, sw.paycheck);
+        if (sw.paycheck != null) storedPaycheckMap.set(sw.label, sw.paycheck);
       }
       const historicalWeeks = getExistingWeeks()
         .filter((w: any) => !generatedLabels.has(w.label) && (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
@@ -2844,15 +2844,18 @@ export function BudgetWizard({
         .map((w: any) => {
           const e = weekEdits[w.weekLabel];
           const items = injectBillColors(e?.items ?? w.bills, colorLookup);
-          // Prefer the edit override, then any stored paycheck for this week label
-          // (preserves $638.15 etc. when paycheckAmount in the UI is temporarily $0),
-          // then fall back to the freshly generated value.
+          // Prefer the edit override, then — only when the generated paycheck is $0 —
+          // restore any explicitly stored paycheck for this week label (preserves $638.15
+          // etc. when paycheckAmount in the UI is temporarily $0 after session reload).
+          // When the generated paycheck is non-zero the user has deliberately set it, so
+          // we honour the freshly generated value regardless of what was stored.
           const storedPaycheck = storedPaycheckMap.get(w.weekLabel);
-          const paycheck = e?.paycheck ?? storedPaycheck ?? w.paycheck;
+          const paycheck = e?.paycheck ?? (w.paycheck === 0 && storedPaycheck != null ? storedPaycheck : w.paycheck);
           const ob = e?.openingBalance ?? w.openingBalance;
           const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
           // Recalculate closing when any override was applied (edit, stored paycheck, or items).
-          const needsRecalc = e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items || (storedPaycheck !== undefined && storedPaycheck !== w.paycheck);
+          const restoredPaycheck = w.paycheck === 0 && storedPaycheck != null && storedPaycheck !== 0;
+          const needsRecalc = e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items || restoredPaycheck;
           const closing = needsRecalc ? (ob + paycheck + totalBills) : w.closingBalance;
           return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
         });
