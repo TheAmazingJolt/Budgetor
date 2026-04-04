@@ -216,6 +216,11 @@ export interface Debt {
   createdAt?: string | null;
   /** Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable budget period. */
   paymentFrequency?: DebtPaymentFrequency;
+  /**
+   * Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance/rate formula.
+   * @minimum 1
+   */
+  paymentsRemaining?: number | null;
 }
 
 export type SavedBudgetSettings = { [key: string]: unknown };

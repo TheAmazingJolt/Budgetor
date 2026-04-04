@@ -225,13 +225,21 @@ function debtTypeLeftBar(type: string): string {
   return "bg-amber-500";
 }
 
-function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: number | null, paymentFrequency?: string | null): string | null {
+function getPayoffLabel(balance: number, minimumPayment: number, interestRate?: number | null, paymentFrequency?: string | null, paymentsRemaining?: number | null): string | null {
   if (balance <= 0 || minimumPayment <= 0) return null;
   const isWeekly = paymentFrequency === "weekly";
   const isBiweekly = paymentFrequency === "biweekly";
+  const payoffDate = new Date();
+
+  if (paymentsRemaining != null && paymentsRemaining > 0) {
+    if (isWeekly) payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 7);
+    else if (isBiweekly) payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 14);
+    else payoffDate.setMonth(payoffDate.getMonth() + paymentsRemaining);
+    return `Paid off ~${payoffDate.toLocaleString("en-US", { month: "long", year: "numeric" })} (${paymentsRemaining} payment${paymentsRemaining === 1 ? "" : "s"} left)`;
+  }
+
   const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
   const annualRate = interestRate ?? 0;
-  const payoffDate = new Date();
   if (annualRate > 0) {
     const periodicRate = annualRate / 100 / freq;
     const periodicInterest = balance * periodicRate;
@@ -255,11 +263,26 @@ function calcDebtPayoffDate(
   balance: number,
   minimumPayment: number,
   interestRate?: number | null,
-  paymentFrequency?: string | null
+  paymentFrequency?: string | null,
+  paymentsRemaining?: number | null
 ): string | null {
   if (!balance || balance <= 0 || !minimumPayment || minimumPayment <= 0) return null;
   const isWeekly = paymentFrequency === "weekly";
   const isBiweekly = paymentFrequency === "biweekly";
+  const payoffDate = new Date();
+
+  // When paymentsRemaining is provided, derive the payoff date from count × frequency directly
+  if (paymentsRemaining != null && paymentsRemaining > 0) {
+    if (isWeekly) {
+      payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 7);
+    } else if (isBiweekly) {
+      payoffDate.setDate(payoffDate.getDate() + paymentsRemaining * 14);
+    } else {
+      payoffDate.setMonth(payoffDate.getMonth() + paymentsRemaining);
+    }
+    return payoffDate.toISOString().split("T")[0];
+  }
+
   const freq = isWeekly ? 52 : isBiweekly ? 26 : 12;
   const annualRate = interestRate ?? 0;
   let periods: number;
@@ -273,7 +296,6 @@ function calcDebtPayoffDate(
     periods = Math.ceil(balance / minimumPayment);
   }
   if (periods <= 0) return null;
-  const payoffDate = new Date();
   if (isWeekly) {
     payoffDate.setDate(payoffDate.getDate() + periods * 7);
   } else if (isBiweekly) {
@@ -382,9 +404,18 @@ function fmtGoalTargetDate(isoDate: string): string {
   return `${GOAL_MONTH_SHORT[(m - 1) % 12]} ${d}`;
 }
 
+type ExistingWeekLike = {
+  label?: string;
+  weekLabel?: string;
+  items?: { name: string; amount: number }[];
+  bills?: { name: string; amount: number }[];
+};
+
 function computeSavingsGoalBills(
   goals: Array<{ id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }>,
-  contributions: Array<{ billName: string; amount: number }>,
+  contributions: Array<{ billName: string; amount: number; note?: string | null }>,
+  existingWeeks?: ExistingWeekLike[],
+  checkins?: Array<{ weekLabel: string; itemName: string; itemType?: string; actualAmount: number }>,
 ): Bill[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -393,9 +424,50 @@ function computeSavingsGoalBills(
     if (!g.includeInBudget) continue;
     const targetDate = new Date(g.targetDate + "T00:00:00");
     if (targetDate <= today) continue;
-    const savedSoFar = contributions
+
+    // Contributions already include goal check-in amounts (the API writes check-ins
+    // to savings_contributions with note="checkin:<weekLabel>"). So summing all
+    // contributions for this goal gives us manual + check-in amounts together.
+    const contributionSaved = contributions
       .filter(c => c.billName === g.name)
       .reduce((sum, c) => sum + c.amount, 0);
+
+    // Build a set of week labels that already have a contribution record (so we don't
+    // double-count their planned budget amounts).
+    const weekLabelsWithContrib = new Set(
+      contributions
+        .filter(c => c.billName === g.name && typeof c.note === "string" && c.note.startsWith("checkin:"))
+        .map(c => c.note!.replace(/^checkin:/, ""))
+    );
+
+    // Scan past budget weeks that do NOT have a check-in contribution yet.
+    // These weeks have planned amounts that the user has not formally checked in on,
+    // but the budget row indicates the money was set aside.
+    let uncheckedWeekSaved = 0;
+    if (existingWeeks) {
+      const goalBillNamePattern = `${g.name} [→`;
+      for (const w of existingWeeks) {
+        const weekLabel = w.weekLabel ?? w.label ?? "";
+        const weekDates = parseLabelDates(weekLabel);
+        if (!weekDates || weekDates.end >= today) continue;
+        // Skip this week if a check-in contribution already accounts for it
+        if (weekLabelsWithContrib.has(weekLabel)) continue;
+        // Also skip if there's an explicit goal check-in in checkins list
+        const hasGoalCheckin = checkins?.some(
+          c => c.weekLabel === weekLabel && c.itemType === "goal" &&
+            (c.itemName === g.name || c.itemName.startsWith(goalBillNamePattern)),
+        );
+        if (hasGoalCheckin) continue;
+        const items = w.items ?? w.bills ?? [];
+        for (const item of items) {
+          if (item.name === g.name || item.name.startsWith(goalBillNamePattern)) {
+            uncheckedWeekSaved += Math.abs(item.amount);
+          }
+        }
+      }
+    }
+
+    const savedSoFar = contributionSaved + uncheckedWeekSaved;
     const remaining = Math.max(0, g.targetAmount - savedSoFar);
     if (remaining <= 0) continue;
     const msPerWeek = 7 * 24 * 60 * 60 * 1000;
@@ -417,7 +489,9 @@ function computeSavingsGoalBills(
 
 function computeGoalBillsForCheckin(
   goals: Array<{ id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }>,
-  contributions: Array<{ billName: string; amount: number }>,
+  contributions: Array<{ billName: string; amount: number; note?: string | null }>,
+  existingWeeks?: ExistingWeekLike[],
+  checkins?: Array<{ weekLabel: string; itemName: string; itemType?: string; actualAmount: number }>,
 ): Bill[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -425,9 +499,42 @@ function computeGoalBillsForCheckin(
   for (const g of goals) {
     const targetDate = new Date(g.targetDate + "T00:00:00");
     if (targetDate <= today) continue;
-    const savedSoFar = contributions
+
+    // Contributions already include goal check-in amounts (API writes checkins to
+    // savings_contributions with note="checkin:<weekLabel>").
+    const contributionSaved = contributions
       .filter(c => c.billName === g.name)
       .reduce((sum, c) => sum + c.amount, 0);
+
+    const weekLabelsWithContrib = new Set(
+      contributions
+        .filter(c => c.billName === g.name && typeof c.note === "string" && c.note.startsWith("checkin:"))
+        .map(c => c.note!.replace(/^checkin:/, ""))
+    );
+
+    let uncheckedWeekSaved = 0;
+    if (existingWeeks) {
+      const goalBillNamePattern = `${g.name} [→`;
+      for (const w of existingWeeks) {
+        const weekLabel = w.weekLabel ?? w.label ?? "";
+        const weekDates = parseLabelDates(weekLabel);
+        if (!weekDates || weekDates.end >= today) continue;
+        if (weekLabelsWithContrib.has(weekLabel)) continue;
+        const hasGoalCheckin = checkins?.some(
+          c => c.weekLabel === weekLabel && c.itemType === "goal" &&
+            (c.itemName === g.name || c.itemName.startsWith(goalBillNamePattern)),
+        );
+        if (hasGoalCheckin) continue;
+        const items = w.items ?? w.bills ?? [];
+        for (const item of items) {
+          if (item.name === g.name || item.name.startsWith(goalBillNamePattern)) {
+            uncheckedWeekSaved += Math.abs(item.amount);
+          }
+        }
+      }
+    }
+
+    const savedSoFar = contributionSaved + uncheckedWeekSaved;
     const remaining = Math.max(0, g.targetAmount - savedSoFar);
     if (remaining <= 0) continue;
     const msPerWeek = 7 * 24 * 60 * 60 * 1000;
@@ -888,14 +995,26 @@ export function BudgetWizard({
     setDebts(serverDebts);
     prevDebtsRef.current = JSON.stringify(serverDebts);
     debtsLoadedForUserRef.current = currentUser.id;
-    // If bills are already loaded, auto-add bills for any debt that doesn't have one yet
+    // If bills are already loaded, refresh payoffDate on existing debt bills and auto-add missing ones
     if (billsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
       debtAutoAddDoneRef.current = currentUser.id;
+      const debtMap = new Map(serverDebts.map(d => [d.id, d]));
       setBills(prev => {
         const existingDebtIds = new Set(prev.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
         const missing = serverDebts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
-        if (missing.length === 0) return prev;
-        return [...prev, ...missing.map(d => ({
+        // Refresh payoffDate and amount for existing debt-linked bills
+        const refreshed = prev.map(b => {
+          if (!b.sourceDebtId) return b;
+          const d = debtMap.get(b.sourceDebtId);
+          if (!d) return b;
+          return {
+            ...b,
+            amount: -Math.abs(d.minimumPayment),
+            payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          };
+        });
+        if (missing.length === 0) return refreshed;
+        return [...refreshed, ...missing.map(d => ({
           name: `${d.name} (min payment)`,
           amount: -Math.abs(d.minimumPayment),
           dayOfMonth: debtBillDayOfMonth(d),
@@ -903,7 +1022,7 @@ export function BudgetWizard({
           type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
-          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
         }))];
       });
       setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill).map(d => d.id)));
@@ -963,11 +1082,23 @@ export function BudgetWizard({
       serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
     );
     setDebtBillImports(billedIds);
-    // If debts are already loaded, auto-add bills for any debt that doesn't have one yet
+    // If debts are already loaded, refresh payoffDate on existing debt bills and auto-add missing ones
     if (debtsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
       debtAutoAddDoneRef.current = currentUser.id;
+      const debtMap = new Map(debts.map(d => [d.id, d]));
       const existingDebtIds = new Set(serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
       const missing = debts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
+      // Refresh payoffDate and amount for existing debt-linked bills
+      const refreshed = serverBills.map(b => {
+        if (!b.sourceDebtId) return b;
+        const d = debtMap.get(b.sourceDebtId);
+        if (!d) return b;
+        return {
+          ...b,
+          amount: -Math.abs(d.minimumPayment),
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+        };
+      });
       if (missing.length > 0) {
         const newDebtBills = missing.map(d => ({
           name: `${d.name} (min payment)`,
@@ -977,9 +1108,11 @@ export function BudgetWizard({
           type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
-          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
         }));
-        setBills([...serverBills, ...newDebtBills]);
+        setBills([...refreshed, ...newDebtBills]);
+      } else {
+        setBills(refreshed);
       }
       setDebtBillImports(new Set(debts.filter(d => !d.excludeFromBill).map(d => d.id)));
     }
@@ -1072,6 +1205,8 @@ export function BudgetWizard({
   bgSyncRef.current.savingsGoalBills = computeSavingsGoalBills(
     budgetGoalsQuery.data?.goals ?? [],
     budgetContributionsQuery.data?.contributions ?? [],
+    cloudExistingWeeks,
+    checkinsQuery.data?.checkins,
   );
 
   useEffect(() => {
@@ -1129,6 +1264,8 @@ export function BudgetWizard({
     const savingsGoalBillsList = computeGoalBillsForCheckin(
       budgetGoalsQuery.data?.goals ?? [],
       budgetContributionsQuery.data?.contributions ?? [],
+      cloudExistingWeeks,
+      checkinsQuery.data?.checkins,
     );
     const debtBillsList = bills.filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"));
     if (balancedBillsList.length === 0 && savingsGoalBillsList.length === 0 && debtBillsList.length === 0) return;
@@ -1456,7 +1593,7 @@ export function BudgetWizard({
         type: debtBillType(d),
         color: "red",
         sourceDebtId: d.id,
-        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
       }));
     if (newDebtBills.length > 0) {
       setBills(prev => [...prev, ...newDebtBills]);
@@ -1806,7 +1943,7 @@ export function BudgetWizard({
     const refreshedDebts: Debt[] = restoredDebts.map((d: Debt) => {
       const acct = accountDebtMap.get(d.id);
       if (!acct) return d;
-      return { ...d, balance: acct.balance, minimumPayment: acct.minimumPayment, interestRate: acct.interestRate };
+      return { ...d, balance: acct.balance, minimumPayment: acct.minimumPayment, interestRate: acct.interestRate, paymentsRemaining: acct.paymentsRemaining };
     });
 
     // Update any already-saved debt bills to match refreshed minimum payment / payoff date.
@@ -1817,7 +1954,7 @@ export function BudgetWizard({
       return {
         ...bill,
         amount: -Math.abs(refreshed.minimumPayment),
-        payoffDate: calcDebtPayoffDate(refreshed.balance, refreshed.minimumPayment, refreshed.interestRate, refreshed.paymentFrequency),
+        payoffDate: calcDebtPayoffDate(refreshed.balance, refreshed.minimumPayment, refreshed.interestRate, refreshed.paymentFrequency, refreshed.paymentsRemaining),
       };
     });
 
@@ -1833,7 +1970,7 @@ export function BudgetWizard({
         type: debtBillType(d),
         color: "red",
         sourceDebtId: d.id,
-        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
       }));
       billsToSet = [...billsToSet, ...autoBills];
     }
@@ -2168,6 +2305,8 @@ export function BudgetWizard({
     const savingsGoalBills = computeSavingsGoalBills(
       budgetGoalsQuery.data?.goals ?? [],
       budgetContributionsQuery.data?.contributions ?? [],
+      cloudExistingWeeks,
+      checkinsQuery.data?.checkins,
     );
     const allBillsForGeneration = [...rawBills, ...savingsGoalBills];
 
@@ -2286,6 +2425,8 @@ export function BudgetWizard({
     const goalBills = computeSavingsGoalBills(
       budgetGoalsQuery.data?.goals ?? [],
       budgetContributionsQuery.data?.contributions ?? [],
+      cloudExistingWeeks,
+      checkinsQuery.data?.checkins,
     );
     for (const gb of goalBills) {
       const goalColor = (gb as any).color ?? "teal";
@@ -2590,6 +2731,8 @@ export function BudgetWizard({
       const savingsBillsForSync = computeSavingsGoalBills(
         budgetGoalsQuery.data?.goals ?? [],
         budgetContributionsQuery.data?.contributions ?? [],
+        cloudExistingWeeks,
+        checkinsQuery.data?.checkins,
       );
       const allBillsForSync = [...bills, ...savingsBillsForSync];
       const colorLookup = buildBillColorLookup(allBillsForSync);
@@ -2768,7 +2911,7 @@ export function BudgetWizard({
           type: debtBillType(debt),
           color: "red",
           sourceDebtId: debtId,
-          payoffDate: calcDebtPayoffDate(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency),
+          payoffDate: calcDebtPayoffDate(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency, debt.paymentsRemaining),
         });
       }
     } else {
@@ -2795,7 +2938,7 @@ export function BudgetWizard({
           type: debtBillType(d),
           color: "red",
           sourceDebtId: d.id,
-          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency),
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
         }));
       if (newDebtBills.length > 0) {
         setBills([...bills, ...newDebtBills]);
@@ -4804,7 +4947,7 @@ export function BudgetWizard({
                     ...bills[linkedBillIdx],
                     type: debtBillType(data),
                     dayOfMonth: debtBillDayOfMonth(data),
-                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency),
+                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
                   });
                 }
                 triggerBackgroundSheetSync();
@@ -4825,7 +4968,7 @@ export function BudgetWizard({
                     type: debtBillType(data),
                     color: "red",
                     sourceDebtId: data.id,
-                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency),
+                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
                   });
                 }
               }
@@ -5231,7 +5374,7 @@ export function BudgetWizard({
                           );
                         })()}
                         {(() => {
-                          const payoffLabel = getPayoffLabel(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency);
+                          const payoffLabel = getPayoffLabel(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency, debt.paymentsRemaining);
                           if (!payoffLabel) return null;
                           const isGrowing = payoffLabel.startsWith("Balance growing");
                           return (

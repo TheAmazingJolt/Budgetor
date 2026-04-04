@@ -30,6 +30,7 @@ const formSchema = z.object({
   originalAmount: z.coerce.number().min(0).nullable().optional(),
   billAsBalanced: z.boolean().optional(),
   paymentFrequency: z.enum(PAYMENT_FREQUENCIES).optional(),
+  paymentsRemaining: z.coerce.number().int().min(1, "Must be at least 1").nullable().optional(),
 }).refine(
   (data) => {
     if (data.originalAmount == null) return true;
@@ -59,6 +60,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           originalAmount: initialData.originalAmount ?? null,
           billAsBalanced: initialData.billAsBalanced ?? false,
           paymentFrequency: (PAYMENT_FREQUENCIES as readonly string[]).includes(initialData.paymentFrequency ?? "") ? initialData.paymentFrequency as typeof PAYMENT_FREQUENCIES[number] : "monthly",
+          paymentsRemaining: initialData.paymentsRemaining ?? null,
         }
       : {
           name: "",
@@ -70,6 +72,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           originalAmount: null,
           billAsBalanced: false,
           paymentFrequency: "monthly" as const,
+          paymentsRemaining: null,
         },
   });
 
@@ -94,6 +97,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       originalAmount: values.originalAmount ?? undefined,
       billAsBalanced: recurring ? false : (values.billAsBalanced ?? false),
       paymentFrequency: values.type === "installment" ? (values.paymentFrequency ?? "monthly") : undefined,
+      paymentsRemaining: values.type === "installment" ? (values.paymentsRemaining ?? undefined) : undefined,
       lastPaymentDate: initialData?.lastPaymentDate ?? undefined,
       lastPaymentAmount: initialData?.lastPaymentAmount ?? undefined,
       createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
@@ -229,6 +233,33 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   {isRecurringFrequency
                     ? "This payment will appear in every applicable budget period automatically."
                     : "The payment appears once per month on its due day."}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {isInstallment && (
+          <FormField
+            control={form.control}
+            name="paymentsRemaining"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payments Remaining<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="e.g. 2"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
+                </FormControl>
+                <FormDescription className="text-xs">
+                  How many payments are left? When provided, this overrides the balance calculation to set the exact payoff date.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

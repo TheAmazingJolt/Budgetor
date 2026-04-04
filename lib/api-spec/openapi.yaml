@@ -1107,6 +1107,11 @@ components:
           nullable: true
           enum: [monthly, weekly, biweekly]
           description: Payment cadence for installment debts. Defaults to monthly. Weekly/biweekly generate a recurring bill in every applicable budget period.
+        paymentsRemaining:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance/rate formula.
       required:
         - id
         - name

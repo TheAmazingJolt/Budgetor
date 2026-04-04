@@ -300,6 +300,14 @@ export const SavedBudgetListResponse = zod.object({
               .describe(
                 "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
               ),
+            paymentsRemaining: zod
+              .number()
+              .int()
+              .gte(1)
+              .nullish()
+              .describe(
+                "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+              ),
           }),
         )
         .optional(),
@@ -401,6 +409,14 @@ export const SavedBudgetCreateBody = zod.object({
           .describe(
             "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
           ),
+        paymentsRemaining: zod
+          .number()
+          .int()
+          .gte(1)
+          .nullish()
+          .describe(
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          ),
       }),
     )
     .optional(),
@@ -485,6 +501,14 @@ export const SavedBudgetCreateResponse = zod.object({
             .nullish()
             .describe(
               "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+            ),
+          paymentsRemaining: zod
+            .number()
+            .int()
+            .gte(1)
+            .nullish()
+            .describe(
+              "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
             ),
         }),
       )
@@ -590,6 +614,14 @@ export const SavedBudgetUpdateBody = zod.object({
           .describe(
             "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
           ),
+        paymentsRemaining: zod
+          .number()
+          .int()
+          .gte(1)
+          .nullish()
+          .describe(
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          ),
       }),
     )
     .optional(),
@@ -688,6 +720,14 @@ export const SavedBudgetUpdateResponse = zod.object({
             .nullish()
             .describe(
               "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+            ),
+          paymentsRemaining: zod
+            .number()
+            .int()
+            .gte(1)
+            .nullish()
+            .describe(
+              "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
             ),
         }),
       )
@@ -1041,6 +1081,14 @@ export const SheetWriteBody = zod.object({
           .describe(
             "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
           ),
+        paymentsRemaining: zod
+          .number()
+          .int()
+          .gte(1)
+          .nullish()
+          .describe(
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          ),
       }),
     )
     .optional(),
@@ -1179,6 +1227,14 @@ export const SheetCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
+        paymentsRemaining: zod
+          .number()
+          .int()
+          .gte(1)
+          .nullish()
+          .describe(
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
           ),
       }),
     )
@@ -1510,6 +1566,14 @@ export const ExcelWriteBody = zod.object({
           .describe(
             "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
           ),
+        paymentsRemaining: zod
+          .number()
+          .int()
+          .gte(1)
+          .nullish()
+          .describe(
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+          ),
       }),
     )
     .optional(),
@@ -1685,6 +1749,14 @@ export const ExcelCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+          ),
+        paymentsRemaining: zod
+          .number()
+          .int()
+          .gte(1)
+          .nullish()
+          .describe(
+            "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
           ),
       }),
     )
@@ -1932,6 +2004,14 @@ export const GetUserDebtsResponse = zod.object({
         .describe(
           "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
         ),
+      paymentsRemaining: zod
+        .number()
+        .int()
+        .gte(1)
+        .nullish()
+        .describe(
+          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+        ),
     }),
   ),
 });
@@ -2009,6 +2089,14 @@ export const UpdateUserDebtsBody = zod.object({
         .describe(
           "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
         ),
+      paymentsRemaining: zod
+        .number()
+        .int()
+        .gte(1)
+        .nullish()
+        .describe(
+          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
+        ),
     }),
   ),
 });
@@ -2081,6 +2169,14 @@ export const UpdateUserDebtsResponse = zod.object({
         .nullish()
         .describe(
           "Payment cadence for installment debts. Defaults to monthly. Weekly\/biweekly generate a recurring bill in every applicable budget period.",
+        ),
+      paymentsRemaining: zod
+        .number()
+        .int()
+        .gte(1)
+        .nullish()
+        .describe(
+          "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count x payment frequency, overriding the balance/rate formula.",
         ),
     }),
   ),
