@@ -1,10 +1,67 @@
-[build]
+# railway.toml — Monorepo service configuration reference
+#
+# This repo contains two Railway services. Create each service in the Railway
+# dashboard by pointing it at this repository and configuring the Dockerfile
+# path shown below. Both services share the same repo; only the Dockerfile
+# path differs.
+#
+# Production services  → master branch
+# Staging services     → develop branch  (see STAGING.md for full setup guide)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Service 1: API Server
+# Dashboard → Source → Dockerfile path: Dockerfile  (repo root)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[services.api-server.build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
-[deploy]
+[services.api-server.deploy]
 startCommand = "node artifacts/api-server/dist/index.cjs"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+
+# Required environment variables for this service (set per environment in Railway):
+#   DATABASE_URL                   – PostgreSQL connection string (auto-set if Railway DB is attached)
+#   SESSION_SECRET                 – Random secret for signing session cookies / JWTs
+#   ENCRYPTION_KEY                 – 64-char hex string for AES-256-GCM encryption (openssl rand -hex 32)
+#   PORT                           – Auto-set by Railway
+#   NODE_ENV                       – "production"
+#   CORS_ORIGIN                    – Comma-separated list of allowed frontend origins
+#   GOOGLE_CLIENT_ID               – Google OAuth application client ID
+#   GOOGLE_CLIENT_SECRET           – Google OAuth application client secret
+#   GOOGLE_REDIRECT_URI            – Sheets OAuth callback  (https://<api-domain>/api/auth/google/callback)
+#   GOOGLE_ACCOUNT_REDIRECT_URI    – Login OAuth callback   (https://<api-domain>/api/auth/login/google/callback)
+#   MICROSOFT_CLIENT_ID            – Azure AD application client ID
+#   MICROSOFT_CLIENT_SECRET        – Azure AD application client secret
+#   MICROSOFT_REDIRECT_URI         – Login OAuth callback   (https://<api-domain>/api/auth/microsoft/callback)
+#   APPLE_CLIENT_ID                – Apple Services ID
+#   APPLE_TEAM_ID                  – Apple Developer Team ID
+#   APPLE_KEY_ID                   – Apple private key ID
+#   APPLE_PRIVATE_KEY              – Apple private key (PEM, newlines as \n)
+#   APPLE_REDIRECT_URI             – Login OAuth callback   (https://<api-domain>/api/auth/login/apple/callback)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Service 2: Budget Automator (Frontend)
+# Dashboard → Source → Dockerfile path: artifacts/budget-automator/Dockerfile
+# ─────────────────────────────────────────────────────────────────────────────
+
+[services.budget-automator.build]
+builder = "DOCKERFILE"
+dockerfilePath = "artifacts/budget-automator/Dockerfile"
+
+[services.budget-automator.deploy]
+startCommand = "pnpm --filter @workspace/budget-automator serve"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Required environment variables for this service (set per environment in Railway):
+#   VITE_API_BASE_URL  – Full URL of the API Server for this environment
+#                        Build-time variable — baked into the frontend bundle.
+#                        Trigger a redeploy after changing it.
+#   PORT               – Auto-set by Railway
