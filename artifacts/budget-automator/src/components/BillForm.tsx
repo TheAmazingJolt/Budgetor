@@ -362,7 +362,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
               )}
             />
 
-            {isYearly && (
+            {isAnyYearly && (
               <YearlyDueDatePicker
                 month={watchedAnnualDueMonth ?? 1}
                 day={watchedDayOfMonth ?? 1}
