@@ -2373,6 +2373,12 @@ export function BudgetWizard({
 
           if (effectiveInputMode === "cloud") {
             const freshLabels = new Set(data.weeks.map(w => w.weekLabel));
+            const freshDates = data.weeks.map(w => ({
+              start: new Date(w.startDate + "T00:00:00"),
+              end: new Date(w.endDate + "T00:00:00"),
+            }));
+            const genStart = freshDates.reduce((min, d) => d.start < min ? d.start : min, freshDates[0].start);
+            const genEnd = freshDates.reduce((max, d) => d.end > max ? d.end : max, freshDates[0].end);
             const freshAsCloudWeeks = data.weeks.map(w => ({
               label: w.weekLabel,
               remaining: w.closingBalance,
@@ -2381,7 +2387,12 @@ export function BudgetWizard({
               items: w.bills,
             }));
             setCloudExistingWeeks(prev => [
-              ...prev.filter((w: any) => !freshLabels.has(w.label)),
+              ...prev.filter((w: any) => {
+                if (freshLabels.has(w.label)) return false;
+                const d = parseLabelDates(w.label);
+                if (!d) return true;
+                return d.end < genStart || d.start > genEnd;
+              }),
               ...freshAsCloudWeeks,
             ]);
           }
@@ -2493,8 +2504,28 @@ export function BudgetWizard({
       }
     }
 
+    const genWeeks = generatedWeek?.weeks ?? [];
+    let genStart: Date | null = null;
+    let genEnd: Date | null = null;
+    if (genWeeks.length > 0) {
+      for (const gw of genWeeks) {
+        const s = new Date(gw.startDate + "T00:00:00");
+        const e = new Date(gw.endDate + "T00:00:00");
+        if (!genStart || s < genStart) genStart = s;
+        if (!genEnd || e > genEnd) genEnd = e;
+      }
+    }
+
     const source = getExistingWeeks()
-      .filter((w: any) => (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
+      .filter((w: any) => {
+        if (!(w.items || w.openingBalance !== undefined)) return false;
+        if (weekEdits[w.label]?.deleted) return false;
+        if (genStart && genEnd) {
+          const d = parseLabelDates(w.label);
+          if (d && d.start <= genEnd && d.end >= genStart) return false;
+        }
+        return true;
+      })
       .map((w: any) => {
         const e = weekEdits[w.label];
         const dates = parseLabelDates(w.label);
