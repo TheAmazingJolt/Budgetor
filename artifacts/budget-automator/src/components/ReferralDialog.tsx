@@ -84,7 +84,7 @@ export function ReferralDialog({ open, onOpenChange, referralInfo, isLoading }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md overflow-hidden p-0">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md overflow-y-auto max-h-[90vh] p-0">
         <DialogTitle className="sr-only">Refer a Friend</DialogTitle>
         <DialogDescription className="sr-only">
           Share your referral link. When a friend signs up and upgrades to Pro, you earn one free month of Pro.
@@ -141,19 +141,19 @@ export function ReferralDialog({ open, onOpenChange, referralInfo, isLoading }: 
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
                 {STAT_CONFIGS.map(({ key, label, Icon, bg, border, iconBg, numColor, labelColor, iconColor }) => (
                   <div
                     key={key}
-                    className={`rounded-xl ${bg} ${border} border p-3.5 flex flex-col items-center gap-2`}
+                    className={`rounded-xl ${bg} ${border} border p-2 sm:p-3.5 flex flex-col items-center gap-1.5 sm:gap-2 min-w-0`}
                   >
-                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${iconBg}`}>
-                      <Icon className={`w-4 h-4 ${iconColor}`} />
+                    <div className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full ${iconBg} flex-shrink-0`}>
+                      <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${iconColor}`} />
                     </div>
-                    <div className={`text-3xl font-extrabold leading-none ${numColor}`}>
+                    <div className={`text-2xl sm:text-3xl font-extrabold leading-none ${numColor}`}>
                       {referralInfo[key]}
                     </div>
-                    <div className={`text-xs font-medium ${labelColor}`}>{label}</div>
+                    <div className={`text-[10px] sm:text-xs font-medium ${labelColor} text-center leading-tight`}>{label}</div>
                   </div>
                 ))}
               </div>
