@@ -5976,7 +5976,7 @@ export function BudgetWizard({
                 }}
               />
             </div>
-            <div className="flex items-center justify-between py-3">
+            <div className="flex items-center justify-between py-3 border-b border-border/40">
               <div>
                 <p className="text-sm font-medium">Payment due reminders</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Show a badge on debt cards when a payment is likely due based on the due date</p>
@@ -6005,6 +6005,24 @@ export function BudgetWizard({
                 }}
               />
             </div>
+            {microsoftConfigured && (
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm font-medium">Microsoft / OneDrive</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {microsoftAuthenticated ? "Connected — export budgets to Excel Online" : "Connect to export budgets to Excel Online"}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant={microsoftAuthenticated ? "outline" : "default"}
+                  className={`ml-4 shrink-0 rounded-xl text-xs ${microsoftAuthenticated ? "" : "bg-gradient-to-r from-teal-600 to-teal-500 text-white border-0"}`}
+                  onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
+                >
+                  {microsoftAuthenticated ? "Disconnect" : "Connect"}
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
