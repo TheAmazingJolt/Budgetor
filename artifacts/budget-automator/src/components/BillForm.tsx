@@ -121,9 +121,10 @@ interface BillFormProps {
   initialData?: Bill;
   onSubmit: (data: Bill) => void;
   onCancel: () => void;
+  suggestedCategories?: string[];
 }
 
-export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
+export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories }: BillFormProps) {
   const d = initialData as any;
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -299,7 +300,14 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                 <FormItem>
                   <FormLabel>Category Label</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Insurance" {...field} className="focus:ring-primary/20 focus:border-primary" />
+                    <>
+                      <Input placeholder="e.g. Insurance" {...field} list="bill-category-suggestions" className="focus:ring-primary/20 focus:border-primary" />
+                      {suggestedCategories && suggestedCategories.length > 0 && (
+                        <datalist id="bill-category-suggestions">
+                          {suggestedCategories.map(cat => <option key={cat} value={cat} />)}
+                        </datalist>
+                      )}
+                    </>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -378,7 +386,14 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
                 <FormItem>
                   <FormLabel>Category Label</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Rent, Utilities" {...field} className="focus:ring-primary/20 focus:border-primary" />
+                    <>
+                      <Input placeholder="e.g. Rent, Utilities" {...field} list="bill-category-suggestions" className="focus:ring-primary/20 focus:border-primary" />
+                      {suggestedCategories && suggestedCategories.length > 0 && (
+                        <datalist id="bill-category-suggestions">
+                          {suggestedCategories.map(cat => <option key={cat} value={cat} />)}
+                        </datalist>
+                      )}
+                    </>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

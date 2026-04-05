@@ -5050,6 +5050,7 @@ export function BudgetWizard({
               setIsBillDialogOpen(false);
             }}
             onCancel={() => setIsBillDialogOpen(false)}
+            suggestedCategories={billCategories}
           />
         </DialogContent>
       </Dialog>
@@ -5756,6 +5757,7 @@ export function BudgetWizard({
               setIsBillManagerFormOpen(false);
             }}
             onCancel={() => setIsBillManagerFormOpen(false)}
+            suggestedCategories={billCategories}
           />
         </DialogContent>
       </Dialog>
