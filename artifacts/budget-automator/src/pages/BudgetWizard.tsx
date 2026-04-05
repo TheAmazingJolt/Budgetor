@@ -5024,7 +5024,7 @@ export function BudgetWizard({
                       size="lg"
                       onClick={() => {
                         if (newExcelSaveSuccess) return;
-                        setExportNameInput(buildDefaultExportTitle());
+                        setExportNameInput(savedCloudName || activeCloudBudgetName || buildDefaultExportTitle());
                         setPendingExportType("excel");
                       }}
                       disabled={isSavingToNewExcel || newExcelSaveSuccess || isRegeneratingForExport}

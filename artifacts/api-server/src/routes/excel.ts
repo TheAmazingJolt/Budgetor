@@ -883,17 +883,34 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
     const xlsxBuf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 
     const fileName = `${title}.xlsx`;
-    const createRes = await fetch(`${GRAPH}/me/drive/root:/${fileName}:/content?@microsoft.graph.conflictBehavior=rename`, {
-      method: "PUT",
+    const sessionRes = await fetch(`${GRAPH}/me/drive/root:/${fileName}:/createUploadSession`, {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": "rename" } }),
+    });
+    if (!sessionRes.ok) {
+      const errText = await sessionRes.text();
+      throw Object.assign(new Error(`Failed to create upload session: ${errText}`), { status: sessionRes.status });
+    }
+    const sessionData = await sessionRes.json() as any;
+    const uploadUrl = sessionData.uploadUrl as string;
+
+    const contentLength = xlsxBuf.length;
+    const createRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Length": String(contentLength),
+        "Content-Range": `bytes 0-${contentLength - 1}/${contentLength}`,
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       },
       body: xlsxBuf,
     });
     if (!createRes.ok) {
       const errText = await createRes.text();
-      throw Object.assign(new Error(`Failed to create file: ${errText}`), { status: createRes.status });
+      throw Object.assign(new Error(`Failed to upload file: ${errText}`), { status: createRes.status });
     }
     const fileData = await createRes.json() as any;
     const fileId = fileData.id as string;
