@@ -5041,7 +5041,7 @@ export function BudgetWizard({
                       ) : newExcelSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to OneDrive</>
                       ) : (
-                        <><FilePlus2 className="w-5 h-5 mr-2" /> Save to new Excel file</>
+                        <><Sheet className="w-5 h-5 mr-2" /><span key={(activeCloudBudgetId && !activeLinkedSheet) ? "link" : "save"} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{(activeCloudBudgetId && !activeLinkedSheet) ? "Link to OneDrive" : "Save to OneDrive"}</span></>
                       )}
                     </Button>
                     {newExcelSaveSuccess && newExcelUrl && (
