@@ -13,10 +13,10 @@ const BILL_COLOR_HEX: Readonly<Record<string, string>> = {
   rose:   'FDA4AF', indigo: 'A5B4FC', yellow: 'FDE047', cyan:   '67E8F9',
 };
 
-async function graphGet(accessToken: string, path: string): Promise<any> {
-  const res = await fetch(`${GRAPH}${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+async function graphGet(accessToken: string, path: string, sessionId?: string | null): Promise<any> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
+  if (sessionId) headers["workbook-session-id"] = sessionId;
+  const res = await fetch(`${GRAPH}${path}`, { headers });
   if (!res.ok) {
     const body = await res.text();
     const err: any = new Error(`Graph API error: ${body}`);
@@ -26,13 +26,15 @@ async function graphGet(accessToken: string, path: string): Promise<any> {
   return res.json() as any;
 }
 
-async function graphPost(accessToken: string, path: string, body: unknown): Promise<any> {
+async function graphPost(accessToken: string, path: string, body: unknown, sessionId?: string | null): Promise<any> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+  if (sessionId) headers["workbook-session-id"] = sessionId;
   const res = await fetch(`${GRAPH}${path}`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -44,13 +46,15 @@ async function graphPost(accessToken: string, path: string, body: unknown): Prom
   return res.json() as any;
 }
 
-async function graphPatch(accessToken: string, path: string, body: unknown): Promise<any> {
+async function graphPatch(accessToken: string, path: string, body: unknown, sessionId?: string | null): Promise<any> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+  if (sessionId) headers["workbook-session-id"] = sessionId;
   const res = await fetch(`${GRAPH}${path}`, {
     method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -60,6 +64,35 @@ async function graphPatch(accessToken: string, path: string, body: unknown): Pro
     throw err;
   }
   return res.json() as any;
+}
+
+async function createWorkbookSession(token: string, fileId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${GRAPH}/me/drive/items/${fileId}/workbook/createSession`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ persistChanges: true }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    return (data.id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function closeWorkbookSession(token: string, fileId: string, sessionId: string): Promise<void> {
+  try {
+    await fetch(`${GRAPH}/me/drive/items/${fileId}/workbook/closeSession`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "workbook-session-id": sessionId,
+      },
+      body: JSON.stringify({}),
+    });
+  } catch { }
 }
 
 async function getAccessToken(req: Request): Promise<string | null> {
@@ -611,6 +644,7 @@ async function writeExcelDebtRows(
   startRow: number,
   debts: DebtItem[],
   bills?: BillMeta[],
+  sessionId?: string | null,
 ) {
   const debtGrid = buildExcelDebtGrid(debts, bills);
   const debtStartAddr = `A${startRow + 1}`;
@@ -620,7 +654,8 @@ async function writeExcelDebtRows(
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${debtRange}')`,
-    { values: debtGrid }
+    { values: debtGrid },
+    sessionId,
   );
 
   const headerRow = startRow + 1;
@@ -628,48 +663,50 @@ async function writeExcelDebtRows(
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
-    { bold: true, name: "Arial", size: 11 }
+    { bold: true, name: "Arial", size: 11 },
+    sessionId,
   );
 
   const colHeaderRange = `A${headerRow + 2}:E${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
-    { bold: true, name: "Arial", size: 10 }
+    { bold: true, name: "Arial", size: 10 },
+    sessionId,
   );
 
   const allDebtRange = `A${headerRow + 1}:E${startRow + debtGrid.length}`;
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allDebtRange}')/format/fill`,
-    { color: "#F9E9E9" }
+    { color: "#F9E9E9" },
+    sessionId,
   );
 
-  // Center Balance (B), APR % (C), and Due Day (E) from column header row through data rows.
   const lastDebtRow = startRow + debtGrid.length;
   for (const col of ["B", "C", "E"]) {
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${col}${headerRow + 2}:${col}${lastDebtRow}')/format`,
-      { horizontalAlignment: "Center" }
+      { horizontalAlignment: "Center" },
+      sessionId,
     );
   }
 
-  // Right-align Min Payment (D) from column header row through data rows.
   const minPayRange = `D${headerRow + 2}:D${lastDebtRow}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${minPayRange}')/format`,
-    { horizontalAlignment: "Right" }
+    { horizontalAlignment: "Right" },
+    sessionId,
   );
 
-  // Set minimum column widths so headers are never clipped.
   await Promise.all([
-    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='A1')/format`, { columnWidth: 160 }),
-    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B1')/format`, { columnWidth: 90 }),
-    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='C1')/format`, { columnWidth: 75 }),
-    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='D1')/format`, { columnWidth: 100 }),
-    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='E1')/format`, { columnWidth: 80 }),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='A1')/format`, { columnWidth: 160 }, sessionId),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B1')/format`, { columnWidth: 90 }, sessionId),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='C1')/format`, { columnWidth: 75 }, sessionId),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='D1')/format`, { columnWidth: 100 }, sessionId),
+    graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='E1')/format`, { columnWidth: 80 }, sessionId),
   ]);
 }
 
@@ -679,6 +716,7 @@ async function writeExcelBillRows(
   sheetName: string,
   startRow: number,
   bills: BillMeta[],
+  sessionId?: string | null,
 ) {
   // Exclude all debt-linked bills — balanced debt bills now appear in the Debts section with "(B)".
   const filteredBills = bills.filter((b) => !b.sourceDebtId);
@@ -723,7 +761,8 @@ async function writeExcelBillRows(
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${range}')`,
-    { values: rows }
+    { values: rows },
+    sessionId,
   );
 
   const headerRow = startRow + 1;
@@ -731,31 +770,34 @@ async function writeExcelBillRows(
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${headerRange}')/format/font`,
-    { bold: true, name: "Arial", size: 11 }
+    { bold: true, name: "Arial", size: 11 },
+    sessionId,
   );
 
   const colHeaderRange = `A${headerRow + 2}:E${headerRow + 2}`;
   await graphPost(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${colHeaderRange}')/format/font`,
-    { bold: true, name: "Arial", size: 10 }
+    { bold: true, name: "Arial", size: 10 },
+    sessionId,
   );
 
   const allBillsRange = `A${headerRow + 1}:E${startRow + rows.length}`;
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${allBillsRange}')/format/fill`,
-    { color: "#EBF6EE" }
+    { color: "#EBF6EE" },
+    sessionId,
   );
 
-  // Center Amount (B) and Due Day (E) from column header row through data rows.
   const lastBillRow = startRow + rows.length;
   const colHeaderRowNum = headerRow + 2;
   for (const col of ["B", "E"]) {
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${col}${colHeaderRowNum}:${col}${lastBillRow}')/format`,
-      { horizontalAlignment: "Center" }
+      { horizontalAlignment: "Center" },
+      sessionId,
     );
   }
 }
@@ -765,39 +807,41 @@ async function writeHiddenExcelBillsSheet(
   fileId: string,
   bills: BillMeta[],
   debts?: DebtItem[],
+  sessionId?: string | null,
 ) {
   if ((!bills || bills.length === 0) && (!debts || debts.length === 0)) return;
   const META_SHEET = "_BudgifyData";
   const LEGACY_SHEET = "_MoneyPalData";
 
-  const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
+  const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`, sessionId);
   const allSheets: any[] = sheetsData.value ?? [];
 
-  // Prefer _BudgifyData; rename legacy _MoneyPalData if found and _BudgifyData doesn't exist.
   let existing = allSheets.find((s: any) => s.name === META_SHEET);
   const legacyExisting = allSheets.find((s: any) => s.name === LEGACY_SHEET);
 
   if (legacyExisting && !existing) {
     const legacyEncoded = encodeURIComponent(legacyExisting.name);
-    await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${legacyEncoded}`, { name: META_SHEET });
+    await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${legacyEncoded}`, { name: META_SHEET }, sessionId);
     existing = legacyExisting;
   }
 
   let metaSheetName: string;
   if (existing) {
     metaSheetName = encodeURIComponent(META_SHEET);
-    const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`);
+    const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`, sessionId);
     const endAddr = usedRange.address?.split("!")?.[1] ?? "G100";
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endAddr}')`,
-      { values: Array.from({ length: 50 }, () => Array(9).fill("")) }
+      { values: Array.from({ length: 50 }, () => Array(9).fill("")) },
+      sessionId,
     );
   } else {
     const added = await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/add`,
-      { name: META_SHEET }
+      { name: META_SHEET },
+      sessionId,
     );
     metaSheetName = encodeURIComponent(added.name ?? META_SHEET);
   }
@@ -805,7 +849,8 @@ async function writeHiddenExcelBillsSheet(
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}`,
-    { visibility: "Hidden" }
+    { visibility: "Hidden" },
+    sessionId,
   );
 
   const grid: (string | number)[][] = [
@@ -852,7 +897,8 @@ async function writeHiddenExcelBillsSheet(
   await graphPatch(
     token,
     `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endCol}${endRow}')`,
-    { values: padded }
+    { values: padded },
+    sessionId,
   );
 }
 
@@ -916,7 +962,10 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
     const fileId = fileData.id as string;
     const webUrl = (fileData.webUrl as string) ?? "";
 
-    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
+    // Create a workbook session so all subsequent calls work on Microsoft 365 work/school accounts.
+    const sessionId = await createWorkbookSession(token, fileId);
+
+    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`, sessionId);
     const sheets: any[] = sheetsData.value ?? [];
     const targetSheet = sheets[0];
     if (!targetSheet) {
@@ -982,35 +1031,40 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${rangeAddr}')`,
-      { values: grid }
+      { values: grid },
+      sessionId,
     );
 
     const boldRowRange = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 }
+      { bold: true, name: "Arial", size: 10 },
+      sessionId,
     );
 
     const bodyRangeCreate = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRangeCreate}')/format/font`,
-      { bold: false, name: "Arial", size: 10 }
+      { bold: false, name: "Arial", size: 10 },
+      sessionId,
     );
 
     const fullWeekRangeCreate = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}${totalRows}`;
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeCreate}')/format/fill`,
-      { patternType: "none" }
+      { patternType: "none" },
+      sessionId,
     );
 
     // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/fill`,
-      { color: "#BDD7EE" }
+      { color: "#BDD7EE" },
+      sessionId,
     );
 
     // Apply user-chosen fill colors to individual bill rows (run in parallel).
@@ -1025,7 +1079,7 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
         const rowNum = billRowBaseCreate + j;
         const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
         billFillCreate.push(
-          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }).then(() => {})
+          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }, sessionId).then(() => {})
         );
       });
     }
@@ -1033,16 +1087,17 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
 
     let afterSectionsRow = totalRows;
     if (body.bills && body.bills.length > 0) {
-      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills);
+      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills, sessionId);
       afterSectionsRow += body.bills.length + 3;
-      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills, body.debts); } catch { }
+      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills, body.debts, sessionId); } catch { }
     } else if (body.debts && body.debts.length > 0) {
-      try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts); } catch { }
+      try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts, sessionId); } catch { }
     }
     if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRow, body.debts, body.bills);
+      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRow, body.debts, body.bills, sessionId);
     }
 
+    if (sessionId) await closeWorkbookSession(token, fileId, sessionId);
     res.json({ fileId, webUrl });
   } catch (err: any) {
     handleGraphError(err, req, res, "create Excel file");
@@ -1246,7 +1301,10 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
   }
 
   try {
-    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
+    // Create a workbook session so all subsequent calls work on Microsoft 365 work/school accounts.
+    const sessionId = await createWorkbookSession(token, fileId);
+
+    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`, sessionId);
     const sheets: any[] = sheetsData.value ?? [];
     const targetSheet = sheets.find((s: any) => s.name === (sheetTitle ?? "Budget")) ?? sheets[0];
     if (!targetSheet) {
@@ -1263,7 +1321,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     // that lie beyond the new weeks (handles reducing week count on re-sync).
     let clearEndColIdx = totalCols - 1;
     try {
-      const usedRangeRes = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`);
+      const usedRangeRes = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`, sessionId);
       const usedAddr = usedRangeRes.address?.split("!")?.[1] ?? "";
       const endCell = usedAddr.split(":")?.[1] ?? "";
       const oldLastColLetters = endCell.replace(/[0-9]/g, "");
@@ -1327,21 +1385,24 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${rangeAddr}')`,
-      { values: slicedGrid }
+      { values: slicedGrid },
+      sessionId,
     );
 
     const boldRowRange = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 }
+      { bold: true, name: "Arial", size: 10 },
+      sessionId,
     );
 
     const bodyRange = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
     await graphPost(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRange}')/format/font`,
-      { bold: false, name: "Arial", size: 10 }
+      { bold: false, name: "Arial", size: 10 },
+      sessionId,
     );
 
     // Clear fill for all columns from startCol to clearEndColIdx (covers old weeks too).
@@ -1349,7 +1410,8 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeWrite}')/format/fill`,
-      { patternType: "none" }
+      { patternType: "none" },
+      sessionId,
     );
 
     // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
@@ -1357,7 +1419,8 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     await graphPatch(
       token,
       `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRangeWrite}')/format/fill`,
-      { color: "#BDD7EE" }
+      { color: "#BDD7EE" },
+      sessionId,
     );
 
     // Apply user-chosen fill colors to individual bill rows (run in parallel).
@@ -1372,7 +1435,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
         const rowNum = billRowBaseWrite + j;
         const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
         billFillWrite.push(
-          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }).then(() => {})
+          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }, sessionId).then(() => {})
         );
       });
     }
@@ -1380,16 +1443,17 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
 
     let afterSectionsRowWrite = totalRows;
     if (body.bills && body.bills.length > 0) {
-      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills);
+      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills, sessionId);
       afterSectionsRowWrite += body.bills.length + 3;
-      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills, body.debts); } catch { }
+      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills, body.debts, sessionId); } catch { }
     } else if (body.debts && body.debts.length > 0) {
-      try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts); } catch { }
+      try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts, sessionId); } catch { }
     }
     if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts, body.bills);
+      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts, body.bills, sessionId);
     }
 
+    if (sessionId) await closeWorkbookSession(token, fileId, sessionId);
     res.json({
       ok: true,
       message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} starting at column ${colLetter(startCol)}`,
