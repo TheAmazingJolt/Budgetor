@@ -274,8 +274,12 @@ function writeExcelBudgetSheetXL(
     });
   }
 
-  ws.getColumn(sc).width = 30;
-  ws.getColumn(sc + 1).width = 14;
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    const lc = sc + wIdx * 2;
+    const vc = lc + 1;
+    ws.getColumn(lc).width = 26;
+    ws.getColumn(vc).width = 12;
+  }
 }
 
 function writeExcelDataSheetXL(ws: ExcelJS.Worksheet, bills: BillMeta[], debts?: DebtItem[]): void {
