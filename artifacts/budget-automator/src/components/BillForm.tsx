@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Check } from "lucide-react";
+import { Check, CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -16,6 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import type { Bill } from "@workspace/api-client-react";
 import { BILL_COLOR_PALETTE } from "@/lib/billColors";
 
@@ -113,6 +115,52 @@ function DayOfMonthInput({ value, onChange }: { value: number | null | undefined
         />
         Varies
       </label>
+    </div>
+  );
+}
+
+function YearlyDueDatePicker({
+  month,
+  day,
+  onSelect,
+}: {
+  month: number;
+  day: number;
+  onSelect: (month: number, day: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const selected = new Date(currentYear, month - 1, day);
+  const label = `${MONTH_NAMES[month - 1]} ${day}`;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium leading-none">Due Date</span>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full justify-start text-left font-normal focus:ring-primary/20 focus:border-primary"
+          >
+            <CalendarIcon className="mr-2 h-4 w-4 opacity-60" />
+            {label}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selected}
+            month={selected}
+            onSelect={(date) => {
+              if (date) {
+                onSelect(date.getMonth() + 1, date.getDate());
+                setOpen(false);
+              }
+            }}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -315,58 +363,14 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
             />
 
             {isYearly && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="annualDueMonth"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Due Month</FormLabel>
-                      <Select
-                        onValueChange={v => field.onChange(parseInt(v, 10))}
-                        value={field.value != null ? String(field.value) : "1"}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="focus:ring-primary/20 focus:border-primary">
-                            <SelectValue placeholder="Month" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {MONTH_NAMES.map((name, idx) => (
-                            <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="dayOfMonth"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Due Day of Month</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={31}
-                          placeholder="1–31"
-                          value={field.value != null ? field.value : ""}
-                          onChange={e => {
-                            const num = parseInt(e.target.value, 10);
-                            field.onChange(!isNaN(num) ? num : null);
-                          }}
-                          className="w-24 focus:ring-primary/20 focus:border-primary"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
+              <YearlyDueDatePicker
+                month={watchedAnnualDueMonth ?? 1}
+                day={watchedDayOfMonth ?? 1}
+                onSelect={(month, day) => {
+                  form.setValue("annualDueMonth", month, { shouldValidate: true });
+                  form.setValue("dayOfMonth", day, { shouldValidate: true });
+                }}
+              />
             )}
 
             {weeklyEstimate && (
