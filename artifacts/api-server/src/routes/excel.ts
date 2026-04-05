@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { db, usersTable, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { refreshMicrosoftToken } from "./microsoft-auth.js";
@@ -11,6 +12,12 @@ const BILL_COLOR_HEX: Readonly<Record<string, string>> = {
   blue:   '93C5FD', green:  '86EFAC', orange: 'FDBA74', purple: 'D8B4FE',
   red:    'FCA5A5', slate:  'CBD5E1', amber:  'FCD34D', teal:   '5EEAD4',
   rose:   'FDA4AF', indigo: 'A5B4FC', yellow: 'FDE047', cyan:   '67E8F9',
+};
+
+const BILL_COLOR_ARGB: Readonly<Record<string, string>> = {
+  blue:   'FF93C5FD', green:  'FF86EFAC', orange: 'FFFDBA74', purple: 'FFD8B4FE',
+  red:    'FFFCA5A5', slate:  'FFCBD5E1', amber:  'FFFCD34D', teal:   'FF5EEAD4',
+  rose:   'FFFDA4AF', indigo: 'FFA5B4FC', yellow: 'FFFDE047', cyan:   'FF67E8F9',
 };
 
 async function graphGet(accessToken: string, path: string, sessionId?: string | null): Promise<any> {
@@ -94,6 +101,271 @@ async function closeWorkbookSession(token: string, fileId: string, sessionId: st
     });
   } catch { }
 }
+
+// ─── ExcelJS-based helpers (no workbook API calls) ────────────────────────────
+
+function xlFill(argb: string): ExcelJS.Fill {
+  return { type: "pattern", pattern: "solid", fgColor: { argb } };
+}
+
+function xlFont(bold = false, size = 10): Partial<ExcelJS.Font> {
+  return { name: "Arial", size, bold };
+}
+
+function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | number)[][] {
+  const grid: (string | number)[][] = [
+    ["Bills"],
+    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId", "AnnualDueMonth"],
+    ...(bills ?? []).map((b) => [
+      b.name, Math.abs(b.amount), b.type ?? "fixed", b.category ?? b.name,
+      b.dayOfMonth != null ? b.dayOfMonth : "varies", b.color ?? "",
+      b.sourceDebtId ?? "", b.annualDueMonth != null ? b.annualDueMonth : "",
+    ]),
+  ];
+  if (debts && debts.length > 0) {
+    grid.push(Array(9).fill(""));
+    grid.push(["Debts", "", "", "", "", "", "", "", ""]);
+    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced"]);
+    for (const d of debts) {
+      grid.push([
+        d.id, d.name, d.type ?? "credit_card", d.balance ?? 0,
+        d.interestRate != null ? d.interestRate : "",
+        d.minimumPayment ?? 0, d.dueDay != null ? d.dueDay : "",
+        d.originalAmount != null ? d.originalAmount : "",
+        d.billAsBalanced ? "true" : "false",
+      ]);
+    }
+  }
+  return grid;
+}
+
+function writeExcelBudgetSheetXL(
+  ws: ExcelJS.Worksheet,
+  weeks: ExcelWriteRequest["weeks"],
+  bills: BillMeta[] | undefined,
+  debts: DebtItem[] | undefined,
+  includeRemainingAcct: boolean,
+  startColOffset = 0,
+): void {
+  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
+
+  const sc = startColOffset + 1;
+  const maxBills = weeks.length > 0 ? Math.max(...weeks.map((w) => w.bills.length)) : 0;
+  const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    const week = weeks[wIdx];
+    const lc = sc + wIdx * 2;
+    const vc = lc + 1;
+    let r = 1;
+
+    ws.getCell(r, lc).value = week.weekLabel;
+    ws.getCell(r, vc).value = "";
+    for (const c of [lc, vc]) {
+      ws.getCell(r, c).fill = xlFill("FFBDD7EE");
+      ws.getCell(r, c).font = xlFont(true);
+    }
+    r++;
+
+    const sumStartRow = r;
+
+    if (includeRemainingAcct) {
+      ws.getCell(r, lc).value = "Remaining Acct";
+      ws.getCell(r, vc).value = week.openingBalance;
+      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+      r++;
+    }
+
+    const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+      ? `Paycheck (${week.paycheckBreakdown.map((b) => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ")})`
+      : "Paycheck";
+    ws.getCell(r, lc).value = paycheckLabel;
+    ws.getCell(r, vc).value = week.paycheck;
+    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    r++;
+
+    for (const bill of week.bills) {
+      const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
+      ws.getCell(r, lc).value = bill.name;
+      ws.getCell(r, vc).value = bill.amount;
+      for (const c of [lc, vc]) {
+        ws.getCell(r, c).font = xlFont();
+        if (argb) ws.getCell(r, c).fill = xlFill(argb);
+      }
+      r++;
+    }
+
+    while (r < totalRows) {
+      ws.getCell(r, lc).value = "";
+      ws.getCell(r, vc).value = "";
+      r++;
+    }
+
+    const vcLetter = colLetter(vc - 1);
+    ws.getCell(r, lc).value = "Remaining";
+    ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
+    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+  }
+
+  let nextRow = totalRows + 1;
+
+  const filteredBills = (bills ?? []).filter((b) => !b.sourceDebtId);
+  if (filteredBills.length > 0) {
+    nextRow++;
+    ws.getCell(nextRow, sc).value = "Bills";
+    ws.getCell(nextRow, sc).font = xlFont(true, 11);
+    ws.getCell(nextRow, sc).fill = xlFill("FFEBF6EE");
+    nextRow++;
+
+    const billColHdrs = ["Name", "Amount", "Type", "Category", "Due Day"];
+    billColHdrs.forEach((h, i) => {
+      ws.getCell(nextRow, sc + i).value = h;
+      ws.getCell(nextRow, sc + i).font = xlFont(true);
+      ws.getCell(nextRow, sc + i).fill = xlFill("FFEBF6EE");
+    });
+    nextRow++;
+
+    const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    for (const bill of filteredBills) {
+      const isYearly = bill.type === "yearly" || bill.type === "yearly-flat";
+      let endingStr = "";
+      if ((bill.type === "weekly" || bill.type === "biweekly") && bill.payoffDate) {
+        const parts = bill.payoffDate.split("-");
+        const pm = parts.length >= 3 ? parseInt(parts[1], 10) : NaN;
+        const pd = parts.length >= 3 ? parseInt(parts[2], 10) : NaN;
+        if (!isNaN(pm) && !isNaN(pd)) endingStr = ` (ending ${pm}/${pd})`;
+      }
+      const dueDay = bill.type === "weekly" ? `Weekly${endingStr}`
+        : bill.type === "biweekly" ? `Biweekly${endingStr}`
+        : isYearly && bill.annualDueMonth != null
+          ? `${MONTH_SHORT[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}`
+          : isYearly ? "Yearly"
+          : bill.dayOfMonth != null ? bill.dayOfMonth : "Varies";
+
+      const vals: (string | number)[] = [
+        bill.name, Math.abs(bill.amount), bill.type ?? "fixed",
+        bill.category ?? bill.name, dueDay as string | number,
+      ];
+      vals.forEach((v, i) => {
+        ws.getCell(nextRow, sc + i).value = v;
+        ws.getCell(nextRow, sc + i).font = xlFont();
+        ws.getCell(nextRow, sc + i).fill = xlFill("FFEBF6EE");
+      });
+      nextRow++;
+    }
+  }
+
+  if (debts && debts.length > 0) {
+    nextRow++;
+    const debtGrid = buildExcelDebtGrid(debts, bills);
+    debtGrid.forEach((rowData, i) => {
+      const isSectionHeader = i === 1;
+      const isColHeader = i === 2;
+      const isBlankRow = i === 0;
+      rowData.forEach((val, j) => {
+        const cell = ws.getCell(nextRow, sc + j);
+        cell.value = val;
+        if (!isBlankRow) cell.fill = xlFill("FFF9E9E9");
+        if (isSectionHeader) cell.font = xlFont(true, 11);
+        else if (isColHeader) cell.font = xlFont(true);
+        else cell.font = xlFont();
+      });
+      nextRow++;
+    });
+  }
+
+  ws.getColumn(sc).width = 30;
+  ws.getColumn(sc + 1).width = 14;
+}
+
+function writeExcelDataSheetXL(ws: ExcelJS.Worksheet, bills: BillMeta[], debts?: DebtItem[]): void {
+  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
+  ws.state = "hidden";
+  const grid = buildBudgifyDataGrid(bills, debts);
+  grid.forEach((rowData, rIdx) => {
+    rowData.forEach((val, cIdx) => {
+      ws.getCell(rIdx + 1, cIdx + 1).value = val;
+    });
+  });
+}
+
+async function uploadBufferToOneDrive(
+  token: string,
+  fileName: string,
+  buf: Buffer,
+): Promise<{ fileId: string; webUrl: string }> {
+  const sessionRes = await fetch(`${GRAPH}/me/drive/root:/${fileName}:/createUploadSession`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": "rename" } }),
+  });
+  if (!sessionRes.ok) {
+    const errText = await sessionRes.text();
+    throw Object.assign(new Error(`Failed to create upload session: ${errText}`), { status: sessionRes.status });
+  }
+  const sessionData = await sessionRes.json() as any;
+  const uploadUrl = sessionData.uploadUrl as string;
+
+  const contentLength = buf.length;
+  const putRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Length": String(contentLength),
+      "Content-Range": `bytes 0-${contentLength - 1}/${contentLength}`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    body: buf,
+  });
+  if (!putRes.ok) {
+    const errText = await putRes.text();
+    throw Object.assign(new Error(`Failed to upload file: ${errText}`), { status: putRes.status });
+  }
+  const fileData = await putRes.json() as any;
+  return { fileId: fileData.id as string, webUrl: (fileData.webUrl as string) ?? "" };
+}
+
+async function reuploadBufferToOneDrive(token: string, fileId: string, buf: Buffer): Promise<void> {
+  const CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (buf.length < 4 * 1024 * 1024) {
+    const putRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": CONTENT_TYPE },
+      body: buf,
+    });
+    if (!putRes.ok) {
+      const errText = await putRes.text();
+      throw Object.assign(new Error(`Failed to reupload file: ${errText}`), { status: putRes.status });
+    }
+    return;
+  }
+  const sessionRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/createUploadSession`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": "replace" } }),
+  });
+  if (!sessionRes.ok) {
+    const errText = await sessionRes.text();
+    throw Object.assign(new Error(`Failed to create upload session: ${errText}`), { status: sessionRes.status });
+  }
+  const sessionData = await sessionRes.json() as any;
+  const uploadUrl = sessionData.uploadUrl as string;
+  const contentLength = buf.length;
+  const putRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Length": String(contentLength),
+      "Content-Range": `bytes 0-${contentLength - 1}/${contentLength}`,
+      "Content-Type": CONTENT_TYPE,
+    },
+    body: buf,
+  });
+  if (!putRes.ok) {
+    const errText = await putRes.text();
+    throw Object.assign(new Error(`Failed to reupload file: ${errText}`), { status: putRes.status });
+  }
+}
+
+// ─── End of ExcelJS-based helpers ─────────────────────────────────────────────
 
 async function getAccessToken(req: Request): Promise<string | null> {
   return refreshMicrosoftToken(req as any);
@@ -923,181 +1195,21 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
   }
 
   try {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([[""]]);
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    const xlsxBuf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Budget");
+    writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct ?? false);
 
+    const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
+    if (hasMeta) {
+      const dataWs = wb.addWorksheet("_BudgifyData");
+      writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
+    }
+
+    const rawBuf = await wb.xlsx.writeBuffer();
+    const buf = Buffer.from(rawBuf as ArrayBuffer);
     const fileName = `${title}.xlsx`;
-    const sessionRes = await fetch(`${GRAPH}/me/drive/root:/${fileName}:/createUploadSession`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": "rename" } }),
-    });
-    if (!sessionRes.ok) {
-      const errText = await sessionRes.text();
-      throw Object.assign(new Error(`Failed to create upload session: ${errText}`), { status: sessionRes.status });
-    }
-    const sessionData = await sessionRes.json() as any;
-    const uploadUrl = sessionData.uploadUrl as string;
+    const { fileId, webUrl } = await uploadBufferToOneDrive(token, fileName, buf);
 
-    const contentLength = xlsxBuf.length;
-    const createRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Length": String(contentLength),
-        "Content-Range": `bytes 0-${contentLength - 1}/${contentLength}`,
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      },
-      body: xlsxBuf,
-    });
-    if (!createRes.ok) {
-      const errText = await createRes.text();
-      throw Object.assign(new Error(`Failed to upload file: ${errText}`), { status: createRes.status });
-    }
-    const fileData = await createRes.json() as any;
-    const fileId = fileData.id as string;
-    const webUrl = (fileData.webUrl as string) ?? "";
-
-    // Create a workbook session so all subsequent calls work on Microsoft 365 work/school accounts.
-    const sessionId = await createWorkbookSession(token, fileId);
-
-    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`, sessionId);
-    const sheets: any[] = sheetsData.value ?? [];
-    const targetSheet = sheets[0];
-    if (!targetSheet) {
-      res.status(500).json({ error: "Workbook has no worksheets" });
-      return;
-    }
-
-    const sheetName = encodeURIComponent(targetSheet.name);
-    const startCol = 0;
-    const maxBills = Math.max(...weeks.map((w) => w.bills.length));
-    const useRemainingAcct = includeRemainingAcct ?? false;
-    const totalRows = 1 + (useRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
-    const totalCols = startCol + weeks.length * 2;
-
-    const grid: (string | number)[][] = Array.from({ length: totalRows }, () =>
-      Array(totalCols).fill("")
-    );
-
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const week = weeks[wIdx];
-      const lc = startCol + wIdx * 2;
-      const vc = lc + 1;
-      let row = 0;
-
-      grid[row][lc] = week.weekLabel;
-      row++;
-
-      const sumStartRow = row;
-
-      if (useRemainingAcct) {
-        grid[row][lc] = "Remaining Acct";
-        grid[row][vc] = week.openingBalance;
-        row++;
-      }
-
-      grid[row][lc] = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
-        ? "Paycheck (" + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ") + ")"
-        : "Paycheck";
-      grid[row][vc] = week.paycheck;
-      row++;
-
-      for (const bill of week.bills) {
-        grid[row][lc] = bill.name;
-        grid[row][vc] = bill.amount;
-        row++;
-      }
-
-      while (row < totalRows - 1) {
-        grid[row][lc] = "";
-        grid[row][vc] = "";
-        row++;
-      }
-
-      const vcLetter = colLetter(vc);
-      grid[totalRows - 1][lc] = "Remaining";
-      grid[totalRows - 1][vc] = `=SUM(${vcLetter}${sumStartRow + 1}:${vcLetter}${totalRows - 1})`;
-    }
-
-    const startAddr = `${colLetter(startCol)}1`;
-    const endAddr = `${colLetter(totalCols - 1)}${totalRows}`;
-    const rangeAddr = `${startAddr}:${endAddr}`;
-
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${rangeAddr}')`,
-      { values: grid },
-      sessionId,
-    );
-
-    const boldRowRange = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
-    await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 },
-      sessionId,
-    );
-
-    const bodyRangeCreate = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
-    await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRangeCreate}')/format/font`,
-      { bold: false, name: "Arial", size: 10 },
-      sessionId,
-    );
-
-    const fullWeekRangeCreate = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}${totalRows}`;
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeCreate}')/format/fill`,
-      { patternType: "none" },
-      sessionId,
-    );
-
-    // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/fill`,
-      { color: "#BDD7EE" },
-      sessionId,
-    );
-
-    // Apply user-chosen fill colors to individual bill rows (run in parallel).
-    const billRowBaseCreate = 3 + (useRemainingAcct ? 1 : 0);
-    const billFillCreate: Promise<void>[] = [];
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const lc = startCol + wIdx * 2;
-      const vc = lc + 1;
-      weeks[wIdx].bills.forEach((bill, j) => {
-        const hex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
-        if (!hex) return;
-        const rowNum = billRowBaseCreate + j;
-        const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
-        billFillCreate.push(
-          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }, sessionId).then(() => {})
-        );
-      });
-    }
-    await Promise.all(billFillCreate);
-
-    let afterSectionsRow = totalRows;
-    if (body.bills && body.bills.length > 0) {
-      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills, sessionId);
-      afterSectionsRow += body.bills.length + 3;
-      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills, body.debts, sessionId); } catch { }
-    } else if (body.debts && body.debts.length > 0) {
-      try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts, sessionId); } catch { }
-    }
-    if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRow, body.debts, body.bills, sessionId);
-    }
-
-    if (sessionId) await closeWorkbookSession(token, fileId, sessionId);
     res.json({ fileId, webUrl });
   } catch (err: any) {
     handleGraphError(err, req, res, "create Excel file");
@@ -1301,185 +1413,49 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
   }
 
   try {
-    // Create a workbook session so all subsequent calls work on Microsoft 365 work/school accounts.
-    const sessionId = await createWorkbookSession(token, fileId);
+    // Download the existing file, modify it with ExcelJS, then re-upload.
+    // This avoids the Graph workbook API entirely (which returns 405 on many account types).
+    const downloadRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
+      headers: { Authorization: `Bearer ${token}` },
+      redirect: "follow",
+    });
+    if (!downloadRes.ok) {
+      const errText = await downloadRes.text();
+      throw Object.assign(new Error(`Failed to download file: ${errText}`), { status: downloadRes.status });
+    }
+    const rawBuf = await downloadRes.arrayBuffer();
 
-    const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`, sessionId);
-    const sheets: any[] = sheetsData.value ?? [];
-    const targetSheet = sheets.find((s: any) => s.name === (sheetTitle ?? "Budget")) ?? sheets[0];
-    if (!targetSheet) {
-      res.status(400).json({ error: "No worksheets found in workbook" });
-      return;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(rawBuf));
+
+    const targetSheetName = sheetTitle ?? "Budget";
+    let ws = wb.getWorksheet(targetSheetName);
+    if (!ws) {
+      ws = wb.worksheets.find(
+        (s) => s.state !== "hidden" && s.state !== "veryHidden"
+          && s.name !== "_BudgifyData" && s.name !== "_MoneyPalData" && s.name !== "Savings"
+      );
+      if (!ws) ws = wb.addWorksheet(targetSheetName);
     }
 
-    const sheetName = encodeURIComponent(targetSheet.name);
-    const maxBills = Math.max(...weeks.map((w) => w.bills.length));
-    const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
-    const totalCols = startCol + weeks.length * 2;
+    writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct, startCol ?? 0);
 
-    // Find the sheet's current used extent so we can clear any old week columns
-    // that lie beyond the new weeks (handles reducing week count on re-sync).
-    let clearEndColIdx = totalCols - 1;
-    try {
-      const usedRangeRes = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`, sessionId);
-      const usedAddr = usedRangeRes.address?.split("!")?.[1] ?? "";
-      const endCell = usedAddr.split(":")?.[1] ?? "";
-      const oldLastColLetters = endCell.replace(/[0-9]/g, "");
-      if (oldLastColLetters) {
-        const oldLastColIdx = letterToColIndex(oldLastColLetters);
-        clearEndColIdx = Math.max(clearEndColIdx, oldLastColIdx);
-      }
-    } catch { /* proceed without extra clearing */ }
-
-    // Build the grid wide enough to overwrite all previously-used columns with "".
-    const grid: (string | number)[][] = Array.from({ length: totalRows }, () =>
-      Array(clearEndColIdx + 1).fill("")
-    );
-
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const week = weeks[wIdx];
-      const lc = startCol + wIdx * 2;
-      const vc = lc + 1;
-      let row = 0;
-
-      grid[row][lc] = week.weekLabel;
-      row++;
-
-      const sumStartRow = row;
-
-      if (includeRemainingAcct) {
-        grid[row][lc] = "Remaining Acct";
-        grid[row][vc] = week.openingBalance;
-        row++;
-      }
-
-      grid[row][lc] = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
-        ? "Paycheck (" + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ") + ")"
-        : "Paycheck";
-      grid[row][vc] = week.paycheck;
-      row++;
-
-      for (const bill of week.bills) {
-        grid[row][lc] = bill.name;
-        grid[row][vc] = bill.amount;
-        row++;
-      }
-
-      while (row < totalRows - 1) {
-        grid[row][lc] = "";
-        grid[row][vc] = "";
-        row++;
-      }
-
-      const vcLetter = colLetter(vc);
-      grid[totalRows - 1][lc] = "Remaining";
-      grid[totalRows - 1][vc] = `=SUM(${vcLetter}${sumStartRow + 1}:${vcLetter}${totalRows - 1})`;
+    const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
+    if (hasMeta) {
+      const META_SHEET = "_BudgifyData";
+      let dataWs = wb.getWorksheet(META_SHEET);
+      if (!dataWs) dataWs = wb.addWorksheet(META_SHEET);
+      writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
     }
 
-    const startAddr = `${colLetter(startCol)}1`;
-    const endAddr = `${colLetter(clearEndColIdx)}${totalRows}`;
-    const rangeAddr = `${startAddr}:${endAddr}`;
+    const outRaw = await wb.xlsx.writeBuffer();
+    const outBuf = Buffer.from(outRaw as ArrayBuffer);
+    await reuploadBufferToOneDrive(token, fileId, outBuf);
 
-    const slicedGrid = grid.map((row) => row.slice(startCol));
-
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${rangeAddr}')`,
-      { values: slicedGrid },
-      sessionId,
-    );
-
-    const boldRowRange = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
-    await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 },
-      sessionId,
-    );
-
-    const bodyRange = `${colLetter(startCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
-    await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRange}')/format/font`,
-      { bold: false, name: "Arial", size: 10 },
-      sessionId,
-    );
-
-    // Clear fill for all columns from startCol to clearEndColIdx (covers old weeks too).
-    const fullWeekRangeWrite = `${colLetter(startCol)}1:${colLetter(clearEndColIdx)}${totalRows}`;
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeWrite}')/format/fill`,
-      { patternType: "none" },
-      sessionId,
-    );
-
-    // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
-    const boldRowRangeWrite = `${colLetter(startCol)}1:${colLetter(totalCols - 1)}1`;
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRangeWrite}')/format/fill`,
-      { color: "#BDD7EE" },
-      sessionId,
-    );
-
-    // Apply user-chosen fill colors to individual bill rows (run in parallel).
-    const billRowBaseWrite = 3 + (includeRemainingAcct ? 1 : 0);
-    const billFillWrite: Promise<void>[] = [];
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const lc = startCol + wIdx * 2;
-      const vc = lc + 1;
-      weeks[wIdx].bills.forEach((bill, j) => {
-        const hex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
-        if (!hex) return;
-        const rowNum = billRowBaseWrite + j;
-        const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
-        billFillWrite.push(
-          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }, sessionId).then(() => {})
-        );
-      });
-    }
-    await Promise.all(billFillWrite);
-
-    let afterSectionsRowWrite = totalRows;
-    if (body.bills && body.bills.length > 0) {
-      await writeExcelBillRows(token, fileId, sheetName, totalRows, body.bills, sessionId);
-      afterSectionsRowWrite += body.bills.length + 3;
-      try { await writeHiddenExcelBillsSheet(token, fileId, body.bills, body.debts, sessionId); } catch { }
-    } else if (body.debts && body.debts.length > 0) {
-      try { await writeHiddenExcelBillsSheet(token, fileId, [], body.debts, sessionId); } catch { }
-    }
-    if (body.debts && body.debts.length > 0) {
-      await writeExcelDebtRows(token, fileId, sheetName, afterSectionsRowWrite, body.debts, body.bills, sessionId);
-    }
-
-    if (sessionId) await closeWorkbookSession(token, fileId, sessionId);
     res.json({
       ok: true,
-      message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} starting at column ${colLetter(startCol)}`,
+      message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} to Excel`,
     });
-
-    if (body.bills && body.bills.length > 0 && body.budgetId && (req as any).user?.id) {
-      const userId = (req as any).user.id;
-      const budgetId = body.budgetId;
-      const bills = body.bills;
-      ;(async () => {
-        try {
-          const contribRows = await db.select().from(savingsContributionsTable)
-            .where(and(eq(savingsContributionsTable.budgetId, budgetId), eq(savingsContributionsTable.userId, userId)));
-          const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
-          const goalRows = await db.select().from(savingsGoalsTable)
-            .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
-          const goals = goalRows.map(g => ({
-            name: g.name,
-            targetAmount: Number(g.targetAmount),
-            targetDate: g.targetDate,
-            savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
-          }));
-          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals, body.tz);
-        } catch { /* non-fatal */ }
-      })().catch(() => {});
-    }
   } catch (err: any) {
     handleGraphError(err, req, res, "write Excel file");
   }
