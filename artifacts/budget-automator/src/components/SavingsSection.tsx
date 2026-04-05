@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, CalendarDays, PiggyBank, Repeat2, Info, Plus, Trash2,
   ChevronDown, ChevronUp, ClipboardCheck, CheckCircle2, Target, Pencil,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,7 @@ interface SavingsGoal {
   targetAmount: number;
   targetDate: string;
   note?: string | null;
+  includeInBudget: boolean;
   budgetId: string;
   userId: string;
   createdAt: string;
@@ -140,6 +143,21 @@ export function SavingsSection({
     },
   });
 
+  const toggleBudgetMutation = useMutation({
+    mutationFn: ({ goalId, value }: { goalId: string; value: boolean }) =>
+      apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ includeInBudget: value }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update goal", variant: "destructive" });
+    },
+  });
+
   const [sinkingCollapsed, setSinkingCollapsed] = useState(false);
   const [balancedCollapsed, setBalancedCollapsed] = useState(false);
 
@@ -210,6 +228,7 @@ export function SavingsSection({
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
           onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
           onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
+          onToggleBudget={(goalId, value) => toggleBudgetMutation.mutateAsync({ goalId, value })}
           onAddBillForGoal={handleAddBill ? (name, amt) => handleAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       </div>
@@ -336,6 +355,7 @@ export function SavingsSection({
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
           onUpdate={(goalId, payload) => updateGoalMutation.mutateAsync({ goalId, ...payload })}
           onDelete={goalId => deleteGoalMutation.mutateAsync(goalId)}
+          onToggleBudget={(goalId, value) => toggleBudgetMutation.mutateAsync({ goalId, value })}
           onAddBillForGoal={handleAddBill ? (name, amt) => handleAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       )}
@@ -646,10 +666,11 @@ interface SavingsGoalsSectionProps {
   onCreate: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
   onUpdate: (goalId: string, payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
   onDelete: (goalId: string) => Promise<unknown>;
+  onToggleBudget: (goalId: string, value: boolean) => Promise<unknown>;
   onAddBillForGoal?: (name: string, weeklyAmount: number) => void;
 }
 
-function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onCreate, onUpdate, onDelete, onAddBillForGoal }: SavingsGoalsSectionProps) {
+function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onCreate, onUpdate, onDelete, onToggleBudget, onAddBillForGoal }: SavingsGoalsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
   const [addAmount, setAddAmount] = useState("");
@@ -757,6 +778,7 @@ function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onC
               onDeleteContrib={onDeleteContrib}
               onUpdate={(payload) => onUpdate(goal.id, payload)}
               onDelete={() => onDelete(goal.id)}
+              onToggleBudget={(value) => onToggleBudget(goal.id, value)}
               onAddAsBill={onAddBillForGoal ? (amt) => onAddBillForGoal(goal.name, amt) : undefined}
             />
           ))}
@@ -773,12 +795,15 @@ interface GoalCardProps {
   onDeleteContrib: (id: string) => Promise<unknown>;
   onUpdate: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) => Promise<unknown>;
   onDelete: () => Promise<unknown>;
+  onToggleBudget: (value: boolean) => Promise<unknown>;
   onAddAsBill?: (weeklyAmount: number) => void;
 }
 
-function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDelete, onAddAsBill }: GoalCardProps) {
+function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDelete, onToggleBudget, onAddAsBill }: GoalCardProps) {
   const [editing, setEditing] = useState(false);
   const [addedToBills, setAddedToBills] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [optimisticInclude, setOptimisticInclude] = useState<boolean | null>(null);
   const [editName, setEditName] = useState(goal.name);
   const [editAmount, setEditAmount] = useState(String(goal.targetAmount));
   const [editDate, setEditDate] = useState(goal.targetDate);
@@ -823,6 +848,26 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
     try {
       await onDelete();
     } catch {}
+  };
+
+  const includeInBudget = optimisticInclude !== null ? optimisticInclude : goal.includeInBudget;
+
+  useEffect(() => {
+    if (optimisticInclude !== null && goal.includeInBudget === optimisticInclude) {
+      setOptimisticInclude(null);
+    }
+  }, [goal.includeInBudget, optimisticInclude]);
+
+  const handleToggleBudget = async (value: boolean) => {
+    setOptimisticInclude(value);
+    setToggling(true);
+    try {
+      await onToggleBudget(value);
+    } catch {
+      setOptimisticInclude(null);
+    } finally {
+      setToggling(false);
+    }
   };
 
   if (editing) {
@@ -957,6 +1002,29 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
           <p className="text-xs text-teal-600 font-medium">
             Save ${fmt(weeklyNeeded)}/wk to reach your goal
           </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 pt-0.5">
+        <Switch
+          id={`budget-toggle-${goal.id}`}
+          checked={includeInBudget}
+          onCheckedChange={handleToggleBudget}
+          disabled={toggling}
+          className="data-[state=checked]:bg-teal-600"
+        />
+        <Label
+          htmlFor={`budget-toggle-${goal.id}`}
+          className="text-xs cursor-pointer select-none"
+        >
+          {includeInBudget ? (
+            <span className="text-teal-700 font-medium">On budget</span>
+          ) : (
+            <span className="text-muted-foreground">Not counted in budget</span>
+          )}
+        </Label>
+        {includeInBudget && weeklyNeeded > 0 && !isComplete && (
+          <span className="ml-auto text-xs text-teal-600 font-medium">${fmt(weeklyNeeded)}/wk</span>
         )}
       </div>
 
