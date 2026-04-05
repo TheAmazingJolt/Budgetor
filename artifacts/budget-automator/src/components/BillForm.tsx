@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Check, CalendarIcon } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -16,8 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import type { Bill } from "@workspace/api-client-react";
 import { BILL_COLOR_PALETTE } from "@/lib/billColors";
 
@@ -128,39 +126,44 @@ function YearlyDueDatePicker({
   day: number;
   onSelect: (month: number, day: number) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const currentYear = new Date().getFullYear();
-  const selected = new Date(currentYear, month - 1, day);
-  const label = `${MONTH_NAMES[month - 1]} ${day}`;
+  const daysInMonth = new Date(2024, month, 0).getDate();
+  const clampedDay = Math.min(day, daysInMonth);
 
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm font-medium leading-none">Due Date</span>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className="w-full justify-start text-left font-normal focus:ring-primary/20 focus:border-primary"
-          >
-            <CalendarIcon className="mr-2 h-4 w-4 opacity-60" />
-            {label}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={selected}
-            month={selected}
-            onSelect={(date) => {
-              if (date) {
-                onSelect(date.getMonth() + 1, date.getDate());
-                setOpen(false);
-              }
-            }}
-            initialFocus
-          />
-        </PopoverContent>
-      </Popover>
+      <div className="flex gap-2">
+        <Select
+          value={String(month)}
+          onValueChange={(val) => {
+            const newMonth = parseInt(val, 10);
+            const maxDay = new Date(2024, newMonth, 0).getDate();
+            onSelect(newMonth, Math.min(clampedDay, maxDay));
+          }}
+        >
+          <SelectTrigger className="flex-1 focus:ring-primary/20 focus:border-primary">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MONTH_NAMES.map((name, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={String(clampedDay)}
+          onValueChange={(val) => onSelect(month, parseInt(val, 10))}
+        >
+          <SelectTrigger className="w-20 focus:ring-primary/20 focus:border-primary">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: daysInMonth }, (_, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }
