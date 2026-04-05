@@ -18,6 +18,7 @@ import {
   PlusCircle,
   Sheet,
   LogOut,
+  Cloud,
   CloudUpload,
   User,
   Save,
@@ -3271,7 +3272,22 @@ export function BudgetWizard({
               </>
             )}
 
-            {isSignedIn ? (
+            <div className="flex items-center gap-2">
+              {isSignedIn && (
+                <div className="flex items-center gap-1.5" title="Connection status">
+                  <span
+                    className={`w-2 h-2 rounded-full ${googleAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`}
+                    title={googleAuthenticated ? "Google: connected" : "Google: not connected"}
+                  />
+                  {microsoftConfigured && (
+                    <span
+                      className={`w-2 h-2 rounded-full ${microsoftAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`}
+                      title={microsoftAuthenticated ? "Microsoft: connected" : "Microsoft: not connected"}
+                    />
+                  )}
+                </div>
+              )}
+              {isSignedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2 rounded-xl">
@@ -3298,14 +3314,6 @@ export function BudgetWizard({
                     )}
                   </div>
                   <DropdownMenuSeparator />
-                  {!isGuest && (
-                    <>
-                      <DropdownMenuItem onClick={handleBackToMenu}>
-                        <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
                   {isGuest && (
                     <>
                       <DropdownMenuSeparator />
@@ -3327,6 +3335,11 @@ export function BudgetWizard({
                       <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
                         <Settings2 className="w-4 h-4 mr-2" /> Preferences
                       </DropdownMenuItem>
+                      {microsoftConfigured && (
+                        <DropdownMenuItem onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}>
+                          <Cloud className="w-4 h-4 mr-2" /> {microsoftAuthenticated ? "Disconnect Microsoft" : "Connect Microsoft"}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={handleOpenReferral}>
                         <Gift className="w-4 h-4 mr-2" /> Refer a friend
                       </DropdownMenuItem>
@@ -3359,6 +3372,7 @@ export function BudgetWizard({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            </div>
           </div>
         </div>
       </header>
@@ -3487,24 +3501,6 @@ export function BudgetWizard({
                       ) : savedBudgetsQuery.data ? (
                         <p className="text-sm text-muted-foreground">No saved budgets yet. Create a new budget and save it to access it here.</p>
                       ) : null}
-                      {microsoftConfigured && (
-                        <div className="flex items-center justify-between pt-3 border-t border-border/30 mt-1">
-                          <div>
-                            <p className="text-xs font-medium text-foreground">Microsoft / OneDrive</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {microsoftAuthenticated ? "Connected — export to Excel Online" : "Connect to export to Excel Online"}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant={microsoftAuthenticated ? "outline" : "default"}
-                            className={`ml-3 shrink-0 rounded-xl text-xs ${microsoftAuthenticated ? "" : "bg-gradient-to-r from-teal-600 to-teal-500 text-white border-0"}`}
-                            onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
-                          >
-                            {microsoftAuthenticated ? "Disconnect" : "Connect"}
-                          </Button>
-                        </div>
-                      )}
                     </>
                   ) : (
                     <div className="space-y-3">
