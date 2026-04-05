@@ -141,7 +141,7 @@ export function BillForm({ initialData, onSubmit, onCancel }: BillFormProps) {
       : {
           name: "",
           amount: -0,
-          dayOfMonth: null,
+          dayOfMonth: 1,
           annualDueMonth: null,
           category: "",
           type: "fixed",
