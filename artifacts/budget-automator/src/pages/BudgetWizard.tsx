@@ -3102,7 +3102,7 @@ export function BudgetWizard({
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <button
             type="button"
             onClick={() => setStep(0)}
@@ -3116,7 +3116,7 @@ export function BudgetWizard({
             </div>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-5">
             {step > 0 && (
               <button
                 onClick={() => setStep(step - 1)}
@@ -3126,20 +3126,20 @@ export function BudgetWizard({
                 <ChevronLeft className="w-5 h-5" />
               </button>
             )}
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-3">
               {STEPS.map((label, i) => (
-                <div key={i} className="flex items-center gap-2">
+                <div key={i} className="flex items-center gap-3">
                   {i < step ? (
                     <button
                       onClick={() => setStep(i)}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer"
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer"
                     >
                       <Check className="w-3 h-3" />
                       {label}
                     </button>
                   ) : (
                     <div
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                         i === step
                           ? "bg-primary text-white"
                           : "bg-slate-100 text-muted-foreground"
@@ -3233,7 +3233,7 @@ export function BudgetWizard({
                         <User className="w-3.5 h-3.5 text-primary" />
                       </div>
                     )}
-                    <span className="text-sm font-medium max-w-[120px] truncate">
+                    <span className="text-sm font-medium max-w-[160px] truncate">
                       {currentUser?.name || "Guest"}
                     </span>
                   </Button>
