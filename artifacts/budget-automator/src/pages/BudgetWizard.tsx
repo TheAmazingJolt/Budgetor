@@ -2133,6 +2133,13 @@ export function BudgetWizard({
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({ title: "Budget deleted", description: `"${name}" has been removed.` });
+          if (id === activeCloudBudgetId) {
+            setActiveCloudBudgetId(null);
+            setActiveCloudBudgetName(null);
+            setActiveLinkedSheet(null);
+            setNewCloudSaveSuccess(false);
+            setSavedCloudName("");
+          }
         },
       }
     );
@@ -2230,14 +2237,25 @@ export function BudgetWizard({
           });
         },
         onError: (err: unknown) => {
-          const apiErr = err as { data?: { error?: string } };
+          const apiErr = err as { data?: { error?: string }; status?: number };
           const detail = apiErr?.data?.error ?? (err instanceof Error ? err.message : "Unknown error");
-          const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
-          toast({
-            title: "Failed to save to cloud",
-            description,
-            variant: "destructive",
-          });
+          if (detail === "Budget not found" || apiErr?.status === 404) {
+            setActiveCloudBudgetId(null);
+            setActiveCloudBudgetName(null);
+            setActiveLinkedSheet(null);
+            toast({
+              title: "Budget no longer exists",
+              description: "This budget was deleted. Click Save to Cloud to save as a new budget.",
+              variant: "destructive",
+            });
+          } else {
+            const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
+            toast({
+              title: "Failed to save to cloud",
+              description,
+              variant: "destructive",
+            });
+          }
         },
         onSettled: () => {
           setIsSavingToCloud(false);
@@ -3469,6 +3487,24 @@ export function BudgetWizard({
                       ) : savedBudgetsQuery.data ? (
                         <p className="text-sm text-muted-foreground">No saved budgets yet. Create a new budget and save it to access it here.</p>
                       ) : null}
+                      {microsoftConfigured && (
+                        <div className="flex items-center justify-between pt-3 border-t border-border/30 mt-1">
+                          <div>
+                            <p className="text-xs font-medium text-foreground">Microsoft / OneDrive</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {microsoftAuthenticated ? "Connected — export to Excel Online" : "Connect to export to Excel Online"}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={microsoftAuthenticated ? "outline" : "default"}
+                            className={`ml-3 shrink-0 rounded-xl text-xs ${microsoftAuthenticated ? "" : "bg-gradient-to-r from-teal-600 to-teal-500 text-white border-0"}`}
+                            onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
+                          >
+                            {microsoftAuthenticated ? "Disconnect" : "Connect"}
+                          </Button>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="space-y-3">
