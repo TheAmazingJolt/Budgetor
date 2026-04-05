@@ -512,9 +512,15 @@ function writeBillsVerbatim(
     sheet[addr] = normalized;
   }
 
-  // Restore any merges that were in the bills columns
+  // Only restore merges that are single-row (header/title rows).
+  // Multi-row merges and content-row merges are intentionally dropped so
+  // individual bill/data cells remain independently selectable.
   if (!sheet['!merges']) sheet['!merges'] = [];
   for (const m of raw.merges) {
+    if (m.s.r !== m.e.r) continue; // skip any merge that spans multiple rows
+    // Only keep merges that span more than one column (i.e. a header title bar).
+    // Single-cell "merges" (s===e) are no-ops; content rows should be unmerged.
+    if (m.s.c === m.e.c) continue;
     const already = (sheet['!merges'] as any[]).some(
       (e: any) => e.s.r === m.s.r && e.s.c === m.s.c && e.e.r === m.e.r && e.e.c === m.e.c
     );
