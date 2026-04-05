@@ -33,6 +33,7 @@ import {
   ArrowUpDown,
   SlidersHorizontal,
   MessageSquareWarning,
+  ExternalLink,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -4382,7 +4383,6 @@ export function BudgetWizard({
                           <h3 className="text-lg font-semibold text-foreground">
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
-                          <div className="flex-1" />
                           <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5">
                             <button
                               type="button"
@@ -4401,6 +4401,7 @@ export function BudgetWizard({
                               </button>
                             )}
                           </div>
+                          <div className="flex-1" />
                           {step2Tab === "budget" && (
                             <>
                               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
@@ -4458,6 +4459,38 @@ export function BudgetWizard({
                                   title="Download spreadsheet"
                                 >
                                   <Download className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                              {activeLinkedSheet && (
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Also sync to ${activeLinkedSheet.type === "google" ? "Google Sheets" : "Excel"} when saving`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOnUpdate}
+                                    onChange={e => setSyncOnUpdate(e.target.checked)}
+                                    className="accent-primary w-3.5 h-3.5"
+                                  />
+                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                  Sync
+                                  {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
+                                </label>
+                              )}
+                              {activeLinkedSheet && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5"
+                                  title={`Open in ${activeLinkedSheet.type === "google" ? "Google Sheets" : "Excel Online"}`}
+                                  asChild
+                                >
+                                  <a
+                                    href={activeLinkedSheet.type === "google"
+                                      ? `https://docs.google.com/spreadsheets/d/${activeLinkedSheet.id}`
+                                      : (selectedExcelFileUrl ?? "#")}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
                                 </Button>
                               )}
                             </>
