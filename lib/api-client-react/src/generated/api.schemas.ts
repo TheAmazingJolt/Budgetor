@@ -165,6 +165,7 @@ export interface AuthUserResponse {
 export interface AuthProviders {
   google: boolean;
   apple: boolean;
+  microsoft?: boolean;
 }
 
 export type DebtType = (typeof DebtType)[keyof typeof DebtType];

@@ -14,6 +14,7 @@ import {
   useAuthGuestLogin,
   authLoginGoogle,
   authLoginApple,
+  getMicrosoftAuthUrl,
   getAuthMeQueryKey,
   getAuthProvidersQueryKey,
 } from "@workspace/api-client-react";
@@ -130,6 +131,7 @@ function AppRouting() {
   const isGuest = currentUser?.provider === "guest";
   const googleLoginAvailable = providersQuery.data?.google ?? false;
   const appleLoginAvailable = providersQuery.data?.apple ?? false;
+  const microsoftLoginAvailable = providersQuery.data?.microsoft ?? false;
 
   const initialRefCode = new URLSearchParams(window.location.search).get("ref");
   const [referralReady, setReferralReady] = useState<boolean>(!initialRefCode);
@@ -217,6 +219,20 @@ function AppRouting() {
     }
   };
 
+  const handleMicrosoftLogin = async () => {
+    try {
+      const currentUrl = window.location.href;
+      const result = await getMicrosoftAuthUrl({ redirect: currentUrl });
+      window.location.href = result.url;
+    } catch (err) {
+      toast({
+        title: "Failed to start Microsoft login",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleGuestLogin = () => {
     guestLoginMutation.mutate(undefined, {
       onSuccess: (data) => {
@@ -245,8 +261,10 @@ function AppRouting() {
       <SignInPage
         googleLoginAvailable={googleLoginAvailable}
         appleLoginAvailable={appleLoginAvailable}
+        microsoftLoginAvailable={microsoftLoginAvailable}
         onGoogleLogin={handleGoogleLogin}
         onAppleLogin={handleAppleLogin}
+        onMicrosoftLogin={handleMicrosoftLogin}
         onGuestLogin={handleGuestLogin}
         isLoggingIn={guestLoginMutation.isPending}
       />

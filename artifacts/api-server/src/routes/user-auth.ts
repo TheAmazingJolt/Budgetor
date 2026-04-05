@@ -240,9 +240,9 @@ function getAccountOAuth2Client() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-async function upsertOrUpgradeUser(
+export async function upsertOrUpgradeUser(
   req: Request,
-  provider: "google" | "apple",
+  provider: "google" | "apple" | "microsoft",
   providerId: string,
   profile: { email?: string | null; name?: string | null; avatarUrl?: string | null },
 ): Promise<string> {
@@ -324,7 +324,7 @@ async function upsertOrUpgradeUser(
       provider,
       providerId,
       email: profile.email || null,
-      name: profile.name || (provider === "google" ? "Google User" : "Apple User"),
+      name: profile.name || (provider === "google" ? "Google User" : provider === "apple" ? "Apple User" : "Microsoft User"),
       avatarUrl: profile.avatarUrl || null,
       referralCode: crypto.randomBytes(5).toString("hex").toUpperCase(),
       referredBy: pendingReferralCode || null,
@@ -336,7 +336,7 @@ async function upsertOrUpgradeUser(
 const AUTH_CODES = new Map<string, { userId: string; expiresAt: number }>();
 const AUTH_CODE_TTL_MS = 2 * 60 * 1000;
 
-function generateAuthCode(userId: string): string {
+export function generateAuthCode(userId: string): string {
   const code = crypto.randomBytes(32).toString("hex");
   AUTH_CODES.set(code, { userId, expiresAt: Date.now() + AUTH_CODE_TTL_MS });
   setTimeout(() => AUTH_CODES.delete(code), AUTH_CODE_TTL_MS);
@@ -607,9 +607,15 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
 });
 
 router.get("/auth/providers", (_req: Request, res: Response) => {
+  const microsoftConfigured = !!(
+    process.env["MICROSOFT_CLIENT_ID"] &&
+    process.env["MICROSOFT_CLIENT_SECRET"] &&
+    process.env["MICROSOFT_REDIRECT_URI"]
+  );
   res.json({
     google: !!getAccountOAuth2Client(),
     apple: isAppleConfigured(),
+    microsoft: microsoftConfigured,
   });
 });
 

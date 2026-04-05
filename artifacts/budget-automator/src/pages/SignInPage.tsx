@@ -17,8 +17,10 @@ import {
 interface SignInPageProps {
   googleLoginAvailable: boolean;
   appleLoginAvailable: boolean;
+  microsoftLoginAvailable?: boolean;
   onGoogleLogin: () => void;
   onAppleLogin: () => void;
+  onMicrosoftLogin?: () => void;
   onGuestLogin: () => void;
   isLoggingIn: boolean;
 }
@@ -42,11 +44,24 @@ function AppleIcon({ className }: { className?: string }) {
   );
 }
 
+function MicrosoftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <path d="M0 0h11.377v11.372H0z" fill="#F35325" />
+      <path d="M12.623 0H24v11.372H12.623z" fill="#81BC06" />
+      <path d="M0 12.623h11.377V24H0z" fill="#05A6F0" />
+      <path d="M12.623 12.623H24V24H12.623z" fill="#FFBA08" />
+    </svg>
+  );
+}
+
 function AuthButtons({
   googleLoginAvailable,
   appleLoginAvailable,
+  microsoftLoginAvailable,
   onGoogleLogin,
   onAppleLogin,
+  onMicrosoftLogin,
   onGuestLogin,
   isLoggingIn,
   clickedProvider,
@@ -55,8 +70,10 @@ function AuthButtons({
 }: {
   googleLoginAvailable: boolean;
   appleLoginAvailable: boolean;
+  microsoftLoginAvailable?: boolean;
   onGoogleLogin: () => void;
   onAppleLogin: () => void;
+  onMicrosoftLogin?: () => void;
   onGuestLogin: () => void;
   isLoggingIn: boolean;
   clickedProvider: string | null;
@@ -65,6 +82,7 @@ function AuthButtons({
 }) {
   const handleGoogle = () => { setClickedProvider("google"); onGoogleLogin(); };
   const handleApple = () => { setClickedProvider("apple"); onAppleLogin(); };
+  const handleMicrosoft = () => { setClickedProvider("microsoft"); onMicrosoftLogin?.(); };
   const handleGuest = () => { setClickedProvider("guest"); onGuestLogin(); };
 
   const isCompact = variant === "compact";
@@ -104,7 +122,24 @@ function AuthButtons({
         </Button>
       )}
 
-      {(googleLoginAvailable || appleLoginAvailable) && (
+      {microsoftLoginAvailable && (
+        <Button
+          size="lg"
+          className="w-full h-12 rounded-xl gap-2 bg-white text-foreground border border-border/60 hover:bg-slate-50 shadow-sm"
+          variant="outline"
+          onClick={handleMicrosoft}
+          disabled={isLoggingIn}
+        >
+          {clickedProvider === "microsoft" && isLoggingIn ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <MicrosoftIcon className="w-5 h-5" />
+          )}
+          Sign in with Microsoft
+        </Button>
+      )}
+
+      {(googleLoginAvailable || appleLoginAvailable || microsoftLoginAvailable) && (
         <div className="relative my-1">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-border/50" />
@@ -208,8 +243,10 @@ const testimonials = [
 export function SignInPage({
   googleLoginAvailable,
   appleLoginAvailable,
+  microsoftLoginAvailable,
   onGoogleLogin,
   onAppleLogin,
+  onMicrosoftLogin,
   onGuestLogin,
   isLoggingIn,
 }: SignInPageProps) {
@@ -269,8 +306,10 @@ export function SignInPage({
           <AuthButtons
             googleLoginAvailable={googleLoginAvailable}
             appleLoginAvailable={appleLoginAvailable}
+            microsoftLoginAvailable={microsoftLoginAvailable}
             onGoogleLogin={onGoogleLogin}
             onAppleLogin={onAppleLogin}
+            onMicrosoftLogin={onMicrosoftLogin}
             onGuestLogin={onGuestLogin}
             isLoggingIn={isLoggingIn}
             clickedProvider={clickedProvider}
@@ -458,6 +497,23 @@ export function SignInPage({
                 <AppleIcon className="w-5 h-5" />
               )}
               Sign in with Apple
+            </Button>
+          )}
+
+          {microsoftLoginAvailable && (
+            <Button
+              size="lg"
+              className="w-full h-12 rounded-xl gap-2 bg-white text-foreground border border-white/60 hover:bg-slate-50 shadow-sm"
+              variant="outline"
+              onClick={() => { setClickedProvider("microsoft"); onMicrosoftLogin?.(); }}
+              disabled={isLoggingIn}
+            >
+              {clickedProvider === "microsoft" && isLoggingIn ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <MicrosoftIcon className="w-5 h-5" />
+              )}
+              Sign in with Microsoft
             </Button>
           )}
 

@@ -19,7 +19,7 @@ export const usersTable = pgTable("users", {
   email: text("email"),
   name: text("name").notNull(),
   avatarUrl: text("avatar_url"),
-  provider: text("provider").notNull().$type<"google" | "apple" | "guest">(),
+  provider: text("provider").notNull().$type<"google" | "apple" | "guest" | "microsoft">(),
   providerId: text("provider_id"),
   googleAccessToken: text("google_access_token"),
   googleRefreshToken: text("google_refresh_token"),
