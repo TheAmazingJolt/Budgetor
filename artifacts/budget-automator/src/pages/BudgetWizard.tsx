@@ -4253,6 +4253,7 @@ export function BudgetWizard({
                 };
 
                 const newWeekLabels = new Set(rawNewWeeks.map(w => w.label));
+                const existingWeekLabels = new Set(rawHistoryWeeks.map(w => w.label));
                 const filteredHistoryWeeks = rawHistoryWeeks.filter(w => !newWeekLabels.has(w.label));
                 const allWeeks = [...filteredHistoryWeeks, ...rawNewWeeks]
                   .map(applyEdit)
@@ -4516,12 +4517,12 @@ export function BudgetWizard({
                                       }`}
                                     >
                                       {week.label}
-                                      {week.isNew && rawHistoryWeeks.length > 0 && (
+                                      {week.isNew && !existingWeekLabels.has(week.label) && rawHistoryWeeks.length > 0 && (
                                         <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-full">
                                           NEW
                                         </span>
                                       )}
-                                      {isEdited && (
+                                      {(isEdited || (week.isNew && existingWeekLabels.has(week.label))) && (
                                         <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">
                                           EDITED
                                         </span>
