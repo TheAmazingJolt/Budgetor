@@ -650,7 +650,7 @@ export function generateClaimToken(userId: string): string {
   return token;
 }
 
-function consumeClaimToken(token: string): string | null {
+export function consumeClaimToken(token: string): string | null {
   const entry = CLAIM_TOKENS.get(token);
   if (!entry) return null;
   CLAIM_TOKENS.delete(token);
@@ -664,11 +664,11 @@ function getHmacSecret(): string {
   return process.env["SESSION_SECRET"] || "budget-automator-dev-secret";
 }
 
-function signOAuthState(payload: string): string {
+export function signOAuthState(payload: string): string {
   return crypto.createHmac("sha256", getHmacSecret()).update(payload).digest("hex");
 }
 
-function generateOAuthState(_req: Request, redirect?: string): string {
+export function generateOAuthState(_req: Request, redirect?: string): string {
   const nonce = crypto.randomBytes(32).toString("hex");
   const ts = Date.now();
   const data: Record<string, unknown> = { nonce, ts };
@@ -678,7 +678,7 @@ function generateOAuthState(_req: Request, redirect?: string): string {
   return `${payload}.${sig}`;
 }
 
-function verifyAndConsumeOAuthState(_req: Request, stateParam: string | undefined): { valid: boolean; redirect: string } {
+export function verifyAndConsumeOAuthState(_req: Request, stateParam: string | undefined): { valid: boolean; redirect: string } {
   if (!stateParam) return { valid: false, redirect: "/" };
 
   const dotIdx = stateParam.lastIndexOf(".");

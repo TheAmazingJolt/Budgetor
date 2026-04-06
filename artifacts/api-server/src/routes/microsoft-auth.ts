@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request } from "express";
 import crypto from "crypto";
 import { db, usersTable, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { upsertOrUpgradeUser, generateAuthCode } from "./user-auth";
+import { upsertOrUpgradeUser, generateAuthCode, generateClaimToken, generateOAuthState, verifyAndConsumeOAuthState } from "./user-auth";
 
 const router: IRouter = Router();
 
@@ -56,7 +56,7 @@ router.get("/auth/microsoft", (req, res) => {
   }
 
   const frontendUrl = req.query["redirect"] as string | undefined;
-  const state = frontendUrl ? Buffer.from(frontendUrl).toString("base64") : "";
+  const state = generateOAuthState(req, frontendUrl);
 
   const nonce = crypto.randomBytes(16).toString("hex");
   (req as any).session.microsoftOAuthNonce = nonce;
@@ -89,16 +89,58 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
   }
 
   const state = req.query["state"] as string | undefined;
-  let redirectUrl = "/";
-  if (state) {
-    try {
-      redirectUrl = Buffer.from(state, "base64").toString("utf-8");
-    } catch {}
-  }
+  const { redirect: redirectUrl } = verifyAndConsumeOAuthState(req, state);
 
-  // Enforce authenticated session BEFORE exchanging tokens
+  // Enforce authenticated session BEFORE exchanging tokens.
+  // Exception: if this Microsoft email matches an existing no-password OAuth account,
+  // issue a one-time claim token so the user can set a password.
   const user = (req as any).user;
   if (!user?.id) {
+    // Attempt to get user email from Microsoft using the auth code before rejecting.
+    // We do a minimal token exchange just to extract the email for claim detection.
+    const config2 = getMicrosoftConfig();
+    if (config2 && code) {
+      try {
+        const tokenBody = new URLSearchParams({
+          client_id: config2.clientId,
+          client_secret: config2.clientSecret,
+          code,
+          redirect_uri: config2.redirectUri,
+          grant_type: "authorization_code",
+          scope: SCOPES.join(" "),
+        });
+        const tokenRes = await fetch(AZURE_TOKEN_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: tokenBody.toString(),
+        });
+        if (tokenRes.ok) {
+          const tokens = await tokenRes.json() as any;
+          // Decode the id_token to get the email (standard JWT payload, no verification needed here)
+          if (tokens.id_token) {
+            const [, b64] = tokens.id_token.split(".");
+            const payload = JSON.parse(Buffer.from(b64, "base64url").toString("utf-8")) as Record<string, unknown>;
+            const email = (payload["email"] as string | undefined) || (payload["preferred_username"] as string | undefined);
+            if (email) {
+              const [matchedUser] = await db
+                .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+                .from(usersTable)
+                .where(eq(usersTable.email, email.toLowerCase()))
+                .limit(1);
+              if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
+                const claimToken = generateClaimToken(matchedUser.id);
+                const sep = redirectUrl.includes("?") ? "&" : "?";
+                const encodedEmail = encodeURIComponent(email);
+                res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${encodedEmail}`);
+                return;
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore errors in claim detection — fall through to link_only
+      }
+    }
     const sep = redirectUrl.includes("?") ? "&" : "?";
     res.redirect(`${redirectUrl}${sep}error=link_only`);
     return;

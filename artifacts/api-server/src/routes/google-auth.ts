@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request } from "express";
 import { google } from "googleapis";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { generateOAuthState, verifyAndConsumeOAuthState } from "./user-auth";
 
 function saveSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -53,7 +54,7 @@ router.get("/auth/google", (req, res) => {
   }
 
   const frontendUrl = req.query["redirect"] as string | undefined;
-  const state = frontendUrl ? Buffer.from(frontendUrl).toString("base64") : "";
+  const state = generateOAuthState(req, frontendUrl);
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -79,12 +80,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
   }
 
   const state = req.query["state"] as string | undefined;
-  let redirectUrl = "/";
-  if (state) {
-    try {
-      redirectUrl = Buffer.from(state, "base64").toString("utf-8");
-    } catch {}
-  }
+  const { redirect: redirectUrl } = verifyAndConsumeOAuthState(req, state);
 
   const user = (req as any).user;
   if (!user?.id) {
