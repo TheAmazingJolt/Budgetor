@@ -31,7 +31,7 @@ interface SignInPageProps {
   onGuestLogin: () => void;
   onEmailLogin: (email: string, password: string) => Promise<void>;
   onEmailRegister: (name: string, email: string, password: string) => Promise<void>;
-  onForgotPassword: (email: string) => Promise<void>;
+  onForgotPassword: (email: string) => Promise<{ resetUrl?: string } | void>;
   onResetPassword?: (token: string, password: string) => Promise<void>;
   resetToken?: string | null;
   isLoggingIn: boolean;
@@ -93,7 +93,7 @@ function AuthPanel({
   onGuestLogin: () => void;
   onEmailLogin: (email: string, password: string) => Promise<void>;
   onEmailRegister: (name: string, email: string, password: string) => Promise<void>;
-  onForgotPassword: (email: string) => Promise<void>;
+  onForgotPassword: (email: string) => Promise<{ resetUrl?: string } | void>;
   onResetPassword?: (token: string, password: string) => Promise<void>;
   resetToken?: string | null;
   isLoggingIn: boolean;
@@ -113,6 +113,7 @@ function AuthPanel({
   const [regPassword, setRegPassword] = useState("");
 
   const [forgotEmail, setForgotEmail] = useState("");
+  const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
 
   const [resetPassword, setResetPassword] = useState("");
   const [resetConfirm, setResetConfirm] = useState("");
@@ -154,7 +155,8 @@ function AuthPanel({
     setError(null);
     setLoading(true);
     try {
-      await onForgotPassword(forgotEmail.trim());
+      const result = await onForgotPassword(forgotEmail.trim());
+      if (result?.resetUrl) setDevResetUrl(result.resetUrl);
       setView("forgot_sent");
     } catch {
       setView("forgot_sent");
@@ -250,6 +252,12 @@ function AuthPanel({
             <h2 className="text-xl font-bold mb-1">Check your email</h2>
             <p className="text-muted-foreground text-sm">If an account exists for {forgotEmail || "that address"}, we've sent a reset link. It expires in 1 hour.</p>
           </div>
+          {devResetUrl && (
+            <div className="w-full text-left bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <p className="text-xs font-semibold text-amber-700 mb-1">Dev mode — reset link:</p>
+              <a href={devResetUrl} className="text-xs text-amber-800 break-all underline underline-offset-2">{devResetUrl}</a>
+            </div>
+          )}
           <button type="button" onClick={() => switchView("signin")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             Back to sign in
           </button>
@@ -353,21 +361,13 @@ function AuthPanel({
               Try for free — no account needed
             </Button>
 
-            {googleLoginAvailable && (
-              <button
-                type="button"
-                onClick={handleGoogle}
-                disabled={busy}
-                className="text-xs text-center text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5"
-              >
-                {clickedGoogle && isLoggingIn ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <GoogleIcon className="w-3.5 h-3.5" />
-                )}
-                Already have a Google account? Sign in with Google
-              </button>
-            )}
+            <p className="text-xs text-center text-muted-foreground/70 leading-relaxed">
+              Had a Budgify account via Google or Apple?{" "}
+              <button type="button" onClick={() => switchView("forgot")} className="underline underline-offset-2 hover:text-foreground transition-colors">
+                Use forgot password
+              </button>{" "}
+              with your email to set a password.
+            </p>
           </div>
         </>
       )}

@@ -372,17 +372,21 @@ async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<
 router.post("/auth/forgot-password", async (req: Request, res: Response): Promise<void> => {
   const { email } = req.body as { email?: string };
 
-  res.json({ ok: true });
-
-  if (!email || typeof email !== "string" || !email.includes("@")) return;
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    res.json({ ok: true });
+    return;
+  }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const [user] = await db.select({ id: usersTable.id, email: usersTable.email, passwordHash: usersTable.passwordHash })
+  const [user] = await db.select({ id: usersTable.id, email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.email, normalizedEmail))
     .limit(1);
 
-  if (!user || !user.passwordHash) return;
+  if (!user) {
+    res.json({ ok: true });
+    return;
+  }
 
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -399,9 +403,17 @@ router.post("/auth/forgot-password", async (req: Request, res: Response): Promis
     : "http://localhost:5173";
   const resetUrl = `${frontendOrigin}?reset_token=${rawToken}`;
 
+  const isDev = process.env["NODE_ENV"] !== "production";
+
   sendPasswordResetEmail(normalizedEmail, resetUrl).catch((err) => {
     console.error("[forgot-password] Failed to send email:", err);
   });
+
+  if (isDev) {
+    res.json({ ok: true, resetUrl });
+  } else {
+    res.json({ ok: true });
+  }
 });
 
 router.post("/auth/reset-password", async (req: Request, res: Response): Promise<void> => {
@@ -436,7 +448,7 @@ router.post("/auth/reset-password", async (req: Request, res: Response): Promise
     passwordHash,
     passwordResetToken: null,
     passwordResetExpires: null,
-    provider: user.provider === "guest" ? "email" : user.provider,
+    provider: "email",
     updatedAt: new Date(),
   }).where(eq(usersTable.id, user.id));
 
@@ -466,6 +478,7 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
   const passwordHash = await bcrypt.hash(password, 12);
   await db.update(usersTable).set({
     passwordHash,
+    provider: "email",
     updatedAt: new Date(),
   }).where(eq(usersTable.id, req.user.id));
 
@@ -699,13 +712,7 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
       return;
     }
 
-    const [existingUser] = await db
-      .select({ id: usersTable.id, provider: usersTable.provider, email: usersTable.email, passwordHash: usersTable.passwordHash })
-      .from(usersTable)
-      .where(and(eq(usersTable.provider, "google"), eq(usersTable.providerId, profile.id)))
-      .limit(1);
-
-    if (!existingUser && !req.user) {
+    if (!req.user) {
       const sep = redirectUrl.includes("?") ? "&" : "?";
       res.redirect(`${redirectUrl}${sep}error=link_required`);
       return;
@@ -845,6 +852,12 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
       }
     }
 
+    if (!req.user) {
+      const sep = redirectUrl.includes("?") ? "&" : "?";
+      res.redirect(`${redirectUrl}${sep}error=link_required`);
+      return;
+    }
+
     const userId = await upsertOrUpgradeUser(req, "apple", appleUserId, {
       email,
       name: email?.split("@")[0],
@@ -861,15 +874,10 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
 });
 
 router.get("/auth/providers", (_req: Request, res: Response) => {
-  const microsoftConfigured = !!(
-    process.env["MICROSOFT_CLIENT_ID"] &&
-    process.env["MICROSOFT_CLIENT_SECRET"] &&
-    process.env["MICROSOFT_REDIRECT_URI"]
-  );
   res.json({
-    google: !!getAccountOAuth2Client(),
-    apple: isAppleConfigured(),
-    microsoft: microsoftConfigured,
+    google: false,
+    apple: false,
+    microsoft: false,
   });
 });
 

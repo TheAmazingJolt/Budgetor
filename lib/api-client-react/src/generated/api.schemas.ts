@@ -171,6 +171,8 @@ export interface AuthForgotPasswordRequest {
 
 export interface AuthForgotPasswordResponse {
   ok: boolean;
+  /** Only present in development environments — the reset URL to use directly */
+  resetUrl?: string;
 }
 
 export interface AuthResetPasswordRequest {

@@ -246,7 +246,8 @@ function AppRouting() {
   };
 
   const handleForgotPassword = async (email: string) => {
-    await authForgotPassword({ email });
+    const data = await authForgotPassword({ email });
+    return data;
   };
 
   const handleResetPassword = async (token: string, password: string) => {
