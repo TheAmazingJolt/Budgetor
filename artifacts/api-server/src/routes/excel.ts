@@ -1266,7 +1266,6 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
   }
 });
 
-const MONTH_SHORT_EXCEL = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function getNextYearlyDueExcel(today: Date, dueMonth: number, dueDay: number): Date {
   const year = today.getFullYear();
