@@ -139,6 +139,12 @@ function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | 
   return grid;
 }
 
+const FMT_CURRENCY = '"$"#,##0.00';
+const FMT_CURRENCY_NEG = '"$"#,##0.00;[Red]"$"-#,##0.00';
+const BILL_BG = "FFEBF6EE";
+const DEBT_BG = "FFF9E9E9";
+const MONTH_SHORT_XL = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 function writeExcelBudgetSheetXL(
   ws: ExcelJS.Worksheet,
   weeks: ExcelWriteRequest["weeks"],
@@ -172,6 +178,7 @@ function writeExcelBudgetSheetXL(
     if (includeRemainingAcct) {
       ws.getCell(r, lc).value = "Remaining Acct";
       ws.getCell(r, vc).value = week.openingBalance;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
       for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
       r++;
     }
@@ -181,6 +188,7 @@ function writeExcelBudgetSheetXL(
       : "Paycheck";
     ws.getCell(r, lc).value = paycheckLabel;
     ws.getCell(r, vc).value = week.paycheck;
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY;
     for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
     r++;
 
@@ -188,6 +196,7 @@ function writeExcelBudgetSheetXL(
       const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
       ws.getCell(r, lc).value = bill.name;
       ws.getCell(r, vc).value = bill.amount;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
       for (const c of [lc, vc]) {
         ws.getCell(r, c).font = xlFont();
         if (argb) ws.getCell(r, c).fill = xlFill(argb);
@@ -204,28 +213,30 @@ function writeExcelBudgetSheetXL(
     const vcLetter = colLetter(vc - 1);
     ws.getCell(r, lc).value = "Remaining";
     ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
     for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
   }
 
   let nextRow = totalRows + 1;
 
-  const filteredBills = (bills ?? []).filter((b) => !b.sourceDebtId);
+  const filteredBills = (bills ?? []).filter((b) => !b.sourceDebtId && !b.sourceGoalId);
   if (filteredBills.length > 0) {
     nextRow++;
     ws.getCell(nextRow, sc).value = "Bills";
     ws.getCell(nextRow, sc).font = xlFont(true, 11);
-    ws.getCell(nextRow, sc).fill = xlFill("FFEBF6EE");
+    for (let c = sc; c < sc + 3; c++) ws.getCell(nextRow, c).fill = xlFill(BILL_BG);
     nextRow++;
 
-    const billColHdrs = ["Name", "Amount", "Type", "Category", "Due Day"];
-    billColHdrs.forEach((h, i) => {
+    const billHdrs = ["Name", "Amount", "Due Day"];
+    billHdrs.forEach((h, i) => {
       ws.getCell(nextRow, sc + i).value = h;
       ws.getCell(nextRow, sc + i).font = xlFont(true);
-      ws.getCell(nextRow, sc + i).fill = xlFill("FFEBF6EE");
+      ws.getCell(nextRow, sc + i).fill = xlFill(BILL_BG);
     });
+    ws.getCell(nextRow, sc + 1).alignment = { horizontal: "right" };
+    ws.getCell(nextRow, sc + 2).alignment = { horizontal: "right" };
     nextRow++;
 
-    const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     for (const bill of filteredBills) {
       const isYearly = bill.type === "yearly" || bill.type === "yearly-flat";
       let endingStr = "";
@@ -235,22 +246,22 @@ function writeExcelBudgetSheetXL(
         const pd = parts.length >= 3 ? parseInt(parts[2], 10) : NaN;
         if (!isNaN(pm) && !isNaN(pd)) endingStr = ` (ending ${pm}/${pd})`;
       }
-      const dueDay = bill.type === "weekly" ? `Weekly${endingStr}`
+      const dueDay: string | number = bill.type === "weekly" ? `Weekly${endingStr}`
         : bill.type === "biweekly" ? `Biweekly${endingStr}`
         : isYearly && bill.annualDueMonth != null
-          ? `${MONTH_SHORT[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}`
+          ? `${MONTH_SHORT_XL[(bill.annualDueMonth - 1) % 12]} ${bill.dayOfMonth ?? 1}`
           : isYearly ? "Yearly"
           : bill.dayOfMonth != null ? bill.dayOfMonth : "Varies";
 
-      const vals: (string | number)[] = [
-        bill.name, Math.abs(bill.amount), bill.type ?? "fixed",
-        bill.category ?? bill.name, dueDay as string | number,
-      ];
+      const vals: (string | number)[] = [bill.name, Math.abs(bill.amount), dueDay];
       vals.forEach((v, i) => {
         ws.getCell(nextRow, sc + i).value = v;
         ws.getCell(nextRow, sc + i).font = xlFont();
-        ws.getCell(nextRow, sc + i).fill = xlFill("FFEBF6EE");
+        ws.getCell(nextRow, sc + i).fill = xlFill(BILL_BG);
       });
+      ws.getCell(nextRow, sc + 1).numFmt = FMT_CURRENCY;
+      ws.getCell(nextRow, sc + 1).alignment = { horizontal: "right" };
+      ws.getCell(nextRow, sc + 2).alignment = { horizontal: "right" };
       nextRow++;
     }
   }
@@ -262,14 +273,28 @@ function writeExcelBudgetSheetXL(
       const isSectionHeader = i === 1;
       const isColHeader = i === 2;
       const isBlankRow = i === 0;
+      const isDataRow = !isBlankRow && !isSectionHeader && !isColHeader;
       rowData.forEach((val, j) => {
         const cell = ws.getCell(nextRow, sc + j);
         cell.value = val;
-        if (!isBlankRow) cell.fill = xlFill("FFF9E9E9");
+        if (!isBlankRow) cell.fill = xlFill(DEBT_BG);
         if (isSectionHeader) cell.font = xlFont(true, 11);
         else if (isColHeader) cell.font = xlFont(true);
         else cell.font = xlFont();
       });
+      if (isColHeader) {
+        for (const j of [1, 2, 3, 4]) {
+          ws.getCell(nextRow, sc + j).alignment = { horizontal: j === 3 ? "right" : "center" };
+        }
+      }
+      if (isDataRow) {
+        ws.getCell(nextRow, sc + 1).numFmt = FMT_CURRENCY;
+        ws.getCell(nextRow, sc + 1).alignment = { horizontal: "right" };
+        ws.getCell(nextRow, sc + 2).alignment = { horizontal: "center" };
+        ws.getCell(nextRow, sc + 3).numFmt = FMT_CURRENCY;
+        ws.getCell(nextRow, sc + 3).alignment = { horizontal: "right" };
+        ws.getCell(nextRow, sc + 4).alignment = { horizontal: "center" };
+      }
       nextRow++;
     });
   }
@@ -277,8 +302,8 @@ function writeExcelBudgetSheetXL(
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const lc = sc + wIdx * 2;
     const vc = lc + 1;
-    ws.getColumn(lc).width = 26;
-    ws.getColumn(vc).width = 12;
+    ws.getColumn(lc).width = 28;
+    ws.getColumn(vc).width = 14;
   }
 }
 
@@ -854,6 +879,7 @@ interface BillMeta {
   dayOfMonth?: number | null;
   color?: string;
   sourceDebtId?: string;
+  sourceGoalId?: string;
   annualDueMonth?: number | null;
   payoffDate?: string | null;
 }
@@ -885,6 +911,8 @@ interface ExcelCreateAndWriteRequest {
   includeRemainingAcct?: boolean;
   debts?: DebtItem[];
   bills?: BillMeta[];
+  budgetId?: string;
+  tz?: string;
 }
 
 function buildExcelDebtGrid(debts: DebtItem[], bills?: BillMeta[]): (string | number)[][] {
@@ -1209,6 +1237,24 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
     }
 
+    if (body.budgetId && (req as any).user?.id && body.bills) {
+      try {
+        const userId = (req as any).user.id;
+        const contribRows = await db.select().from(savingsContributionsTable)
+          .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, userId)));
+        const contributions = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+        const goalRows = await db.select().from(savingsGoalsTable)
+          .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, userId)));
+        const goalData = goalRows.map(g => ({
+          name: g.name,
+          targetAmount: Number(g.targetAmount),
+          targetDate: g.targetDate,
+          savedSoFar: contributions.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+        }));
+        writeExcelSavingsSheetXL(wb, body.bills, weeks, contributions, goalData, body.tz);
+      } catch { /* non-fatal */ }
+    }
+
     const rawBuf = await wb.xlsx.writeBuffer();
     const buf = Buffer.from(rawBuf as ArrayBuffer);
     const fileName = `${title}.xlsx`;
@@ -1227,6 +1273,179 @@ function getNextYearlyDueExcel(today: Date, dueMonth: number, dueDay: number): D
   const candidate = new Date(year, dueMonth - 1, dueDay);
   candidate.setHours(0, 0, 0, 0);
   return candidate <= today ? new Date(year + 1, dueMonth - 1, dueDay) : candidate;
+}
+
+function writeExcelSavingsSheetXL(
+  wb: ExcelJS.Workbook,
+  bills: BillMeta[],
+  weeks: ExcelWriteRequest["weeks"],
+  contributions: { billName: string; amount: number; date: string }[],
+  goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
+  tz?: string,
+): void {
+  const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
+  today.setHours(0, 0, 0, 0);
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+
+  const sinkingFunds: { name: string; annualGoal: number; savedInCycle: number; progressPct: number; nextDueDateStr: string; weeksRemaining: number }[] = [];
+  const balanced: { name: string; monthlyGoal: number; savedThisMonth: number; progressPct: number }[] = [];
+
+  for (const bill of bills) {
+    if (bill.type === "yearly") {
+      const annualGoal = Math.abs(bill.amount);
+      const dueMonth = bill.annualDueMonth ?? 1;
+      const dueDay = bill.dayOfMonth ?? 1;
+      const nextDue = getNextYearlyDueExcel(today, dueMonth, dueDay);
+      const cycleStart = new Date(nextDue);
+      cycleStart.setFullYear(cycleStart.getFullYear() - 1);
+      const prefix = `${bill.name} [annual:`;
+      let savedInCycle = 0;
+      for (const w of weeks) {
+        const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
+        if (wStart <= cycleStart || wStart > today) continue;
+        for (const item of w.bills) {
+          if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
+        }
+      }
+      for (const c of contributions) {
+        if (c.billName !== bill.name) continue;
+        const cDate = new Date(c.date + "T00:00:00");
+        if (cDate <= cycleStart || cDate > today) continue;
+        savedInCycle += c.amount;
+      }
+      const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
+      const nextDueDateStr = `${MONTH_SHORT_XL[nextDue.getMonth()]} ${nextDue.getDate()}`;
+      const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
+      sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle, progressPct, nextDueDateStr, weeksRemaining });
+    } else if (bill.type === "balanced") {
+      const monthlyGoal = Math.abs(bill.amount);
+      const prefix = `Partial ${bill.name}`;
+      let savedThisMonth = 0;
+      for (const w of weeks) {
+        const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
+        if (wStart > today) continue;
+        if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
+        for (const item of w.bills) {
+          if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
+        }
+      }
+      for (const c of contributions) {
+        if (c.billName !== bill.name) continue;
+        const cDate = new Date(c.date + "T00:00:00");
+        if (cDate > today) continue;
+        if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
+        savedThisMonth += c.amount;
+      }
+      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
+      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, progressPct });
+    }
+  }
+
+  if (sinkingFunds.length === 0 && balanced.length === 0 && goals.length === 0) return;
+
+  const SAVINGS_SHEET = "Savings";
+  let ws = wb.getWorksheet(SAVINGS_SHEET) ?? wb.getWorksheet("Savings Progress");
+  if (!ws) ws = wb.addWorksheet(SAVINGS_SHEET);
+  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
+  const savingsWs: ExcelJS.Worksheet = ws;
+
+  const dateStr = today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const currentMonthStr = today.toLocaleString("en-US", { month: "long", year: "numeric" });
+
+  const xlFillS = (argb: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+  const xlFontS = (bold = false, size = 10, italic = false, color?: string): Partial<ExcelJS.Font> =>
+    ({ name: "Arial", size, bold, italic, color: color ? { argb: color } : undefined });
+
+  const VIOLET      = "FF7C3AED";
+  const VIOLET_LT   = "FFEDE9FE";
+  const VIOLET_LTR  = "FFF5F3FF";
+  const INDIGO      = "FF3730A3";
+  const INDIGO_LT   = "FFE0E7FF";
+  const INDIGO_LTR  = "FFEEF2FF";
+  const AMBER_LT    = "FFFEF3C7";
+  const AMBER       = "FFD97706";
+  const GRAY        = "FF6B7280";
+  const WHITE       = "FFFFFFFF";
+
+  let r = 1;
+
+  const writeRow = (
+    cells: (string | number)[],
+    opts?: {
+      bg?: string; fontColor?: string; bold?: boolean; size?: number; italic?: boolean;
+      numFmtCols?: number[]; align?: ExcelJS.Alignment["horizontal"];
+    },
+  ) => {
+    cells.forEach((v, j) => {
+      const cell = savingsWs.getCell(r, j + 1);
+      cell.value = v;
+      if (opts?.bg) cell.fill = xlFillS(opts.bg);
+      cell.font = xlFontS(opts?.bold, opts?.size ?? 10, opts?.italic, opts?.fontColor);
+      if (opts?.numFmtCols?.includes(j)) cell.numFmt = FMT_CURRENCY;
+      if (opts?.align) cell.alignment = { horizontal: opts.align };
+    });
+    r++;
+  };
+
+  writeRow(["Savings Progress"], { bg: VIOLET, fontColor: WHITE, bold: true, size: 14, align: "center" });
+  writeRow([`Generated on ${dateStr}`], { italic: true, size: 10, fontColor: GRAY, align: "center" });
+  r++;
+
+  if (sinkingFunds.length > 0) {
+    writeRow(["Sinking Funds"], { bg: VIOLET_LT, fontColor: INDIGO, bold: true, size: 11 });
+    writeRow(["Bill Name", "Annual Goal", "Saved This Cycle", "Progress", "Next Due Date", "Weeks Left"],
+      { bg: VIOLET_LTR, bold: true });
+    for (const sf of sinkingFunds) {
+      writeRow(
+        [sf.name, sf.annualGoal, sf.savedInCycle, `${Math.round(sf.progressPct)}%`, sf.nextDueDateStr, sf.weeksRemaining],
+        { numFmtCols: [1, 2] },
+      );
+    }
+    r++;
+  }
+
+  if (balanced.length > 0) {
+    writeRow([`Monthly Set-Aside — ${currentMonthStr}`], { bg: INDIGO_LT, fontColor: INDIGO, bold: true, size: 11 });
+    writeRow(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress"], { bg: INDIGO_LTR, bold: true });
+    for (const b of balanced) {
+      writeRow([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`], { numFmtCols: [1, 2] });
+    }
+    r++;
+  }
+
+  if (goals.length > 0) {
+    writeRow(["Savings Goals"], { bg: AMBER_LT, fontColor: AMBER, bold: true, size: 11 });
+    writeRow(["Goal Name", "Target Amount", "Saved So Far", "Progress", "Target Date", "Weeks Left", "Weekly Needed"],
+      { bg: AMBER_LT, bold: true });
+    for (const g of goals) {
+      const targetDate = new Date(g.targetDate + "T00:00:00");
+      const weeksLeft = Math.max(0, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
+      const remaining = Math.max(0, g.targetAmount - g.savedSoFar);
+      const weeklyNeeded = weeksLeft > 0 ? Math.round((remaining / weeksLeft) * 100) / 100 : 0;
+      const progressPct = g.targetAmount > 0 ? Math.min(100, (g.savedSoFar / g.targetAmount) * 100) : 0;
+      const targetDateStr = `${MONTH_SHORT_XL[targetDate.getMonth()]} ${targetDate.getDate()}, ${targetDate.getFullYear()}`;
+      writeRow(
+        [g.name, g.targetAmount, g.savedSoFar, `${Math.round(progressPct)}%`, targetDateStr, weeksLeft, weeklyNeeded],
+        { numFmtCols: [1, 2, 6] },
+      );
+    }
+    r++;
+  }
+
+  writeRow(
+    ["Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month."],
+    { italic: true, fontColor: GRAY },
+  );
+
+  ws.getColumn(1).width = 28;
+  ws.getColumn(2).width = 16;
+  ws.getColumn(3).width = 20;
+  ws.getColumn(4).width = 12;
+  ws.getColumn(5).width = 16;
+  ws.getColumn(6).width = 12;
+  ws.getColumn(7).width = 16;
 }
 
 async function writeSavingsTabToExcel(
@@ -1450,6 +1669,24 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       let dataWs = wb.getWorksheet(META_SHEET);
       if (!dataWs) dataWs = wb.addWorksheet(META_SHEET);
       writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
+    }
+
+    if (body.budgetId && (req as any).user?.id && body.bills) {
+      try {
+        const userId = (req as any).user.id;
+        const contribRows = await db.select().from(savingsContributionsTable)
+          .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, userId)));
+        const contributions = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+        const goalRows = await db.select().from(savingsGoalsTable)
+          .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, userId)));
+        const goalData = goalRows.map(g => ({
+          name: g.name,
+          targetAmount: Number(g.targetAmount),
+          targetDate: g.targetDate,
+          savedSoFar: contributions.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+        }));
+        writeExcelSavingsSheetXL(wb, body.bills, weeks, contributions, goalData, body.tz);
+      } catch { /* non-fatal */ }
     }
 
     const outRaw = await wb.xlsx.writeBuffer();
