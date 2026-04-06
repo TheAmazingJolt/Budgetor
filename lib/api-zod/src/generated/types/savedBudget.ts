@@ -30,6 +30,8 @@ export interface SavedBudget {
   linkedExcelSheetId?: string | null;
   /** Display name of the linked Excel/OneDrive file */
   linkedExcelSheetName?: string | null;
+  /** Web URL to open the linked Excel file (null for Google Sheets or if not saved) */
+  linkedSheetUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

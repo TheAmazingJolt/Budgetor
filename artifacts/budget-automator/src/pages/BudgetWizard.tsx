@@ -2207,8 +2207,10 @@ export function BudgetWizard({
     }
     if (budget.linkedExcelSheetId) {
       setActiveExcelSheet({ id: budget.linkedExcelSheetId, name: budget.linkedExcelSheetName ?? "Excel file" });
+      setSelectedExcelFileUrl(budget.linkedSheetUrl ?? null);
     } else if (budget.linkedSheetId && budget.linkedSheetType === "excel") {
       setActiveExcelSheet({ id: budget.linkedSheetId, name: budget.linkedSheetName ?? "Excel file" });
+      setSelectedExcelFileUrl(budget.linkedSheetUrl ?? null);
     } else {
       setActiveExcelSheet(null);
     }
@@ -2980,10 +2982,11 @@ export function BudgetWizard({
       setNewExcelSaveSuccess(true);
       setNewExcelUrl(result.webUrl);
       setActiveExcelSheet({ id: result.fileId, name: title });
+      setSelectedExcelFileUrl(result.webUrl ?? null);
       if (activeCloudBudgetId) {
         linkSheetMutation.mutate({
           id: activeCloudBudgetId,
-          data: { linkedExcelSheetId: result.fileId, linkedExcelSheetName: title },
+          data: { linkedExcelSheetId: result.fileId, linkedExcelSheetName: title, linkedSheetUrl: result.webUrl ?? null },
         }, {
           onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }),
         });
@@ -4797,9 +4800,9 @@ export function BudgetWizard({
                                   {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
                                 </label>
                               )}
-                              {activeExcelSheet && (
+                              {activeExcelSheet && selectedExcelFileUrl && (
                                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" asChild>
-                                  <a href={selectedExcelFileUrl ?? "#"} target="_blank" rel="noopener noreferrer">
+                                  <a href={selectedExcelFileUrl} target="_blank" rel="noopener noreferrer">
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </a>
                                 </Button>

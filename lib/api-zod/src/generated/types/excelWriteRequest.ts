@@ -16,6 +16,4 @@ export interface ExcelWriteRequest {
   sheetTitle?: string;
   debts?: Debt[];
   bills?: Bill[];
-  budgetId?: string;
-  tz?: string;
 }

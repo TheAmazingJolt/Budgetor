@@ -74,6 +74,7 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
     linkedSheetId, linkedSheetName, linkedSheetType,
     linkedGoogleSheetId, linkedGoogleSheetName,
     linkedExcelSheetId, linkedExcelSheetName,
+    linkedSheetUrl,
   } = req.body as {
     name?: string;
     bills?: unknown[];
@@ -86,6 +87,7 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
     linkedGoogleSheetName?: string | null;
     linkedExcelSheetId?: string | null;
     linkedExcelSheetName?: string | null;
+    linkedSheetUrl?: string | null;
   };
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -106,6 +108,7 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
   if (linkedGoogleSheetName !== undefined) updates.linkedGoogleSheetName = linkedGoogleSheetName;
   if (linkedExcelSheetId !== undefined) updates.linkedExcelSheetId = linkedExcelSheetId;
   if (linkedExcelSheetName !== undefined) updates.linkedExcelSheetName = linkedExcelSheetName;
+  if (linkedSheetUrl !== undefined) updates.linkedSheetUrl = linkedSheetUrl;
 
   try {
     const [budget] = await db

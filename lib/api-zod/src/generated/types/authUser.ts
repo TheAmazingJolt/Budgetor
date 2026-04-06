@@ -12,5 +12,7 @@ export interface AuthUser {
   name: string;
   avatarUrl?: string | null;
   provider: string;
+  /** Whether the user has a password set (for email/password auth) */
+  hasPassword?: boolean;
   createdAt: Date;
 }

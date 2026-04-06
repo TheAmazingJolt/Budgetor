@@ -6,13 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./authClaimAccountRequest";
+export * from "./authForgotPasswordRequest";
+export * from "./authForgotPasswordResponse";
 export * from "./authLoginApple200";
 export * from "./authLoginAppleParams";
 export * from "./authLoginGoogle200";
 export * from "./authLoginGoogleParams";
+export * from "./authLoginRequest";
 export * from "./authLogout200";
 export * from "./authMeResponse";
 export * from "./authProviders";
+export * from "./authRegisterRequest";
+export * from "./authResetPasswordRequest";
 export * from "./authUser";
 export * from "./authUserResponse";
 export * from "./bill";

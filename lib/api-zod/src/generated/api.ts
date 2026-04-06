@@ -88,6 +88,12 @@ export const GenerateBudgetBody = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -161,6 +167,12 @@ export const AuthMeResponse = zod.object({
       name: zod.string(),
       avatarUrl: zod.string().nullish(),
       provider: zod.string(),
+      hasPassword: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether the user has a password set (for email\/password auth)",
+        ),
       createdAt: zod.date(),
     }),
     zod.null(),
@@ -178,6 +190,12 @@ export const AuthGuestLoginResponse = zod.object({
     name: zod.string(),
     avatarUrl: zod.string().nullish(),
     provider: zod.string(),
+    hasPassword: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the user has a password set (for email\/password auth)",
+      ),
     createdAt: zod.date(),
   }),
   token: zod.string().optional(),
@@ -189,6 +207,142 @@ export const AuthGuestLoginResponse = zod.object({
  */
 export const AuthLogoutResponse = zod.object({
   ok: zod.boolean(),
+});
+
+/**
+ * Creates a new account with email and password
+ * @summary Register with email and password
+ */
+export const authEmailRegisterBodyPasswordMin = 8;
+
+export const AuthEmailRegisterBody = zod.object({
+  name: zod.string(),
+  email: zod.string().email(),
+  password: zod.string().min(authEmailRegisterBodyPasswordMin),
+});
+
+export const AuthEmailRegisterResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    email: zod.string().nullish(),
+    name: zod.string(),
+    avatarUrl: zod.string().nullish(),
+    provider: zod.string(),
+    hasPassword: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the user has a password set (for email\/password auth)",
+      ),
+    createdAt: zod.date(),
+  }),
+  token: zod.string().optional(),
+});
+
+/**
+ * Authenticates an existing user with email and password
+ * @summary Log in with email and password
+ */
+export const AuthEmailLoginBody = zod.object({
+  email: zod.string().email(),
+  password: zod.string(),
+});
+
+export const AuthEmailLoginResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    email: zod.string().nullish(),
+    name: zod.string(),
+    avatarUrl: zod.string().nullish(),
+    provider: zod.string(),
+    hasPassword: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the user has a password set (for email\/password auth)",
+      ),
+    createdAt: zod.date(),
+  }),
+  token: zod.string().optional(),
+});
+
+/**
+ * Sends a password reset link to the user's email
+ * @summary Request a password reset
+ */
+export const AuthForgotPasswordBody = zod.object({
+  email: zod.string().email(),
+});
+
+export const AuthForgotPasswordResponse = zod.object({
+  message: zod.string(),
+  resetUrl: zod
+    .string()
+    .optional()
+    .describe("Reset URL (dev\/testing environments only)"),
+});
+
+/**
+ * Sets a new password using a valid reset token
+ * @summary Reset password with token
+ */
+export const authResetPasswordBodyPasswordMin = 8;
+
+export const AuthResetPasswordBody = zod.object({
+  token: zod.string(),
+  password: zod.string().min(authResetPasswordBodyPasswordMin),
+});
+
+export const AuthResetPasswordResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    email: zod.string().nullish(),
+    name: zod.string(),
+    avatarUrl: zod.string().nullish(),
+    provider: zod.string(),
+    hasPassword: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the user has a password set (for email\/password auth)",
+      ),
+    createdAt: zod.date(),
+  }),
+  token: zod.string().optional(),
+});
+
+/**
+ * Sets a password on a legacy OAuth-only account. Requires either an active session (no password yet) or a one-time claim token issued by an OAuth callback.
+ * @summary Claim a legacy OAuth account
+ */
+export const authClaimAccountBodyPasswordMin = 8;
+
+export const AuthClaimAccountBody = zod.object({
+  password: zod.string().min(authClaimAccountBodyPasswordMin),
+  claimToken: zod
+    .string()
+    .optional()
+    .describe(
+      "One-time claim token issued by OAuth callback (required for unauthenticated path)",
+    ),
+});
+
+export const AuthClaimAccountResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    email: zod.string().nullish(),
+    name: zod.string(),
+    avatarUrl: zod.string().nullish(),
+    provider: zod.string(),
+    hasPassword: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the user has a password set (for email\/password auth)",
+      ),
+    createdAt: zod.date(),
+  }),
+  token: zod.string().optional(),
 });
 
 /**
@@ -331,6 +485,12 @@ export const SavedBudgetListResponse = zod.object({
         .enum(["google", "excel"])
         .nullish()
         .describe("Type of linked sheet ('google' or 'excel')"),
+      linkedSheetUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Web URL to open the linked Excel file (null for Google Sheets or if not saved)",
+        ),
       createdAt: zod.date(),
       updatedAt: zod.date(),
     }),
@@ -531,6 +691,12 @@ export const SavedBudgetCreateResponse = zod.object({
       .enum(["google", "excel"])
       .nullish()
       .describe("Type of linked sheet ('google' or 'excel')"),
+    linkedSheetUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Web URL to open the linked Excel file (null for Google Sheets or if not saved)",
+      ),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -642,6 +808,10 @@ export const SavedBudgetUpdateBody = zod.object({
     .enum(["google", "excel"])
     .nullish()
     .describe("Type of linked sheet ('google' or 'excel')"),
+  linkedSheetUrl: zod
+    .string()
+    .nullish()
+    .describe("Web URL to open the linked Excel file (null to clear)"),
 });
 
 export const savedBudgetUpdateResponseBudgetDebtsItemDueDayMax = 31;
@@ -748,6 +918,12 @@ export const SavedBudgetUpdateResponse = zod.object({
       .enum(["google", "excel"])
       .nullish()
       .describe("Type of linked sheet ('google' or 'excel')"),
+    linkedSheetUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Web URL to open the linked Excel file (null for Google Sheets or if not saved)",
+      ),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -846,6 +1022,12 @@ export const SheetReadResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -919,6 +1101,12 @@ export const SheetReadByUrlResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -1035,6 +1223,12 @@ export const SheetWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        sourceGoalId: zod
+          .string()
+          .optional()
+          .describe(
+            "ID of the savings goal this bill was imported from (if any)",
+          ),
         payoffDate: zod
           .string()
           .nullish()
@@ -1199,6 +1393,16 @@ export const SheetCreateAndWriteBody = zod.object({
     }),
   ),
   includeRemainingAcct: zod.boolean().optional(),
+  tz: zod
+    .string()
+    .optional()
+    .describe(
+      "IANA timezone string for date formatting (e.g. America\/New_York)",
+    ),
+  budgetId: zod
+    .string()
+    .optional()
+    .describe("ID of the linked saved budget (if any)"),
   debts: zod
     .array(
       zod.object({
@@ -1314,6 +1518,12 @@ export const SheetCreateAndWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        sourceGoalId: zod
+          .string()
+          .optional()
+          .describe(
+            "ID of the savings goal this bill was imported from (if any)",
+          ),
         payoffDate: zod
           .string()
           .nullish()
@@ -1419,6 +1629,12 @@ export const ExcelReadResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -1492,6 +1708,12 @@ export const ExcelReadByUrlResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -1690,6 +1912,12 @@ export const ExcelWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        sourceGoalId: zod
+          .string()
+          .optional()
+          .describe(
+            "ID of the savings goal this bill was imported from (if any)",
+          ),
         payoffDate: zod
           .string()
           .nullish()
@@ -1771,6 +1999,16 @@ export const ExcelCreateAndWriteBody = zod.object({
     }),
   ),
   includeRemainingAcct: zod.boolean().optional(),
+  tz: zod
+    .string()
+    .optional()
+    .describe(
+      "IANA timezone string for date formatting (e.g. America\/New_York)",
+    ),
+  budgetId: zod
+    .string()
+    .optional()
+    .describe("ID of the linked saved budget (if any)"),
   debts: zod
     .array(
       zod.object({
@@ -1886,6 +2124,12 @@ export const ExcelCreateAndWriteBody = zod.object({
           .string()
           .optional()
           .describe("ID of the debt this bill was imported from (if any)"),
+        sourceGoalId: zod
+          .string()
+          .optional()
+          .describe(
+            "ID of the savings goal this bill was imported from (if any)",
+          ),
         payoffDate: zod
           .string()
           .nullish()
@@ -1972,6 +2216,12 @@ export const GetUserBillsResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -2028,6 +2278,12 @@ export const UpdateUserBillsBody = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()
@@ -2080,6 +2336,12 @@ export const UpdateUserBillsResponse = zod.object({
         .string()
         .optional()
         .describe("ID of the debt this bill was imported from (if any)"),
+      sourceGoalId: zod
+        .string()
+        .optional()
+        .describe(
+          "ID of the savings goal this bill was imported from (if any)",
+        ),
       payoffDate: zod
         .string()
         .nullish()

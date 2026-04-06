@@ -13,6 +13,10 @@ export interface SheetCreateAndWriteRequest {
   title: string;
   weeks: WeeklyBudget[];
   includeRemainingAcct?: boolean;
+  /** IANA timezone string for date formatting (e.g. America/New_York) */
+  tz?: string;
+  /** ID of the linked saved budget (if any) */
+  budgetId?: string;
   debts?: Debt[];
   bills?: Bill[];
 }

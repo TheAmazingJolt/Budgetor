@@ -24,7 +24,7 @@ export const BillType = {
   weekly: "weekly",
   biweekly: "biweekly",
   yearly: "yearly",
-  yearlyFlat: "yearly-flat",
+  "yearly-flat": "yearly-flat",
 } as const;
 
 export interface Bill {
@@ -46,6 +46,8 @@ export interface Bill {
   userColor?: boolean;
   /** ID of the debt this bill was imported from (if any) */
   sourceDebtId?: string;
+  /** ID of the savings goal this bill was imported from (if any) */
+  sourceGoalId?: string;
   /**
    * ISO date string after which this bill should stop appearing (debt payoff date)
    * @nullable
@@ -150,17 +152,19 @@ export interface AuthUser {
   name: string;
   avatarUrl?: string | null;
   provider: string;
-  createdAt: string;
+  /** Whether the user has a password set (for email/password auth) */
   hasPassword?: boolean;
+  createdAt: string;
 }
 
-export interface AuthEmailRegisterRequest {
+export interface AuthRegisterRequest {
   name: string;
   email: string;
+  /** @minLength 8 */
   password: string;
 }
 
-export interface AuthEmailLoginRequest {
+export interface AuthLoginRequest {
   email: string;
   password: string;
 }
@@ -170,17 +174,19 @@ export interface AuthForgotPasswordRequest {
 }
 
 export interface AuthForgotPasswordResponse {
-  ok: boolean;
-  /** Only present in development environments — the reset URL to use directly */
+  message: string;
+  /** Reset URL (dev/testing environments only) */
   resetUrl?: string;
 }
 
 export interface AuthResetPasswordRequest {
   token: string;
+  /** @minLength 8 */
   password: string;
 }
 
 export interface AuthClaimAccountRequest {
+  /** @minLength 8 */
   password: string;
   /** One-time claim token issued by OAuth callback (required for unauthenticated path) */
   claimToken?: string;
@@ -198,7 +204,6 @@ export interface AuthUserResponse {
 export interface AuthProviders {
   google: boolean;
   apple: boolean;
-  microsoft?: boolean;
 }
 
 export type DebtType = (typeof DebtType)[keyof typeof DebtType];
@@ -297,6 +302,8 @@ export interface SavedBudget {
   linkedExcelSheetId?: string | null;
   /** Display name of the linked Excel/OneDrive file */
   linkedExcelSheetName?: string | null;
+  /** Web URL to open the linked Excel file (null for Google Sheets or if not saved) */
+  linkedSheetUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -351,6 +358,8 @@ export interface SavedBudgetUpdateRequest {
   linkedExcelSheetId?: string | null;
   /** Display name of the linked Excel/OneDrive file */
   linkedExcelSheetName?: string | null;
+  /** Web URL to open the linked Excel file (null to clear) */
+  linkedSheetUrl?: string | null;
 }
 
 export interface GoogleAuthStatus {
@@ -411,6 +420,10 @@ export interface SheetCreateAndWriteRequest {
   title: string;
   weeks: WeeklyBudget[];
   includeRemainingAcct?: boolean;
+  /** IANA timezone string for date formatting (e.g. America/New_York) */
+  tz?: string;
+  /** ID of the linked saved budget (if any) */
+  budgetId?: string;
   debts?: Debt[];
   bills?: Bill[];
 }
@@ -456,8 +469,6 @@ export interface ExcelWriteRequest {
   sheetTitle?: string;
   debts?: Debt[];
   bills?: Bill[];
-  budgetId?: string;
-  tz?: string;
 }
 
 export interface ExcelWriteResponse {
@@ -469,10 +480,12 @@ export interface ExcelCreateAndWriteRequest {
   title: string;
   weeks: WeeklyBudget[];
   includeRemainingAcct?: boolean;
+  /** IANA timezone string for date formatting (e.g. America/New_York) */
+  tz?: string;
+  /** ID of the linked saved budget (if any) */
+  budgetId?: string;
   debts?: Debt[];
   bills?: Bill[];
-  budgetId?: string;
-  tz?: string;
 }
 
 export interface ExcelCreateAndWriteResponse {

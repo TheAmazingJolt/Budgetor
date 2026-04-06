@@ -15,6 +15,7 @@ export const savedBudgetsTable = pgTable("saved_budgets", {
   linkedGoogleSheetName: text("linked_google_sheet_name"),
   linkedExcelSheetId: text("linked_excel_sheet_id"),
   linkedExcelSheetName: text("linked_excel_sheet_name"),
+  linkedSheetUrl: text("linked_sheet_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

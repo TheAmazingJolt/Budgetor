@@ -112,7 +112,7 @@ paths:
 
   /auth/register:
     post:
-      operationId: authRegister
+      operationId: authEmailRegister
       tags: [auth]
       summary: Register with email and password
       description: Creates a new account with email and password
@@ -144,7 +144,7 @@ paths:
 
   /auth/login:
     post:
-      operationId: authLogin
+      operationId: authEmailLogin
       tags: [auth]
       summary: Log in with email and password
       description: Authenticates an existing user with email and password
@@ -993,6 +993,9 @@ components:
         sourceDebtId:
           type: string
           description: ID of the debt this bill was imported from (if any)
+        sourceGoalId:
+          type: string
+          description: ID of the savings goal this bill was imported from (if any)
         payoffDate:
           type: ["string", "null"]
           description: ISO date string after which this bill should stop appearing (debt payoff date)
@@ -1167,6 +1170,9 @@ components:
           nullable: true
         provider:
           type: string
+        hasPassword:
+          type: boolean
+          description: Whether the user has a password set (for email/password auth)
         createdAt:
           type: string
           format: date-time
@@ -1386,6 +1392,10 @@ components:
           nullable: true
           enum: [google, excel]
           description: Type of linked sheet ('google' or 'excel')
+        linkedSheetUrl:
+          type: string
+          nullable: true
+          description: Web URL to open the linked Excel file (null for Google Sheets or if not saved)
         createdAt:
           type: string
           format: date-time
@@ -1465,6 +1475,10 @@ components:
           nullable: true
           enum: [google, excel]
           description: Type of linked sheet ('google' or 'excel')
+        linkedSheetUrl:
+          type: string
+          nullable: true
+          description: Web URL to open the linked Excel file (null to clear)
 
     GoogleAuthStatus:
       type: object
@@ -1604,6 +1618,12 @@ components:
             $ref: "#/components/schemas/WeeklyBudget"
         includeRemainingAcct:
           type: boolean
+        tz:
+          type: string
+          description: IANA timezone string for date formatting (e.g. America/New_York)
+        budgetId:
+          type: string
+          description: ID of the linked saved budget (if any)
         debts:
           type: array
           items:
@@ -1744,6 +1764,12 @@ components:
             $ref: "#/components/schemas/WeeklyBudget"
         includeRemainingAcct:
           type: boolean
+        tz:
+          type: string
+          description: IANA timezone string for date formatting (e.g. America/New_York)
+        budgetId:
+          type: string
+          description: ID of the linked saved budget (if any)
         debts:
           type: array
           items:
