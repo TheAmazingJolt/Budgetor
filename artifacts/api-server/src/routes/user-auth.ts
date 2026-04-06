@@ -460,19 +460,47 @@ router.post("/auth/reset-password", async (req: Request, res: Response): Promise
 });
 
 router.post("/auth/claim-account", async (req: Request, res: Response): Promise<void> => {
-  const { password } = req.body as { password?: string };
+  const { password, email } = req.body as { password?: string; email?: string };
 
-  if (!req.user) {
-    res.status(401).json({ error: "Not signed in" });
-    return;
-  }
   if (!password || typeof password !== "string" || password.length < 8) {
     res.status(400).json({ error: "Password must be at least 8 characters" });
     return;
   }
-  if (!req.user.email) {
-    res.status(400).json({ error: "Your account does not have an email address. Please update your profile first." });
-    return;
+
+  let targetUserId: string;
+
+  if (req.user) {
+    // Authenticated path: user is already signed in (e.g. via the in-app banner)
+    if (!req.user.email) {
+      res.status(400).json({ error: "Your account does not have an email address. Please update your profile first." });
+      return;
+    }
+    if (req.user.hasPassword) {
+      res.status(400).json({ error: "Your account already has a password." });
+      return;
+    }
+    targetUserId = req.user.id;
+  } else {
+    // Unauthenticated path: email + password to claim an existing OAuth-only account
+    if (!email || typeof email !== "string") {
+      res.status(400).json({ error: "Email is required" });
+      return;
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const [existing] = await db
+      .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalizedEmail))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "No account found with that email address" });
+      return;
+    }
+    if (existing.passwordHash) {
+      res.status(400).json({ error: "This account already has a password. Use the sign-in form instead." });
+      return;
+    }
+    targetUserId = existing.id;
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
@@ -480,10 +508,10 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
     passwordHash,
     provider: "email",
     updatedAt: new Date(),
-  }).where(eq(usersTable.id, req.user.id));
+  }).where(eq(usersTable.id, targetUserId));
 
-  const [updatedUser] = await db.select().from(usersTable).where(eq(usersTable.id, req.user.id)).limit(1);
-  const jwtToken = await signUserJwt(req.user.id);
+  const [updatedUser] = await db.select().from(usersTable).where(eq(usersTable.id, targetUserId)).limit(1);
+  const jwtToken = await signUserJwt(targetUserId);
   res.json({ user: serializeUser(updatedUser), token: jwtToken });
 });
 
@@ -713,6 +741,21 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
     }
 
     if (!req.user) {
+      // Allow unauthenticated login only if this email belongs to an existing
+      // OAuth-only user who has never set a password — direct them to claim flow.
+      if (profile.email) {
+        const [matchedUser] = await db
+          .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+          .from(usersTable)
+          .where(and(eq(usersTable.email, profile.email.toLowerCase()), eq(usersTable.provider, "google")))
+          .limit(1);
+        if (matchedUser && !matchedUser.passwordHash) {
+          const sep = redirectUrl.includes("?") ? "&" : "?";
+          const email = encodeURIComponent(profile.email);
+          res.redirect(`${redirectUrl}${sep}claim_email=${email}`);
+          return;
+        }
+      }
       const sep = redirectUrl.includes("?") ? "&" : "?";
       res.redirect(`${redirectUrl}${sep}error=link_required`);
       return;
@@ -853,6 +896,21 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     }
 
     if (!req.user) {
+      // Allow unauthenticated Apple login only if the email matches an existing
+      // Apple-provider user who has never set a password — send them to claim flow.
+      if (email) {
+        const [matchedUser] = await db
+          .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+          .from(usersTable)
+          .where(and(eq(usersTable.email, email.toLowerCase()), eq(usersTable.provider, "apple")))
+          .limit(1);
+        if (matchedUser && !matchedUser.passwordHash) {
+          const sep = redirectUrl.includes("?") ? "&" : "?";
+          const encodedEmail = encodeURIComponent(email);
+          res.redirect(`${redirectUrl}${sep}claim_email=${encodedEmail}`);
+          return;
+        }
+      }
       const sep = redirectUrl.includes("?") ? "&" : "?";
       res.redirect(`${redirectUrl}${sep}error=link_required`);
       return;

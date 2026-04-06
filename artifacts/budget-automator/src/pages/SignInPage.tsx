@@ -33,7 +33,9 @@ interface SignInPageProps {
   onEmailRegister: (name: string, email: string, password: string) => Promise<void>;
   onForgotPassword: (email: string) => Promise<{ resetUrl?: string } | void>;
   onResetPassword?: (token: string, password: string) => Promise<void>;
+  onClaimAccount?: (email: string, password: string) => Promise<void>;
   resetToken?: string | null;
+  claimEmail?: string | null;
   isLoggingIn: boolean;
 }
 
@@ -48,7 +50,7 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-type AuthView = "signin" | "register" | "forgot" | "forgot_sent" | "reset";
+type AuthView = "signin" | "register" | "forgot" | "forgot_sent" | "reset" | "claim";
 
 function PasswordInput({ value, onChange, placeholder, id }: { value: string; onChange: (v: string) => void; placeholder?: string; id?: string }) {
   const [show, setShow] = useState(false);
@@ -84,7 +86,9 @@ function AuthPanel({
   onEmailRegister,
   onForgotPassword,
   onResetPassword,
+  onClaimAccount,
   resetToken,
+  claimEmail,
   isLoggingIn,
   instanceId = "hero",
 }: {
@@ -95,11 +99,13 @@ function AuthPanel({
   onEmailRegister: (name: string, email: string, password: string) => Promise<void>;
   onForgotPassword: (email: string) => Promise<{ resetUrl?: string } | void>;
   onResetPassword?: (token: string, password: string) => Promise<void>;
+  onClaimAccount?: (email: string, password: string) => Promise<void>;
   resetToken?: string | null;
+  claimEmail?: string | null;
   isLoggingIn: boolean;
   instanceId?: string;
 }) {
-  const initialView: AuthView = resetToken ? "reset" : "signin";
+  const initialView: AuthView = claimEmail ? "claim" : resetToken ? "reset" : "signin";
   const [view, setView] = useState<AuthView>(initialView);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +123,9 @@ function AuthPanel({
 
   const [resetPassword, setResetPassword] = useState("");
   const [resetConfirm, setResetConfirm] = useState("");
+
+  const [claimPassword, setClaimPassword] = useState("");
+  const [claimConfirm, setClaimConfirm] = useState("");
 
   const busy = loading || isLoggingIn;
 
@@ -187,6 +196,28 @@ function AuthPanel({
     }
   };
 
+  const handleClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (claimPassword.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (claimPassword !== claimConfirm) {
+      setError("Passwords don't match");
+      return;
+    }
+    if (!onClaimAccount || !claimEmail) return;
+    setLoading(true);
+    try {
+      await onClaimAccount(claimEmail, claimPassword);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set password. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogle = () => {
     setClickedGoogle(true);
     onGoogleLogin();
@@ -217,6 +248,32 @@ function AuthPanel({
           <Button type="submit" className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white" disabled={busy}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set password & sign in"}
           </Button>
+        </form>
+      )}
+
+      {view === "claim" && claimEmail && (
+        <form onSubmit={handleClaim} className="flex flex-col gap-4">
+          <div className="text-center mb-2">
+            <h2 className="text-xl font-bold">Set a password</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              We found your account for <strong>{claimEmail}</strong>. Set a password to sign in with email going forward.
+            </p>
+          </div>
+          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex flex-col gap-1.5">
+            <Label>New password</Label>
+            <PasswordInput value={claimPassword} onChange={setClaimPassword} placeholder="At least 8 characters" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Confirm password</Label>
+            <PasswordInput value={claimConfirm} onChange={setClaimConfirm} placeholder="Re-enter password" />
+          </div>
+          <Button type="submit" className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white" disabled={busy}>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set password & sign in"}
+          </Button>
+          <button type="button" onClick={() => switchView("signin")} className="text-sm text-muted-foreground hover:text-foreground text-center transition-colors">
+            Back to sign in
+          </button>
         </form>
       )}
 
@@ -439,7 +496,9 @@ export function SignInPage({
   onEmailRegister,
   onForgotPassword,
   onResetPassword,
+  onClaimAccount,
   resetToken,
+  claimEmail,
   isLoggingIn,
 }: SignInPageProps) {
 
@@ -500,7 +559,9 @@ export function SignInPage({
             onEmailRegister={onEmailRegister}
             onForgotPassword={onForgotPassword}
             onResetPassword={onResetPassword}
+            onClaimAccount={onClaimAccount}
             resetToken={resetToken}
+            claimEmail={claimEmail}
             isLoggingIn={isLoggingIn}
           />
           <p className="text-xs text-muted-foreground/70">
@@ -602,7 +663,9 @@ export function SignInPage({
               onEmailRegister={onEmailRegister}
               onForgotPassword={onForgotPassword}
               onResetPassword={onResetPassword}
+              onClaimAccount={onClaimAccount}
               resetToken={resetToken}
+              claimEmail={claimEmail}
               isLoggingIn={isLoggingIn}
               instanceId="cta"
             />

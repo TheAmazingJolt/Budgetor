@@ -19,6 +19,7 @@ import {
   authEmailRegister,
   authForgotPassword,
   authResetPassword,
+  authClaimAccount,
 } from "@workspace/api-client-react";
 import { DollarSign, Loader2, RefreshCw, Bug } from "lucide-react";
 
@@ -138,6 +139,7 @@ function AppRouting() {
   const [referralReady, setReferralReady] = useState<boolean>(!initialRefCode);
 
   const resetToken = new URLSearchParams(window.location.search).get("reset_token");
+  const claimEmail = new URLSearchParams(window.location.search).get("claim_email");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -265,6 +267,21 @@ function AppRouting() {
     }
   };
 
+  const handleClaimAccount = async (email: string, password: string) => {
+    const data = await authClaimAccount({ email, password });
+    if (data.token) {
+      localStorage.setItem("auth_token", data.token);
+    }
+    if (data.user) {
+      qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+      const params = new URLSearchParams(window.location.search);
+      params.delete("claim_email");
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    }
+  };
+
   const handleGuestLogin = () => {
     guestLoginMutation.mutate(undefined, {
       onSuccess: (data) => {
@@ -288,7 +305,7 @@ function AppRouting() {
     return <SplashScreen />;
   }
 
-  if (!isSignedIn || resetToken) {
+  if (!isSignedIn || resetToken || claimEmail) {
     return (
       <SignInPage
         googleLoginAvailable={googleLoginAvailable}
@@ -300,7 +317,9 @@ function AppRouting() {
         onEmailRegister={handleEmailRegister}
         onForgotPassword={handleForgotPassword}
         onResetPassword={handleResetPassword}
+        onClaimAccount={handleClaimAccount}
         resetToken={resetToken}
+        claimEmail={claimEmail}
         isLoggingIn={guestLoginMutation.isPending}
       />
     );

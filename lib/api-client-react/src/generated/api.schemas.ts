@@ -182,6 +182,8 @@ export interface AuthResetPasswordRequest {
 
 export interface AuthClaimAccountRequest {
   password: string;
+  /** Required when calling unauthenticated (to claim an existing OAuth-only account) */
+  email?: string;
 }
 
 export interface AuthMeResponse {

@@ -1011,6 +1011,7 @@ export function BudgetWizard({
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
   const [isClaimAccountOpen, setIsClaimAccountOpen] = useState(false);
+  const [claimBannerDismissed, setClaimBannerDismissed] = useState(false);
   const [isReferralDialogOpen, setIsReferralDialogOpen] = useState(false);
   const [referralInfo, setReferralInfo] = useState<{ referralCode: string; referralLink: string; totalReferred: number; totalConverted: number; totalRewarded: number } | null>(null);
   const [referralLoading, setReferralLoading] = useState(false);
@@ -3489,7 +3490,7 @@ export function BudgetWizard({
         </div>
       </header>
 
-      {isSignedIn && !isGuest && currentUser && !currentUser.hasPassword && (
+      {isSignedIn && !isGuest && currentUser && !currentUser.hasPassword && !claimBannerDismissed && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-sm text-amber-800">
@@ -3499,14 +3500,24 @@ export function BudgetWizard({
                 Add a password so you can sign in with email and password.
               </span>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-lg border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0 h-8 text-xs"
-              onClick={() => setIsClaimAccountOpen(true)}
-            >
-              Set a password
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-lg border-amber-300 text-amber-800 hover:bg-amber-100 h-8 text-xs"
+                onClick={() => setIsClaimAccountOpen(true)}
+              >
+                Set a password
+              </Button>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                className="text-amber-600 hover:text-amber-800 transition-colors p-1"
+                onClick={() => setClaimBannerDismissed(true)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
