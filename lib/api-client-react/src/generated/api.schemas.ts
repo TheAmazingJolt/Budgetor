@@ -151,6 +151,35 @@ export interface AuthUser {
   avatarUrl?: string | null;
   provider: string;
   createdAt: string;
+  hasPassword?: boolean;
+}
+
+export interface AuthEmailRegisterRequest {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthEmailLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthForgotPasswordRequest {
+  email: string;
+}
+
+export interface AuthForgotPasswordResponse {
+  ok: boolean;
+}
+
+export interface AuthResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
+export interface AuthClaimAccountRequest {
+  password: string;
 }
 
 export interface AuthMeResponse {

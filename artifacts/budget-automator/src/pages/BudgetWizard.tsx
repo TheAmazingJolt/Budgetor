@@ -14,6 +14,7 @@ import {
   Plus,
   Edit2,
   Eye,
+  EyeOff,
   FilePlus2,
   PlusCircle,
   Sheet,
@@ -35,6 +36,7 @@ import {
   SlidersHorizontal,
   MessageSquareWarning,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -64,6 +66,7 @@ import {
   useSavedBudgetDelete,
   authLoginGoogle,
   authLoginApple,
+  useAuthClaimAccount,
   getAuthMeQueryKey,
   getSavedBudgetListQueryKey,
   getMicrosoftAuthStatusQueryKey,
@@ -139,7 +142,7 @@ import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
 import { PaydayCheckInDialog } from "@/components/PaydayCheckInDialog";
 import type { PaydayBillItem } from "@/components/PaydayCheckInDialog";
 import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
-import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank, Gift } from "lucide-react";
+import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank, Gift, Lock } from "lucide-react";
 
 type InputMode = "scratch" | "google" | "excel" | "cloud";
 
@@ -652,6 +655,113 @@ function inferPeriodTypeFromWeekLabel(label: string): "weekly" | "biweekly" | "m
   return "monthly";
 }
 
+function ClaimAccountDialog({
+  open,
+  onOpenChange,
+  currentUser,
+  claimAccountMutation,
+  queryClient,
+  toast,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUser: import("@workspace/api-client-react").AuthUser | null;
+  claimAccountMutation: ReturnType<typeof import("@workspace/api-client-react").useAuthClaimAccount>;
+  queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
+  toast: ReturnType<typeof import("@/hooks/use-toast").useToast>["toast"];
+}) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords don't match");
+      return;
+    }
+    claimAccountMutation.mutate(
+      { data: { password } },
+      {
+        onSuccess: (data) => {
+          if (data.token) localStorage.setItem("auth_token", data.token);
+          if (data.user) queryClient.setQueryData(getAuthMeQueryKey(), { user: data.user });
+          toast({ title: "Password set", description: "You can now sign in with your email and password." });
+          onOpenChange(false);
+          setPassword("");
+          setConfirm("");
+        },
+        onError: (err) => {
+          setError(err instanceof Error ? err.message : "Failed to set password. Please try again.");
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
+        <DialogHeader className="mb-4">
+          <DialogTitle className="text-xl font-bold">Set a password</DialogTitle>
+          <DialogDescription>
+            {currentUser?.email ? (
+              <>Add a password to sign in as <span className="font-medium text-foreground">{currentUser.email}</span> with email and password.</>
+            ) : (
+              "Add a password to your account so you can sign in with email and password."
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="claim-password">New password</Label>
+            <div className="relative">
+              <Input
+                id="claim-password"
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="pr-10"
+                autoComplete="new-password"
+              />
+              <button type="button" tabIndex={-1} onClick={() => setShowPw(s => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="claim-confirm">Confirm password</Label>
+            <Input
+              id="claim-confirm"
+              type={showPw ? "text" : "password"}
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              placeholder="Re-enter password"
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="flex gap-3 mt-2">
+            <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white" disabled={claimAccountMutation.isPending}>
+              {claimAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set password"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function BudgetWizard({
   currentUser,
   isSignedIn,
@@ -900,6 +1010,7 @@ export function BudgetWizard({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingSpreadsheet, setIsDeletingSpreadsheet] = useState(false);
   const [isPrefsDialogOpen, setIsPrefsDialogOpen] = useState(false);
+  const [isClaimAccountOpen, setIsClaimAccountOpen] = useState(false);
   const [isReferralDialogOpen, setIsReferralDialogOpen] = useState(false);
   const [referralInfo, setReferralInfo] = useState<{ referralCode: string; referralLink: string; totalReferred: number; totalConverted: number; totalRewarded: number } | null>(null);
   const [referralLoading, setReferralLoading] = useState(false);
@@ -956,6 +1067,7 @@ export function BudgetWizard({
 
   const guestLoginMutation = useAuthGuestLogin();
   const logoutMutation = useAuthLogout();
+  const claimAccountMutation = useAuthClaimAccount();
   const saveBudgetMutation = useSavedBudgetCreate();
   const renameBudgetMutation = useSavedBudgetUpdate();
   const cloudSaveMutation = useSavedBudgetUpdate();
@@ -3305,7 +3417,7 @@ export function BudgetWizard({
                     </span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-64">
                   <div className="px-3 py-2">
                     <p className="text-sm font-medium">{currentUser?.name}</p>
                     {currentUser?.email && (
@@ -3316,32 +3428,50 @@ export function BudgetWizard({
                     )}
                   </div>
                   <DropdownMenuSeparator />
-                  {isGuest && (
-                    <>
-                      <DropdownMenuSeparator />
-                      {googleLoginAvailable && (
-                        <DropdownMenuItem onClick={handleAccountGoogleLogin}>
-                          <LogIn className="w-4 h-4 mr-2" /> Sign in with Google
-                        </DropdownMenuItem>
-                      )}
-                      {appleLoginAvailable && (
-                        <DropdownMenuItem onClick={handleAccountAppleLogin}>
-                          <LogIn className="w-4 h-4 mr-2" /> Sign in with Apple
-                        </DropdownMenuItem>
-                      )}
-                    </>
-                  )}
                   {!isGuest && (
                     <>
-                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
                         <Settings2 className="w-4 h-4 mr-2" /> Preferences
                       </DropdownMenuItem>
-                      {microsoftConfigured && (
-                        <DropdownMenuItem onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}>
-                          <Cloud className="w-4 h-4 mr-2" /> {microsoftAuthenticated ? "Disconnect Microsoft" : "Connect Microsoft"}
+                      {!currentUser?.hasPassword && currentUser?.provider !== "guest" && (
+                        <DropdownMenuItem onClick={() => setIsClaimAccountOpen(true)}>
+                          <Lock className="w-4 h-4 mr-2" /> Set a password
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuSeparator />
+                      <div className="px-3 py-1.5">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Connected Services</p>
+                        <div className="flex flex-col gap-1">
+                          {googleConfigured && (
+                            <button
+                              onClick={googleAuthenticated ? handleDisconnectGoogle : handleConnectGoogle}
+                              className="flex items-center justify-between text-xs px-0 py-1 hover:text-foreground text-muted-foreground transition-colors w-full"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${googleAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                                Google Sheets
+                              </span>
+                              <span className="text-xs text-muted-foreground/70">{googleAuthenticated ? "Disconnect" : "Connect"}</span>
+                            </button>
+                          )}
+                          {microsoftConfigured && (
+                            <button
+                              onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
+                              className="flex items-center justify-between text-xs px-0 py-1 hover:text-foreground text-muted-foreground transition-colors w-full"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${microsoftAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                                Microsoft OneDrive
+                              </span>
+                              <span className="text-xs text-muted-foreground/70">{microsoftAuthenticated ? "Disconnect" : "Connect"}</span>
+                            </button>
+                          )}
+                          {!googleConfigured && !microsoftConfigured && (
+                            <p className="text-xs text-muted-foreground/60 italic">No services configured</p>
+                          )}
+                        </div>
+                      </div>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleOpenReferral}>
                         <Gift className="w-4 h-4 mr-2" /> Refer a friend
                       </DropdownMenuItem>
@@ -3353,31 +3483,33 @@ export function BudgetWizard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 rounded-xl">
-                    <LogIn className="w-4 h-4" /> Sign in
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {googleLoginAvailable && (
-                    <DropdownMenuItem onClick={handleAccountGoogleLogin}>
-                      Sign in with Google
-                    </DropdownMenuItem>
-                  )}
-                  {appleLoginAvailable && (
-                    <DropdownMenuItem onClick={handleAccountAppleLogin}>
-                      Sign in with Apple
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            ) : null}
             </div>
           </div>
         </div>
       </header>
+
+      {isSignedIn && !isGuest && currentUser && !currentUser.hasPassword && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+          <div className="max-w-4xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <Lock className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>
+                <span className="font-medium">No password set.</span>{" "}
+                Add a password so you can sign in with email and password.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-lg border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0 h-8 text-xs"
+              onClick={() => setIsClaimAccountOpen(true)}
+            >
+              Set a password
+            </Button>
+          </div>
+        </div>
+      )}
 
       <main className={`flex-1 max-w-4xl mx-auto w-full px-6 py-10 ${isSignedIn ? "pb-24 sm:pb-10" : ""}`}>
         <AnimatePresence mode="wait">
@@ -6118,6 +6250,15 @@ export function BudgetWizard({
         onOpenChange={setIsReferralDialogOpen}
         referralInfo={referralInfo}
         isLoading={referralLoading}
+      />
+
+      <ClaimAccountDialog
+        open={isClaimAccountOpen}
+        onOpenChange={setIsClaimAccountOpen}
+        currentUser={currentUser}
+        claimAccountMutation={claimAccountMutation}
+        queryClient={queryClient}
+        toast={toast}
       />
 
       <BugReportDialog

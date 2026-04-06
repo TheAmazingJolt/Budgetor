@@ -78,19 +78,26 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
     return;
   }
 
+  const state = req.query["state"] as string | undefined;
+  let redirectUrl = "/";
+  if (state) {
+    try {
+      redirectUrl = Buffer.from(state, "base64").toString("utf-8");
+    } catch {}
+  }
+
+  const user = (req as any).user;
+  if (!user?.id) {
+    const sep = redirectUrl.includes("?") ? "&" : "?";
+    res.redirect(`${redirectUrl}${sep}error=link_required`);
+    return;
+  }
+
   try {
     const { tokens } = await oauth2Client.getToken(code);
     (req as any).session.googleTokens = tokens;
 
     await saveSession(req);
-
-    const state = req.query["state"] as string | undefined;
-    let redirectUrl = "/";
-    if (state) {
-      try {
-        redirectUrl = Buffer.from(state, "base64").toString("utf-8");
-      } catch {}
-    }
 
     res.redirect(redirectUrl);
   } catch (err: any) {

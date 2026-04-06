@@ -41,6 +41,10 @@ export async function initDb(): Promise<void> {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS bills JSONB DEFAULT '[]'::jsonb;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
 
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires BIGINT;
+
       ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;

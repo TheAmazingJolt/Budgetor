@@ -130,49 +130,19 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
       } catch {}
     }
 
-    if (user?.id && tokens.access_token) {
+    if (!user?.id) {
+      const sep = redirectUrl.includes("?") ? "&" : "?";
+      res.redirect(`${redirectUrl}${sep}error=link_required`);
+      return;
+    }
+
+    if (tokens.access_token) {
       await db.update(usersTable).set({
         microsoftAccessToken: maybeEncrypt(tokens.access_token),
         microsoftRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
         microsoftTokenExpiry: expiresAt,
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id));
-    } else if (!user?.id && tokens.access_token) {
-      try {
-        const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", {
-          headers: { Authorization: `Bearer ${tokens.access_token}` },
-        });
-        if (profileRes.ok) {
-          const profile = await profileRes.json() as any;
-          const msId = profile.id as string;
-          const email: string | null = profile.mail || profile.userPrincipalName || null;
-          const name: string | null = profile.displayName || null;
-
-          const userId = await upsertOrUpgradeUser(req as any, "microsoft", msId, {
-            email,
-            name,
-            avatarUrl: null,
-          });
-
-          await db.update(usersTable).set({
-            microsoftAccessToken: maybeEncrypt(tokens.access_token),
-            microsoftRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
-            microsoftTokenExpiry: expiresAt,
-            updatedAt: new Date(),
-          }).where(eq(usersTable.id, userId));
-
-          (req as any).session.userId = userId;
-          await saveSession(req as any);
-
-          const authCode = generateAuthCode(userId);
-          const sep = redirectUrl.includes("?") ? "&" : "?";
-          redirectUrl = `${redirectUrl}${sep}auth_code=${authCode}`;
-        } else {
-          console.error("[Microsoft login] Failed to fetch profile:", await profileRes.text());
-        }
-      } catch (profileErr) {
-        console.error("[Microsoft login] Profile fetch error:", profileErr);
-      }
     }
 
     res.redirect(redirectUrl);

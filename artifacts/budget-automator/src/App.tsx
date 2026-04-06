@@ -13,10 +13,12 @@ import {
   useAuthProviders,
   useAuthGuestLogin,
   authLoginGoogle,
-  authLoginApple,
-  getMicrosoftAuthUrl,
   getAuthMeQueryKey,
   getAuthProvidersQueryKey,
+  authEmailLogin,
+  authEmailRegister,
+  authForgotPassword,
+  authResetPassword,
 } from "@workspace/api-client-react";
 import { DollarSign, Loader2, RefreshCw, Bug } from "lucide-react";
 
@@ -131,10 +133,11 @@ function AppRouting() {
   const isGuest = currentUser?.provider === "guest";
   const googleLoginAvailable = providersQuery.data?.google ?? false;
   const appleLoginAvailable = providersQuery.data?.apple ?? false;
-  const microsoftLoginAvailable = providersQuery.data?.microsoft ?? false;
 
   const initialRefCode = new URLSearchParams(window.location.search).get("ref");
   const [referralReady, setReferralReady] = useState<boolean>(!initialRefCode);
+
+  const resetToken = new URLSearchParams(window.location.search).get("reset_token");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -191,6 +194,23 @@ function AppRouting() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get("error");
+    if (errorParam === "link_required") {
+      params.delete("error");
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+      toast({
+        title: "Sign in required",
+        description: "Please sign in with your email and password first, then connect your account in Settings.",
+        variant: "destructive",
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleGoogleLogin = async () => {
     try {
       const currentUrl = window.location.href;
@@ -205,31 +225,42 @@ function AppRouting() {
     }
   };
 
-  const handleAppleLogin = async () => {
-    try {
-      const currentUrl = window.location.href;
-      const result = await authLoginApple({ redirect: currentUrl });
-      window.location.href = result.url;
-    } catch (err) {
-      toast({
-        title: "Failed to start Apple login",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
+  const handleEmailLogin = async (email: string, password: string) => {
+    const data = await authEmailLogin({ email, password });
+    if (data.token) {
+      localStorage.setItem("auth_token", data.token);
+    }
+    if (data.user) {
+      qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
     }
   };
 
-  const handleMicrosoftLogin = async () => {
-    try {
-      const currentUrl = window.location.href;
-      const result = await getMicrosoftAuthUrl({ redirect: currentUrl });
-      window.location.href = result.url;
-    } catch (err) {
-      toast({
-        title: "Failed to start Microsoft login",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
+  const handleEmailRegister = async (name: string, email: string, password: string) => {
+    const data = await authEmailRegister({ name, email, password });
+    if (data.token) {
+      localStorage.setItem("auth_token", data.token);
+    }
+    if (data.user) {
+      qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+    }
+  };
+
+  const handleForgotPassword = async (email: string) => {
+    await authForgotPassword({ email });
+  };
+
+  const handleResetPassword = async (token: string, password: string) => {
+    const data = await authResetPassword({ token, password });
+    if (data.token) {
+      localStorage.setItem("auth_token", data.token);
+    }
+    if (data.user) {
+      qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+      const params = new URLSearchParams(window.location.search);
+      params.delete("reset_token");
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
     }
   };
 
@@ -256,16 +287,19 @@ function AppRouting() {
     return <SplashScreen />;
   }
 
-  if (!isSignedIn) {
+  if (!isSignedIn || resetToken) {
     return (
       <SignInPage
         googleLoginAvailable={googleLoginAvailable}
         appleLoginAvailable={appleLoginAvailable}
-        microsoftLoginAvailable={microsoftLoginAvailable}
         onGoogleLogin={handleGoogleLogin}
-        onAppleLogin={handleAppleLogin}
-        onMicrosoftLogin={handleMicrosoftLogin}
+        onAppleLogin={() => {}}
         onGuestLogin={handleGuestLogin}
+        onEmailLogin={handleEmailLogin}
+        onEmailRegister={handleEmailRegister}
+        onForgotPassword={handleForgotPassword}
+        onResetPassword={handleResetPassword}
+        resetToken={resetToken}
         isLoggingIn={guestLoginMutation.isPending}
       />
     );

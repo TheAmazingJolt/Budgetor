@@ -1,5 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import nodemailer from "nodemailer";
 import { db } from "@workspace/db";
 import { usersTable, savedBudgetsTable, type User, encryptJson, decryptJson, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq, and, lt } from "drizzle-orm";
@@ -39,7 +41,7 @@ function getJwtKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-async function signUserJwt(userId: string): Promise<string> {
+export async function signUserJwt(userId: string): Promise<string> {
   return new SignJWT({ userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -64,6 +66,7 @@ function serializeUser(user: User) {
     avatarUrl: user.avatarUrl,
     provider: user.provider,
     createdAt: user.createdAt,
+    hasPassword: !!user.passwordHash,
   };
 }
 
@@ -230,6 +233,245 @@ router.post("/auth/guest", async (req: Request, res: Response): Promise<void> =>
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to create guest account: " + message });
   }
+});
+
+router.post("/auth/register", async (req: Request, res: Response): Promise<void> => {
+  const { name, email, password } = req.body as { name?: string; email?: string; password?: string };
+
+  if (!name || typeof name !== "string" || name.trim().length < 1) {
+    res.status(400).json({ error: "Name is required" });
+    return;
+  }
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    res.status(400).json({ error: "Valid email is required" });
+    return;
+  }
+  if (!password || typeof password !== "string" || password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const [existing] = await db
+    .select({ id: usersTable.id, provider: usersTable.provider, passwordHash: usersTable.passwordHash })
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail))
+    .limit(1);
+
+  if (existing) {
+    if (existing.provider === "email" || existing.passwordHash) {
+      res.status(409).json({ error: "An account with this email already exists. Please sign in." });
+    } else {
+      res.status(409).json({ error: "An account with this email exists. Use 'Set a password' to add email login to your account.", code: "claim_required" });
+    }
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  const pendingReferralCode = req.session?.pendingReferralCode ?? null;
+  if (pendingReferralCode) {
+    req.session.pendingReferralCode = null;
+    await saveSession(req).catch(() => {});
+  }
+
+  const currentGuestUser = req.session?.userId
+    ? (await db.select().from(usersTable).where(and(eq(usersTable.id, req.session.userId), eq(usersTable.provider, "guest"))).limit(1))[0] ?? null
+    : null;
+
+  let userId: string;
+  if (currentGuestUser) {
+    await db.update(usersTable).set({
+      provider: "email",
+      email: normalizedEmail,
+      name: name.trim(),
+      passwordHash,
+      referredBy: currentGuestUser.referredBy ?? pendingReferralCode ?? null,
+      updatedAt: new Date(),
+    }).where(eq(usersTable.id, currentGuestUser.id));
+    userId = currentGuestUser.id;
+  } else {
+    const [newUser] = await db.insert(usersTable).values({
+      provider: "email",
+      email: normalizedEmail,
+      name: name.trim(),
+      passwordHash,
+      referralCode: crypto.randomBytes(5).toString("hex").toUpperCase(),
+      referredBy: pendingReferralCode || null,
+    }).returning();
+    userId = newUser.id;
+  }
+
+  req.session.userId = userId;
+  await saveSession(req);
+  const token = await signUserJwt(userId);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  res.json({ user: serializeUser(user), token });
+});
+
+router.post("/auth/login/email", async (req: Request, res: Response): Promise<void> => {
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "Email is required" });
+    return;
+  }
+  if (!password || typeof password !== "string") {
+    res.status(400).json({ error: "Password is required" });
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail)).limit(1);
+
+  if (!user || !user.passwordHash) {
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+
+  req.session.userId = user.id;
+  await saveSession(req);
+  const token = await signUserJwt(user.id);
+  res.json({ user: serializeUser(user), token });
+});
+
+async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
+  const smtpHost = process.env["SMTP_HOST"];
+  const smtpPort = parseInt(process.env["SMTP_PORT"] ?? "587", 10);
+  const smtpUser = process.env["SMTP_USER"];
+  const smtpPass = process.env["SMTP_PASS"];
+  const smtpFrom = process.env["SMTP_FROM"] ?? smtpUser ?? "noreply@budgify.org";
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    console.log(`[password-reset] Reset link for ${email}: ${resetUrl}`);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass },
+  });
+
+  await transporter.sendMail({
+    from: `"Budgify" <${smtpFrom}>`,
+    to: email,
+    subject: "Reset your Budgify password",
+    text: `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+    html: `<p>Click the link below to reset your password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
+  });
+}
+
+router.post("/auth/forgot-password", async (req: Request, res: Response): Promise<void> => {
+  const { email } = req.body as { email?: string };
+
+  res.json({ ok: true });
+
+  if (!email || typeof email !== "string" || !email.includes("@")) return;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const [user] = await db.select({ id: usersTable.id, email: usersTable.email, passwordHash: usersTable.passwordHash })
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail))
+    .limit(1);
+
+  if (!user || !user.passwordHash) return;
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const expires = Date.now() + 60 * 60 * 1000;
+
+  await db.update(usersTable).set({
+    passwordResetToken: tokenHash,
+    passwordResetExpires: expires,
+    updatedAt: new Date(),
+  }).where(eq(usersTable.id, user.id));
+
+  const frontendOrigin = process.env["CORS_ORIGIN"]
+    ? process.env["CORS_ORIGIN"].split(",")[0].trim()
+    : "http://localhost:5173";
+  const resetUrl = `${frontendOrigin}?reset_token=${rawToken}`;
+
+  sendPasswordResetEmail(normalizedEmail, resetUrl).catch((err) => {
+    console.error("[forgot-password] Failed to send email:", err);
+  });
+});
+
+router.post("/auth/reset-password", async (req: Request, res: Response): Promise<void> => {
+  const { token, password } = req.body as { token?: string; password?: string };
+
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ error: "Missing reset token" });
+    return;
+  }
+  if (!password || typeof password !== "string" || password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const [user] = await db.select()
+    .from(usersTable)
+    .where(eq(usersTable.passwordResetToken, tokenHash))
+    .limit(1);
+
+  if (!user) {
+    res.status(400).json({ error: "Invalid or expired reset link" });
+    return;
+  }
+  if (!user.passwordResetExpires || Date.now() > user.passwordResetExpires) {
+    res.status(400).json({ error: "Reset link has expired. Please request a new one." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await db.update(usersTable).set({
+    passwordHash,
+    passwordResetToken: null,
+    passwordResetExpires: null,
+    provider: user.provider === "guest" ? "email" : user.provider,
+    updatedAt: new Date(),
+  }).where(eq(usersTable.id, user.id));
+
+  req.session.userId = user.id;
+  await saveSession(req);
+  const jwtToken = await signUserJwt(user.id);
+  const [updatedUser] = await db.select().from(usersTable).where(eq(usersTable.id, user.id)).limit(1);
+  res.json({ user: serializeUser(updatedUser), token: jwtToken });
+});
+
+router.post("/auth/claim-account", async (req: Request, res: Response): Promise<void> => {
+  const { password } = req.body as { password?: string };
+
+  if (!req.user) {
+    res.status(401).json({ error: "Not signed in" });
+    return;
+  }
+  if (!password || typeof password !== "string" || password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+  if (!req.user.email) {
+    res.status(400).json({ error: "Your account does not have an email address. Please update your profile first." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await db.update(usersTable).set({
+    passwordHash,
+    updatedAt: new Date(),
+  }).where(eq(usersTable.id, req.user.id));
+
+  const [updatedUser] = await db.select().from(usersTable).where(eq(usersTable.id, req.user.id)).limit(1);
+  const jwtToken = await signUserJwt(req.user.id);
+  res.json({ user: serializeUser(updatedUser), token: jwtToken });
 });
 
 function getAccountOAuth2Client() {
@@ -454,6 +696,18 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
 
     if (!profile.id) {
       res.status(500).json({ error: "Failed to get Google profile" });
+      return;
+    }
+
+    const [existingUser] = await db
+      .select({ id: usersTable.id, provider: usersTable.provider, email: usersTable.email, passwordHash: usersTable.passwordHash })
+      .from(usersTable)
+      .where(and(eq(usersTable.provider, "google"), eq(usersTable.providerId, profile.id)))
+      .limit(1);
+
+    if (!existingUser && !req.user) {
+      const sep = redirectUrl.includes("?") ? "&" : "?";
+      res.redirect(`${redirectUrl}${sep}error=link_required`);
       return;
     }
 

@@ -66,6 +66,12 @@ import type {
   UserBillsResponse,
   UserDebtsResponse,
   UserPreferencesResponse,
+  AuthEmailRegisterRequest,
+  AuthEmailLoginRequest,
+  AuthForgotPasswordRequest,
+  AuthForgotPasswordResponse,
+  AuthResetPasswordRequest,
+  AuthClaimAccountRequest,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -3146,4 +3152,174 @@ export const useUpdateUserPreferences = <
   TContext
 > => {
   return useMutation(getUpdateUserPreferencesMutationOptions(options));
+};
+
+export const authEmailRegister = async (
+  data: BodyType<AuthEmailRegisterRequest>,
+  options?: RequestInit,
+): Promise<AuthUserResponse> => {
+  return customFetch<AuthUserResponse>(`/api/auth/register`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export const authEmailLogin = async (
+  data: BodyType<AuthEmailLoginRequest>,
+  options?: RequestInit,
+): Promise<AuthUserResponse> => {
+  return customFetch<AuthUserResponse>(`/api/auth/login/email`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export const authForgotPassword = async (
+  data: BodyType<AuthForgotPasswordRequest>,
+  options?: RequestInit,
+): Promise<AuthForgotPasswordResponse> => {
+  return customFetch<AuthForgotPasswordResponse>(`/api/auth/forgot-password`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export const authResetPassword = async (
+  data: BodyType<AuthResetPasswordRequest>,
+  options?: RequestInit,
+): Promise<AuthUserResponse> => {
+  return customFetch<AuthUserResponse>(`/api/auth/reset-password`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export const authClaimAccount = async (
+  data: BodyType<AuthClaimAccountRequest>,
+  options?: RequestInit,
+): Promise<AuthUserResponse> => {
+  return customFetch<AuthUserResponse>(`/api/auth/claim-account`, {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+};
+
+export const getAuthEmailRegisterMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authEmailRegister>>, TError, { data: BodyType<AuthEmailRegisterRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof authEmailRegister>>, TError, { data: BodyType<AuthEmailRegisterRequest> }, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authEmailRegister>>, { data: BodyType<AuthEmailRegisterRequest> }> = (props) => {
+    const { data } = props ?? {};
+    return authEmailRegister(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useAuthEmailRegister = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authEmailRegister>>, TError, { data: BodyType<AuthEmailRegisterRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof authEmailRegister>>, TError, { data: BodyType<AuthEmailRegisterRequest> }, TContext> => {
+  return useMutation(getAuthEmailRegisterMutationOptions(options));
+};
+
+export const getAuthEmailLoginMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authEmailLogin>>, TError, { data: BodyType<AuthEmailLoginRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof authEmailLogin>>, TError, { data: BodyType<AuthEmailLoginRequest> }, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authEmailLogin>>, { data: BodyType<AuthEmailLoginRequest> }> = (props) => {
+    const { data } = props ?? {};
+    return authEmailLogin(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useAuthEmailLogin = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authEmailLogin>>, TError, { data: BodyType<AuthEmailLoginRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof authEmailLogin>>, TError, { data: BodyType<AuthEmailLoginRequest> }, TContext> => {
+  return useMutation(getAuthEmailLoginMutationOptions(options));
+};
+
+export const getAuthForgotPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authForgotPassword>>, TError, { data: BodyType<AuthForgotPasswordRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof authForgotPassword>>, TError, { data: BodyType<AuthForgotPasswordRequest> }, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authForgotPassword>>, { data: BodyType<AuthForgotPasswordRequest> }> = (props) => {
+    const { data } = props ?? {};
+    return authForgotPassword(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useAuthForgotPassword = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authForgotPassword>>, TError, { data: BodyType<AuthForgotPasswordRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof authForgotPassword>>, TError, { data: BodyType<AuthForgotPasswordRequest> }, TContext> => {
+  return useMutation(getAuthForgotPasswordMutationOptions(options));
+};
+
+export const getAuthResetPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authResetPassword>>, TError, { data: BodyType<AuthResetPasswordRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof authResetPassword>>, TError, { data: BodyType<AuthResetPasswordRequest> }, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authResetPassword>>, { data: BodyType<AuthResetPasswordRequest> }> = (props) => {
+    const { data } = props ?? {};
+    return authResetPassword(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useAuthResetPassword = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authResetPassword>>, TError, { data: BodyType<AuthResetPasswordRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof authResetPassword>>, TError, { data: BodyType<AuthResetPasswordRequest> }, TContext> => {
+  return useMutation(getAuthResetPasswordMutationOptions(options));
+};
+
+export const getAuthClaimAccountMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authClaimAccount>>, TError, { data: BodyType<AuthClaimAccountRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof authClaimAccount>>, TError, { data: BodyType<AuthClaimAccountRequest> }, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authClaimAccount>>, { data: BodyType<AuthClaimAccountRequest> }> = (props) => {
+    const { data } = props ?? {};
+    return authClaimAccount(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useAuthClaimAccount = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authClaimAccount>>, TError, { data: BodyType<AuthClaimAccountRequest> }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof authClaimAccount>>, TError, { data: BodyType<AuthClaimAccountRequest> }, TContext> => {
+  return useMutation(getAuthClaimAccountMutationOptions(options));
 };
