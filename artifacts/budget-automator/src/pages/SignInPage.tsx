@@ -426,7 +426,7 @@ function AuthPanel({
               with your email to set a password.
             </p>
 
-            {googleLoginAvailable && claimEmail && (
+            {googleLoginAvailable && (
               <button
                 type="button"
                 onClick={handleGoogle}
@@ -438,7 +438,7 @@ function AuthPanel({
                 ) : (
                   <GoogleIcon className="w-3.5 h-3.5" />
                 )}
-                Sign in with Google (existing accounts)
+                Had a Google account? Sign in here
               </button>
             )}
           </div>

@@ -110,6 +110,142 @@ paths:
                 required:
                   - ok
 
+  /auth/register:
+    post:
+      operationId: authRegister
+      tags: [auth]
+      summary: Register with email and password
+      description: Creates a new account with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRegisterRequest"
+      responses:
+        "200":
+          description: Registered user with JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: authLogin
+      tags: [auth]
+      summary: Log in with email and password
+      description: Authenticates an existing user with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: Authenticated user with JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-password:
+    post:
+      operationId: authForgotPassword
+      tags: [auth]
+      summary: Request a password reset
+      description: Sends a password reset link to the user's email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthForgotPasswordRequest"
+      responses:
+        "200":
+          description: Reset email sent (or no-op if not found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthForgotPasswordResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: authResetPassword
+      tags: [auth]
+      summary: Reset password with token
+      description: Sets a new password using a valid reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/claim-account:
+    post:
+      operationId: authClaimAccount
+      tags: [auth]
+      summary: Claim a legacy OAuth account
+      description: Sets a password on a legacy OAuth-only account. Requires either an active session (no password yet) or a one-time claim token issued by an OAuth callback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthClaimAccountRequest"
+      responses:
+        "200":
+          description: Account claimed with JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+        "400":
+          description: Validation error or account already has password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or expired claim token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/providers:
     get:
       operationId: authProviders
@@ -1039,6 +1175,78 @@ components:
         - name
         - provider
         - createdAt
+
+    AuthRegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+      required:
+        - name
+        - email
+        - password
+
+    AuthLoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+        - email
+
+    AuthForgotPasswordResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        resetUrl:
+          type: string
+          description: Reset URL (dev/testing environments only)
+      required:
+        - message
+
+    AuthResetPasswordRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 8
+      required:
+        - token
+        - password
+
+    AuthClaimAccountRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 8
+        claimToken:
+          type: string
+          description: One-time claim token issued by OAuth callback (required for unauthenticated path)
+      required:
+        - password
 
     AuthMeResponse:
       type: object

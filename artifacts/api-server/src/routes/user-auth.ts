@@ -765,8 +765,9 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
     }
 
     if (!req.user) {
-      // Allow unauthenticated flow only for legacy OAuth users who have no password.
-      // Match by email across all OAuth providers — issue a one-time claim token.
+      // Temporary legacy Google sign-in path for existing OAuth users who have no password yet.
+      // Signs them in via auth_code AND issues a claim_token so they can set a password.
+      // New Google users (no existing account) are rejected with link_only.
       if (profile.email) {
         const [matchedUser] = await db
           .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
@@ -774,10 +775,13 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
           .where(eq(usersTable.email, profile.email.toLowerCase()))
           .limit(1);
         if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
+          // Allow temporary sign-in by issuing an auth_code (same as normal login)
+          // + a claim_token so the frontend can prompt them to set a password
+          const authCode = generateAuthCode(matchedUser.id);
           const claimToken = generateClaimToken(matchedUser.id);
           const sep = redirectUrl.includes("?") ? "&" : "?";
           const encodedEmail = encodeURIComponent(profile.email);
-          res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${encodedEmail}`);
+          res.redirect(`${redirectUrl}${sep}auth_code=${authCode}&claim_token=${claimToken}&claim_email=${encodedEmail}`);
           return;
         }
       }
@@ -906,8 +910,8 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     }
 
     if (!req.user) {
-      // Allow unauthenticated flow only for legacy OAuth users who have no password.
-      // Match by email across all OAuth providers — issue a one-time claim token.
+      // Temporary legacy sign-in path: allow existing Apple-provider users (no password)
+      // to sign in via auth_code AND receive a claim_token to set a password.
       if (email) {
         const [matchedUser] = await db
           .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
@@ -915,10 +919,11 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
           .where(eq(usersTable.email, email.toLowerCase()))
           .limit(1);
         if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
+          const authCode = generateAuthCode(matchedUser.id);
           const claimToken = generateClaimToken(matchedUser.id);
           const sep = redirectUrl.includes("?") ? "&" : "?";
           const encodedEmail = encodeURIComponent(email);
-          res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${encodedEmail}`);
+          res.redirect(`${redirectUrl}${sep}auth_code=${authCode}&claim_token=${claimToken}&claim_email=${encodedEmail}`);
           return;
         }
       }

@@ -80,7 +80,12 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
   }
 
   const state = req.query["state"] as string | undefined;
-  const { redirect: redirectUrl } = verifyAndConsumeOAuthState(req, state);
+  const { valid, redirect: redirectUrl } = verifyAndConsumeOAuthState(req, state);
+
+  if (!valid) {
+    res.status(400).json({ error: "Invalid or expired OAuth state. Please try connecting again." });
+    return;
+  }
 
   const user = (req as any).user;
   if (!user?.id) {
