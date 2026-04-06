@@ -88,6 +88,22 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
     return;
   }
 
+  const state = req.query["state"] as string | undefined;
+  let redirectUrl = "/";
+  if (state) {
+    try {
+      redirectUrl = Buffer.from(state, "base64").toString("utf-8");
+    } catch {}
+  }
+
+  // Enforce authenticated session BEFORE exchanging tokens
+  const user = (req as any).user;
+  if (!user?.id) {
+    const sep = redirectUrl.includes("?") ? "&" : "?";
+    res.redirect(`${redirectUrl}${sep}error=link_required`);
+    return;
+  }
+
   try {
     const body = new URLSearchParams({
       client_id: config.clientId,
@@ -120,21 +136,6 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
     (req as any).session.microsoftOAuthNonce = undefined;
 
     await saveSession(req);
-
-    const user = (req as any).user;
-    const state = req.query["state"] as string | undefined;
-    let redirectUrl = "/";
-    if (state) {
-      try {
-        redirectUrl = Buffer.from(state, "base64").toString("utf-8");
-      } catch {}
-    }
-
-    if (!user?.id) {
-      const sep = redirectUrl.includes("?") ? "&" : "?";
-      res.redirect(`${redirectUrl}${sep}error=link_required`);
-      return;
-    }
 
     if (tokens.access_token) {
       await db.update(usersTable).set({

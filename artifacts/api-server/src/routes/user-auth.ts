@@ -460,7 +460,7 @@ router.post("/auth/reset-password", async (req: Request, res: Response): Promise
 });
 
 router.post("/auth/claim-account", async (req: Request, res: Response): Promise<void> => {
-  const { password, email } = req.body as { password?: string; email?: string };
+  const { password, claimToken } = req.body as { password?: string; claimToken?: string };
 
   if (!password || typeof password !== "string" || password.length < 8) {
     res.status(400).json({ error: "Password must be at least 8 characters" });
@@ -470,7 +470,7 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
   let targetUserId: string;
 
   if (req.user) {
-    // Authenticated path: user is already signed in (e.g. via the in-app banner)
+    // Authenticated path: signed-in user sets a password for their own account
     if (!req.user.email) {
       res.status(400).json({ error: "Your account does not have an email address. Please update your profile first." });
       return;
@@ -480,20 +480,20 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
       return;
     }
     targetUserId = req.user.id;
-  } else {
-    // Unauthenticated path: email + password to claim an existing OAuth-only account
-    if (!email || typeof email !== "string") {
-      res.status(400).json({ error: "Email is required" });
+  } else if (claimToken && typeof claimToken === "string") {
+    // Unauthenticated path: verified via one-time claim token issued by OAuth callback
+    const userId = consumeClaimToken(claimToken);
+    if (!userId) {
+      res.status(401).json({ error: "Invalid or expired claim token. Please sign in with Google again." });
       return;
     }
-    const normalizedEmail = email.trim().toLowerCase();
     const [existing] = await db
-      .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+      .select({ id: usersTable.id, passwordHash: usersTable.passwordHash })
       .from(usersTable)
-      .where(eq(usersTable.email, normalizedEmail))
+      .where(eq(usersTable.id, userId))
       .limit(1);
     if (!existing) {
-      res.status(404).json({ error: "No account found with that email address" });
+      res.status(404).json({ error: "Account not found" });
       return;
     }
     if (existing.passwordHash) {
@@ -501,6 +501,9 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
       return;
     }
     targetUserId = existing.id;
+  } else {
+    res.status(401).json({ error: "Authentication required. Sign in or provide a valid claim token." });
+    return;
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
@@ -634,6 +637,26 @@ function consumeAuthCode(code: string): string | null {
   return entry.userId;
 }
 
+// One-time claim tokens: issued when an OAuth callback identifies a no-password user
+// who needs to set a password. Token → userId mapping, 15-minute TTL.
+const CLAIM_TOKENS = new Map<string, { userId: string; expiresAt: number }>();
+const CLAIM_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+export function generateClaimToken(userId: string): string {
+  const token = crypto.randomBytes(32).toString("hex");
+  CLAIM_TOKENS.set(token, { userId, expiresAt: Date.now() + CLAIM_TOKEN_TTL_MS });
+  setTimeout(() => CLAIM_TOKENS.delete(token), CLAIM_TOKEN_TTL_MS);
+  return token;
+}
+
+function consumeClaimToken(token: string): string | null {
+  const entry = CLAIM_TOKENS.get(token);
+  if (!entry) return null;
+  CLAIM_TOKENS.delete(token);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.userId;
+}
+
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 function getHmacSecret(): string {
@@ -742,7 +765,8 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
 
     if (!req.user) {
       // Allow unauthenticated login only if this email belongs to an existing
-      // OAuth-only user who has never set a password — direct them to claim flow.
+      // Google-provider user who has never set a password. Issue a one-time
+      // claim token (15-min TTL) and redirect to the claim flow.
       if (profile.email) {
         const [matchedUser] = await db
           .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
@@ -750,9 +774,10 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
           .where(and(eq(usersTable.email, profile.email.toLowerCase()), eq(usersTable.provider, "google")))
           .limit(1);
         if (matchedUser && !matchedUser.passwordHash) {
+          const claimToken = generateClaimToken(matchedUser.id);
           const sep = redirectUrl.includes("?") ? "&" : "?";
           const email = encodeURIComponent(profile.email);
-          res.redirect(`${redirectUrl}${sep}claim_email=${email}`);
+          res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${email}`);
           return;
         }
       }
@@ -818,28 +843,13 @@ async function generateAppleClientSecret(): Promise<string> {
     .sign(privateKey);
 }
 
-router.get("/auth/login/apple", (req: Request, res: Response) => {
-  if (!isAppleConfigured()) {
-    res.status(500).json({ error: "Apple Sign-In not configured. Set APPLE_CLIENT_ID, APPLE_REDIRECT_URI, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY." });
-    return;
-  }
-
-  const clientId = process.env["APPLE_CLIENT_ID"]!;
-  const redirectUri = process.env["APPLE_REDIRECT_URI"]!;
-
-  const frontendRedirect = req.query["redirect"] as string | undefined;
-  const state = generateOAuthState(req, frontendRedirect);
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: "code id_token",
-    scope: "name email",
-    response_mode: "form_post",
-    state,
+router.get("/auth/login/apple", (_req: Request, res: Response) => {
+  // Apple Sign-In has been removed as a primary auth method.
+  // Users who previously signed in with Apple should use "forgot password"
+  // with their email to set an email/password credential.
+  res.status(410).json({
+    error: "Apple Sign-In is no longer supported as a primary login method. Please use your email and password, or use 'Forgot password' to set a password for your account.",
   });
-
-  res.json({ url: `https://appleid.apple.com/auth/authorize?${params.toString()}` });
 });
 
 router.post("/auth/login/apple/callback", async (req: Request, res: Response): Promise<void> => {
@@ -897,7 +907,8 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
 
     if (!req.user) {
       // Allow unauthenticated Apple login only if the email matches an existing
-      // Apple-provider user who has never set a password — send them to claim flow.
+      // Apple-provider user who has never set a password. Issue a one-time claim
+      // token (15-min TTL) and redirect to the claim flow.
       if (email) {
         const [matchedUser] = await db
           .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
@@ -905,9 +916,10 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
           .where(and(eq(usersTable.email, email.toLowerCase()), eq(usersTable.provider, "apple")))
           .limit(1);
         if (matchedUser && !matchedUser.passwordHash) {
+          const claimToken = generateClaimToken(matchedUser.id);
           const sep = redirectUrl.includes("?") ? "&" : "?";
           const encodedEmail = encodeURIComponent(email);
-          res.redirect(`${redirectUrl}${sep}claim_email=${encodedEmail}`);
+          res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${encodedEmail}`);
           return;
         }
       }
@@ -932,8 +944,12 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
 });
 
 router.get("/auth/providers", (_req: Request, res: Response) => {
+  // Google is surfaced as a legacy fallback link only (not primary sign-in).
+  // Apple is removed from primary auth — never advertised as a provider.
+  // Microsoft is only used as a service integration (OneDrive), not for login.
+  const googleConfigured = !!(getAccountOAuth2Client());
   res.json({
-    google: false,
+    google: googleConfigured,
     apple: false,
     microsoft: false,
   });

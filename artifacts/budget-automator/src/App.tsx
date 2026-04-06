@@ -140,6 +140,7 @@ function AppRouting() {
 
   const resetToken = new URLSearchParams(window.location.search).get("reset_token");
   const claimEmail = new URLSearchParams(window.location.search).get("claim_email");
+  const claimToken = new URLSearchParams(window.location.search).get("claim_token");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -267,8 +268,11 @@ function AppRouting() {
     }
   };
 
-  const handleClaimAccount = async (email: string, password: string) => {
-    const data = await authClaimAccount({ email, password });
+  const handleClaimAccount = async (_email: string, password: string) => {
+    const data = await authClaimAccount({
+      password,
+      ...(claimToken ? { claimToken } : {}),
+    });
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
@@ -276,6 +280,7 @@ function AppRouting() {
       qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
       const params = new URLSearchParams(window.location.search);
       params.delete("claim_email");
+      params.delete("claim_token");
       const newSearch = params.toString();
       const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
       window.history.replaceState({}, "", newUrl);
@@ -305,7 +310,7 @@ function AppRouting() {
     return <SplashScreen />;
   }
 
-  if (!isSignedIn || resetToken || claimEmail) {
+  if (!isSignedIn || resetToken || claimEmail || claimToken) {
     return (
       <SignInPage
         googleLoginAvailable={googleLoginAvailable}
