@@ -475,7 +475,7 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
       res.status(400).json({ error: "Your account does not have an email address. Please update your profile first." });
       return;
     }
-    if (req.user.hasPassword) {
+    if (req.user.passwordHash) {
       res.status(400).json({ error: "Your account already has a password." });
       return;
     }

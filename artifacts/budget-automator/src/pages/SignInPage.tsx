@@ -425,6 +425,22 @@ function AuthPanel({
               </button>{" "}
               with your email to set a password.
             </p>
+
+            {googleLoginAvailable && (
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={busy}
+                className="text-xs text-center text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5"
+              >
+                {clickedGoogle && isLoggingIn ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <GoogleIcon className="w-3.5 h-3.5" />
+                )}
+                Sign in with Google (existing accounts)
+              </button>
+            )}
           </div>
         </>
       )}

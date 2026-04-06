@@ -3442,30 +3442,50 @@ export function BudgetWizard({
                       <DropdownMenuSeparator />
                       <div className="px-3 py-1.5">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Connected Services</p>
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1.5">
                           {googleConfigured && (
-                            <button
-                              onClick={googleAuthenticated ? handleDisconnectGoogle : handleConnectGoogle}
-                              className="flex items-center justify-between text-xs px-0 py-1 hover:text-foreground text-muted-foreground transition-colors w-full"
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <div className={`w-1.5 h-1.5 rounded-full ${googleAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`} />
-                                Google Sheets
-                              </span>
-                              <span className="text-xs text-muted-foreground/70">{googleAuthenticated ? "Disconnect" : "Connect"}</span>
-                            </button>
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${googleAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                                  Google Sheets
+                                  {googleAuthenticated && (
+                                    <span className="text-[10px] font-medium bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full border border-green-200">Connected</span>
+                                  )}
+                                </span>
+                                <button
+                                  onClick={googleAuthenticated ? handleDisconnectGoogle : handleConnectGoogle}
+                                  className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors ml-2"
+                                >
+                                  {googleAuthenticated ? "Disconnect" : "Connect"}
+                                </button>
+                              </div>
+                              {googleAuthenticated && currentUser?.email && (
+                                <p className="text-[10px] text-muted-foreground/60 pl-3 truncate">{currentUser.email}</p>
+                              )}
+                            </div>
                           )}
                           {microsoftConfigured && (
-                            <button
-                              onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
-                              className="flex items-center justify-between text-xs px-0 py-1 hover:text-foreground text-muted-foreground transition-colors w-full"
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <div className={`w-1.5 h-1.5 rounded-full ${microsoftAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`} />
-                                Microsoft OneDrive
-                              </span>
-                              <span className="text-xs text-muted-foreground/70">{microsoftAuthenticated ? "Disconnect" : "Connect"}</span>
-                            </button>
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${microsoftAuthenticated ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                                  Microsoft OneDrive
+                                  {microsoftAuthenticated && (
+                                    <span className="text-[10px] font-medium bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full border border-green-200">Connected</span>
+                                  )}
+                                </span>
+                                <button
+                                  onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
+                                  className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors ml-2"
+                                >
+                                  {microsoftAuthenticated ? "Disconnect" : "Connect"}
+                                </button>
+                              </div>
+                              {microsoftAuthenticated && currentUser?.email && (
+                                <p className="text-[10px] text-muted-foreground/60 pl-3 truncate">{currentUser.email}</p>
+                              )}
+                            </div>
                           )}
                           {!googleConfigured && !microsoftConfigured && (
                             <p className="text-xs text-muted-foreground/60 italic">No services configured</p>
