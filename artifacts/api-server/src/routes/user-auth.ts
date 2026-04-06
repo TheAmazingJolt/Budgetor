@@ -501,27 +501,9 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
       return;
     }
     targetUserId = existing.id;
-  } else if (email && typeof email === "string") {
-    // Email path: user provides email + password to claim their legacy OAuth account.
-    // Only allowed for accounts with no existing password (legacy OAuth-only users).
-    const normalizedEmail = email.trim().toLowerCase();
-    const [existing] = await db
-      .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
-      .from(usersTable)
-      .where(eq(usersTable.email, normalizedEmail))
-      .limit(1);
-    if (!existing) {
-      // Return same message to avoid user enumeration
-      res.status(404).json({ error: "No account without a password found for that email. If you already have a password, use the sign-in form." });
-      return;
-    }
-    if (existing.passwordHash) {
-      res.status(400).json({ error: "This account already has a password. Use the sign-in form to log in." });
-      return;
-    }
-    targetUserId = existing.id;
   } else {
-    res.status(401).json({ error: "Authentication required. Provide a claim token, email, or sign in first." });
+    // No authenticated session and no claim token — reject
+    res.status(401).json({ error: "Authentication required. Please sign in with Google to receive a claim link, or use 'Forgot password' with your email." });
     return;
   }
 

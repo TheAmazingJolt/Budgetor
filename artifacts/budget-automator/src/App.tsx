@@ -268,11 +268,10 @@ function AppRouting() {
     }
   };
 
-  const handleClaimAccount = async (email: string, password: string) => {
+  const handleClaimAccount = async (_email: string, password: string) => {
     const data = await authClaimAccount({
       password,
       ...(claimToken ? { claimToken } : {}),
-      ...(email && !claimToken ? { email } : {}),
     });
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
