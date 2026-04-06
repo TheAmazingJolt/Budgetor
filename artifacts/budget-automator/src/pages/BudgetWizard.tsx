@@ -4690,7 +4690,7 @@ export function BudgetWizard({
                                 </Button>
                               )}
                               {activeLinkedSheet && (
-                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Also sync to ${activeLinkedSheet.type === "google" ? "Google Sheets" : "Excel"} when saving`}>
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeLinkedSheet.name} when saving`}>
                                   <input
                                     type="checkbox"
                                     checked={syncOnUpdate}
@@ -4698,7 +4698,7 @@ export function BudgetWizard({
                                     className="accent-primary w-3.5 h-3.5"
                                   />
                                   <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                  Sync
+                                  Sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"}
                                   {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
                                 </label>
                               )}
