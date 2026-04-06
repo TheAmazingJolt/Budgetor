@@ -1237,7 +1237,7 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
       writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
     }
 
-    if (body.budgetId && (req as any).user?.id && body.bills) {
+    if (body.budgetId && (req as any).user?.id) {
       try {
         const userId = (req as any).user.id;
         const contribRows = await db.select().from(savingsContributionsTable)
@@ -1251,7 +1251,7 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
           targetDate: g.targetDate,
           savedSoFar: contributions.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
         }));
-        writeExcelSavingsSheetXL(wb, body.bills, weeks, contributions, goalData, body.tz);
+        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz);
       } catch { /* non-fatal */ }
     }
 
@@ -1448,177 +1448,6 @@ function writeExcelSavingsSheetXL(
   ws.getColumn(7).width = 16;
 }
 
-async function writeSavingsTabToExcel(
-  token: string,
-  fileId: string,
-  bills: BillMeta[],
-  weeks: ExcelWriteRequest["weeks"],
-  contributions: { billName: string; amount: number; date: string }[],
-  goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
-  tz?: string,
-): Promise<void> {
-  const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
-  today.setHours(0, 0, 0, 0);
-  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
-
-  const sinkingFunds: { name: string; annualGoal: number; savedInCycle: number; progressPct: number; nextDueDateStr: string; weeksRemaining: number }[] = [];
-  const balanced: { name: string; monthlyGoal: number; savedThisMonth: number; progressPct: number }[] = [];
-
-  for (const bill of bills) {
-    if (bill.type === "yearly") {
-      const annualGoal = Math.abs(bill.amount);
-      const dueMonth = bill.annualDueMonth ?? 1;
-      const dueDay = bill.dayOfMonth ?? 1;
-      const nextDue = getNextYearlyDueExcel(today, dueMonth, dueDay);
-      const cycleStart = new Date(nextDue);
-      cycleStart.setFullYear(cycleStart.getFullYear() - 1);
-      const prefix = `${bill.name} [annual:`;
-      let savedInCycle = 0;
-      for (const w of weeks) {
-        const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
-        if (wStart <= cycleStart || wStart > today) continue;
-        for (const item of w.bills) {
-          if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
-        }
-      }
-      for (const c of contributions) {
-        if (c.billName !== bill.name) continue;
-        const cDate = new Date(c.date + "T00:00:00");
-        if (cDate <= cycleStart || cDate > today) continue;
-        savedInCycle += c.amount;
-      }
-      const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
-      const nextDueDateStr = `${MONTH_SHORT_EXCEL[nextDue.getMonth()]} ${nextDue.getDate()}`;
-      const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
-      sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle, progressPct, nextDueDateStr, weeksRemaining });
-    } else if (bill.type === "balanced") {
-      const monthlyGoal = Math.abs(bill.amount);
-      const prefix = `Partial ${bill.name}`;
-      let savedThisMonth = 0;
-      for (const w of weeks) {
-        const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
-        if (wStart > today) continue;
-        if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
-        for (const item of w.bills) {
-          if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
-        }
-      }
-      for (const c of contributions) {
-        if (c.billName !== bill.name) continue;
-        const cDate = new Date(c.date + "T00:00:00");
-        if (cDate > today) continue;
-        if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
-        savedThisMonth += c.amount;
-      }
-      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
-      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, progressPct });
-    }
-  }
-
-  const dateStr = today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const currentMonthStr = today.toLocaleString("en-US", { month: "long", year: "numeric" });
-
-  const grid: (string | number)[][] = [
-    ["Savings Progress"],
-    [`Generated on ${dateStr}`],
-    [],
-  ];
-
-  if (sinkingFunds.length > 0) {
-    grid.push(["Sinking Funds"]);
-    grid.push(["Bill Name", "Annual Goal", "Saved This Cycle", "Progress", "Next Due Date", "Weeks Left"]);
-    for (const sf of sinkingFunds) {
-      grid.push([sf.name, sf.annualGoal, sf.savedInCycle, `${Math.round(sf.progressPct)}%`, sf.nextDueDateStr, sf.weeksRemaining]);
-    }
-    grid.push([]);
-  }
-
-  if (balanced.length > 0) {
-    grid.push([`Monthly Set-Aside — ${currentMonthStr}`]);
-    grid.push(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress"]);
-    for (const b of balanced) {
-      grid.push([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`]);
-    }
-    grid.push([]);
-  }
-
-  if (goals.length > 0) {
-    grid.push(["Savings Goals"]);
-    grid.push(["Goal Name", "Target Amount", "Saved So Far", "Progress", "Target Date", "Weeks Left", "Weekly Needed"]);
-    for (const g of goals) {
-      const targetDate = new Date(g.targetDate + "T00:00:00");
-      const weeksLeft = Math.max(0, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
-      const remaining = Math.max(0, g.targetAmount - g.savedSoFar);
-      const weeklyNeeded = weeksLeft > 0 ? Math.round((remaining / weeksLeft) * 100) / 100 : 0;
-      const progressPct = g.targetAmount > 0 ? Math.min(100, (g.savedSoFar / g.targetAmount) * 100) : 0;
-      const targetDateStr = `${MONTH_SHORT_EXCEL[targetDate.getMonth()]} ${targetDate.getDate()}, ${targetDate.getFullYear()}`;
-      grid.push([g.name, g.targetAmount, g.savedSoFar, `${Math.round(progressPct)}%`, targetDateStr, weeksLeft, weeklyNeeded]);
-    }
-    grid.push([]);
-  }
-
-  grid.push(["Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month."]);
-
-  const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
-  const existingSheets: any[] = sheetsData.value ?? [];
-  const savingsSheet = existingSheets.find((s: any) => s.name === "Savings Progress");
-  if (!savingsSheet) {
-    await graphPost(token, `/me/drive/items/${fileId}/workbook/worksheets/add`, { name: "Savings Progress" });
-  }
-
-  const sheetName = encodeURIComponent("Savings Progress");
-  const numRows = grid.length;
-  const numCols = Math.max(...grid.map((r) => r.length), 1);
-  const paddedGrid = grid.map((row) => {
-    const padded = [...row];
-    while (padded.length < numCols) padded.push("");
-    return padded;
-  });
-
-  const endColLetter = colLetter(numCols - 1);
-  await graphPatch(
-    token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='A1:${endColLetter}${numRows}')`,
-    { values: paddedGrid },
-  );
-
-  let cr = 3;
-  const fmtCurrency = [["$#,##0.00"]];
-  const fmtCurrency2 = [["$#,##0.00", "$#,##0.00"]];
-  if (sinkingFunds.length > 0) {
-    cr += 2;
-    for (let i = 0; i < sinkingFunds.length; i++) {
-      const row1 = cr + i + 1;
-      try {
-        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:C${row1}')`, { numberFormat: fmtCurrency2 });
-      } catch {}
-    }
-    cr += sinkingFunds.length + 1;
-  }
-  if (balanced.length > 0) {
-    cr += 2;
-    for (let i = 0; i < balanced.length; i++) {
-      const row1 = cr + i + 1;
-      try {
-        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:C${row1}')`, { numberFormat: fmtCurrency2 });
-      } catch {}
-    }
-    cr += balanced.length + 1;
-  }
-  if (goals.length > 0) {
-    cr += 2;
-    for (let i = 0; i < goals.length; i++) {
-      const row1 = cr + i + 1;
-      try {
-        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:C${row1}')`, { numberFormat: fmtCurrency2 });
-        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='G${row1}:G${row1}')`, { numberFormat: fmtCurrency });
-      } catch {}
-    }
-  }
-}
-
 router.post("/excel/:id/write", async (req, res): Promise<void> => {
   const token = await getAccessToken(req);
   if (!token) {
@@ -1671,7 +1500,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
     }
 
-    if (body.budgetId && (req as any).user?.id && body.bills) {
+    if (body.budgetId && (req as any).user?.id) {
       try {
         const userId = (req as any).user.id;
         const contribRows = await db.select().from(savingsContributionsTable)
@@ -1685,7 +1514,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
           targetDate: g.targetDate,
           savedSoFar: contributions.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
         }));
-        writeExcelSavingsSheetXL(wb, body.bills, weeks, contributions, goalData, body.tz);
+        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz);
       } catch { /* non-fatal */ }
     }
 
