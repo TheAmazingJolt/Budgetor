@@ -4010,27 +4010,41 @@ export function BudgetWizard({
                       </Button>
                     </div>
                     {activeLinkedSheet && (inputMode === "cloud" || newCloudSaveSuccess) && (
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            checked={syncOnUpdate}
-                            onChange={e => setSyncOnUpdate(e.target.checked)}
-                            className="accent-primary w-3.5 h-3.5"
-                          />
-                          <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                          Also sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"} on update
-                          {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
-                        </label>
-                        <button
-                          type="button"
-                          onClick={handleManualSheetSync}
-                          disabled={isSyncingToSheet}
-                          className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${isSyncingToSheet ? "animate-spin" : ""}`} />
-                          {isSyncingToSheet ? "Syncing…" : "Sync now"}
-                        </button>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={syncOnUpdate}
+                              onChange={e => setSyncOnUpdate(e.target.checked)}
+                              className="accent-primary w-3.5 h-3.5"
+                            />
+                            <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                            Also sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"} on update
+                            {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleManualSheetSync}
+                            disabled={isSyncingToSheet}
+                            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${isSyncingToSheet ? "animate-spin" : ""}`} />
+                            {isSyncingToSheet ? "Syncing…" : "Sync now"}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+                          <span>Linked to: <span className="font-medium text-muted-foreground">"{activeLinkedSheet.name}"</span></span>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            className="underline underline-offset-2 hover:text-foreground transition-colors"
+                            onClick={() => { setActiveLinkedSheet(null); setSyncOnUpdate(false); }}
+                          >
+                            Unlink
+                          </button>
+                          <span className="text-muted-foreground/40">— to sync to a different service, use the buttons below</span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -5140,7 +5154,7 @@ export function BudgetWizard({
                   )
                 )}
 
-                {googleAuthenticated && inputMode !== "google" && !(inputMode === "cloud" && activeLinkedSheet) && (
+                {googleAuthenticated && inputMode !== "google" && !(activeLinkedSheet?.type === "google") && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
@@ -5179,7 +5193,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {microsoftAuthenticated && inputMode !== "excel" && (
+                {microsoftAuthenticated && inputMode !== "excel" && !(activeLinkedSheet?.type === "excel") && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
