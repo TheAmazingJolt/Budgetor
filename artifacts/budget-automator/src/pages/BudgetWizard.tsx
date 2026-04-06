@@ -4783,7 +4783,7 @@ export function BudgetWizard({
                                           NEW
                                         </span>
                                       )}
-                                      {(isEdited || (week.isNew && existingWeekLabels.has(week.label))) && (
+                                      {isEdited && (
                                         <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">
                                           EDITED
                                         </span>
