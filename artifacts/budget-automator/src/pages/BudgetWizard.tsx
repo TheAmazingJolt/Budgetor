@@ -2829,6 +2829,7 @@ export function BudgetWizard({
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(debts.length > 0 ? { debts } : {}),
           ...(bills.length > 0 ? { bills: stripHeuristicColors(bills) } : {}),
+          ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
         },
       });
       setNewExcelSaveSuccess(true);
@@ -2937,6 +2938,7 @@ export function BudgetWizard({
         weeks,
         startCol: 0,
         includeRemainingAcct,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
         ...(debts.length > 0 ? { debts } : {}),
         ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),

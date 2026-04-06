@@ -15,4 +15,6 @@ export interface ExcelCreateAndWriteRequest {
   includeRemainingAcct?: boolean;
   debts?: Debt[];
   bills?: Bill[];
+  budgetId?: string;
+  tz?: string;
 }

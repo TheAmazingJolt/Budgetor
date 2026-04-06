@@ -407,6 +407,8 @@ export interface ExcelWriteRequest {
   sheetTitle?: string;
   debts?: Debt[];
   bills?: Bill[];
+  budgetId?: string;
+  tz?: string;
 }
 
 export interface ExcelWriteResponse {
@@ -420,6 +422,8 @@ export interface ExcelCreateAndWriteRequest {
   includeRemainingAcct?: boolean;
   debts?: Debt[];
   bills?: Bill[];
+  budgetId?: string;
+  tz?: string;
 }
 
 export interface ExcelCreateAndWriteResponse {
