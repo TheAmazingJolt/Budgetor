@@ -92,6 +92,20 @@ export async function initDb(): Promise<void> {
       ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS linked_excel_sheet_id TEXT;
       ALTER TABLE saved_budgets ADD COLUMN IF NOT EXISTS linked_excel_sheet_name TEXT;
 
+      UPDATE saved_budgets
+        SET linked_google_sheet_id = linked_sheet_id,
+            linked_google_sheet_name = linked_sheet_name
+        WHERE linked_sheet_type = 'google'
+          AND linked_google_sheet_id IS NULL
+          AND linked_sheet_id IS NOT NULL;
+
+      UPDATE saved_budgets
+        SET linked_excel_sheet_id = linked_sheet_id,
+            linked_excel_sheet_name = linked_sheet_name
+        WHERE linked_sheet_type = 'excel'
+          AND linked_excel_sheet_id IS NULL
+          AND linked_sheet_id IS NOT NULL;
+
       CREATE TABLE IF NOT EXISTS user_sessions (
         sid VARCHAR NOT NULL PRIMARY KEY,
         sess JSON NOT NULL,

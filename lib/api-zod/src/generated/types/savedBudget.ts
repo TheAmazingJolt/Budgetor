@@ -22,6 +22,14 @@ export interface SavedBudget {
   linkedSheetName?: string | null;
   /** Type of linked sheet ('google' or 'excel') */
   linkedSheetType?: SavedBudgetLinkedSheetType;
+  /** ID of the linked Google Sheet (null if no link) */
+  linkedGoogleSheetId?: string | null;
+  /** Display name of the linked Google Sheet */
+  linkedGoogleSheetName?: string | null;
+  /** ID of the linked Excel/OneDrive file (null if no link) */
+  linkedExcelSheetId?: string | null;
+  /** Display name of the linked Excel/OneDrive file */
+  linkedExcelSheetName?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

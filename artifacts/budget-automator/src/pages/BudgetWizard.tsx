@@ -3685,18 +3685,27 @@ export function BudgetWizard({
                                     </Button>
                                   </div>
                                 </div>
-                                {budget.linkedSheetId && budget.linkedSheetType && (
-                                  <div className="mt-2 pt-2 border-t border-border/30 flex items-center gap-1.5 min-w-0">
-                                    {budget.linkedSheetType === "google" ? (
-                                      <Sheet className="w-3 h-3 text-blue-500 shrink-0" />
-                                    ) : (
-                                      <FileSpreadsheet className="w-3 h-3 text-teal-500 shrink-0" />
-                                    )}
-                                    <span className="text-xs text-muted-foreground">
-                                      {budget.linkedSheetType === "google" ? "Linked to Google Sheets" : "Linked to Excel"}
-                                    </span>
-                                  </div>
-                                )}
+                                {(() => {
+                                  const googleId = budget.linkedGoogleSheetId ?? (budget.linkedSheetType === "google" ? budget.linkedSheetId : null);
+                                  const excelId = budget.linkedExcelFileId ?? (budget.linkedSheetType === "excel" ? budget.linkedSheetId : null);
+                                  if (!googleId && !excelId) return null;
+                                  return (
+                                    <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap items-center gap-2 min-w-0">
+                                      {googleId && (
+                                        <div className="flex items-center gap-1.5">
+                                          <Sheet className="w-3 h-3 text-blue-500 shrink-0" />
+                                          <span className="text-xs text-muted-foreground">Linked to Google Sheets</span>
+                                        </div>
+                                      )}
+                                      {excelId && (
+                                        <div className="flex items-center gap-1.5">
+                                          <FileSpreadsheet className="w-3 h-3 text-teal-500 shrink-0" />
+                                          <span className="text-xs text-muted-foreground">Linked to Excel</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </CardContent>
                             </Card>
                           ))}
@@ -5214,7 +5223,7 @@ export function BudgetWizard({
                   )
                 )}
 
-                {googleAuthenticated && inputMode !== "google" && !activeGoogleSheet && (
+                {googleAuthenticated && inputMode !== "google" && !(inputMode === "cloud" && activeGoogleSheet) && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
@@ -5253,7 +5262,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {microsoftAuthenticated && inputMode !== "excel" && !activeExcelSheet && (
+                {microsoftAuthenticated && inputMode !== "excel" && !(inputMode === "cloud" && activeExcelSheet) && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
