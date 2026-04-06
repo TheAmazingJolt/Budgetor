@@ -89,7 +89,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
   const user = (req as any).user;
   if (!user?.id) {
     const sep = redirectUrl.includes("?") ? "&" : "?";
-    res.redirect(`${redirectUrl}${sep}error=link_required`);
+    res.redirect(`${redirectUrl}${sep}error=link_only`);
     return;
   }
 

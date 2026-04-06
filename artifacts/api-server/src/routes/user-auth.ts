@@ -460,7 +460,7 @@ router.post("/auth/reset-password", async (req: Request, res: Response): Promise
 });
 
 router.post("/auth/claim-account", async (req: Request, res: Response): Promise<void> => {
-  const { password, claimToken } = req.body as { password?: string; claimToken?: string };
+  const { password, claimToken, email } = req.body as { password?: string; claimToken?: string; email?: string };
 
   if (!password || typeof password !== "string" || password.length < 8) {
     res.status(400).json({ error: "Password must be at least 8 characters" });
@@ -470,7 +470,7 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
   let targetUserId: string;
 
   if (req.user) {
-    // Authenticated path: signed-in user sets a password for their own account
+    // Authenticated path: signed-in user (via banner in app) sets a password
     if (!req.user.email) {
       res.status(400).json({ error: "Your account does not have an email address. Please update your profile first." });
       return;
@@ -481,10 +481,10 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
     }
     targetUserId = req.user.id;
   } else if (claimToken && typeof claimToken === "string") {
-    // Unauthenticated path: verified via one-time claim token issued by OAuth callback
+    // Token path: one-time claim token issued by OAuth callback (most secure)
     const userId = consumeClaimToken(claimToken);
     if (!userId) {
-      res.status(401).json({ error: "Invalid or expired claim token. Please sign in with Google again." });
+      res.status(401).json({ error: "Invalid or expired claim token. Please sign in with Google again to get a new link." });
       return;
     }
     const [existing] = await db
@@ -501,8 +501,27 @@ router.post("/auth/claim-account", async (req: Request, res: Response): Promise<
       return;
     }
     targetUserId = existing.id;
+  } else if (email && typeof email === "string") {
+    // Email path: user provides email + password to claim their legacy OAuth account.
+    // Only allowed for accounts with no existing password (legacy OAuth-only users).
+    const normalizedEmail = email.trim().toLowerCase();
+    const [existing] = await db
+      .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalizedEmail))
+      .limit(1);
+    if (!existing) {
+      // Return same message to avoid user enumeration
+      res.status(404).json({ error: "No account without a password found for that email. If you already have a password, use the sign-in form." });
+      return;
+    }
+    if (existing.passwordHash) {
+      res.status(400).json({ error: "This account already has a password. Use the sign-in form to log in." });
+      return;
+    }
+    targetUserId = existing.id;
   } else {
-    res.status(401).json({ error: "Authentication required. Sign in or provide a valid claim token." });
+    res.status(401).json({ error: "Authentication required. Provide a claim token, email, or sign in first." });
     return;
   }
 
@@ -764,25 +783,24 @@ router.get("/auth/login/google/callback", async (req: Request, res: Response): P
     }
 
     if (!req.user) {
-      // Allow unauthenticated login only if this email belongs to an existing
-      // Google-provider user who has never set a password. Issue a one-time
-      // claim token (15-min TTL) and redirect to the claim flow.
+      // Allow unauthenticated flow only for legacy OAuth users who have no password.
+      // Match by email across all OAuth providers — issue a one-time claim token.
       if (profile.email) {
         const [matchedUser] = await db
           .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
           .from(usersTable)
-          .where(and(eq(usersTable.email, profile.email.toLowerCase()), eq(usersTable.provider, "google")))
+          .where(eq(usersTable.email, profile.email.toLowerCase()))
           .limit(1);
-        if (matchedUser && !matchedUser.passwordHash) {
+        if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
           const claimToken = generateClaimToken(matchedUser.id);
           const sep = redirectUrl.includes("?") ? "&" : "?";
-          const email = encodeURIComponent(profile.email);
-          res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${email}`);
+          const encodedEmail = encodeURIComponent(profile.email);
+          res.redirect(`${redirectUrl}${sep}claim_token=${claimToken}&claim_email=${encodedEmail}`);
           return;
         }
       }
       const sep = redirectUrl.includes("?") ? "&" : "?";
-      res.redirect(`${redirectUrl}${sep}error=link_required`);
+      res.redirect(`${redirectUrl}${sep}error=link_only`);
       return;
     }
 
@@ -906,16 +924,15 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
     }
 
     if (!req.user) {
-      // Allow unauthenticated Apple login only if the email matches an existing
-      // Apple-provider user who has never set a password. Issue a one-time claim
-      // token (15-min TTL) and redirect to the claim flow.
+      // Allow unauthenticated flow only for legacy OAuth users who have no password.
+      // Match by email across all OAuth providers — issue a one-time claim token.
       if (email) {
         const [matchedUser] = await db
           .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
           .from(usersTable)
-          .where(and(eq(usersTable.email, email.toLowerCase()), eq(usersTable.provider, "apple")))
+          .where(eq(usersTable.email, email.toLowerCase()))
           .limit(1);
-        if (matchedUser && !matchedUser.passwordHash) {
+        if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
           const claimToken = generateClaimToken(matchedUser.id);
           const sep = redirectUrl.includes("?") ? "&" : "?";
           const encodedEmail = encodeURIComponent(email);
@@ -924,7 +941,7 @@ router.post("/auth/login/apple/callback", async (req: Request, res: Response): P
         }
       }
       const sep = redirectUrl.includes("?") ? "&" : "?";
-      res.redirect(`${redirectUrl}${sep}error=link_required`);
+      res.redirect(`${redirectUrl}${sep}error=link_only`);
       return;
     }
 

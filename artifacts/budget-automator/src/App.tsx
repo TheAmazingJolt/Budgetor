@@ -200,7 +200,7 @@ function AppRouting() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const errorParam = params.get("error");
-    if (errorParam === "link_required") {
+    if (errorParam === "link_only" || errorParam === "link_required") {
       params.delete("error");
       const newSearch = params.toString();
       const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
@@ -268,10 +268,11 @@ function AppRouting() {
     }
   };
 
-  const handleClaimAccount = async (_email: string, password: string) => {
+  const handleClaimAccount = async (email: string, password: string) => {
     const data = await authClaimAccount({
       password,
       ...(claimToken ? { claimToken } : {}),
+      ...(email && !claimToken ? { email } : {}),
     });
     if (data.token) {
       localStorage.setItem("auth_token", data.token);

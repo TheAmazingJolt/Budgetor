@@ -182,8 +182,10 @@ export interface AuthResetPasswordRequest {
 
 export interface AuthClaimAccountRequest {
   password: string;
-  /** One-time claim token issued by OAuth callback (required for unauthenticated path) */
+  /** One-time claim token issued by OAuth callback (preferred for unauthenticated path) */
   claimToken?: string;
+  /** Email address of the legacy OAuth account to claim (alternative to claimToken) */
+  email?: string;
 }
 
 export interface AuthMeResponse {
