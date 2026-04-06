@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -39,8 +41,7 @@ export async function sendBugReportEmail(opts: BugReportEmailOptions): Promise<v
   }
 
   try {
-    const nodemailer = await import("nodemailer");
-    const transporter = nodemailer.default.createTransport({
+    const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
       secure: smtpPort === 465,
@@ -96,7 +97,13 @@ export async function sendBugReportEmail(opts: BugReportEmailOptions): Promise<v
     });
 
     console.log(`[email] Bug report notification sent to ${adminEmail}`);
-  } catch (err) {
-    console.error("[email] Failed to send bug report notification:", err);
+  } catch (err: unknown) {
+    const errObj = err instanceof Error ? err : new Error(String(err));
+    const smtpCode = (err as Record<string, unknown>)["responseCode"] ?? (err as Record<string, unknown>)["code"] ?? "unknown";
+    const smtpResponse = (err as Record<string, unknown>)["response"] ?? "";
+    console.error(
+      `[email] Failed to send bug report notification: ${errObj.message} (code=${smtpCode}${smtpResponse ? `, response=${smtpResponse}` : ""})`,
+      errObj.stack
+    );
   }
 }
