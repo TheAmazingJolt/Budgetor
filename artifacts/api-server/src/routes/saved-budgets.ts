@@ -69,7 +69,12 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
 router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const userId = req.user!.id;
   const budgetId = req.params.id;
-  const { name, bills, settings, debts, linkedSheetId, linkedSheetName, linkedSheetType } = req.body as {
+  const {
+    name, bills, settings, debts,
+    linkedSheetId, linkedSheetName, linkedSheetType,
+    linkedGoogleSheetId, linkedGoogleSheetName,
+    linkedExcelSheetId, linkedExcelSheetName,
+  } = req.body as {
     name?: string;
     bills?: unknown[];
     settings?: unknown;
@@ -77,6 +82,10 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
     linkedSheetId?: string | null;
     linkedSheetName?: string | null;
     linkedSheetType?: string | null;
+    linkedGoogleSheetId?: string | null;
+    linkedGoogleSheetName?: string | null;
+    linkedExcelSheetId?: string | null;
+    linkedExcelSheetName?: string | null;
   };
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -93,6 +102,10 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
     }
     updates.linkedSheetType = linkedSheetType;
   }
+  if (linkedGoogleSheetId !== undefined) updates.linkedGoogleSheetId = linkedGoogleSheetId;
+  if (linkedGoogleSheetName !== undefined) updates.linkedGoogleSheetName = linkedGoogleSheetName;
+  if (linkedExcelSheetId !== undefined) updates.linkedExcelSheetId = linkedExcelSheetId;
+  if (linkedExcelSheetName !== undefined) updates.linkedExcelSheetName = linkedExcelSheetName;
 
   try {
     const [budget] = await db

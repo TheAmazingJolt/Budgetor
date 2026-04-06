@@ -289,6 +289,10 @@ export interface SavedBudget {
   linkedSheetName?: string | null;
   /** Type of linked sheet ('google' or 'excel') */
   linkedSheetType?: SavedBudgetLinkedSheetType;
+  linkedGoogleSheetId?: string | null;
+  linkedGoogleSheetName?: string | null;
+  linkedExcelSheetId?: string | null;
+  linkedExcelSheetName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -335,6 +339,10 @@ export interface SavedBudgetUpdateRequest {
   linkedSheetName?: string | null;
   /** Type of linked sheet ('google' or 'excel') */
   linkedSheetType?: SavedBudgetUpdateRequestLinkedSheetType;
+  linkedGoogleSheetId?: string | null;
+  linkedGoogleSheetName?: string | null;
+  linkedExcelSheetId?: string | null;
+  linkedExcelSheetName?: string | null;
 }
 
 export interface GoogleAuthStatus {

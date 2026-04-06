@@ -881,10 +881,12 @@ export function BudgetWizard({
 
   const [pendingExportType, setPendingExportType] = useState<null | "xlsx" | "google" | "excel">(null);
   const [exportNameInput, setExportNameInput] = useState("");
-  const [activeLinkedSheet, setActiveLinkedSheet] = useState<{ id: string; type: string; name: string } | null>(null);
+  const [activeGoogleSheet, setActiveGoogleSheet] = useState<{ id: string; name: string } | null>(null);
+  const [activeExcelSheet, setActiveExcelSheet] = useState<{ id: string; name: string } | null>(null);
   const [isUpdatingLinkedSheet, setIsUpdatingLinkedSheet] = useState(false);
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
-  const [syncOnUpdate, setSyncOnUpdate] = useState(false);
+  const [syncGoogleOnUpdate, setSyncGoogleOnUpdate] = useState(false);
+  const [syncExcelOnUpdate, setSyncExcelOnUpdate] = useState(false);
 
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
@@ -909,7 +911,10 @@ export function BudgetWizard({
   const excelDeleteMutation = useExcelDelete();
 
   const bgSyncRef = useRef({
-    activeLinkedSheet: null as { id: string; type: string; name: string } | null,
+    activeGoogleSheet: null as { id: string; name: string } | null,
+    activeExcelSheet: null as { id: string; name: string } | null,
+    syncGoogleOnUpdate: false,
+    syncExcelOnUpdate: false,
     generatedWeek: null as typeof generatedWeek,
     cloudExistingWeeks: [] as any[],
     bills: [] as typeof bills,
@@ -923,7 +928,10 @@ export function BudgetWizard({
     weeklyCheckins: [] as { weekLabel: string; itemName: string; itemType?: string; actualAmount: number }[],
     debtIdToBillName: new Map<string, string>(),
   });
-  bgSyncRef.current.activeLinkedSheet = activeLinkedSheet;
+  bgSyncRef.current.activeGoogleSheet = activeGoogleSheet;
+  bgSyncRef.current.activeExcelSheet = activeExcelSheet;
+  bgSyncRef.current.syncGoogleOnUpdate = syncGoogleOnUpdate;
+  bgSyncRef.current.syncExcelOnUpdate = syncExcelOnUpdate;
   bgSyncRef.current.generatedWeek = generatedWeek;
   bgSyncRef.current.cloudExistingWeeks = cloudExistingWeeks;
   bgSyncRef.current.bills = bills;
@@ -935,8 +943,13 @@ export function BudgetWizard({
 
   const triggerBackgroundSheetSync = useCallback(() => {
     setTimeout(async () => {
-      const { activeLinkedSheet, buildWriteWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
-      if (!activeLinkedSheet || !buildWriteWeeks) return;
+      const { activeGoogleSheet, activeExcelSheet, syncGoogleOnUpdate, syncExcelOnUpdate, buildWriteWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+      if (!buildWriteWeeks) return;
+      const sheetsToSync = [
+        ...(syncGoogleOnUpdate && activeGoogleSheet ? [{ id: activeGoogleSheet.id, name: activeGoogleSheet.name, type: "google" }] : []),
+        ...(syncExcelOnUpdate && activeExcelSheet ? [{ id: activeExcelSheet.id, name: activeExcelSheet.name, type: "excel" }] : []),
+      ];
+      if (!sheetsToSync.length) return;
       const weeks = buildWriteWeeks();
       if (!weeks?.length) return;
       const allBillsForSync = [...bills, ...savingsGoalBills];
@@ -950,12 +963,13 @@ export function BudgetWizard({
         ...(activeCloudBudgetId ? { budgetId: activeCloudBudgetId } : {}),
       };
       try {
-        if (activeLinkedSheet.type === "google") {
-          await sheetWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
-        } else {
-          await excelWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
-        }
-        toast({ title: "Sheet synced", description: `"${activeLinkedSheet.name}" updated.` });
+        await Promise.all(sheetsToSync.map(sheet =>
+          sheet.type === "google"
+            ? sheetWriteMutation.mutateAsync({ id: sheet.id, data: writePayload })
+            : excelWriteMutation.mutateAsync({ id: sheet.id, data: writePayload })
+        ));
+        const names = sheetsToSync.map(s => `"${s.name}"`).join(" & ");
+        toast({ title: "Sheet synced", description: `${names} updated.` });
       } catch (err) {
         toast({
           title: "Sheet sync failed",
@@ -967,8 +981,12 @@ export function BudgetWizard({
   }, [sheetWriteMutation, excelWriteMutation, toast]);
 
   const handleManualSheetSync = useCallback(async () => {
-    const { activeLinkedSheet, buildWriteWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
-    if (!activeLinkedSheet) return;
+    const { activeGoogleSheet, activeExcelSheet, buildWriteWeeks, bills, savingsGoalBills, debts, zeroOpeningBalance, activeCloudBudgetId } = bgSyncRef.current;
+    const sheetsToSync = [
+      ...(activeGoogleSheet ? [{ id: activeGoogleSheet.id, name: activeGoogleSheet.name, type: "google" }] : []),
+      ...(activeExcelSheet ? [{ id: activeExcelSheet.id, name: activeExcelSheet.name, type: "excel" }] : []),
+    ];
+    if (!sheetsToSync.length) return;
     if (!buildWriteWeeks) {
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
@@ -990,12 +1008,13 @@ export function BudgetWizard({
     };
     setIsSyncingToSheet(true);
     try {
-      if (activeLinkedSheet.type === "google") {
-        await sheetWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
-      } else {
-        await excelWriteMutation.mutateAsync({ id: activeLinkedSheet.id, data: writePayload });
-      }
-      toast({ title: "Synced!", description: `"${activeLinkedSheet.name}" is up to date.` });
+      await Promise.all(sheetsToSync.map(sheet =>
+        sheet.type === "google"
+          ? sheetWriteMutation.mutateAsync({ id: sheet.id, data: writePayload })
+          : excelWriteMutation.mutateAsync({ id: sheet.id, data: writePayload })
+      ));
+      const names = sheetsToSync.map(s => `"${s.name}"`).join(" & ");
+      toast({ title: "Synced!", description: `${names} up to date.` });
     } catch (err) {
       toast({
         title: "Sync failed",
@@ -1619,7 +1638,8 @@ export function BudgetWizard({
       billsLoadedForUserRef.current = null;
       debtsLoadedForUserRef.current = null;
     }
-    setActiveLinkedSheet(null);
+    setActiveGoogleSheet(null);
+    setActiveExcelSheet(null);
     setInputMode("scratch");
     setVisitedStep1(true);
     setStep(1);
@@ -1649,7 +1669,10 @@ export function BudgetWizard({
     setSelectedExcelFileName(null);
     setActiveCloudBudgetId(null);
     setActiveCloudBudgetName(null);
-    setActiveLinkedSheet(null);
+    setActiveGoogleSheet(null);
+    setActiveExcelSheet(null);
+    setSyncGoogleOnUpdate(false);
+    setSyncExcelOnUpdate(false);
     setCloudExistingWeeks([]);
     setScratchExistingWeeks([]);
     setCloudSaveSuccess(false);
@@ -2175,14 +2198,19 @@ export function BudgetWizard({
     const restoredWeeks = Array.isArray(s?.existingWeeks) ? s.existingWeeks : [];
     setCloudExistingWeeks(restoredWeeks);
     setCloudSaveSuccess(false);
-    if (budget.linkedSheetId && budget.linkedSheetType) {
-      setActiveLinkedSheet({
-        id: budget.linkedSheetId,
-        type: budget.linkedSheetType,
-        name: budget.linkedSheetName ?? (budget.linkedSheetType === "google" ? "Google Sheet" : "Excel file"),
-      });
+    if (budget.linkedGoogleSheetId) {
+      setActiveGoogleSheet({ id: budget.linkedGoogleSheetId, name: budget.linkedGoogleSheetName ?? "Google Sheet" });
+    } else if (budget.linkedSheetId && budget.linkedSheetType === "google") {
+      setActiveGoogleSheet({ id: budget.linkedSheetId, name: budget.linkedSheetName ?? "Google Sheet" });
     } else {
-      setActiveLinkedSheet(null);
+      setActiveGoogleSheet(null);
+    }
+    if (budget.linkedExcelSheetId) {
+      setActiveExcelSheet({ id: budget.linkedExcelSheetId, name: budget.linkedExcelSheetName ?? "Excel file" });
+    } else if (budget.linkedSheetId && budget.linkedSheetType === "excel") {
+      setActiveExcelSheet({ id: budget.linkedSheetId, name: budget.linkedSheetName ?? "Excel file" });
+    } else {
+      setActiveExcelSheet(null);
     }
     let effectiveOpeningBalance = s?.openingBalance ?? openingBalance;
     const effectiveStartDate = s?.newWeekStartDate ?? newWeekStartDate;
@@ -2250,7 +2278,10 @@ export function BudgetWizard({
           if (id === activeCloudBudgetId) {
             setActiveCloudBudgetId(null);
             setActiveCloudBudgetName(null);
-            setActiveLinkedSheet(null);
+            setActiveGoogleSheet(null);
+            setActiveExcelSheet(null);
+            setSyncGoogleOnUpdate(false);
+            setSyncExcelOnUpdate(false);
             setNewCloudSaveSuccess(false);
             setSavedCloudName("");
           }
@@ -2356,7 +2387,8 @@ export function BudgetWizard({
           if (detail === "Budget not found" || apiErr?.status === 404) {
             setActiveCloudBudgetId(null);
             setActiveCloudBudgetName(null);
-            setActiveLinkedSheet(null);
+            setActiveGoogleSheet(null);
+            setActiveExcelSheet(null);
             toast({
               title: "Budget no longer exists",
               description: "This budget was deleted. Click Save to Cloud to save as a new budget.",
@@ -2892,14 +2924,14 @@ export function BudgetWizard({
       });
       setNewSheetSaveSuccess(true);
       setNewSheetUrl(result.spreadsheetUrl);
+      setActiveGoogleSheet({ id: result.spreadsheetId, name: title });
       if (activeCloudBudgetId) {
         linkSheetMutation.mutate({
           id: activeCloudBudgetId,
-          data: { linkedSheetId: result.spreadsheetId, linkedSheetName: title, linkedSheetType: "google" },
+          data: { linkedGoogleSheetId: result.spreadsheetId, linkedGoogleSheetName: title },
         }, {
           onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }),
         });
-        setActiveLinkedSheet({ id: result.spreadsheetId, type: "google", name: title });
       }
       toast({
         title: "Saved to Google Sheets",
@@ -2947,10 +2979,11 @@ export function BudgetWizard({
       });
       setNewExcelSaveSuccess(true);
       setNewExcelUrl(result.webUrl);
+      setActiveExcelSheet({ id: result.fileId, name: title });
       if (activeCloudBudgetId) {
         linkSheetMutation.mutate({
           id: activeCloudBudgetId,
-          data: { linkedSheetId: result.fileId, linkedSheetName: title, linkedSheetType: "excel" },
+          data: { linkedExcelSheetId: result.fileId, linkedExcelSheetName: title },
         }, {
           onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }),
         });
@@ -2971,7 +3004,7 @@ export function BudgetWizard({
   };
 
   const handleGenerateAndUpdateSheet = async () => {
-    if (!activeLinkedSheet) return;
+    if (!activeGoogleSheet && !activeExcelSheet) return;
     setIsUpdatingLinkedSheet(true);
     try {
       const savingsBillsForSync = computeSavingsGoalBills(
@@ -3056,14 +3089,19 @@ export function BudgetWizard({
         ...(debts.length > 0 ? { debts } : {}),
         ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),
       };
-      if (activeLinkedSheet.type === "google") {
-        await sheetWrite(activeLinkedSheet.id, writePayload);
-      } else {
-        await excelWrite(activeLinkedSheet.id, { ...writePayload, includeRemainingAcct });
-      }
+      const sheetsToUpdate = [
+        ...(activeGoogleSheet ? [{ id: activeGoogleSheet.id, name: activeGoogleSheet.name, type: "google" }] : []),
+        ...(activeExcelSheet ? [{ id: activeExcelSheet.id, name: activeExcelSheet.name, type: "excel" }] : []),
+      ];
+      await Promise.all(sheetsToUpdate.map(sheet =>
+        sheet.type === "google"
+          ? sheetWrite(sheet.id, writePayload)
+          : excelWrite(sheet.id, { ...writePayload, includeRemainingAcct })
+      ));
+      const names = sheetsToUpdate.map(s => `"${s.name}"`).join(" & ");
       toast({
         title: "Sheet updated",
-        description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to "${activeLinkedSheet.name}".`,
+        description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to ${names}.`,
       });
     } catch (err) {
       toast({
@@ -3988,9 +4026,9 @@ export function BudgetWizard({
                           variant="outline"
                           size="default"
                           onClick={activeCloudBudgetId
-                            ? () => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)
+                            ? () => handleQuickUpdate((syncGoogleOnUpdate || syncExcelOnUpdate) ? handleGenerateAndUpdateSheet : undefined)
                             : () => setIsSaveDialogOpen(true)}
-                          disabled={bills.length === 0 || cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
+                          disabled={bills.length === 0 || cloudSaveMutation.isPending || ((syncGoogleOnUpdate || syncExcelOnUpdate) && isUpdatingLinkedSheet)}
                           className="flex-1 rounded-xl"
                         >
                           <Save className="w-4 h-4 mr-1" /> {activeCloudBudgetId ? "Update" : "Save to Cloud"}
@@ -4009,20 +4047,43 @@ export function BudgetWizard({
                         )}
                       </Button>
                     </div>
-                    {activeLinkedSheet && (inputMode === "cloud" || newCloudSaveSuccess) && (
+                    {(activeGoogleSheet || activeExcelSheet) && (inputMode === "cloud" || newCloudSaveSuccess) && (
                       <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
-                            <input
-                              type="checkbox"
-                              checked={syncOnUpdate}
-                              onChange={e => setSyncOnUpdate(e.target.checked)}
-                              className="accent-primary w-3.5 h-3.5"
-                            />
-                            <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                            Also sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"} on update
-                            {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
-                          </label>
+                        {activeGoogleSheet && (
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                checked={syncGoogleOnUpdate}
+                                onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
+                                className="accent-primary w-3.5 h-3.5"
+                              />
+                              <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                              Also sync to Sheets on update
+                              {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                            </label>
+                            <span className="text-xs text-muted-foreground/60">"{activeGoogleSheet.name}"</span>
+                            <button type="button" className="text-xs text-muted-foreground/50 underline underline-offset-2 hover:text-foreground transition-colors" onClick={() => { setActiveGoogleSheet(null); setSyncGoogleOnUpdate(false); if (activeCloudBudgetId) linkSheetMutation.mutate({ id: activeCloudBudgetId, data: { linkedGoogleSheetId: null, linkedGoogleSheetName: null } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }) }); }}>Unlink</button>
+                          </div>
+                        )}
+                        {activeExcelSheet && (
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                checked={syncExcelOnUpdate}
+                                onChange={e => setSyncExcelOnUpdate(e.target.checked)}
+                                className="accent-primary w-3.5 h-3.5"
+                              />
+                              <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                              Also sync to Excel on update
+                              {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                            </label>
+                            <span className="text-xs text-muted-foreground/60">"{activeExcelSheet.name}"</span>
+                            <button type="button" className="text-xs text-muted-foreground/50 underline underline-offset-2 hover:text-foreground transition-colors" onClick={() => { setActiveExcelSheet(null); setSyncExcelOnUpdate(false); if (activeCloudBudgetId) linkSheetMutation.mutate({ id: activeCloudBudgetId, data: { linkedExcelSheetId: null, linkedExcelSheetName: null } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }) }); }}>Unlink</button>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={handleManualSheetSync}
@@ -4032,18 +4093,9 @@ export function BudgetWizard({
                             <RefreshCw className={`w-3 h-3 ${isSyncingToSheet ? "animate-spin" : ""}`} />
                             {isSyncingToSheet ? "Syncing…" : "Sync now"}
                           </button>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
-                          <span>Linked to: <span className="font-medium text-muted-foreground">"{activeLinkedSheet.name}"</span></span>
-                          <span>·</span>
-                          <button
-                            type="button"
-                            className="underline underline-offset-2 hover:text-foreground transition-colors"
-                            onClick={() => { setActiveLinkedSheet(null); setSyncOnUpdate(false); }}
-                          >
-                            Unlink
-                          </button>
-                          <span className="text-muted-foreground/40">— to sync to a different service, use the buttons below</span>
+                          {!(activeGoogleSheet && activeExcelSheet) && (
+                            <span className="text-xs text-muted-foreground/40">— link another service below to sync both</span>
+                          )}
                         </div>
                       </div>
                     )}
@@ -4661,8 +4713,8 @@ export function BudgetWizard({
                                 <Button
                                   size="sm"
                                   className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  onClick={() => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)}
-                                  disabled={cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
+                                  onClick={() => handleQuickUpdate((syncGoogleOnUpdate || syncExcelOnUpdate) ? handleGenerateAndUpdateSheet : undefined)}
+                                  disabled={cloudSaveMutation.isPending || ((syncGoogleOnUpdate || syncExcelOnUpdate) && isUpdatingLinkedSheet)}
                                 >
                                   <Save className="w-3.5 h-3.5" /> {cloudSaveMutation.isPending ? "Saving…" : "Save changes"}
                                 </Button>
@@ -4671,8 +4723,8 @@ export function BudgetWizard({
                                 <Button
                                   size="sm"
                                   className={`h-8 text-xs gap-1.5 text-white transition-colors ${cloudSaveMutation.isSuccess ? "bg-emerald-500 hover:bg-emerald-500 cursor-default" : "bg-emerald-600 hover:bg-emerald-700"}`}
-                                  onClick={() => { if (!cloudSaveMutation.isSuccess) handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined); }}
-                                  disabled={cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
+                                  onClick={() => { if (!cloudSaveMutation.isSuccess) handleQuickUpdate((syncGoogleOnUpdate || syncExcelOnUpdate) ? handleGenerateAndUpdateSheet : undefined); }}
+                                  disabled={cloudSaveMutation.isPending || ((syncGoogleOnUpdate || syncExcelOnUpdate) && isUpdatingLinkedSheet)}
                                 >
                                   {cloudSaveMutation.isPending ? (
                                     <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving…</>
@@ -4703,34 +4755,42 @@ export function BudgetWizard({
                                   <Download className="w-3.5 h-3.5" />
                                 </Button>
                               )}
-                              {activeLinkedSheet && (
-                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeLinkedSheet.name} when saving`}>
+                              {activeGoogleSheet && (
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeGoogleSheet.name} when saving`}>
                                   <input
                                     type="checkbox"
-                                    checked={syncOnUpdate}
-                                    onChange={e => setSyncOnUpdate(e.target.checked)}
+                                    checked={syncGoogleOnUpdate}
+                                    onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
                                     className="accent-primary w-3.5 h-3.5"
                                   />
                                   <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                  Sync to {activeLinkedSheet.type === "google" ? "Sheets" : "Excel"}
+                                  Sync to Sheets
                                   {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
                                 </label>
                               )}
-                              {activeLinkedSheet && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 text-xs gap-1.5"
-                                  title={`Open in ${activeLinkedSheet.type === "google" ? "Google Sheets" : "Excel Online"}`}
-                                  asChild
-                                >
-                                  <a
-                                    href={activeLinkedSheet.type === "google"
-                                      ? `https://docs.google.com/spreadsheets/d/${activeLinkedSheet.id}`
-                                      : (selectedExcelFileUrl ?? "#")}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
+                              {activeGoogleSheet && (
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Google Sheets" asChild>
+                                  <a href={`https://docs.google.com/spreadsheets/d/${activeGoogleSheet.id}`} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                </Button>
+                              )}
+                              {activeExcelSheet && (
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeExcelSheet.name} when saving`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={syncExcelOnUpdate}
+                                    onChange={e => setSyncExcelOnUpdate(e.target.checked)}
+                                    className="accent-primary w-3.5 h-3.5"
+                                  />
+                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                  Sync to Excel
+                                  {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
+                                </label>
+                              )}
+                              {activeExcelSheet && (
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" asChild>
+                                  <a href={selectedExcelFileUrl ?? "#"} target="_blank" rel="noopener noreferrer">
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </a>
                                 </Button>
@@ -5154,7 +5214,7 @@ export function BudgetWizard({
                   )
                 )}
 
-                {googleAuthenticated && inputMode !== "google" && !(activeLinkedSheet?.type === "google") && (
+                {googleAuthenticated && inputMode !== "google" && !activeGoogleSheet && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
@@ -5177,7 +5237,7 @@ export function BudgetWizard({
                       ) : newSheetSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to Google Sheets</>
                       ) : (
-                        <><Sheet className="w-5 h-5 mr-2" /><span key={(activeCloudBudgetId && !activeLinkedSheet) ? "link" : "save"} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{(activeCloudBudgetId && !activeLinkedSheet) ? "Link to Google Sheets" : "Save to Google Sheets"}</span></>
+                        <><Sheet className="w-5 h-5 mr-2" /><span key={(activeCloudBudgetId && !activeGoogleSheet) ? "link" : "save"} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{(activeCloudBudgetId && !activeGoogleSheet) ? "Link to Google Sheets" : "Save to Google Sheets"}</span></>
                       )}
                     </Button>
                     {newSheetSaveSuccess && newSheetUrl && (
@@ -5193,7 +5253,7 @@ export function BudgetWizard({
                   </div>
                 )}
 
-                {microsoftAuthenticated && inputMode !== "excel" && !(activeLinkedSheet?.type === "excel") && (
+                {microsoftAuthenticated && inputMode !== "excel" && !activeExcelSheet && (
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
@@ -5216,7 +5276,7 @@ export function BudgetWizard({
                       ) : newExcelSaveSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Saved to OneDrive</>
                       ) : (
-                        <><Sheet className="w-5 h-5 mr-2" /><span key={(activeCloudBudgetId && !activeLinkedSheet) ? "link" : "save"} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{(activeCloudBudgetId && !activeLinkedSheet) ? "Link to OneDrive" : "Save to OneDrive"}</span></>
+                        <><Sheet className="w-5 h-5 mr-2" /><span key={(activeCloudBudgetId && !activeExcelSheet) ? "link" : "save"} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{(activeCloudBudgetId && !activeExcelSheet) ? "Link to OneDrive" : "Save to OneDrive"}</span></>
                       )}
                     </Button>
                     {newExcelSaveSuccess && newExcelUrl && (
