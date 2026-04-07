@@ -3987,7 +3987,7 @@ export function BudgetWizard({
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                         <Settings2 className="w-4 h-4" /> Start Date
@@ -3997,10 +3997,10 @@ export function BudgetWizard({
                       type="date"
                       value={newWeekStartDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="h-11 rounded-xl"
+                      className="h-11 rounded-xl w-full"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                       <Settings2 className="w-4 h-4" /> {payPeriod === "weekly" ? "Number of Weeks" : payPeriod === "biweekly" ? "Number of Periods" : "Number of Months"}
                     </Label>
@@ -4019,7 +4019,7 @@ export function BudgetWizard({
                       className="h-11 rounded-xl"
                     />
                   </div>
-                  <div className="space-y-2 sm:col-span-2">
+                  <div className="space-y-2 sm:col-span-2 min-w-0">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                       <Settings2 className="w-4 h-4" /> End Date
                       <span className="text-xs font-normal text-muted-foreground/70 ml-1">(auto-calculated, editable)</span>
@@ -4028,10 +4028,10 @@ export function BudgetWizard({
                       type="date"
                       value={newWeekEndDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="h-11 rounded-xl"
+                      className="h-11 rounded-xl w-full"
                     />
                   </div>
-                  <div className="space-y-3 sm:col-span-2">
+                  <div className="space-y-3 sm:col-span-2 min-w-0">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-semibold text-muted-foreground">
                         {incomeSources.length > 1 ? "Income Sources" : "Paycheck Amount"}
@@ -5667,7 +5667,7 @@ export function BudgetWizard({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                 <CalendarDays className="w-4 h-4" /> Start Date
               </Label>
@@ -5675,10 +5675,10 @@ export function BudgetWizard({
                 type="date"
                 value={newWeekStartDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="h-11 rounded-xl"
+                className="h-11 rounded-xl w-full"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                 <CalendarDays className="w-4 h-4" /> {payPeriod === "weekly" ? "Number of Weeks" : payPeriod === "biweekly" ? "Number of Periods" : "Number of Months"}
               </Label>
@@ -5697,7 +5697,7 @@ export function BudgetWizard({
                 className="h-11 rounded-xl"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                 <CalendarDays className="w-4 h-4" /> End Date
                 <span className="text-xs font-normal text-muted-foreground/70 ml-1">(auto-calculated, editable)</span>
@@ -5706,7 +5706,7 @@ export function BudgetWizard({
                 type="date"
                 value={newWeekEndDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="h-11 rounded-xl"
+                className="h-11 rounded-xl w-full"
               />
             </div>
           </div>
