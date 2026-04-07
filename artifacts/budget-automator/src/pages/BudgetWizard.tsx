@@ -1965,8 +1965,6 @@ export function BudgetWizard({
   };
 
   const handleSignOut = async () => {
-    await Promise.allSettled([googleDisconnect(), microsoftDisconnect()]);
-
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
         localStorage.removeItem("auth_token");
