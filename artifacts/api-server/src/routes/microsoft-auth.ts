@@ -192,27 +192,35 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
     await saveSession(req);
 
     if (tokens.access_token) {
+      // Try id_token claims first, then fall back to Graph API /me — more reliable across account types
       let microsoftAccountEmail: string | null = null;
-      console.log("[microsoft-callback] token keys:", Object.keys(tokens));
       if (tokens.id_token) {
         try {
           const [, b64] = tokens.id_token.split(".");
           const payload = JSON.parse(Buffer.from(b64, "base64url").toString("utf-8")) as Record<string, unknown>;
-          console.log("[microsoft-callback] id_token claims:", JSON.stringify(Object.keys(payload)));
-          console.log("[microsoft-callback] email:", payload["email"], "preferred_username:", payload["preferred_username"]);
           microsoftAccountEmail = (payload["email"] as string | undefined) || (payload["preferred_username"] as string | undefined) || null;
-        } catch (e) {
-          console.log("[microsoft-callback] id_token decode error:", e);
+        } catch {
+          // ignore decode errors, fall through to Graph API
         }
-      } else {
-        console.log("[microsoft-callback] no id_token in response");
       }
-      console.log("[microsoft-callback] storing microsoftAccountEmail:", microsoftAccountEmail);
+      if (!microsoftAccountEmail) {
+        try {
+          const meRes = await fetch("https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName", {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+          });
+          if (meRes.ok) {
+            const me = await meRes.json() as { mail?: string; userPrincipalName?: string };
+            microsoftAccountEmail = me.mail || me.userPrincipalName || null;
+          }
+        } catch {
+          // ignore Graph API errors
+        }
+      }
       await db.update(usersTable).set({
         microsoftAccessToken: maybeEncrypt(tokens.access_token),
         microsoftRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
         microsoftTokenExpiry: expiresAt,
-        ...(microsoftAccountEmail !== null ? { microsoftAccountEmail } : {}),
+        microsoftAccountEmail,
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id));
     }
