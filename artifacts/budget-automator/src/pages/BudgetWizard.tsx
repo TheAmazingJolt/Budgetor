@@ -1225,11 +1225,25 @@ export function BudgetWizard({
     const rawServerBills = (userBillsQuery.data.bills ?? []) as Bill[];
     // Always strip any lingering heuristic colors — ensures bills loaded from server
     // never carry the old auto-assigned "blue"/"slate"/"orange" colors.
-    const serverBills = stripHeuristicColors(rawServerBills);
+    const strippedBills = stripHeuristicColors(rawServerBills);
+    // Deduplicate: keep the last bill for each sourceDebtId — repairs any previously
+    // saved duplicates. Keeping last preserves the most-recently-refreshed amount.
+    const seenServerDebtIds = new Set<string>();
+    const serverBills = [...strippedBills].reverse().filter(b => {
+      if (!b.sourceDebtId) return true;
+      if (seenServerDebtIds.has(b.sourceDebtId)) return false;
+      seenServerDebtIds.add(b.sourceDebtId);
+      return true;
+    }).reverse();
+    const serverHadDuplicates = serverBills.length !== strippedBills.length;
 
     setBills(serverBills);
-    // Use the stripped result so the save effect doesn't immediately re-save and overwrite the user's data.
-    prevBillsRef.current = JSON.stringify(serverBills);
+    // If we removed duplicates, leave prevBillsRef empty so the save effect fires
+    // and writes the cleaned-up list back to the server. Otherwise, set it to the
+    // loaded value so the save effect doesn't trigger an unnecessary re-save.
+    if (!serverHadDuplicates) {
+      prevBillsRef.current = JSON.stringify(serverBills);
+    }
     billsLoadedForUserRef.current = currentUser.id;
     const billedIds = new Set<string>(
       serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
