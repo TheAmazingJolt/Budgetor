@@ -142,7 +142,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /auth/login:
+  /auth/login/email:
     post:
       operationId: authEmailLogin
       tags: [auth]

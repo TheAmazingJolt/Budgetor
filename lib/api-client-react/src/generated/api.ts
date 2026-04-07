@@ -568,7 +568,7 @@ export const useAuthEmailRegister = <
  * @summary Log in with email and password
  */
 export const getAuthEmailLoginUrl = () => {
-  return `/api/auth/login`;
+  return `/api/auth/login/email`;
 };
 
 export const authEmailLogin = async (
