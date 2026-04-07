@@ -1015,6 +1015,9 @@ router.put("/user/preferences", requireAuth, async (req: Request, res: Response)
 
 router.post("/auth/logout", (req: Request, res: Response) => {
   req.session.userId = undefined;
+  req.session.googleTokens = undefined;
+  req.session.microsoftTokens = undefined;
+  req.session.microsoftOAuthNonce = undefined;
   res.json({ ok: true });
 });
 
