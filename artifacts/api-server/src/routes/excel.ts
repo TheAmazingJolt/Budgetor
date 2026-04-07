@@ -761,6 +761,22 @@ router.get("/excel/list", async (req, res): Promise<void> => {
   }
 });
 
+router.get("/excel/:id/download-url", async (req, res): Promise<void> => {
+  const token = await getAccessToken(req);
+  if (!token) {
+    res.status(401).json({ error: "Not authenticated with Microsoft" });
+    return;
+  }
+  const fileId = req.params["id"];
+  try {
+    const data = await graphGet(token, `/me/drive/items/${fileId}?$select=id,@microsoft.graph.downloadUrl`);
+    const downloadUrl: string = data["@microsoft.graph.downloadUrl"] ?? "";
+    res.json({ downloadUrl });
+  } catch (err: any) {
+    handleGraphError(err, req, res, "get download URL");
+  }
+});
+
 router.get("/excel/:id/read", async (req, res): Promise<void> => {
   const token = await getAccessToken(req);
   if (!token) {

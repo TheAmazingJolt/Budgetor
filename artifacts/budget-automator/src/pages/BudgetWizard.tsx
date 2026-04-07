@@ -819,8 +819,24 @@ function ClaimAccountDialog({
   );
 }
 
-function openInExcel(webUrl: string) {
-  const deepLink = `ms-excel:ofe|u|${encodeURIComponent(webUrl)}`;
+async function openInExcel(webUrl: string, fileId?: string | null) {
+  let downloadUrl: string | null = null;
+
+  if (fileId) {
+    try {
+      const resp = await fetch(`/api/excel/${fileId}/download-url`, { credentials: "include" });
+      if (resp.ok) {
+        const data = await resp.json() as { downloadUrl?: string };
+        if (data.downloadUrl) downloadUrl = data.downloadUrl;
+      }
+    } catch {
+      // fall back to webUrl
+    }
+  }
+
+  const targetUrl = downloadUrl ?? webUrl;
+  // ofv = Open For View — works with both free and paid Excel on iOS
+  const deepLink = `ms-excel:ofv|u|${encodeURIComponent(targetUrl)}`;
   window.location.href = deepLink;
   setTimeout(() => {
     window.open(webUrl, "_blank", "noopener,noreferrer");
@@ -4921,7 +4937,7 @@ export function BudgetWizard({
                                 </label>
                               )}
                               {activeExcelSheet && selectedExcelFileUrl && (
-                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" onClick={() => openInExcel(selectedExcelFileUrl)}>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}>
                                   <ExternalLink className="w-3.5 h-3.5" />
                                 </Button>
                               )}
@@ -5296,7 +5312,7 @@ export function BudgetWizard({
                     </Button>
                     {excelWriteSuccess && selectedExcelFileUrl && (
                       <button
-                        onClick={() => openInExcel(selectedExcelFileUrl)}
+                        onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}
                         className="text-sm text-teal-600 hover:text-teal-700 underline text-center"
                       >
                         Open in OneDrive →
@@ -5409,7 +5425,7 @@ export function BudgetWizard({
                     </Button>
                     {newExcelSaveSuccess && newExcelUrl && (
                       <button
-                        onClick={() => openInExcel(newExcelUrl)}
+                        onClick={() => openInExcel(newExcelUrl, activeExcelSheet?.id)}
                         className="text-sm text-teal-600 hover:text-teal-700 underline text-center"
                       >
                         Open in OneDrive →
