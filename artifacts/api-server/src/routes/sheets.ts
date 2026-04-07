@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { google, type sheets_v4 } from "googleapis";
-import { db, usersTable, maybeEncrypt, maybeDecrypt, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
+import { db, pool, usersTable, maybeEncrypt, maybeDecrypt, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -1710,6 +1710,7 @@ async function writeSavingsTabToSheet(
   contributions: ManualContribRow[] = [],
   goals: SavingsGoalRow[] = [],
   tz?: string,
+  checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [],
 ): Promise<void> {
   const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
@@ -1744,9 +1745,18 @@ async function writeSavingsTabToSheet(
       for (const w of weeks) {
         const wStart = new Date(w.startDate);
         wStart.setHours(0, 0, 0, 0);
-        if (wStart <= cycleStart || wStart > today) continue;
-        for (const item of w.bills) {
-          if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
+        const wEnd = new Date(w.endDate);
+        wEnd.setHours(0, 0, 0, 0);
+        if (wStart <= cycleStart || wEnd >= today) continue;
+        const weekCheckin = checkins.find(
+          c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "yearly",
+        );
+        if (weekCheckin) {
+          savedInCycle += weekCheckin.actualAmount;
+        } else {
+          for (const item of w.bills) {
+            if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
+          }
         }
       }
       let manualInCycle = 0;
@@ -1771,10 +1781,19 @@ async function writeSavingsTabToSheet(
       for (const w of weeks) {
         const wStart = new Date(w.startDate);
         wStart.setHours(0, 0, 0, 0);
-        if (wStart > today) continue;
+        const wEnd = new Date(w.endDate);
+        wEnd.setHours(0, 0, 0, 0);
+        if (wEnd >= today) continue;
         if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
-        for (const item of w.bills) {
-          if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
+        const weekCheckin = checkins.find(
+          c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "balanced",
+        );
+        if (weekCheckin) {
+          savedThisMonth += weekCheckin.actualAmount;
+        } else {
+          for (const item of w.bills) {
+            if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
+          }
         }
       }
       let manualThisMonth = 0;
@@ -2074,15 +2093,17 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
     if (body.bills && body.bills.length > 0) {
       let savingsContribs: ManualContribRow[] = [];
       let savingsGoals: SavingsGoalRow[] = [];
+      let savingsCheckins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [];
       if (body.budgetId && (req as any).user?.id) {
+        const uid = (req as any).user.id;
         try {
           const rows = await db.select().from(savingsContributionsTable)
-            .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
+            .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, uid)));
           savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
         } catch { }
         try {
           const goalRows = await db.select().from(savingsGoalsTable)
-            .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
+            .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, uid)));
           savingsGoals = goalRows.map(g => ({
             name: g.name,
             targetAmount: Number(g.targetAmount),
@@ -2090,8 +2111,18 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
             savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
           }));
         } catch { }
+        try {
+          const cl = await pool.connect();
+          try {
+            const ciRes = await cl.query(
+              `SELECT week_label, item_name, item_type, actual_amount FROM weekly_checkins WHERE budget_id = $1 AND user_id = $2`,
+              [body.budgetId, uid],
+            );
+            savingsCheckins = ciRes.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
+          } finally { cl.release(); }
+        } catch { }
       }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz); } catch { }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -2165,15 +2196,17 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
       (async () => {
         let savingsContribs: ManualContribRow[] = [];
         let savingsGoals: SavingsGoalRow[] = [];
+        let savingsCheckins2: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [];
         if (body.budgetId && (req as any).user?.id) {
+          const uid2 = (req as any).user.id;
           try {
             const rows = await db.select().from(savingsContributionsTable)
-              .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
+              .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, uid2)));
             savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
           } catch { }
           try {
             const goalRows = await db.select().from(savingsGoalsTable)
-              .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, (req as any).user.id)));
+              .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, uid2)));
             savingsGoals = goalRows.map(g => ({
               name: g.name,
               targetAmount: Number(g.targetAmount),
@@ -2181,8 +2214,18 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
               savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
             }));
           } catch { }
+          try {
+            const cl2 = await pool.connect();
+            try {
+              const ciRes2 = await cl2.query(
+                `SELECT week_label, item_name, item_type, actual_amount FROM weekly_checkins WHERE budget_id = $1 AND user_id = $2`,
+                [body.budgetId, uid2],
+              );
+              savingsCheckins2 = ciRes2.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
+            } finally { cl2.release(); }
+          } catch { }
         }
-        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz); } catch { }
+        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins2); } catch { }
       })().catch(() => {});
     }
   } catch (err: any) {

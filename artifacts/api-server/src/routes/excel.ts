@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import XLSX from "xlsx";
 import ExcelJS from "exceljs";
-import { db, usersTable, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
+import { db, pool, usersTable, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { refreshMicrosoftToken } from "./microsoft-auth.js";
 
@@ -1267,7 +1267,16 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
           targetDate: g.targetDate,
           savedSoFar: contributions.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
         }));
-        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz);
+        const client = await pool.connect();
+        let checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [];
+        try {
+          const ciRes = await client.query(
+            `SELECT week_label, item_name, item_type, actual_amount FROM weekly_checkins WHERE budget_id = $1 AND user_id = $2`,
+            [body.budgetId, userId],
+          );
+          checkins = ciRes.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
+        } finally { client.release(); }
+        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz, checkins);
       } catch { /* non-fatal */ }
     }
 
@@ -1297,6 +1306,7 @@ function writeExcelSavingsSheetXL(
   contributions: { billName: string; amount: number; date: string }[],
   goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
   tz?: string,
+  checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [],
 ): void {
   const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
@@ -1321,16 +1331,25 @@ function writeExcelSavingsSheetXL(
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
         const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
         if (wStart <= cycleStart || wEnd >= today) continue;
-        for (const item of w.bills) {
-          if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
+        const weekCheckin = checkins.find(
+          c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "yearly",
+        );
+        if (weekCheckin) {
+          savedInCycle += weekCheckin.actualAmount;
+        } else {
+          for (const item of w.bills) {
+            if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
+          }
         }
       }
+      let manualInCycle = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
         if (cDate <= cycleStart || cDate > today) continue;
-        savedInCycle += c.amount;
+        manualInCycle += c.amount;
       }
+      savedInCycle += manualInCycle;
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT_XL[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
@@ -1344,8 +1363,15 @@ function writeExcelSavingsSheetXL(
         const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
         if (wEnd >= today) continue;
         if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
-        for (const item of w.bills) {
-          if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
+        const weekCheckin = checkins.find(
+          c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "balanced",
+        );
+        if (weekCheckin) {
+          savedThisMonth += weekCheckin.actualAmount;
+        } else {
+          for (const item of w.bills) {
+            if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
+          }
         }
       }
       for (const c of contributions) {
@@ -1531,7 +1557,16 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
           targetDate: g.targetDate,
           savedSoFar: contributions.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
         }));
-        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz);
+        const client2 = await pool.connect();
+        let checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [];
+        try {
+          const ciRes = await client2.query(
+            `SELECT week_label, item_name, item_type, actual_amount FROM weekly_checkins WHERE budget_id = $1 AND user_id = $2`,
+            [body.budgetId, userId],
+          );
+          checkins = ciRes.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
+        } finally { client2.release(); }
+        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz, checkins);
       } catch { /* non-fatal */ }
     }
 
