@@ -447,6 +447,37 @@ function dedupeDebtBills(bills: Bill[]): Bill[] {
   }).reverse();
 }
 
+/**
+ * Remove "orphaned" debt bills — bills whose sourceDebtId no longer exists in the
+ * current debts list — but ONLY when a valid replacement bill with the same name
+ * is already present (i.e. the debt was deleted and recreated with a new ID).
+ *
+ * This handles the scenario where a debt is removed and re-added: the new copy gets
+ * a fresh UUID, auto-add creates a new linked bill, but the old linked bill (old UUID)
+ * is never removed. Both survive dedupeDebtBills because they have different IDs.
+ *
+ * Safe rules:
+ *   - Bills with no sourceDebtId are always kept.
+ *   - Bills whose sourceDebtId IS in validDebtIds are always kept.
+ *   - An orphaned bill (sourceDebtId NOT in validDebtIds) is removed only when another
+ *     bill with the same name IS linked to a valid debt. If no valid replacement exists,
+ *     the orphaned bill is kept (preserves snapshot budgets, exotic edge-cases, etc.).
+ */
+function removeOrphanedDebtBills(bills: Bill[], validDebtIds: Set<string>): Bill[] {
+  // Names for which at least one bill IS linked to a currently-valid debt
+  const namesWithValidBill = new Set(
+    bills
+      .filter(b => b.sourceDebtId && validDebtIds.has(b.sourceDebtId))
+      .map(b => b.name)
+  );
+  return bills.filter(b => {
+    if (!b.sourceDebtId) return true;
+    if (validDebtIds.has(b.sourceDebtId)) return true;
+    // Orphaned — only drop if a valid replacement with the same name exists
+    return !namesWithValidBill.has(b.name);
+  });
+}
+
 const GOAL_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function fmtGoalTargetDate(isoDate: string): string {
@@ -1178,14 +1209,17 @@ export function BudgetWizard({
     if (billsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
       debtAutoAddDoneRef.current = currentUser.id;
       const debtMap = new Map(serverDebts.map(d => [d.id, d]));
+      const validDebtIds = new Set(serverDebts.map(d => d.id));
       setBills(prev => {
-        const existingDebtIds = new Set(prev.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
+        // Strip orphaned bills (ghost bills from deleted+recreated debts) first
+        const cleaned = removeOrphanedDebtBills(prev, validDebtIds);
+        const existingDebtIds = new Set(cleaned.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
         const missing = serverDebts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
         // Names of legacy bills we're about to replace with properly-linked versions
         const replacingNames = new Set(missing.map(d => `${d.name} (min payment)`));
         // Remove legacy (no-sourceDebtId) bills for debts we're about to add, then
         // refresh payoffDate and amount for existing linked bills
-        const refreshed = prev
+        const refreshed = cleaned
           .filter(b => b.sourceDebtId || !replacingNames.has(b.name))
           .map(b => {
             if (!b.sourceDebtId) return b;
@@ -1278,13 +1312,16 @@ export function BudgetWizard({
     if (debtsLoadedForUserRef.current === currentUser.id && debtAutoAddDoneRef.current !== currentUser.id) {
       debtAutoAddDoneRef.current = currentUser.id;
       const debtMap = new Map(debts.map(d => [d.id, d]));
-      const existingDebtIds = new Set(serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
+      const validDebtIds = new Set(debts.map(d => d.id));
+      // Strip orphaned bills (ghost bills from deleted+recreated debts) before computing missing
+      const cleanedServerBills = removeOrphanedDebtBills(serverBills, validDebtIds);
+      const existingDebtIds = new Set(cleanedServerBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
       const missing = debts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
       // Names of legacy bills we're about to replace with properly-linked versions
       const replacingNames = new Set(missing.map(d => `${d.name} (min payment)`));
       // Remove legacy (no-sourceDebtId) bills for debts we're about to add, then
       // refresh payoffDate and amount for existing linked bills
-      const refreshed = serverBills
+      const refreshed = cleanedServerBills
         .filter(b => b.sourceDebtId || !replacingNames.has(b.name))
         .map(b => {
           if (!b.sourceDebtId) return b;
@@ -2195,12 +2232,19 @@ export function BudgetWizard({
       }));
       billsToSet = [...billsToSet, ...autoBills];
     }
-    // Deduplicate: keeps only the last bill for each sourceDebtId, repairing any
-    // duplicates that were persisted in the saved budget's bills list.
+    // Deduplicate, then strip orphaned bills (ghost entries from deleted+recreated debts).
+    // If cleanup changed the list, leave prevBillsRef empty so the save effect fires
+    // and permanently repairs the server copy.
+    const beforeCleanCount = billsToSet.length;
     billsToSet = dedupeDebtBills(billsToSet);
+    const validDebtIdsForLoad = new Set(refreshedDebts.map((d: Debt) => d.id));
+    billsToSet = removeOrphanedDebtBills(billsToSet, validDebtIdsForLoad);
+    const loadCleanedUp = billsToSet.length !== beforeCleanCount;
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
-    prevBillsRef.current = JSON.stringify(billsToSet);
+    if (!loadCleanedUp) {
+      prevBillsRef.current = JSON.stringify(billsToSet);
+    }
     if (s?.payPeriod && s?.newWeekStartDate) {
       const restoredPayPeriod = s.payPeriod as "weekly" | "biweekly" | "monthly";
       const restoredWeekCount = s?.weekCount ?? 1;
@@ -2561,8 +2605,12 @@ export function BudgetWizard({
       cloudExistingWeeks,
       checkinsQuery.data?.checkins,
     );
-    // Deduplicate debt bills by sourceDebtId before generating (defensive guard)
-    const allBillsForGeneration = [...dedupeDebtBills(rawBills), ...savingsGoalBills];
+    // Deduplicate then strip orphaned debt bills (ghost entries from deleted+recreated debts)
+    const validDebtIdsForGen = new Set(debts.map(d => d.id));
+    const allBillsForGeneration = [
+      ...removeOrphanedDebtBills(dedupeDebtBills(rawBills), validDebtIdsForGen),
+      ...savingsGoalBills,
+    ];
 
     const effectiveIncomeSources = incomeSources.length > 0
       ? incomeSources.length === 1
