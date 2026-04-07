@@ -2242,7 +2242,11 @@ export function BudgetWizard({
     const loadCleanedUp = billsToSet.length !== beforeCleanCount;
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
-    if (!loadCleanedUp) {
+    // If cleanup removed orphaned bills, force prevBillsRef to "" so the save effect
+    // fires and permanently repairs the server copy regardless of prior local state.
+    if (loadCleanedUp) {
+      prevBillsRef.current = "";
+    } else {
       prevBillsRef.current = JSON.stringify(billsToSet);
     }
     if (s?.payPeriod && s?.newWeekStartDate) {
