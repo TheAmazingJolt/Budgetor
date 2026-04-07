@@ -600,44 +600,6 @@ export function SignInPage({
         </div>
       </section>
 
-      <section
-        id="cta-section"
-        className="bg-gradient-to-br from-emerald-600 to-teal-600 px-4 sm:px-8 py-20 sm:py-28 flex flex-col items-center text-center text-white"
-      >
-        <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center mb-6">
-          <DollarSign className="w-7 h-7 text-white" />
-        </div>
-
-        <h2 className="text-3xl sm:text-4xl font-bold mb-4 max-w-xl">
-          Ready to take control of your budget?
-        </h2>
-        <p className="text-emerald-100 text-lg mb-10 max-w-md">
-          Join thousands of people who have made their weekly budget automatic with Budgify. Start free, today.
-        </p>
-
-        <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-          <div className="w-full bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-5">
-            <AuthPanel
-              googleLoginAvailable={googleLoginAvailable}
-              onGoogleLogin={onGoogleLogin}
-              onGuestLogin={onGuestLogin}
-              onEmailLogin={onEmailLogin}
-              onEmailRegister={onEmailRegister}
-              onForgotPassword={onForgotPassword}
-              onResetPassword={onResetPassword}
-              onClaimAccount={onClaimAccount}
-              resetToken={resetToken}
-              claimEmail={claimEmail}
-              isLoggingIn={isLoggingIn}
-              instanceId="cta"
-            />
-          </div>
-          <p className="text-xs text-emerald-200 mt-1">
-            Free forever · No credit card required
-          </p>
-        </div>
-      </section>
-
       <footer className="border-t border-border/30 bg-white px-4 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center">
