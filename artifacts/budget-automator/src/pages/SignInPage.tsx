@@ -11,7 +11,6 @@ import {
   TrendingDown,
   PiggyBank,
   Check,
-  Star,
   ChevronDown,
   Eye,
   EyeOff,
@@ -479,29 +478,6 @@ const features = [
   },
 ];
 
-const testimonials = [
-  {
-    name: "Alex M.",
-    role: "Freelance designer",
-    quote:
-      "I finally know where my money goes each week. The Google Sheets sync means my partner and I are always on the same page.",
-    rating: 5,
-  },
-  {
-    name: "Jordan K.",
-    role: "Software engineer",
-    quote:
-      "Paid off $12,000 in credit card debt last year using the debt tracker. Seeing the number shrink kept me motivated.",
-    rating: 5,
-  },
-  {
-    name: "Sam R.",
-    role: "Teacher",
-    quote:
-      "The weekly reset is genius. It made budgeting feel doable instead of overwhelming. I've stuck with it for 8 months now.",
-    rating: 5,
-  },
-];
 
 export function SignInPage({
   googleLoginAvailable,
@@ -621,36 +597,6 @@ export function SignInPage({
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="bg-slate-50 border-y border-border/30 px-4 sm:px-8 py-20 sm:py-24">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
-              Real people, real results
-            </h2>
-            <p className="text-muted-foreground text-lg">
-              Join thousands who have taken control of their finances with Budgify.
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
-              <div key={t.name} className="bg-white rounded-2xl p-6 border border-border/50 shadow-sm flex flex-col gap-4">
-                <div className="flex gap-0.5">
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-sm text-foreground/80 leading-relaxed flex-1">"{t.quote}"</p>
-                <div>
-                  <div className="font-semibold text-sm">{t.name}</div>
-                  <div className="text-xs text-muted-foreground">{t.role}</div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
