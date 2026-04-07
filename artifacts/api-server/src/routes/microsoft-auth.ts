@@ -193,15 +193,21 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
 
     if (tokens.access_token) {
       let microsoftAccountEmail: string | null = null;
+      console.log("[microsoft-callback] token keys:", Object.keys(tokens));
       if (tokens.id_token) {
         try {
           const [, b64] = tokens.id_token.split(".");
           const payload = JSON.parse(Buffer.from(b64, "base64url").toString("utf-8")) as Record<string, unknown>;
+          console.log("[microsoft-callback] id_token claims:", JSON.stringify(Object.keys(payload)));
+          console.log("[microsoft-callback] email:", payload["email"], "preferred_username:", payload["preferred_username"]);
           microsoftAccountEmail = (payload["email"] as string | undefined) || (payload["preferred_username"] as string | undefined) || null;
-        } catch {
-          // ignore decode errors
+        } catch (e) {
+          console.log("[microsoft-callback] id_token decode error:", e);
         }
+      } else {
+        console.log("[microsoft-callback] no id_token in response");
       }
+      console.log("[microsoft-callback] storing microsoftAccountEmail:", microsoftAccountEmail);
       await db.update(usersTable).set({
         microsoftAccessToken: maybeEncrypt(tokens.access_token),
         microsoftRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
