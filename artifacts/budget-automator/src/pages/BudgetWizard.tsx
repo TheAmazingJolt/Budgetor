@@ -3690,7 +3690,7 @@ export function BudgetWizard({
                                 </div>
                                 {(() => {
                                   const googleId = budget.linkedGoogleSheetId ?? (budget.linkedSheetType === "google" ? budget.linkedSheetId : null);
-                                  const excelId = budget.linkedExcelFileId ?? (budget.linkedSheetType === "excel" ? budget.linkedSheetId : null);
+                                  const excelId = budget.linkedExcelSheetId ?? (budget.linkedSheetType === "excel" ? budget.linkedSheetId : null);
                                   if (!googleId && !excelId) return null;
                                   return (
                                     <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap items-center gap-2 min-w-0">
