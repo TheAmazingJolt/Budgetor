@@ -142,6 +142,7 @@ import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
 import { PaydayCheckInDialog } from "@/components/PaydayCheckInDialog";
 import type { PaydayBillItem } from "@/components/PaydayCheckInDialog";
 import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
+import { fmtUSD } from "@/lib/utils";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank, Gift, Lock } from "lucide-react";
 
 type InputMode = "scratch" | "google" | "excel" | "cloud";
@@ -4803,7 +4804,7 @@ export function BudgetWizard({
                               <tr className="bg-white">
                                 {cloudOnlyWeeks.map((w, i) => (
                                   <td key={i} className="px-3 py-2 text-right tabular-nums font-semibold border-r border-border/30 last:border-r-0">
-                                    Remaining: ${w.remaining.toFixed(2)}
+                                    Remaining: {fmtUSD(w.remaining)}
                                   </td>
                                 ))}
                               </tr>
@@ -5056,7 +5057,7 @@ export function BudgetWizard({
                                             {item.label}
                                           </td>,
                                           <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick} title={item.breakdown ? item.breakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(' + ') : undefined}>
-                                            ${item.value.toFixed(2)}
+                                            {fmtUSD(item.value)}
                                             {item.breakdown && <span className="ml-1 text-[10px] text-muted-foreground">*</span>}
                                           </td>,
                                         ];
@@ -5079,7 +5080,7 @@ export function BudgetWizard({
                                       {isEdited ? "Remaining*" : "Remaining"}
                                     </td>,
                                     <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${remainingStyle}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
-                                      ${week.remaining.toFixed(2)}
+                                      {fmtUSD(week.remaining)}
                                     </td>,
                                   ];
                                 })}
