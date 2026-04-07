@@ -42,8 +42,9 @@ router.get("/auth/google/status", (req, res) => {
   const user = (req as any).user;
   const session = (req as any).session;
   const authenticated = !!(user?.googleAccessToken || session?.googleTokens?.access_token);
+  const accountEmail: string | null = user?.googleSheetEmail ?? null;
 
-  res.json({ configured, authenticated });
+  res.json({ configured, authenticated, accountEmail });
 });
 
 router.get("/auth/google", (req, res) => {
@@ -105,10 +106,21 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
     await saveSession(req);
 
     if (tokens.access_token) {
+      let googleSheetEmail: string | null = null;
+      if (tokens.id_token) {
+        try {
+          const [, b64] = tokens.id_token.split(".");
+          const payload = JSON.parse(Buffer.from(b64, "base64url").toString("utf-8")) as Record<string, unknown>;
+          googleSheetEmail = (payload["email"] as string | undefined) ?? null;
+        } catch {
+          // ignore decode errors
+        }
+      }
       await db.update(usersTable).set({
         googleAccessToken: maybeEncrypt(tokens.access_token),
         googleRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
         googleTokenExpiry: tokens.expiry_date ?? null,
+        ...(googleSheetEmail !== null ? { googleSheetEmail } : {}),
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id));
     }
@@ -128,6 +140,7 @@ router.post("/auth/google/disconnect", async (req, res): Promise<void> => {
       googleAccessToken: null,
       googleRefreshToken: null,
       googleTokenExpiry: null,
+      googleSheetEmail: null,
       updatedAt: new Date(),
     }).where(eq(usersTable.id, user.id));
   }

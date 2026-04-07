@@ -32,10 +32,12 @@ export async function initDb(): Promise<void> {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS google_token_expiry BIGINT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sheet_email TEXT;
 
       ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_access_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_refresh_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_token_expiry BIGINT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_account_email TEXT;
 
       ALTER TABLE users ADD COLUMN IF NOT EXISTS debts JSONB DEFAULT '[]'::jsonb;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS bills JSONB DEFAULT '[]'::jsonb;

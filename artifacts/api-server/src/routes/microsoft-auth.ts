@@ -44,8 +44,9 @@ router.get("/auth/microsoft/status", (req, res) => {
   const user = (req as any).user;
   const session = (req as any).session;
   const authenticated = !!(user?.microsoftAccessToken || session?.microsoftTokens?.access_token);
+  const accountEmail: string | null = user?.microsoftAccountEmail ?? null;
 
-  res.json({ configured, authenticated });
+  res.json({ configured, authenticated, accountEmail });
 });
 
 router.get("/auth/microsoft", (req, res) => {
@@ -191,10 +192,21 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
     await saveSession(req);
 
     if (tokens.access_token) {
+      let microsoftAccountEmail: string | null = null;
+      if (tokens.id_token) {
+        try {
+          const [, b64] = tokens.id_token.split(".");
+          const payload = JSON.parse(Buffer.from(b64, "base64url").toString("utf-8")) as Record<string, unknown>;
+          microsoftAccountEmail = (payload["email"] as string | undefined) || (payload["preferred_username"] as string | undefined) || null;
+        } catch {
+          // ignore decode errors
+        }
+      }
       await db.update(usersTable).set({
         microsoftAccessToken: maybeEncrypt(tokens.access_token),
         microsoftRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
         microsoftTokenExpiry: expiresAt,
+        ...(microsoftAccountEmail !== null ? { microsoftAccountEmail } : {}),
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id));
     }
@@ -215,6 +227,7 @@ router.post("/auth/microsoft/disconnect", async (req, res): Promise<void> => {
       microsoftAccessToken: null,
       microsoftRefreshToken: null,
       microsoftTokenExpiry: null,
+      microsoftAccountEmail: null,
       updatedAt: new Date(),
     }).where(eq(usersTable.id, user.id));
   }

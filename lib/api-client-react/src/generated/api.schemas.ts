@@ -365,6 +365,7 @@ export interface SavedBudgetUpdateRequest {
 export interface GoogleAuthStatus {
   configured: boolean;
   authenticated: boolean;
+  accountEmail?: string | null;
 }
 
 export interface SheetFile {
@@ -436,6 +437,7 @@ export interface SheetCreateAndWriteResponse {
 export interface MicrosoftAuthStatus {
   configured: boolean;
   authenticated: boolean;
+  accountEmail?: string | null;
 }
 
 export interface ExcelFile {

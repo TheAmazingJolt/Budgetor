@@ -1487,6 +1487,9 @@ components:
           type: boolean
         authenticated:
           type: boolean
+        accountEmail:
+          type: string
+          nullable: true
       required:
         - configured
         - authenticated
@@ -1654,6 +1657,9 @@ components:
           type: boolean
         authenticated:
           type: boolean
+        accountEmail:
+          type: string
+          nullable: true
       required:
         - configured
         - authenticated

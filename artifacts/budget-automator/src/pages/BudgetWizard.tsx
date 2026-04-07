@@ -3501,8 +3501,8 @@ export function BudgetWizard({
                                   {googleAuthenticated ? "Disconnect" : "Connect"}
                                 </button>
                               </div>
-                              {googleAuthenticated && currentUser?.email && (
-                                <p className="text-[10px] text-muted-foreground/60 pl-3 truncate">{currentUser.email}</p>
+                              {googleAuthenticated && (googleAuth.data?.accountEmail ?? currentUser?.email) && (
+                                <p className="text-[10px] text-muted-foreground/60 pl-3 truncate">{googleAuth.data?.accountEmail ?? currentUser?.email}</p>
                               )}
                             </div>
                           )}
@@ -3523,8 +3523,8 @@ export function BudgetWizard({
                                   {microsoftAuthenticated ? "Disconnect" : "Connect"}
                                 </button>
                               </div>
-                              {microsoftAuthenticated && currentUser?.email && (
-                                <p className="text-[10px] text-muted-foreground/60 pl-3 truncate">{currentUser.email}</p>
+                              {microsoftAuthenticated && (microsoftAuth.data?.accountEmail ?? currentUser?.email) && (
+                                <p className="text-[10px] text-muted-foreground/60 pl-3 truncate">{microsoftAuth.data?.accountEmail ?? currentUser?.email}</p>
                               )}
                             </div>
                           )}
