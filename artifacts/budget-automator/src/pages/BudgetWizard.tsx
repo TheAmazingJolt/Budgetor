@@ -421,10 +421,25 @@ function stripHeuristicColors(bills: Bill[]): Bill[] {
   });
 }
 
-/** Remove duplicate debt bills, keeping the last entry for each sourceDebtId. */
+/**
+ * Remove duplicate debt bills.
+ * Step 1: Remove legacy bills (no sourceDebtId, name ends in " (min payment)")
+ *         when a properly-linked bill (with sourceDebtId) for the same name exists.
+ *         These were saved before sourceDebtId was introduced.
+ * Step 2: Deduplicate remaining linked bills by sourceDebtId, keeping the last entry.
+ */
 function dedupeDebtBills(bills: Bill[]): Bill[] {
+  // Names of all bills that ARE properly linked
+  const linkedNames = new Set(bills.filter(b => b.sourceDebtId).map(b => b.name));
+  const step1 = bills.filter(b => {
+    if (b.sourceDebtId) return true;
+    // Drop legacy "(min payment)" bills superseded by a linked version
+    if (b.name.endsWith(" (min payment)") && linkedNames.has(b.name)) return false;
+    return true;
+  });
+  // Dedup by sourceDebtId, keep last
   const seen = new Set<string>();
-  return [...bills].reverse().filter(b => {
+  return [...step1].reverse().filter(b => {
     if (!b.sourceDebtId) return true;
     if (seen.has(b.sourceDebtId)) return false;
     seen.add(b.sourceDebtId);
@@ -1166,17 +1181,22 @@ export function BudgetWizard({
       setBills(prev => {
         const existingDebtIds = new Set(prev.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
         const missing = serverDebts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
-        // Refresh payoffDate and amount for existing debt-linked bills
-        const refreshed = prev.map(b => {
-          if (!b.sourceDebtId) return b;
-          const d = debtMap.get(b.sourceDebtId);
-          if (!d) return b;
-          return {
-            ...b,
-            amount: -Math.abs(d.minimumPayment),
-            payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
-          };
-        });
+        // Names of legacy bills we're about to replace with properly-linked versions
+        const replacingNames = new Set(missing.map(d => `${d.name} (min payment)`));
+        // Remove legacy (no-sourceDebtId) bills for debts we're about to add, then
+        // refresh payoffDate and amount for existing linked bills
+        const refreshed = prev
+          .filter(b => b.sourceDebtId || !replacingNames.has(b.name))
+          .map(b => {
+            if (!b.sourceDebtId) return b;
+            const d = debtMap.get(b.sourceDebtId);
+            if (!d) return b;
+            return {
+              ...b,
+              amount: -Math.abs(d.minimumPayment),
+              payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+            };
+          });
         if (missing.length === 0) return refreshed;
         return [...refreshed, ...missing.map(d => ({
           name: `${d.name} (min payment)`,
@@ -1260,17 +1280,22 @@ export function BudgetWizard({
       const debtMap = new Map(debts.map(d => [d.id, d]));
       const existingDebtIds = new Set(serverBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
       const missing = debts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
-      // Refresh payoffDate and amount for existing debt-linked bills
-      const refreshed = serverBills.map(b => {
-        if (!b.sourceDebtId) return b;
-        const d = debtMap.get(b.sourceDebtId);
-        if (!d) return b;
-        return {
-          ...b,
-          amount: -Math.abs(d.minimumPayment),
-          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
-        };
-      });
+      // Names of legacy bills we're about to replace with properly-linked versions
+      const replacingNames = new Set(missing.map(d => `${d.name} (min payment)`));
+      // Remove legacy (no-sourceDebtId) bills for debts we're about to add, then
+      // refresh payoffDate and amount for existing linked bills
+      const refreshed = serverBills
+        .filter(b => b.sourceDebtId || !replacingNames.has(b.name))
+        .map(b => {
+          if (!b.sourceDebtId) return b;
+          const d = debtMap.get(b.sourceDebtId);
+          if (!d) return b;
+          return {
+            ...b,
+            amount: -Math.abs(d.minimumPayment),
+            payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          };
+        });
       if (missing.length > 0) {
         const newDebtBills = missing.map(d => ({
           name: `${d.name} (min payment)`,
