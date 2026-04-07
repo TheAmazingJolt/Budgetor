@@ -952,6 +952,7 @@ export function BudgetWizard({
   const billsFromImportPendingRef = useRef(false);
   const pendingImportCallbackRef = useRef<((useBills: Bill[]) => void) | null>(null);
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
+  const [cloudSaveCountdown, setCloudSaveCountdown] = useState<number | null>(null);
   const [newCloudSaveSuccess, setNewCloudSaveSuccess] = useState(false);
   const [savedCloudName, setSavedCloudName] = useState("");
 
@@ -1197,6 +1198,38 @@ export function BudgetWizard({
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevDebtsRef = useRef<string>("");
   const debtAutoAddDoneRef = useRef<string | null>(null);
+
+  // Countdown timer for "Saved" button — starts when either save succeeds, resets after 10s
+  const cloudSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopCloudSaveCountdown = useCallback(() => {
+    if (cloudSaveIntervalRef.current) {
+      clearInterval(cloudSaveIntervalRef.current);
+      cloudSaveIntervalRef.current = null;
+    }
+    setCloudSaveCountdown(null);
+  }, []);
+
+  useEffect(() => {
+    if (!cloudSaveMutation.isSuccess && !cloudSaveSuccess) {
+      stopCloudSaveCountdown();
+      return;
+    }
+    setCloudSaveCountdown(10);
+    cloudSaveIntervalRef.current = setInterval(() => {
+      setCloudSaveCountdown(prev => {
+        if (prev === null || prev <= 1) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+    return stopCloudSaveCountdown;
+  }, [cloudSaveMutation.isSuccess, cloudSaveSuccess]);
+
+  useEffect(() => {
+    if (cloudSaveCountdown !== 0) return;
+    stopCloudSaveCountdown();
+    cloudSaveMutation.reset();
+    setCloudSaveSuccess(false);
+  }, [cloudSaveCountdown]);
 
   useEffect(() => {
     setStep2Tab("budget");
@@ -4873,7 +4906,7 @@ export function BudgetWizard({
                                   {cloudSaveMutation.isPending ? (
                                     <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving…</>
                                   ) : cloudSaveMutation.isSuccess ? (
-                                    <><Check className="w-3.5 h-3.5" /> Saved</>
+                                    <><Check className="w-3.5 h-3.5" /> Saved{cloudSaveCountdown !== null && <span className="ml-1 opacity-40 text-[9px] tabular-nums">{cloudSaveCountdown}</span>}</>
                                   ) : (
                                     <><Save className="w-3.5 h-3.5" /> Save</>
                                   )}
@@ -5331,7 +5364,7 @@ export function BudgetWizard({
                     {isSavingToCloud ? (
                       <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to Cloud…</>
                     ) : cloudSaveSuccess ? (
-                      <><Check className="w-5 h-5 mr-2" /> Saved to Cloud</>
+                      <><Check className="w-5 h-5 mr-2" /> Saved to Cloud{cloudSaveCountdown !== null && <span className="ml-2 opacity-40 text-xs tabular-nums">{cloudSaveCountdown}</span>}</>
                     ) : (
                       <><CloudUpload className="w-5 h-5 mr-2" /> Save to Cloud</>
                     )}
