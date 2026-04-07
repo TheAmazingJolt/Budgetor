@@ -6397,8 +6397,8 @@ export function BudgetWizard({
           <div className="space-y-1">
             <div className="flex items-center justify-between py-3 border-b border-border/40">
               <div>
-                <p className="text-sm font-medium">Auto-open last Google Sheet</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Automatically reconnect to the last sheet you used when you sign in</p>
+                <p className="text-sm font-medium">Auto-open last budget</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Automatically open your last cloud budget when you sign in</p>
               </div>
               <Switch
                 className="ml-4 shrink-0"
@@ -6461,14 +6461,16 @@ export function BudgetWizard({
                     {microsoftAuthenticated ? "Connected — export budgets to Excel Online" : "Connect to export budgets to Excel Online"}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant={microsoftAuthenticated ? "outline" : "default"}
-                  className={`ml-4 shrink-0 rounded-xl text-xs ${microsoftAuthenticated ? "" : "bg-gradient-to-r from-teal-600 to-teal-500 text-white border-0"}`}
-                  onClick={microsoftAuthenticated ? handleDisconnectMicrosoft : handleConnectMicrosoft}
-                >
-                  {microsoftAuthenticated ? "Disconnect" : "Connect"}
-                </Button>
+                {!microsoftAuthenticated && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="ml-4 shrink-0 rounded-xl text-xs bg-gradient-to-r from-teal-600 to-teal-500 text-white border-0"
+                    onClick={handleConnectMicrosoft}
+                  >
+                    Connect
+                  </Button>
+                )}
               </div>
             )}
           </div>
