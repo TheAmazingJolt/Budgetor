@@ -4849,6 +4849,7 @@ export function BudgetWizard({
 
                     {allWeeks.length > 0 && (
                       <div className="space-y-3">
+                        {/* Title + tabs + primary action buttons */}
                         <div className="flex items-center flex-wrap gap-2">
                           <Eye className="w-4 h-4 text-muted-foreground" />
                           <h3 className="text-lg font-semibold text-foreground">
@@ -4921,7 +4922,7 @@ export function BudgetWizard({
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 text-xs gap-1.5"
+                                  className="h-8 w-8 p-0"
                                   onClick={() => {
                                     setExportNameInput(buildDefaultXlsxFilename().replace(/\.xlsx$/, ""));
                                     setPendingExportType("xlsx");
@@ -4932,69 +4933,76 @@ export function BudgetWizard({
                                   <Download className="w-3.5 h-3.5" />
                                 </Button>
                               )}
-                              {activeGoogleSheet && (
-                                <>
-                                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeGoogleSheet.name} when saving`}>
-                                    <input
-                                      type="checkbox"
-                                      checked={syncGoogleOnUpdate}
-                                      onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
-                                      className="accent-primary w-3.5 h-3.5"
-                                    />
-                                    <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                    Sync to Sheets
-                                  </label>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    title="Sync to Sheets now"
-                                    disabled={isUpdatingLinkedSheet}
-                                    onClick={handleGenerateAndUpdateSheet}
-                                  >
-                                    <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
-                                  </Button>
-                                </>
-                              )}
-                              {activeGoogleSheet && (
-                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Google Sheets" asChild>
-                                  <a href={`https://docs.google.com/spreadsheets/d/${activeGoogleSheet.id}`} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </a>
-                                </Button>
-                              )}
-                              {activeExcelSheet && (
-                                <>
-                                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeExcelSheet.name} when saving`}>
-                                    <input
-                                      type="checkbox"
-                                      checked={syncExcelOnUpdate}
-                                      onChange={e => setSyncExcelOnUpdate(e.target.checked)}
-                                      className="accent-primary w-3.5 h-3.5"
-                                    />
-                                    <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                    Sync to Excel
-                                  </label>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    title="Sync to Excel now"
-                                    disabled={isUpdatingLinkedSheet}
-                                    onClick={handleGenerateAndUpdateSheet}
-                                  >
-                                    <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
-                                  </Button>
-                                </>
-                              )}
-                              {activeExcelSheet && selectedExcelFileUrl && (
-                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}>
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </Button>
-                              )}
                             </>
                           )}
                         </div>
+                        {/* Sync row — compact grouped pills, only shown when a sheet is connected */}
+                        {step2Tab === "budget" && (activeGoogleSheet || activeExcelSheet) && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {activeGoogleSheet && (
+                              <div className="flex items-center h-8 rounded-lg border border-border/60 overflow-hidden text-xs text-muted-foreground">
+                                <label className="flex items-center gap-1.5 px-2.5 h-full cursor-pointer select-none hover:bg-muted/60 transition-colors" title={`Auto-sync to ${activeGoogleSheet.name} when saving`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={syncGoogleOnUpdate}
+                                    onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
+                                    className="accent-primary w-3 h-3"
+                                  />
+                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                  Sheets
+                                </label>
+                                <button
+                                  className="border-l border-border/60 h-full px-2 hover:bg-muted/60 transition-colors disabled:opacity-40"
+                                  title="Sync to Sheets now"
+                                  disabled={isUpdatingLinkedSheet}
+                                  onClick={handleGenerateAndUpdateSheet}
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
+                                </button>
+                                <a
+                                  href={`https://docs.google.com/spreadsheets/d/${activeGoogleSheet.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="border-l border-border/60 h-full px-2 flex items-center hover:bg-muted/60 transition-colors"
+                                  title="Open in Google Sheets"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            )}
+                            {activeExcelSheet && (
+                              <div className="flex items-center h-8 rounded-lg border border-border/60 overflow-hidden text-xs text-muted-foreground">
+                                <label className="flex items-center gap-1.5 px-2.5 h-full cursor-pointer select-none hover:bg-muted/60 transition-colors" title={`Auto-sync to ${activeExcelSheet.name} when saving`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={syncExcelOnUpdate}
+                                    onChange={e => setSyncExcelOnUpdate(e.target.checked)}
+                                    className="accent-primary w-3 h-3"
+                                  />
+                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                  Excel
+                                </label>
+                                <button
+                                  className="border-l border-border/60 h-full px-2 hover:bg-muted/60 transition-colors disabled:opacity-40"
+                                  title="Sync to Excel now"
+                                  disabled={isUpdatingLinkedSheet}
+                                  onClick={handleGenerateAndUpdateSheet}
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
+                                </button>
+                                {selectedExcelFileUrl && (
+                                  <button
+                                    className="border-l border-border/60 h-full px-2 flex items-center hover:bg-muted/60 transition-colors"
+                                    title="Open in Excel Online"
+                                    onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {step2Tab === "savings" && (
                           <SavingsSection
                             bills={bills}
