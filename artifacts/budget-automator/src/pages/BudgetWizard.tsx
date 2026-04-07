@@ -4702,7 +4702,7 @@ export function BudgetWizard({
                   .map(applyEdit)
                   .filter(Boolean) as UnifiedWeek[];
                 const hasHistory = rawHistoryWeeks.length > 0 || cloudOnlyWeeks.length > 0;
-                const newCount = rawNewWeeks.length;
+                const newCount = rawNewWeeks.filter(w => !existingWeekLabels.has(w.label)).length;
                 const hasEdits = Object.keys(weekEdits).length > 0;
 
                 const handleJumpToToday = () => {
@@ -4773,17 +4773,12 @@ export function BudgetWizard({
                       </h2>
                       <p className="text-muted-foreground">
                         {hasHistory
-                          ? `${rawHistoryWeeks.length + cloudOnlyWeeks.length} existing week${(rawHistoryWeeks.length + cloudOnlyWeeks.length) !== 1 ? "s" : ""} + ${newCount} new week${newCount !== 1 ? "s" : ""} generated.`
-                          : newCount > 1
-                          ? `${newCount} budget weeks have been generated.`
-                          : "The new week has been generated."}{" "}
-                        {inputMode === "google"
-                          ? "Write new weeks to your Google Sheet or download as a file."
-                          : inputMode === "excel"
-                          ? "Write new weeks to your Excel Online file or download as a file."
-                          : inputMode === "cloud"
-                          ? "Save new weeks back to your cloud budget or download as a file."
-                          : "Download the updated file below."}
+                          ? newCount > 0
+                            ? `${rawHistoryWeeks.length + cloudOnlyWeeks.length} existing + ${newCount} new week${newCount !== 1 ? "s" : ""} generated.`
+                            : `${rawHistoryWeeks.length + cloudOnlyWeeks.length} week${(rawHistoryWeeks.length + cloudOnlyWeeks.length) !== 1 ? "s" : ""} refreshed.`
+                          : newCount !== 1
+                          ? `${newCount} weeks generated.`
+                          : "1 week generated."}
                       </p>
                     </div>
 
