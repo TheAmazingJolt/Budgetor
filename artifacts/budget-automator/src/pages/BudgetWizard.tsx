@@ -2270,7 +2270,7 @@ export function BudgetWizard({
         });
       }
     } else {
-      setStep(1);
+      setStep(2);
       scheduleAutoGenerate({
         bills: billsToSet,
         openingBalance: effectiveOpeningBalance,
