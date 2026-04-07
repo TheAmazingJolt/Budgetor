@@ -421,6 +421,17 @@ function stripHeuristicColors(bills: Bill[]): Bill[] {
   });
 }
 
+/** Remove duplicate debt bills, keeping the last entry for each sourceDebtId. */
+function dedupeDebtBills(bills: Bill[]): Bill[] {
+  const seen = new Set<string>();
+  return [...bills].reverse().filter(b => {
+    if (!b.sourceDebtId) return true;
+    if (seen.has(b.sourceDebtId)) return false;
+    seen.add(b.sourceDebtId);
+    return true;
+  }).reverse();
+}
+
 const GOAL_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function fmtGoalTargetDate(isoDate: string): string {
@@ -1228,13 +1239,7 @@ export function BudgetWizard({
     const strippedBills = stripHeuristicColors(rawServerBills);
     // Deduplicate: keep the last bill for each sourceDebtId — repairs any previously
     // saved duplicates. Keeping last preserves the most-recently-refreshed amount.
-    const seenServerDebtIds = new Set<string>();
-    const serverBills = [...strippedBills].reverse().filter(b => {
-      if (!b.sourceDebtId) return true;
-      if (seenServerDebtIds.has(b.sourceDebtId)) return false;
-      seenServerDebtIds.add(b.sourceDebtId);
-      return true;
-    }).reverse();
+    const serverBills = dedupeDebtBills(strippedBills);
     const serverHadDuplicates = serverBills.length !== strippedBills.length;
 
     setBills(serverBills);
@@ -1635,9 +1640,11 @@ export function BudgetWizard({
     setDebtBillImports(new Set());
     if (isSignedIn && currentUser) {
       if (userBillsQuery.data) {
-        const cachedBills = (userBillsQuery.data.bills ?? []) as Bill[];
+        const rawCachedBills = stripHeuristicColors((userBillsQuery.data.bills ?? []) as Bill[]);
+        const cachedBills = dedupeDebtBills(rawCachedBills);
+        const cacheHadDuplicates = cachedBills.length !== rawCachedBills.length;
         setBills(cachedBills);
-        prevBillsRef.current = JSON.stringify(cachedBills);
+        if (!cacheHadDuplicates) prevBillsRef.current = JSON.stringify(cachedBills);
         billsLoadedForUserRef.current = currentUser.id;
         const billedIds = new Set<string>(
           cachedBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string)
@@ -1673,9 +1680,11 @@ export function BudgetWizard({
         clearTimeout(billsSaveTimerRef.current);
         billsSaveTimerRef.current = null;
       }
-      const cachedBills = stripHeuristicColors((userBillsQuery.data?.bills ?? []) as Bill[]);
-      prevBillsRef.current = JSON.stringify(cachedBills);
+      const rawCachedBills = stripHeuristicColors((userBillsQuery.data?.bills ?? []) as Bill[]);
+      const cachedBills = dedupeDebtBills(rawCachedBills);
+      const backHadDuplicates = cachedBills.length !== rawCachedBills.length;
       setBills(cachedBills);
+      if (!backHadDuplicates) prevBillsRef.current = JSON.stringify(cachedBills);
       const cachedDebts = (userDebtsQuery.data?.debts ?? []) as Debt[];
       prevDebtsRef.current = JSON.stringify(cachedDebts);
       setDebts(cachedDebts);
@@ -2161,17 +2170,9 @@ export function BudgetWizard({
       }));
       billsToSet = [...billsToSet, ...autoBills];
     }
-    // Deduplicate: keep only the last bill for each sourceDebtId (prevents doubling if
-    // both the saved budget and current state contributed a debt bill for the same debt).
-    {
-      const seenDebtIds = new Set<string>();
-      billsToSet = [...billsToSet].reverse().filter((bill: Bill) => {
-        if (!bill.sourceDebtId) return true;
-        if (seenDebtIds.has(bill.sourceDebtId)) return false;
-        seenDebtIds.add(bill.sourceDebtId);
-        return true;
-      }).reverse();
-    }
+    // Deduplicate: keeps only the last bill for each sourceDebtId, repairing any
+    // duplicates that were persisted in the saved budget's bills list.
+    billsToSet = dedupeDebtBills(billsToSet);
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
     prevBillsRef.current = JSON.stringify(billsToSet);
@@ -2536,15 +2537,6 @@ export function BudgetWizard({
       checkinsQuery.data?.checkins,
     );
     // Deduplicate debt bills by sourceDebtId before generating (defensive guard)
-    const dedupeDebtBills = (arr: Bill[]) => {
-      const seen = new Set<string>();
-      return [...arr].reverse().filter(b => {
-        if (!b.sourceDebtId) return true;
-        if (seen.has(b.sourceDebtId)) return false;
-        seen.add(b.sourceDebtId);
-        return true;
-      }).reverse();
-    };
     const allBillsForGeneration = [...dedupeDebtBills(rawBills), ...savingsGoalBills];
 
     const effectiveIncomeSources = incomeSources.length > 0
