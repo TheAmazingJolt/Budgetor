@@ -2087,7 +2087,11 @@ export function BudgetWizard({
       );
       const incomingKeys = new Set(b.map(billKey));
       const userAddedBills = bills.filter(
-        (bill: Bill) => !loadedKeys.has(billKey(bill)) && !incomingKeys.has(billKey(bill))
+        (bill: Bill) =>
+          !bill.sourceDebtId &&
+          !bill.sourceGoalId &&
+          !loadedKeys.has(billKey(bill)) &&
+          !incomingKeys.has(billKey(bill))
       );
       if (userAddedBills.length > 0) {
         billsToSet = [...b, ...userAddedBills];
@@ -2134,6 +2138,17 @@ export function BudgetWizard({
         payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
       }));
       billsToSet = [...billsToSet, ...autoBills];
+    }
+    // Deduplicate: keep only the last bill for each sourceDebtId (prevents doubling if
+    // both the saved budget and current state contributed a debt bill for the same debt).
+    {
+      const seenDebtIds = new Set<string>();
+      billsToSet = [...billsToSet].reverse().filter((bill: Bill) => {
+        if (!bill.sourceDebtId) return true;
+        if (seenDebtIds.has(bill.sourceDebtId)) return false;
+        seenDebtIds.add(bill.sourceDebtId);
+        return true;
+      }).reverse();
     }
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
@@ -2498,7 +2513,17 @@ export function BudgetWizard({
       cloudExistingWeeks,
       checkinsQuery.data?.checkins,
     );
-    const allBillsForGeneration = [...rawBills, ...savingsGoalBills];
+    // Deduplicate debt bills by sourceDebtId before generating (defensive guard)
+    const dedupeDebtBills = (arr: Bill[]) => {
+      const seen = new Set<string>();
+      return [...arr].reverse().filter(b => {
+        if (!b.sourceDebtId) return true;
+        if (seen.has(b.sourceDebtId)) return false;
+        seen.add(b.sourceDebtId);
+        return true;
+      }).reverse();
+    };
+    const allBillsForGeneration = [...dedupeDebtBills(rawBills), ...savingsGoalBills];
 
     const effectiveIncomeSources = incomeSources.length > 0
       ? incomeSources.length === 1
