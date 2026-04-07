@@ -4933,17 +4933,28 @@ export function BudgetWizard({
                                 </Button>
                               )}
                               {activeGoogleSheet && (
-                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeGoogleSheet.name} when saving`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={syncGoogleOnUpdate}
-                                    onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
-                                    className="accent-primary w-3.5 h-3.5"
-                                  />
-                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                  Sync to Sheets
-                                  {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
-                                </label>
+                                <>
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeGoogleSheet.name} when saving`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={syncGoogleOnUpdate}
+                                      onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
+                                      className="accent-primary w-3.5 h-3.5"
+                                    />
+                                    <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                    Sync to Sheets
+                                  </label>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    title="Sync to Sheets now"
+                                    disabled={isUpdatingLinkedSheet}
+                                    onClick={handleGenerateAndUpdateSheet}
+                                  >
+                                    <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
+                                  </Button>
+                                </>
                               )}
                               {activeGoogleSheet && (
                                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Google Sheets" asChild>
@@ -4953,17 +4964,28 @@ export function BudgetWizard({
                                 </Button>
                               )}
                               {activeExcelSheet && (
-                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeExcelSheet.name} when saving`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={syncExcelOnUpdate}
-                                    onChange={e => setSyncExcelOnUpdate(e.target.checked)}
-                                    className="accent-primary w-3.5 h-3.5"
-                                  />
-                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                  Sync to Excel
-                                  {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-0.5" />}
-                                </label>
+                                <>
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors" title={`Auto-sync to ${activeExcelSheet.name} when saving`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={syncExcelOnUpdate}
+                                      onChange={e => setSyncExcelOnUpdate(e.target.checked)}
+                                      className="accent-primary w-3.5 h-3.5"
+                                    />
+                                    <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                    Sync to Excel
+                                  </label>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    title="Sync to Excel now"
+                                    disabled={isUpdatingLinkedSheet}
+                                    onClick={handleGenerateAndUpdateSheet}
+                                  >
+                                    <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
+                                  </Button>
+                                </>
                               )}
                               {activeExcelSheet && selectedExcelFileUrl && (
                                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}>
@@ -5089,7 +5111,7 @@ export function BudgetWizard({
                                           <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
                                             {item.label}
                                           </td>,
-                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick} title={item.breakdown ? item.breakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(' + ') : undefined}>
+                                          <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap border-r border-border/30 last:border-r-0 ${item.style || ""}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick} title={item.breakdown ? item.breakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(' + ') : undefined}>
                                             {fmtUSD(item.value)}
                                             {item.breakdown && <span className="ml-1 text-[10px] text-muted-foreground">*</span>}
                                           </td>,
