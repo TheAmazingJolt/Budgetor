@@ -820,15 +820,10 @@ function ClaimAccountDialog({
   );
 }
 
-async function openInExcel(webUrl: string, fileId?: string | null) {
-  // ms-excel:ofv|u| expects the OneDrive/SharePoint web URL, not a raw download URL.
-  // Using the download URL causes "Can't open file" on iOS Excel because it gets raw bytes.
-  const deepLink = `ms-excel:ofv|u|${encodeURIComponent(webUrl)}`;
-  window.location.href = deepLink;
-  // Fall back to browser after a short delay if the app didn't open
-  setTimeout(() => {
-    window.open(webUrl, "_blank", "noopener,noreferrer");
-  }, 1500);
+function openInExcel(webUrl: string, fileId?: string | null) {
+  // Open the OneDrive web URL directly. On iOS, Universal Links route this to the
+  // Excel app automatically when installed; on desktop it opens Excel Online.
+  window.open(webUrl, "_blank", "noopener,noreferrer");
 }
 
 export function BudgetWizard({
@@ -4942,7 +4937,7 @@ export function BudgetWizard({
                                   className="border-l border-border/60 h-full px-2 hover:bg-muted/60 transition-colors disabled:opacity-40"
                                   title="Sync to Sheets now"
                                   disabled={isUpdatingLinkedSheet}
-                                  onClick={handleGenerateAndUpdateSheet}
+                                  onClick={() => handleGenerateAndUpdateSheet("google")}
                                 >
                                   <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
                                 </button>
@@ -4973,7 +4968,7 @@ export function BudgetWizard({
                                   className="border-l border-border/60 h-full px-2 hover:bg-muted/60 transition-colors disabled:opacity-40"
                                   title="Sync to Excel now"
                                   disabled={isUpdatingLinkedSheet}
-                                  onClick={handleGenerateAndUpdateSheet}
+                                  onClick={() => handleGenerateAndUpdateSheet("excel")}
                                 >
                                   <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
                                 </button>
