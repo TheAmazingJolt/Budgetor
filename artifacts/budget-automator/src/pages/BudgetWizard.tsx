@@ -762,6 +762,14 @@ function ClaimAccountDialog({
   );
 }
 
+function openInExcel(webUrl: string) {
+  const deepLink = `ms-excel:ofe|u|${encodeURIComponent(webUrl)}`;
+  window.location.href = deepLink;
+  setTimeout(() => {
+    window.open(webUrl, "_blank", "noopener,noreferrer");
+  }, 1500);
+}
+
 export function BudgetWizard({
   currentUser,
   isSignedIn,
@@ -4830,10 +4838,8 @@ export function BudgetWizard({
                                 </label>
                               )}
                               {activeExcelSheet && selectedExcelFileUrl && (
-                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" asChild>
-                                  <a href={selectedExcelFileUrl} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </a>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" title="Open in Excel Online" onClick={() => openInExcel(selectedExcelFileUrl)}>
+                                  <ExternalLink className="w-3.5 h-3.5" />
                                 </Button>
                               )}
                             </>
@@ -5206,14 +5212,12 @@ export function BudgetWizard({
                       )}
                     </Button>
                     {excelWriteSuccess && selectedExcelFileUrl && (
-                      <a
-                        href={selectedExcelFileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openInExcel(selectedExcelFileUrl)}
                         className="text-sm text-teal-600 hover:text-teal-700 underline text-center"
                       >
                         Open in OneDrive →
-                      </a>
+                      </button>
                     )}
                   </div>
                 )}
@@ -5321,14 +5325,12 @@ export function BudgetWizard({
                       )}
                     </Button>
                     {newExcelSaveSuccess && newExcelUrl && (
-                      <a
-                        href={newExcelUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openInExcel(newExcelUrl)}
                         className="text-sm text-teal-600 hover:text-teal-700 underline text-center"
                       >
                         Open in OneDrive →
-                      </a>
+                      </button>
                     )}
                   </div>
                 )}
