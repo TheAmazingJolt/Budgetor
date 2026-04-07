@@ -668,17 +668,19 @@ export function signOAuthState(payload: string): string {
   return crypto.createHmac("sha256", getHmacSecret()).update(payload).digest("hex");
 }
 
-export function generateOAuthState(_req: Request, redirect?: string): string {
+export function generateOAuthState(req: Request, redirect?: string): string {
   const nonce = crypto.randomBytes(32).toString("hex");
   const ts = Date.now();
   const data: Record<string, unknown> = { nonce, ts };
   if (redirect) data.redirect = redirect;
+  const user = (req as any).user;
+  if (user?.id) data.userId = user.id;
   const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
   const sig = signOAuthState(payload);
   return `${payload}.${sig}`;
 }
 
-export function verifyAndConsumeOAuthState(_req: Request, stateParam: string | undefined): { valid: boolean; redirect: string } {
+export function verifyAndConsumeOAuthState(_req: Request, stateParam: string | undefined): { valid: boolean; redirect: string; userId?: string } {
   if (!stateParam) return { valid: false, redirect: "/" };
 
   const dotIdx = stateParam.lastIndexOf(".");
@@ -700,7 +702,8 @@ export function verifyAndConsumeOAuthState(_req: Request, stateParam: string | u
     const redirect = typeof data.redirect === "string" && isAllowedRedirect(data.redirect)
       ? data.redirect
       : "/";
-    return { valid: true, redirect };
+    const userId = typeof data.userId === "string" ? data.userId : undefined;
+    return { valid: true, redirect, userId };
   } catch {
     return { valid: false, redirect: "/" };
   }

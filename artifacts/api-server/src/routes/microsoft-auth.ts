@@ -89,7 +89,7 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
   }
 
   const state = req.query["state"] as string | undefined;
-  const { valid, redirect: redirectUrl } = verifyAndConsumeOAuthState(req, state);
+  const { valid, redirect: redirectUrl, userId: stateUserId } = verifyAndConsumeOAuthState(req, state);
 
   if (!valid) {
     res.status(400).json({ error: "Invalid or expired OAuth state. Please try connecting again." });
@@ -99,7 +99,13 @@ router.get("/auth/microsoft/callback", async (req, res): Promise<void> => {
   // Enforce authenticated session BEFORE exchanging tokens.
   // Exception: if this Microsoft email matches an existing no-password OAuth account,
   // issue a one-time claim token so the user can set a password.
-  const user = (req as any).user;
+  // On mobile, session cookies may not survive the OAuth redirect — fall back to the
+  // userId embedded in the signed state.
+  let user = (req as any).user;
+  if (!user?.id && stateUserId) {
+    const [found] = await db.select().from(usersTable).where(eq(usersTable.id, stateUserId)).limit(1);
+    if (found) user = found;
+  }
   if (!user?.id) {
     // Attempt to get user email from Microsoft using the auth code before rejecting.
     // We do a minimal token exchange just to extract the email for claim detection.
