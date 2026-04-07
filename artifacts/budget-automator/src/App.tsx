@@ -15,6 +15,7 @@ import {
   authLoginGoogle,
   getAuthMeQueryKey,
   getAuthProvidersQueryKey,
+  getMicrosoftAuthStatusQueryKey,
   authEmailLogin,
   authEmailRegister,
   authForgotPassword,
@@ -189,6 +190,7 @@ function AppRouting() {
         if (data.user) {
           qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
           qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+          qc.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
         }
       })
       .catch(() => {
@@ -235,6 +237,8 @@ function AppRouting() {
     }
     if (data.user) {
       qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+      qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+      qc.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
     }
   };
 
@@ -245,6 +249,8 @@ function AppRouting() {
     }
     if (data.user) {
       qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+      qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+      qc.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
     }
   };
 
@@ -260,6 +266,8 @@ function AppRouting() {
     }
     if (data.user) {
       qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+      qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+      qc.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
       const params = new URLSearchParams(window.location.search);
       params.delete("reset_token");
       const newSearch = params.toString();
@@ -278,6 +286,8 @@ function AppRouting() {
     }
     if (data.user) {
       qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
+      qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+      qc.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
       const params = new URLSearchParams(window.location.search);
       params.delete("claim_email");
       params.delete("claim_token");
