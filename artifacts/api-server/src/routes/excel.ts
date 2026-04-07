@@ -1319,7 +1319,8 @@ function writeExcelSavingsSheetXL(
       let savedInCycle = 0;
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
-        if (wStart <= cycleStart || wStart > today) continue;
+        const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
+        if (wStart <= cycleStart || wEnd >= today) continue;
         for (const item of w.bills) {
           if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
         }
@@ -1340,7 +1341,8 @@ function writeExcelSavingsSheetXL(
       let savedThisMonth = 0;
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
-        if (wStart > today) continue;
+        const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
+        if (wEnd >= today) continue;
         if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
         for (const item of w.bills) {
           if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
