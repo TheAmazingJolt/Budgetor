@@ -3842,8 +3842,14 @@ export function BudgetWizard({
                       type="number"
                       min={1}
                       max={100}
-                      value={weekCount}
-                      onChange={(e) => setWeekCount(Math.min(100, parseInt(e.target.value) || 1))}
+                      value={weekCount || ""}
+                      onChange={(e) => {
+                        const raw = parseInt(e.target.value);
+                        setWeekCount(isNaN(raw) ? 0 : Math.min(100, raw));
+                      }}
+                      onBlur={() => {
+                        if (!weekCount || weekCount < 1) setWeekCount(1);
+                      }}
                       className="h-11 rounded-xl"
                     />
                   </div>
@@ -5525,8 +5531,14 @@ export function BudgetWizard({
                 type="number"
                 min={1}
                 max={100}
-                value={weekCount}
-                onChange={(e) => setWeekCount(Math.min(100, parseInt(e.target.value) || 1))}
+                value={weekCount || ""}
+                onChange={(e) => {
+                  const raw = parseInt(e.target.value);
+                  setWeekCount(isNaN(raw) ? 0 : Math.min(100, raw));
+                }}
+                onBlur={() => {
+                  if (!weekCount || weekCount < 1) setWeekCount(1);
+                }}
                 className="h-11 rounded-xl"
               />
             </div>
