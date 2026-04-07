@@ -3170,7 +3170,7 @@ export function BudgetWizard({
     }
   };
 
-  const handleGenerateAndUpdateSheet = async () => {
+  const handleGenerateAndUpdateSheet = async (target: "google" | "excel" | "all" = "all") => {
     if (!activeGoogleSheet && !activeExcelSheet) return;
     setIsUpdatingLinkedSheet(true);
     try {
@@ -3257,8 +3257,8 @@ export function BudgetWizard({
         ...(allBillsForSync.length > 0 ? { bills: stripHeuristicColors(allBillsForSync) } : {}),
       };
       const sheetsToUpdate = [
-        ...(activeGoogleSheet ? [{ id: activeGoogleSheet.id, name: activeGoogleSheet.name, type: "google" }] : []),
-        ...(activeExcelSheet ? [{ id: activeExcelSheet.id, name: activeExcelSheet.name, type: "excel" }] : []),
+        ...(activeGoogleSheet && (target === "all" || target === "google") ? [{ id: activeGoogleSheet.id, name: activeGoogleSheet.name, type: "google" }] : []),
+        ...(activeExcelSheet && (target === "all" || target === "excel") ? [{ id: activeExcelSheet.id, name: activeExcelSheet.name, type: "excel" }] : []),
       ];
       await Promise.all(sheetsToUpdate.map(sheet =>
         sheet.type === "google"
