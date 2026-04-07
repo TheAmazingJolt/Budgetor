@@ -821,24 +821,11 @@ function ClaimAccountDialog({
 }
 
 async function openInExcel(webUrl: string, fileId?: string | null) {
-  let downloadUrl: string | null = null;
-
-  if (fileId) {
-    try {
-      const resp = await fetch(`/api/excel/${fileId}/download-url`, { credentials: "include" });
-      if (resp.ok) {
-        const data = await resp.json() as { downloadUrl?: string };
-        if (data.downloadUrl) downloadUrl = data.downloadUrl;
-      }
-    } catch {
-      // fall back to webUrl
-    }
-  }
-
-  const targetUrl = downloadUrl ?? webUrl;
-  // ofv = Open For View — works with both free and paid Excel on iOS
-  const deepLink = `ms-excel:ofv|u|${encodeURIComponent(targetUrl)}`;
+  // ms-excel:ofv|u| expects the OneDrive/SharePoint web URL, not a raw download URL.
+  // Using the download URL causes "Can't open file" on iOS Excel because it gets raw bytes.
+  const deepLink = `ms-excel:ofv|u|${encodeURIComponent(webUrl)}`;
   window.location.href = deepLink;
+  // Fall back to browser after a short delay if the app didn't open
   setTimeout(() => {
     window.open(webUrl, "_blank", "noopener,noreferrer");
   }, 1500);
