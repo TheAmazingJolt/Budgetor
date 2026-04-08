@@ -134,9 +134,35 @@ export function generateWeeklyBudgets(
   const yearlyFlatBills = bills.filter((b) => b.type === "yearly-flat");
 
   // alwaysBills = balanced with no specific due day (varies across all weeks)
-  const alwaysBills = balancedBills.filter((b) => !b.dayOfMonth);
+  // Sort: constrained bills (payoff date) first (earliest payoff first), unconstrained last.
+  // This ensures bills with limited week eligibility are placed before unconstrained bills,
+  // giving unconstrained bills full visibility of any imbalance to correct it.
+  const alwaysBills = balancedBills
+    .filter((b) => !b.dayOfMonth)
+    .sort((a, b) => {
+      const aHasPayoff = !!a.payoffDate;
+      const bHasPayoff = !!b.payoffDate;
+      if (aHasPayoff && !bHasPayoff) return -1;
+      if (!aHasPayoff && bHasPayoff) return 1;
+      if (aHasPayoff && bHasPayoff) {
+        return new Date(a.payoffDate!).getTime() - new Date(b.payoffDate!).getTime();
+      }
+      return 0;
+    });
   // timedBills = balanced with a specific due day
-  const timedBills = balancedBills.filter((b) => !!b.dayOfMonth);
+  // Same ordering: constrained (payoff date) first, unconstrained last.
+  const timedBills = balancedBills
+    .filter((b) => !!b.dayOfMonth)
+    .sort((a, b) => {
+      const aHasPayoff = !!a.payoffDate;
+      const bHasPayoff = !!b.payoffDate;
+      if (aHasPayoff && !bHasPayoff) return -1;
+      if (!aHasPayoff && bHasPayoff) return 1;
+      if (aHasPayoff && bHasPayoff) {
+        return new Date(a.payoffDate!).getTime() - new Date(b.payoffDate!).getTime();
+      }
+      return 0;
+    });
 
   const alwaysTotal = alwaysBills.reduce((s, b) => s + Math.abs(b.amount), 0);
 
@@ -515,6 +541,43 @@ export function generateWeeklyBudgets(
           amount: amt,
           color: bill.sourceDebtId ? 'red' : bill.color,
         });
+      }
+    }
+
+    // ── Final rounding-residual guard ──────────────────────────────────────
+    // After all bills are placed for this month, check if any week total
+    // differs from the others by more than $0.01. If so, find an unconstrained
+    // always-bill entry (no payoff date) and adjust it to absorb the residual.
+    const allWeekTotals = monthWeekIndices.map((idx) =>
+      weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+      weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
+    );
+    if (allWeekTotals.length > 1) {
+      const targetAvg = allWeekTotals.reduce((s, t) => s + t, 0) / allWeekTotals.length;
+      const maxDeviation = Math.max(...allWeekTotals.map((t) => Math.abs(t - targetAvg)));
+      if (maxDeviation > 0.01) {
+        // Find an unconstrained alwaysBill (no payoff date) to use as the adjustment vehicle
+        const unconstrainedBill = alwaysBills.find((b) => !b.payoffDate);
+        if (unconstrainedBill) {
+          for (let j = 0; j < monthWeekIndices.length; j++) {
+            const idx = monthWeekIndices[j];
+            const residual = Math.round((targetAvg - allWeekTotals[j]) * 100) / 100;
+            if (Math.abs(residual) < 0.005) continue;
+            // Find the existing partial entry for this bill and adjust it
+            const existingEntry = weeks[idx].largeBills.find(
+              (lb) => lb.name === `Partial ${unconstrainedBill.name}`
+            );
+            if (existingEntry) {
+              existingEntry.amount = Math.round((existingEntry.amount + residual) * 100) / 100;
+            } else {
+              weeks[idx].largeBills.push({
+                name: `Partial ${unconstrainedBill.name}`,
+                amount: residual,
+                color: unconstrainedBill.sourceDebtId ? 'red' : unconstrainedBill.color,
+              });
+            }
+          }
+        }
       }
     }
   }
