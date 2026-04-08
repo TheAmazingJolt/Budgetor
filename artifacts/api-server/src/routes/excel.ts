@@ -1738,19 +1738,10 @@ function archivePastWeeksInExcel(
 }
 
 async function uploadWorkbookToOneDrive(token: string, fileId: string, wb: ExcelJS.Workbook): Promise<void> {
-  const outBuf = await wb.xlsx.writeBuffer();
-  const uploadRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    },
-    body: outBuf,
-  });
-  if (!uploadRes.ok) {
-    const errText = await uploadRes.text();
-    throw Object.assign(new Error(`Failed to upload Excel file: ${errText}`), { status: uploadRes.status });
-  }
+  const outBuf = Buffer.from(await wb.xlsx.writeBuffer());
+  // Delegate to reuploadBufferToOneDrive which uses a simple PUT for small files
+  // (<4 MB) and an upload session for larger workbooks to avoid size-limit failures.
+  await reuploadBufferToOneDrive(token, fileId, outBuf);
 }
 
 async function downloadWorkbookFromOneDrive(token: string, fileId: string): Promise<ExcelJS.Workbook> {
