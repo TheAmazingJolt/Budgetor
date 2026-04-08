@@ -1,12 +1,39 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import { db } from "@workspace/db";
 import { usersTable, savedBudgetsTable, type User, encryptJson, decryptJson, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq, and, lt } from "drizzle-orm";
 import { google } from "googleapis";
 import { createRemoteJWKSet, jwtVerify, SignJWT, importPKCS8 } from "jose";
 
+const guestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: true,
+  message: { error: "Too many requests, please try again later." },
+});
+
+const authInitiationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: true,
+  message: { error: "Too many requests, please try again later." },
+});
+
+const generalAuthLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: true,
+  message: { error: "Too many requests, please try again later." },
+});
+
 const router: IRouter = Router();
+
+router.use("/auth", generalAuthLimiter);
 
 declare module "express-session" {
   interface SessionData {
@@ -170,7 +197,7 @@ router.post("/auth/exchange", async (req: Request, res: Response): Promise<void>
   }
 });
 
-router.post("/auth/guest", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/guest", guestLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     await new Promise<void>((resolve, reject) => {
       req.session.regenerate((err) => (err ? reject(err) : resolve()));
@@ -349,7 +376,7 @@ function verifyAndConsumeOAuthState(_req: Request, stateParam: string | undefine
   }
 }
 
-router.get("/auth/login/google", (req: Request, res: Response) => {
+router.get("/auth/login/google", authInitiationLimiter, (req: Request, res: Response) => {
   const oauth2Client = getAccountOAuth2Client();
   if (!oauth2Client) {
     res.status(500).json({ error: "Google account login not configured. Set GOOGLE_ACCOUNT_REDIRECT_URI." });
@@ -375,7 +402,7 @@ router.get("/auth/login/google", (req: Request, res: Response) => {
   res.json({ url: authUrl });
 });
 
-router.get("/auth/login/google/callback", async (req: Request, res: Response): Promise<void> => {
+router.get("/auth/login/google/callback", authInitiationLimiter, async (req: Request, res: Response): Promise<void> => {
   const oauth2Client = getAccountOAuth2Client();
   if (!oauth2Client) {
     res.status(500).json({ error: "Google account login not configured" });
@@ -464,7 +491,7 @@ async function generateAppleClientSecret(): Promise<string> {
     .sign(privateKey);
 }
 
-router.get("/auth/login/apple", (req: Request, res: Response) => {
+router.get("/auth/login/apple", authInitiationLimiter, (req: Request, res: Response) => {
   if (!isAppleConfigured()) {
     res.status(500).json({ error: "Apple Sign-In not configured. Set APPLE_CLIENT_ID, APPLE_REDIRECT_URI, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY." });
     return;
@@ -488,7 +515,7 @@ router.get("/auth/login/apple", (req: Request, res: Response) => {
   res.json({ url: `https://appleid.apple.com/auth/authorize?${params.toString()}` });
 });
 
-router.post("/auth/login/apple/callback", async (req: Request, res: Response): Promise<void> => {
+router.post("/auth/login/apple/callback", authInitiationLimiter, async (req: Request, res: Response): Promise<void> => {
   const { id_token, code, state } = req.body as { id_token?: string; code?: string; state?: string };
   const clientId = process.env["APPLE_CLIENT_ID"];
 
