@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -54,10 +54,7 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
-const sessionSecret = process.env["SESSION_SECRET"];
-if (!sessionSecret && process.env["NODE_ENV"] === "production") {
-  throw new Error("SESSION_SECRET must be set in production.");
-}
+const sessionSecret = process.env["SESSION_SECRET"] ?? "";
 
 const PgSession = connectPgSimple(session);
 
@@ -71,7 +68,7 @@ const sessionStore = process.env["DATABASE_URL"]
 
 app.use(session({
   store: sessionStore,
-  secret: sessionSecret || "budget-automator-dev-secret",
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -83,5 +80,11 @@ app.use(session({
 }));
 
 app.use("/api", router);
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[unhandled error]", err);
+  res.status(500).json({ error: "Internal server error" });
+});
 
 export default app;

@@ -183,7 +183,10 @@ function AppRouting() {
       credentials: "include",
       body: JSON.stringify({ code: authCode }),
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Exchange failed: ${r.status}`);
+        return r.json();
+      })
       .then((data: { user?: AuthUser; token?: string }) => {
         if (data.token) {
           localStorage.setItem("auth_token", data.token);
@@ -202,7 +205,15 @@ function AppRouting() {
         }
       })
       .catch(() => {
-        authQuery.refetch();
+        const failParams = new URLSearchParams(window.location.search);
+        failParams.delete("auth_code");
+        const failSearch = failParams.toString();
+        const failUrl = window.location.pathname + (failSearch ? "?" + failSearch : "") + window.location.hash;
+        window.history.replaceState({}, "", failUrl);
+        toast({
+          title: "Sign-in failed — please try again.",
+          variant: "destructive",
+        });
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
