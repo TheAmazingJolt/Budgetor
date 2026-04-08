@@ -9,13 +9,33 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
-const allowedOrigins = process.env["CORS_ORIGIN"]
-  ? process.env["CORS_ORIGIN"].split(",").map(s => s.trim())
+// Production env vars that must be set before going live:
+//   CORS_ORIGIN  — comma-separated list of allowed frontend origins (e.g. https://app.budgify.com)
+//   SESSION_SECRET — secret used to sign session cookies
+//   DATABASE_URL — PostgreSQL connection string
+const corsOriginEnv = process.env["CORS_ORIGIN"];
+
+if (!corsOriginEnv) {
+  if (process.env["NODE_ENV"] === "production") {
+    console.error(
+      "[startup] CORS_ORIGIN must be set in production. Set it to your frontend domain (e.g. https://app.budgify.com).",
+    );
+    process.exit(1);
+  } else {
+    console.warn(
+      "[startup] CORS_ORIGIN is not set. Allowing all origins for development. Set CORS_ORIGIN before deploying to production.",
+    );
+  }
+}
+
+const allowedOrigins = corsOriginEnv
+  ? corsOriginEnv.split(",").map(s => s.trim())
   : undefined;
 
 app.use(cors({
   origin: allowedOrigins ?? true,
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 }));
 
 app.post(
