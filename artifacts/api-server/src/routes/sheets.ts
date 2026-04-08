@@ -1378,6 +1378,172 @@ function buildSavingsGoalRows(
   return { savingsRows, savingsRequests, savingsRowCount: savingsRows.length };
 }
 
+function parseLabelEndDate(label: string): Date | null {
+  const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
+  if (!m) return null;
+  const year = 2000 + parseInt(m[6]);
+  return new Date(year, parseInt(m[4]) - 1, parseInt(m[5]));
+}
+
+async function archivePastWeeksInSheet(
+  sheetsApi: sheets_v4.Sheets,
+  spreadsheetId: string,
+  budgetSheetTitle: string,
+  budgetSheetId: number,
+): Promise<number> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Read the budget sheet header row to find week columns
+  const escapedBudget = budgetSheetTitle.replace(/'/g, "''");
+  let headerValues: any[][];
+  try {
+    const resp = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${escapedBudget}'!1:1`,
+    });
+    headerValues = resp.data.values ?? [];
+  } catch {
+    return 0;
+  }
+
+  const headerRow = headerValues[0] ?? [];
+  const pastColGroups: { startCol: number; endCol: number }[] = [];
+
+  for (let c = 0; c < headerRow.length; c++) {
+    const label = String(headerRow[c] ?? "").trim();
+    if (!label.toLowerCase().startsWith("budget")) continue;
+    const endDate = parseLabelEndDate(label);
+    if (!endDate) continue;
+    if (endDate < today) {
+      pastColGroups.push({ startCol: c, endCol: c + 1 });
+      c++; // skip the value column
+    }
+  }
+
+  if (pastColGroups.length === 0) return 0;
+
+  // Determine the full row count (need to read the budget sheet's used range)
+  let totalRows = 30;
+  try {
+    const usedRangeResp = await sheetsApi.spreadsheets.get({
+      spreadsheetId,
+      ranges: [`'${escapedBudget}'!A1:A`],
+      fields: "sheets.data.rowData.values",
+    });
+    const rowCount = usedRangeResp.data.sheets?.[0]?.data?.[0]?.rowData?.length ?? 30;
+    totalRows = rowCount;
+  } catch { /* use default */ }
+
+  // Read all past-week column data
+  const pastRanges = pastColGroups.map(g =>
+    `'${escapedBudget}'!${columnToLetter(g.startCol)}1:${columnToLetter(g.endCol)}${totalRows}`
+  );
+
+  let pastData: any[][][] = [];
+  try {
+    const batchResp = await sheetsApi.spreadsheets.values.batchGet({
+      spreadsheetId,
+      ranges: pastRanges,
+    });
+    pastData = (batchResp.data.valueRanges ?? []).map(vr => vr.values ?? []);
+  } catch {
+    return 0;
+  }
+
+  // Ensure Archive sheet exists; create it if not
+  const metaResp = await sheetsApi.spreadsheets.get({ spreadsheetId });
+  const allSheets = metaResp.data.sheets ?? [];
+  let archiveSheet = allSheets.find(s => s.properties?.title === "Archive");
+  let archiveSheetId: number;
+
+  if (!archiveSheet) {
+    const addResp = await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: "Archive" } } }],
+      },
+    });
+    archiveSheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 1;
+  } else {
+    archiveSheetId = archiveSheet.properties?.sheetId ?? 1;
+  }
+
+  // Determine the next free column in the Archive sheet
+  let archiveStartCol = 0;
+  try {
+    const archiveResp = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId,
+      range: "Archive!1:1",
+    });
+    const archiveHeader = archiveResp.data.values?.[0] ?? [];
+    // Find the last non-empty column
+    let lastNonEmpty = -1;
+    for (let c = archiveHeader.length - 1; c >= 0; c--) {
+      if (archiveHeader[c] && String(archiveHeader[c]).trim() !== "") {
+        lastNonEmpty = c;
+        break;
+      }
+    }
+    archiveStartCol = lastNonEmpty + 1;
+    // Round up to even column if not even (weeks are 2-col groups)
+    if (archiveStartCol % 2 !== 0) archiveStartCol++;
+  } catch { /* start at 0 */ }
+
+  // Append past-week data to Archive sheet
+  for (let i = 0; i < pastData.length; i++) {
+    const colData = pastData[i];
+    if (!colData || colData.length === 0) continue;
+    const destStartCol = columnToLetter(archiveStartCol + i * 2);
+    const destEndCol = columnToLetter(archiveStartCol + i * 2 + 1);
+    const destRange = `Archive!${destStartCol}1:${destEndCol}${colData.length}`;
+    try {
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId,
+        range: destRange,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: colData },
+      });
+    } catch { /* continue with other groups */ }
+  }
+
+  // Clear past-week columns from Budget sheet (values + formatting)
+  const clearRanges = pastColGroups.map(g =>
+    `'${escapedBudget}'!${columnToLetter(g.startCol)}1:${columnToLetter(g.endCol)}${totalRows}`
+  );
+  try {
+    await sheetsApi.spreadsheets.values.batchClear({
+      spreadsheetId,
+      requestBody: { ranges: clearRanges },
+    });
+  } catch { /* non-fatal */ }
+
+  // Clear formatting for past-week columns
+  const formatClearRequests = pastColGroups.map(g => ({
+    repeatCell: {
+      range: {
+        sheetId: budgetSheetId,
+        startRowIndex: 0,
+        endRowIndex: totalRows,
+        startColumnIndex: g.startCol,
+        endColumnIndex: g.endCol + 1,
+      },
+      cell: {},
+      fields: "userEnteredFormat",
+    },
+  }));
+  if (formatClearRequests.length > 0) {
+    try {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: formatClearRequests },
+      });
+    } catch { /* non-fatal */ }
+  }
+
+  return pastColGroups.length;
+}
+
 async function writeBudgetToSheet(
   sheetsApi: sheets_v4.Sheets,
   spreadsheetId: string,
@@ -2148,8 +2314,32 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
     const sheetTitleStr = sheetTitle ?? "Budget";
     const sheetColumnCount = sheet?.properties?.gridProperties?.columnCount ?? 1000;
 
+    console.log("[sheets/write] archiving past weeks");
+    let effectiveStartCol = startCol;
+    try {
+      const archivedCount = await archivePastWeeksInSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId);
+      if (archivedCount > 0) {
+        // Re-read the header to find how many current-week columns remain
+        try {
+          const hdrResp = await sheetsApi.spreadsheets.values.get({
+            spreadsheetId,
+            range: `'${sheetTitleStr.replace(/'/g, "''")}'!1:1`,
+          });
+          const hdr = hdrResp.data.values?.[0] ?? [];
+          let lastCurrentCol = -1;
+          for (let c = 0; c < hdr.length; c++) {
+            const lbl = String(hdr[c] ?? "").trim();
+            if (lbl.toLowerCase().startsWith("budget")) lastCurrentCol = c + 1; // +1 for the value col
+          }
+          effectiveStartCol = lastCurrentCol >= 0 ? lastCurrentCol + 1 : 0;
+        } catch { /* fall back to original startCol */ }
+      }
+    } catch (archiveErr: any) {
+      console.log("[sheets/write] archive step error (non-fatal):", archiveErr?.message);
+    }
+
     console.log("[sheets/write] calling writeBudgetToSheet");
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, startCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, effectiveStartCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
     console.log("[sheets/write] writeBudgetToSheet OK");
     clearTimeout(timeout);
     if (res.headersSent) return;

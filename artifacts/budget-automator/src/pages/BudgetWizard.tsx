@@ -811,7 +811,9 @@ export function BudgetWizard({
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
-  const [step2Tab, setStep2Tab] = useState<"budget" | "savings">("budget");
+  const [step2Tab, setStep2Tab] = useState<"budget" | "savings" | "archive">("budget");
+  const [pastWeeks, setPastWeeks] = useState<UnifiedWeek[]>([]);
+  const archiveToastFiredRef = useRef<string>("");
   const [editDraft, setEditDraft] = useState<{ paycheck: string; openingBalance: string; items: { name: string; amount: string }[] } | null>(null);
   const [showEditOb, setShowEditOb] = useState(false);
   const [visitedStep1, setVisitedStep1] = useState(false);
@@ -1888,6 +1890,71 @@ export function BudgetWizard({
     if (inputMode === "scratch") return scratchExistingWeeks;
     return [];
   };
+
+  React.useEffect(() => {
+    if (step !== 2) return;
+    const sourceExisting = getExistingWeeks();
+    const budgetStartDate = newWeekStartDate ? new Date(newWeekStartDate + 'T00:00:00') : null;
+    const isBeforeBudgetStart = (label: string) => {
+      if (!budgetStartDate) return false;
+      const parsed = parseLabelDates(label);
+      if (!parsed) return false;
+      return parsed.start < budgetStartDate;
+    };
+    const rawHistory: UnifiedWeek[] = sourceExisting
+      .filter((w: any) => w.items || w.openingBalance !== undefined)
+      .filter((w: any) => !isBeforeBudgetStart(w.label))
+      .map((w: any) => ({
+        label: w.label,
+        openingBalance: w.openingBalance as number | undefined,
+        paycheck: w.paycheck as number | undefined,
+        paycheckBreakdown: w.paycheckBreakdown as PaycheckBreakdown[] | undefined,
+        items: (w.items ?? w.bills ?? []) as { name: string; amount: number }[],
+        remaining: w.remaining as number,
+        isNew: false,
+      }));
+    const rawNew: UnifiedWeek[] = (generatedWeek?.weeks ?? []).map((w) => ({
+      label: w.weekLabel,
+      openingBalance: w.openingBalance as number | undefined,
+      paycheck: w.paycheck as number | undefined,
+      paycheckBreakdown: w.paycheckBreakdown as PaycheckBreakdown[] | undefined,
+      items: (w.bills ?? []) as { name: string; amount: number }[],
+      remaining: w.closingBalance,
+      isNew: true,
+    }));
+    const newLabels = new Set(rawNew.map(w => w.label));
+    const filteredHistory = rawHistory.filter(w => !newLabels.has(w.label));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const combined = [...filteredHistory, ...rawNew].filter(Boolean) as UnifiedWeek[];
+    const computed = combined.filter(w => {
+      const d = parseLabelDates(w.label);
+      return d !== null && d.end < today;
+    });
+    const currentWeeks = combined.filter(w => {
+      const d = parseLabelDates(w.label);
+      return d === null || d.end >= today;
+    });
+    const archiveKey = computed.map(w => w.label).join("|");
+    setPastWeeks(computed);
+    if (computed.length > 0 && currentWeeks.length === 0) {
+      setStep2Tab("archive");
+    }
+    if (computed.length > 0 && archiveKey !== archiveToastFiredRef.current) {
+      archiveToastFiredRef.current = archiveKey;
+      const fmt = (w: UnifiedWeek) => {
+        const d = parseLabelDates(w.label);
+        if (!d) return w.label;
+        return `${d.start.getMonth() + 1}/${d.start.getDate()}–${d.end.getMonth() + 1}/${d.end.getDate()}`;
+      };
+      const ranges = computed.slice(0, 3).map(fmt).join(", ");
+      const extra = computed.length > 3 ? ` +${computed.length - 3} more` : "";
+      toast({
+        title: `${computed.length} past week${computed.length !== 1 ? "s" : ""} archived — visible in the Archive tab`,
+        description: ranges + extra,
+      });
+    }
+  }, [step, sheetReadQuery.data, excelReadQuery.data, cloudExistingWeeks, scratchExistingWeeks, generatedWeek, newWeekStartDate]);
 
   const handleSaveBudget = () => {
     if (!saveBudgetName.trim()) return;
@@ -4292,9 +4359,20 @@ export function BudgetWizard({
 
                 const newWeekLabels = new Set(rawNewWeeks.map(w => w.label));
                 const filteredHistoryWeeks = rawHistoryWeeks.filter(w => !newWeekLabels.has(w.label));
-                const allWeeks = [...filteredHistoryWeeks, ...rawNewWeeks]
+
+                const todayForArchive = new Date();
+                todayForArchive.setHours(0, 0, 0, 0);
+                const isPastWeek = (w: UnifiedWeek) => {
+                  const d = parseLabelDates(w.label);
+                  return d !== null && d.end < todayForArchive;
+                };
+
+                const combinedWeeks = [...filteredHistoryWeeks, ...rawNewWeeks]
                   .map(applyEdit)
                   .filter(Boolean) as UnifiedWeek[];
+
+                const allWeeks = combinedWeeks.filter(w => !isPastWeek(w));
+
                 const hasHistory = rawHistoryWeeks.length > 0 || cloudOnlyWeeks.length > 0;
                 const newCount = rawNewWeeks.length;
                 const hasEdits = Object.keys(weekEdits).length > 0;
@@ -4412,7 +4490,7 @@ export function BudgetWizard({
                       </div>
                     )}
 
-                    {allWeeks.length > 0 && (
+                    {(allWeeks.length > 0 || pastWeeks.length > 0) && (
                       <div className="space-y-3">
                         <div className="flex items-center flex-wrap gap-2">
                           <Eye className="w-4 h-4 text-muted-foreground" />
@@ -4435,6 +4513,15 @@ export function BudgetWizard({
                                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "savings" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                               >
                                 Savings
+                              </button>
+                            )}
+                            {pastWeeks.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setStep2Tab("archive")}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "archive" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                              >
+                                Archive
                               </button>
                             )}
                           </div>
@@ -4501,6 +4588,68 @@ export function BudgetWizard({
                               if (best) { setCheckInWeek(best); setCheckInDialogOpen(true); }
                             }}
                           />
+                        )}
+                        {step2Tab === "archive" && pastWeeks.length > 0 && (
+                          <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm opacity-80">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border/40">
+                                  {pastWeeks.map((week, wi) => (
+                                    <th
+                                      key={wi}
+                                      colSpan={2}
+                                      className="px-4 py-3 text-left font-bold border-r border-border/30 last:border-r-0 whitespace-nowrap bg-slate-200 text-slate-500"
+                                    >
+                                      {week.label}
+                                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded-full">
+                                        Past
+                                      </span>
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(() => {
+                                  const maxRows = Math.max(...pastWeeks.map(w => {
+                                    let count = 0;
+                                    if (w.openingBalance !== undefined) count++;
+                                    if (w.paycheck !== undefined) count++;
+                                    count += w.items.length;
+                                    return count;
+                                  }));
+                                  const rows: React.ReactNode[] = [];
+                                  for (let r = 0; r < maxRows; r++) {
+                                    rows.push(
+                                      <tr key={r} className={r % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                        {pastWeeks.map((week, wi) => {
+                                          const rowItems: { label: string; value: number }[] = [];
+                                          if (week.openingBalance !== undefined) rowItems.push({ label: "Remaining Acct", value: week.openingBalance });
+                                          if (week.paycheck !== undefined) rowItems.push({ label: "Paycheck", value: week.paycheck });
+                                          for (const bill of week.items) rowItems.push({ label: bill.name, value: bill.amount });
+                                          const item = rowItems[r];
+                                          if (!item) return <td key={`${wi}-l`} colSpan={2} className="border-r border-border/30 last:border-r-0" />;
+                                          return [
+                                            <td key={`${wi}-l`} className="px-3 py-1.5 whitespace-nowrap text-slate-500">{item.label}</td>,
+                                            <td key={`${wi}-v`} className="px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 text-slate-500">${item.value.toFixed(2)}</td>,
+                                          ];
+                                        })}
+                                      </tr>
+                                    );
+                                  }
+                                  return rows;
+                                })()}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t border-border/40 font-semibold">
+                                  {pastWeeks.map((week, wi) => (
+                                    <td key={wi} colSpan={2} className="px-3 py-2 text-right tabular-nums border-r border-border/30 last:border-r-0 text-slate-500">
+                                      Remaining: ${week.remaining.toFixed(2)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
                         )}
                         {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
