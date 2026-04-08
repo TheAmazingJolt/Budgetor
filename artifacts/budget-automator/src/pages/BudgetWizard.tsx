@@ -1950,8 +1950,8 @@ export function BudgetWizard({
       const ranges = computed.slice(0, 3).map(fmt).join(", ");
       const extra = computed.length > 3 ? ` +${computed.length - 3} more` : "";
       toast({
-        title: `${computed.length} past week${computed.length !== 1 ? "s" : ""} archived — visible in the Archive tab`,
-        description: ranges + extra,
+        title: `${computed.length} past week${computed.length !== 1 ? "s" : ""} found — visible in the Archive tab`,
+        description: (ranges + extra) + " They'll move to the Archive sheet when you next update.",
       });
     }
   }, [step, sheetReadQuery.data, excelReadQuery.data, cloudExistingWeeks, scratchExistingWeeks, generatedWeek, newWeekStartDate]);
@@ -3533,7 +3533,11 @@ export function BudgetWizard({
                           ))}
                         </div>
                       ) : savedBudgetsQuery.data ? (
-                        <p className="text-sm text-muted-foreground">No saved budgets yet. Create a new budget and save it to access it here.</p>
+                        <div className="flex flex-col items-center gap-2 py-6 text-center">
+                          <FolderOpen className="w-10 h-10 text-muted-foreground/40" />
+                          <p className="text-sm font-medium text-muted-foreground">No saved budgets yet</p>
+                          <p className="text-xs text-muted-foreground/70">Generate your first budget and save it to see it here.</p>
+                        </div>
                       ) : null}
                     </>
                   ) : (
@@ -4490,15 +4494,60 @@ export function BudgetWizard({
                       </div>
                     )}
 
+                    {generateMutation.isPending && allWeeks.length === 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-muted animate-pulse" />
+                          <div className="h-5 w-32 rounded bg-muted animate-pulse" />
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border/40">
+                                {[1, 2, 3].map((col) => (
+                                  <th key={col} colSpan={2} className="px-4 py-3 bg-slate-100">
+                                    <div className="h-4 w-28 rounded bg-slate-200 animate-pulse" />
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[1, 2, 3, 4, 5, 6].map((row) => (
+                                <tr key={row} className={row % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                  {[1, 2, 3].map((col) => [
+                                    <td key={`${col}-l`} className="px-3 py-2">
+                                      <div className="h-3.5 rounded bg-muted animate-pulse" style={{ width: `${50 + ((row + col) % 3) * 20}px` }} />
+                                    </td>,
+                                    <td key={`${col}-v`} className="px-3 py-2 border-r border-border/30 last:border-r-0">
+                                      <div className="h-3.5 w-14 rounded bg-muted animate-pulse ml-auto" />
+                                    </td>,
+                                  ])}
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t border-border/40">
+                                {[1, 2, 3].map((col) => (
+                                  <td key={col} colSpan={2} className="px-3 py-2 border-r border-border/30 last:border-r-0">
+                                    <div className="h-4 w-24 rounded bg-muted animate-pulse ml-auto" />
+                                  </td>
+                                ))}
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     {(allWeeks.length > 0 || pastWeeks.length > 0) && (
                       <div className="space-y-3">
-                        <div className="flex items-center flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Eye className="w-4 h-4 text-muted-foreground" />
                           <h3 className="text-lg font-semibold text-foreground">
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
-                          <div className="flex-1" />
-                          <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5">
+                          <div className="flex-1 min-w-0" />
+                          <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5 shrink-0">
                             <button
                               type="button"
                               onClick={() => setStep2Tab("budget")}
@@ -4527,13 +4576,13 @@ export function BudgetWizard({
                           </div>
                           {step2Tab === "budget" && (
                             <>
-                              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
+                              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0" onClick={handleJumpToToday}>
                                 <CalendarDays className="w-3.5 h-3.5" /> Today
                               </Button>
                               <Button
                                 variant={editModeOn ? "default" : "outline"}
                                 size="sm"
-                                className={`h-8 text-xs gap-1.5 ${editModeOn ? "bg-teal-600 hover:bg-teal-700" : ""}`}
+                                className={`h-8 text-xs gap-1.5 shrink-0 ${editModeOn ? "bg-teal-600 hover:bg-teal-700" : ""}`}
                                 onClick={() => { setEditModeOn(v => !v); setSelectedWeekIdx(null); setEditDraft(null); }}
                               >
                                 <Pencil className="w-3.5 h-3.5" /> {editModeOn ? "Done" : "Edit"}
@@ -4541,7 +4590,7 @@ export function BudgetWizard({
                               {hasEdits && activeCloudBudgetId && (
                                 <Button
                                   size="sm"
-                                  className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  className="h-8 text-xs gap-1.5 shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
                                   onClick={() => handleQuickUpdate(syncOnUpdate ? handleGenerateAndUpdateSheet : undefined)}
                                   disabled={cloudSaveMutation.isPending || (syncOnUpdate && isUpdatingLinkedSheet)}
                                 >
@@ -4549,7 +4598,7 @@ export function BudgetWizard({
                                 </Button>
                               )}
                               {hasEdits && (
-                                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setWeekEdits({})}>
+                                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground shrink-0" onClick={() => setWeekEdits({})}>
                                   Reset edits
                                 </Button>
                               )}
@@ -4994,15 +5043,25 @@ export function BudgetWizard({
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
-                      onClick={handleWriteToExcel}
+                      onClick={() => {
+                        if (isSignedIn && !isGuest && !isPro) {
+                          toast({ title: "Pro feature", description: "Upgrade to Pro to sync budgets to Excel Online.", variant: "destructive" });
+                          return;
+                        }
+                        handleWriteToExcel();
+                      }}
                       disabled={isWritingToExcel || excelWriteSuccess}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
-                        excelWriteSuccess
+                        !isPro && isSignedIn && !isGuest
+                          ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/25 hover:shadow-amber-500/30"
+                          : excelWriteSuccess
                           ? "bg-emerald-600"
                           : "bg-gradient-to-r from-blue-700 to-blue-600 shadow-blue-600/25 hover:shadow-blue-600/30"
                       }`}
                     >
-                      {isWritingToExcel ? (
+                      {!isPro && isSignedIn && !isGuest ? (
+                        <><Crown className="w-5 h-5 mr-2" /> Upgrade to sync Excel Online</>
+                      ) : isWritingToExcel ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Excel Online…</>
                       ) : excelWriteSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Written to Excel Online</>
@@ -5112,18 +5171,26 @@ export function BudgetWizard({
                     <Button
                       size="lg"
                       onClick={() => {
+                        if (isSignedIn && !isGuest && !isPro) {
+                          toast({ title: "Pro feature", description: "Upgrade to Pro to save budgets to Excel Online.", variant: "destructive" });
+                          return;
+                        }
                         if (newExcelSaveSuccess) return;
                         setExportNameInput(buildDefaultExportTitle());
                         setPendingExportType("excel");
                       }}
                       disabled={isSavingToNewExcel || newExcelSaveSuccess || isRegeneratingForExport}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
-                        newExcelSaveSuccess
+                        !isPro && isSignedIn && !isGuest
+                          ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/25 hover:shadow-amber-500/30"
+                          : newExcelSaveSuccess
                           ? "bg-emerald-600"
                           : "bg-gradient-to-r from-teal-600 to-teal-500 shadow-teal-500/25 hover:shadow-teal-500/30"
                       }`}
                     >
-                      {isRegeneratingForExport ? (
+                      {!isPro && isSignedIn && !isGuest ? (
+                        <><Crown className="w-5 h-5 mr-2" /> Upgrade to save to Excel Online</>
+                      ) : isRegeneratingForExport ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Regenerating…</>
                       ) : isSavingToNewExcel ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to OneDrive…</>
