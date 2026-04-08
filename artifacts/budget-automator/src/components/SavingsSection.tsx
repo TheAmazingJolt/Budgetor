@@ -38,18 +38,27 @@ interface SavingsGoal {
   updatedAt: string;
 }
 
+interface LumpSumDebtForSavings {
+  id: string;
+  name: string;
+  balance: number;
+  dueDate: string | null;
+  originalAmount: number;
+}
+
 interface SavingsSectionProps {
   bills: Bill[];
   weeks: WeekForSavings[];
   budgetId?: string;
   checkins?: WeeklyCheckIn[];
+  lumpSumDebts?: LumpSumDebtForSavings[];
   onContributionChange?: () => void;
   onOpenCheckIn?: () => void;
   onAddBill?: (bill: Bill) => void;
 }
 
 export function SavingsSection({
-  bills, weeks, budgetId, checkins: externalCheckins,
+  bills, weeks, budgetId, checkins: externalCheckins, lumpSumDebts = [],
   onContributionChange, onOpenCheckIn, onAddBill,
 }: SavingsSectionProps) {
   const today = new Date();
@@ -164,6 +173,11 @@ export function SavingsSection({
   const { sinkingFunds, balanced } = computeSavings(
     bills, weeks, today, contributions, checkins,
   );
+  const activeLumpSumDebts = lumpSumDebts.filter(d => {
+    if (!d.dueDate) return false;
+    const due = new Date(d.dueDate + "T00:00:00");
+    return due > today && d.balance > 0;
+  });
   const hasData = sinkingFunds.length > 0 || balanced.length > 0;
 
   const refDate = deriveReferenceDate(weeks, today);
@@ -187,7 +201,7 @@ export function SavingsSection({
     ? checkins.some(c => c.weekLabel === currentWeek.label)
     : false;
 
-  if (!hasData && !budgetId) {
+  if (!hasData && activeLumpSumDebts.length === 0 && !budgetId) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-3">
         <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
@@ -203,7 +217,7 @@ export function SavingsSection({
     );
   }
 
-  if (!hasData && budgetId) {
+  if (!hasData && activeLumpSumDebts.length === 0 && budgetId) {
     return (
       <div className="space-y-6 py-2">
         <div className="flex flex-col items-center justify-center py-10 px-6 text-center space-y-3">
@@ -359,6 +373,10 @@ export function SavingsSection({
           onAddBillForGoal={handleAddBill ? (name, amt) => handleAddBill({ name, amount: -Math.abs(amt), type: "weekly", color: "teal", category: "Savings", userColor: true }) : undefined}
         />
       )}
+
+      {activeLumpSumDebts.length > 0 && (
+        <LumpSumSection debts={activeLumpSumDebts} today={today} />
+      )}
     </div>
   );
 }
@@ -370,6 +388,67 @@ function fmt(n: number) {
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function LumpSumSection({ debts, today }: { debts: LumpSumDebtForSavings[]; today: Date }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const items = debts.map(d => {
+    const due = new Date(d.dueDate! + "T00:00:00");
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const weeksRemaining = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
+    const weeklySetAside = d.balance / weeksRemaining;
+    const progressPct = d.originalAmount > 0
+      ? Math.min(100, ((d.originalAmount - d.balance) / d.originalAmount) * 100)
+      : 0;
+    return { debt: d, due, weeksRemaining, weeklySetAside, progressPct };
+  });
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        className="flex items-center gap-2 w-full text-left"
+        onClick={() => setCollapsed(c => !c)}
+      >
+        <CalendarDays className="w-4 h-4 text-rose-600 shrink-0" />
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-rose-700 flex-1">
+          Lump-Sum Payments
+        </h4>
+        <ChevronDown className={`w-4 h-4 text-rose-500 shrink-0 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`} />
+      </button>
+      {!collapsed && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {items.map(({ debt, due, weeksRemaining, weeklySetAside, progressPct }) => (
+            <div key={debt.id} className="rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-sm text-rose-900 leading-tight">{debt.name}</p>
+                <span className="text-sm font-bold text-rose-700 shrink-0">${fmt(weeklySetAside)}<span className="text-xs font-normal text-rose-500">/wk</span></span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-rose-700">
+                  <span>Balance</span>
+                  <span className="font-medium">${fmt(debt.balance)}</span>
+                </div>
+                {debt.originalAmount > debt.balance && (
+                  <div className="flex justify-between text-xs text-rose-500">
+                    <span>Paid down</span>
+                    <span>${fmt(debt.originalAmount - debt.balance)}</span>
+                  </div>
+                )}
+                <Progress value={progressPct} className="h-1.5 bg-rose-100 mt-1" />
+              </div>
+              <div className="flex items-center gap-1 text-xs text-rose-600">
+                <CalendarDays className="w-3 h-3 shrink-0" />
+                <span>Due {due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                <span className="ml-1">· {weeksRemaining} wk{weeksRemaining !== 1 ? "s" : ""} away</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface CardActionsProps {

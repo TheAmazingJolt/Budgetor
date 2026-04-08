@@ -402,6 +402,7 @@ export const SavedBudgetListResponse = zod.object({
               "car_loan",
               "installment",
               "collections",
+              "lump_sum",
             ]),
             balance: zod
               .number()
@@ -468,6 +469,12 @@ export const SavedBudgetListResponse = zod.object({
               .describe(
                 "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
               ),
+            dueDate: zod
+              .string()
+              .nullish()
+              .describe(
+                "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+              ),
           }),
         )
         .optional(),
@@ -491,6 +498,22 @@ export const SavedBudgetListResponse = zod.object({
         .describe(
           "Web URL to open the linked Excel file (null for Google Sheets or if not saved)",
         ),
+      linkedGoogleSheetId: zod
+        .string()
+        .nullish()
+        .describe("ID of the linked Google Sheet (null if no link)"),
+      linkedGoogleSheetName: zod
+        .string()
+        .nullish()
+        .describe("Display name of the linked Google Sheet"),
+      linkedExcelSheetId: zod
+        .string()
+        .nullish()
+        .describe("ID of the linked Excel file (null if no link)"),
+      linkedExcelSheetName: zod
+        .string()
+        .nullish()
+        .describe("Display name of the linked Excel file"),
       createdAt: zod.date(),
       updatedAt: zod.date(),
     }),
@@ -518,6 +541,7 @@ export const SavedBudgetCreateBody = zod.object({
           "car_loan",
           "installment",
           "collections",
+          "lump_sum",
         ]),
         balance: zod
           .number()
@@ -582,6 +606,12 @@ export const SavedBudgetCreateBody = zod.object({
           .describe(
             "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
+        dueDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+          ),
       }),
     )
     .optional(),
@@ -608,6 +638,7 @@ export const SavedBudgetCreateResponse = zod.object({
             "car_loan",
             "installment",
             "collections",
+            "lump_sum",
           ]),
           balance: zod
             .number()
@@ -674,6 +705,12 @@ export const SavedBudgetCreateResponse = zod.object({
             .describe(
               "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
             ),
+          dueDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+            ),
         }),
       )
       .optional(),
@@ -697,6 +734,22 @@ export const SavedBudgetCreateResponse = zod.object({
       .describe(
         "Web URL to open the linked Excel file (null for Google Sheets or if not saved)",
       ),
+    linkedGoogleSheetId: zod
+      .string()
+      .nullish()
+      .describe("ID of the linked Google Sheet (null if no link)"),
+    linkedGoogleSheetName: zod
+      .string()
+      .nullish()
+      .describe("Display name of the linked Google Sheet"),
+    linkedExcelSheetId: zod
+      .string()
+      .nullish()
+      .describe("ID of the linked Excel file (null if no link)"),
+    linkedExcelSheetName: zod
+      .string()
+      .nullish()
+      .describe("Display name of the linked Excel file"),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -727,6 +780,7 @@ export const SavedBudgetUpdateBody = zod.object({
           "car_loan",
           "installment",
           "collections",
+          "lump_sum",
         ]),
         balance: zod
           .number()
@@ -791,6 +845,12 @@ export const SavedBudgetUpdateBody = zod.object({
           .describe(
             "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
           ),
+        dueDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+          ),
       }),
     )
     .optional(),
@@ -812,6 +872,22 @@ export const SavedBudgetUpdateBody = zod.object({
     .string()
     .nullish()
     .describe("Web URL to open the linked Excel file (null to clear)"),
+  linkedGoogleSheetId: zod
+    .string()
+    .nullish()
+    .describe("ID of the linked Google Sheet (null clears the link)"),
+  linkedGoogleSheetName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the linked Google Sheet"),
+  linkedExcelSheetId: zod
+    .string()
+    .nullish()
+    .describe("ID of the linked Excel file (null clears the link)"),
+  linkedExcelSheetName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the linked Excel file"),
 });
 
 export const savedBudgetUpdateResponseBudgetDebtsItemDueDayMax = 31;
@@ -835,6 +911,7 @@ export const SavedBudgetUpdateResponse = zod.object({
             "car_loan",
             "installment",
             "collections",
+            "lump_sum",
           ]),
           balance: zod
             .number()
@@ -901,6 +978,12 @@ export const SavedBudgetUpdateResponse = zod.object({
             .describe(
               "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
             ),
+          dueDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+            ),
         }),
       )
       .optional(),
@@ -924,6 +1007,22 @@ export const SavedBudgetUpdateResponse = zod.object({
       .describe(
         "Web URL to open the linked Excel file (null for Google Sheets or if not saved)",
       ),
+    linkedGoogleSheetId: zod
+      .string()
+      .nullish()
+      .describe("ID of the linked Google Sheet (null if no link)"),
+    linkedGoogleSheetName: zod
+      .string()
+      .nullish()
+      .describe("Display name of the linked Google Sheet"),
+    linkedExcelSheetId: zod
+      .string()
+      .nullish()
+      .describe("ID of the linked Excel file (null if no link)"),
+    linkedExcelSheetName: zod
+      .string()
+      .nullish()
+      .describe("Display name of the linked Excel file"),
     createdAt: zod.date(),
     updatedAt: zod.date(),
   }),
@@ -946,6 +1045,7 @@ export const SavedBudgetDeleteResponse = zod.object({
 export const GoogleAuthStatusResponse = zod.object({
   configured: zod.boolean(),
   authenticated: zod.boolean(),
+  accountEmail: zod.string().nullish(),
 });
 
 /**
@@ -1259,6 +1359,7 @@ export const SheetWriteBody = zod.object({
           "car_loan",
           "installment",
           "collections",
+          "lump_sum",
         ]),
         balance: zod
           .number()
@@ -1322,6 +1423,12 @@ export const SheetWriteBody = zod.object({
           .nullish()
           .describe(
             "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
+          ),
+        dueDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
       }),
     )
@@ -1415,6 +1522,7 @@ export const SheetCreateAndWriteBody = zod.object({
           "car_loan",
           "installment",
           "collections",
+          "lump_sum",
         ]),
         balance: zod
           .number()
@@ -1478,6 +1586,12 @@ export const SheetCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
+          ),
+        dueDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
       }),
     )
@@ -1552,6 +1666,7 @@ export const SheetCreateAndWriteResponse = zod.object({
 export const MicrosoftAuthStatusResponse = zod.object({
   configured: zod.boolean(),
   authenticated: zod.boolean(),
+  accountEmail: zod.string().nullish(),
 });
 
 /**
@@ -1809,6 +1924,7 @@ export const ExcelWriteBody = zod.object({
           "car_loan",
           "installment",
           "collections",
+          "lump_sum",
         ]),
         balance: zod
           .number()
@@ -1872,6 +1988,12 @@ export const ExcelWriteBody = zod.object({
           .nullish()
           .describe(
             "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
+          ),
+        dueDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
       }),
     )
@@ -2021,6 +2143,7 @@ export const ExcelCreateAndWriteBody = zod.object({
           "car_loan",
           "installment",
           "collections",
+          "lump_sum",
         ]),
         balance: zod
           .number()
@@ -2084,6 +2207,12 @@ export const ExcelCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
+          ),
+        dueDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
       }),
     )
@@ -2376,6 +2505,7 @@ export const GetUserDebtsResponse = zod.object({
         "car_loan",
         "installment",
         "collections",
+        "lump_sum",
       ]),
       balance: zod.number().describe("Current balance owed (positive number)"),
       interestRate: zod
@@ -2438,6 +2568,12 @@ export const GetUserDebtsResponse = zod.object({
         .describe(
           "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
         ),
+      dueDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+        ),
     }),
   ),
 });
@@ -2460,6 +2596,7 @@ export const UpdateUserDebtsBody = zod.object({
         "car_loan",
         "installment",
         "collections",
+        "lump_sum",
       ]),
       balance: zod.number().describe("Current balance owed (positive number)"),
       interestRate: zod
@@ -2522,6 +2659,12 @@ export const UpdateUserDebtsBody = zod.object({
         .describe(
           "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
         ),
+      dueDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+        ),
     }),
   ),
 });
@@ -2540,6 +2683,7 @@ export const UpdateUserDebtsResponse = zod.object({
         "car_loan",
         "installment",
         "collections",
+        "lump_sum",
       ]),
       balance: zod.number().describe("Current balance owed (positive number)"),
       interestRate: zod
@@ -2601,6 +2745,12 @@ export const UpdateUserDebtsResponse = zod.object({
         .nullish()
         .describe(
           "Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance\/rate formula.",
+        ),
+      dueDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
         ),
     }),
   ),

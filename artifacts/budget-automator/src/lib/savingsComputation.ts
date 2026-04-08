@@ -17,7 +17,7 @@ export interface WeeklyCheckIn {
   id: string;
   weekLabel: string;
   itemName: string;
-  itemType: "balanced" | "debt" | "yearly";
+  itemType: "balanced" | "debt" | "yearly" | "goal";
   plannedAmount: number;
   actualAmount: number;
 }

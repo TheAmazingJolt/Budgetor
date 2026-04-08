@@ -9,4 +9,5 @@
 export interface GoogleAuthStatus {
   configured: boolean;
   authenticated: boolean;
+  accountEmail?: string | null;
 }

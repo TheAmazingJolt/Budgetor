@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import type { Debt } from "@workspace/api-client-react";
 
-const DEBT_TYPES = ["credit_card", "personal_loan", "student_loan", "car_loan", "installment", "collections"] as const;
+const DEBT_TYPES = ["credit_card", "personal_loan", "student_loan", "car_loan", "installment", "collections", "lump_sum"] as const;
 
 const PAYMENT_FREQUENCIES = ["monthly", "weekly", "biweekly"] as const;
 
@@ -25,16 +25,33 @@ const formSchema = z.object({
   type: z.enum(DEBT_TYPES),
   balance: z.coerce.number().min(0.01, "Balance must be greater than 0"),
   interestRate: z.coerce.number().min(0).max(100).nullable().optional(),
-  minimumPayment: z.coerce.number().min(0.01, "Minimum payment is required"),
+  minimumPayment: z.coerce.number().min(0).nullable().optional(),
   dueDay: z.coerce.number().int().min(1, "Must be 1–31").max(31, "Must be 1–31").nullable().optional(),
   originalAmount: z.coerce.number().min(0).nullable().optional(),
   billAsBalanced: z.boolean().optional(),
   paymentFrequency: z.enum(PAYMENT_FREQUENCIES).optional(),
   paymentsRemaining: z.coerce.number().int().min(1, "Must be at least 1").nullable().optional(),
+  dueDate: z.string().nullable().optional(),
 }).refine(
+  (data) => {
+    if (data.type === "lump_sum") return true;
+    if (!data.minimumPayment || data.minimumPayment < 0.01) return false;
+    return true;
+  },
+  { message: "Minimum payment is required", path: ["minimumPayment"] }
+).refine(
+  (data) => {
+    if (data.type === "lump_sum") {
+      return !!data.dueDate;
+    }
+    return true;
+  },
+  { message: "Due date is required for lump-sum debts", path: ["dueDate"] }
+).refine(
   (data) => {
     if (data.originalAmount == null) return true;
     if (data.type === "credit_card") return true;
+    if (data.type === "lump_sum") return true;
     return data.originalAmount >= data.balance;
   },
   { message: "Original amount must be greater than or equal to the current balance", path: ["originalAmount"] }
@@ -61,6 +78,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           billAsBalanced: initialData.billAsBalanced ?? false,
           paymentFrequency: (PAYMENT_FREQUENCIES as readonly string[]).includes(initialData.paymentFrequency ?? "") ? initialData.paymentFrequency as typeof PAYMENT_FREQUENCIES[number] : "monthly",
           paymentsRemaining: initialData.paymentsRemaining ?? null,
+          dueDate: initialData.dueDate ?? null,
         }
       : {
           name: "",
@@ -73,6 +91,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           billAsBalanced: false,
           paymentFrequency: "monthly" as const,
           paymentsRemaining: null,
+          dueDate: null,
         },
   });
 
@@ -81,6 +100,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
   const isCreditCard = debtType === "credit_card";
   const isLoanType = debtType === "personal_loan" || debtType === "student_loan" || debtType === "car_loan";
   const isInstallment = debtType === "installment";
+  const isLumpSum = debtType === "lump_sum";
   const isRecurringFrequency = isInstallment && (paymentFrequency === "weekly" || paymentFrequency === "biweekly");
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
@@ -91,17 +111,18 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       name: values.name,
       type: values.type,
       balance: values.balance,
-      interestRate: values.interestRate ?? undefined,
-      minimumPayment: values.minimumPayment,
-      dueDay: recurring ? undefined : (values.dueDay ?? undefined),
-      originalAmount: values.originalAmount ?? undefined,
-      billAsBalanced: recurring ? false : (values.billAsBalanced ?? false),
+      interestRate: isLumpSum ? undefined : (values.interestRate ?? undefined),
+      minimumPayment: isLumpSum ? 0 : (values.minimumPayment ?? 0),
+      dueDay: (isLumpSum || recurring) ? undefined : (values.dueDay ?? undefined),
+      originalAmount: isLumpSum ? values.balance : (values.originalAmount ?? undefined),
+      billAsBalanced: (isLumpSum || recurring) ? false : (values.billAsBalanced ?? false),
       paymentFrequency: values.type === "installment" ? (values.paymentFrequency ?? "monthly") : undefined,
       paymentsRemaining: values.type === "installment" ? (values.paymentsRemaining ?? undefined) : undefined,
       lastPaymentDate: initialData?.lastPaymentDate ?? undefined,
       lastPaymentAmount: initialData?.lastPaymentAmount ?? undefined,
       createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
-    });
+      ...(isLumpSum ? { dueDate: values.dueDate ?? undefined } : { dueDate: undefined }),
+    } as Debt);
   };
 
   return (
@@ -114,7 +135,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             <FormItem>
               <FormLabel>Debt Name</FormLabel>
               <FormControl>
-                <Input placeholder={isCreditCard ? "e.g. Chase Visa" : isLoanType ? "e.g. Auto Loan, Sallie Mae" : "e.g. Medical bill"} {...field} className="focus:ring-primary/20 focus:border-primary" />
+                <Input placeholder={isCreditCard ? "e.g. Chase Visa" : isLoanType ? "e.g. Auto Loan, Sallie Mae" : isLumpSum ? "e.g. Afterpay — Busch Gardens" : "e.g. Medical bill"} {...field} className="focus:ring-primary/20 focus:border-primary" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -140,6 +161,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   <SelectItem value="car_loan">Car Loan</SelectItem>
                   <SelectItem value="installment">Installments</SelectItem>
                   <SelectItem value="collections">Collections</SelectItem>
+                  <SelectItem value="lump_sum">Lump Sum / One-time</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -166,6 +188,9 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           {debtType === "collections" && (
             <p><span className="font-semibold text-foreground">Collections:</span> Debt that has been sent to a collection agency. May have a negotiated payment plan.</p>
           )}
+          {debtType === "lump_sum" && (
+            <p><span className="font-semibold text-foreground">Lump Sum / One-time:</span> A single payment due by a specific date — like Afterpay or a one-time invoice. The app spreads the balance into weekly set-asides so you're ready by the due date.</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -174,7 +199,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             name="balance"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Current Balance</FormLabel>
+                <FormLabel>{isLumpSum ? "Total Owed" : "Current Balance"}</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -189,26 +214,50 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
             )}
           />
 
+          {!isLumpSum && (
+            <FormField
+              control={form.control}
+              name="minimumPayment"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Minimum Payment</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ""} className="pl-7 focus:ring-primary/20 focus:border-primary" />
+                    </div>
+                  </FormControl>
+                  {isLoanType && (
+                    <FormDescription>Your regular monthly installment amount.</FormDescription>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        </div>
+
+        {isLumpSum && (
           <FormField
             control={form.control}
-            name="minimumPayment"
+            name="dueDate"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Minimum Payment</FormLabel>
+                <FormLabel>Due Date</FormLabel>
                 <FormControl>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                    <Input type="number" step="0.01" placeholder="0.00" {...field} className="pl-7 focus:ring-primary/20 focus:border-primary" />
-                  </div>
+                  <Input
+                    type="date"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value || null)}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
                 </FormControl>
-                {isLoanType && (
-                  <FormDescription>Your regular monthly installment amount.</FormDescription>
-                )}
+                <FormDescription>The date the full amount is due.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
+        )}
 
         {isInstallment && (
           <FormField
@@ -267,7 +316,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           />
         )}
 
-        {!isRecurringFrequency && (
+        {!isRecurringFrequency && !isLumpSum && (
           <FormField
             control={form.control}
             name="dueDay"
@@ -293,60 +342,64 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           />
         )}
 
-        <FormField
-          control={form.control}
-          name="interestRate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Interest Rate (APR %)<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 24.99"
-                    value={field.value ?? ""}
-                    onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
-                    className="pr-7 focus:ring-primary/20 focus:border-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {!isLumpSum && (
+          <FormField
+            control={form.control}
+            name="interestRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Interest Rate (APR %)<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 24.99"
+                      value={field.value ?? ""}
+                      onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                      className="pr-7 focus:ring-primary/20 focus:border-primary"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
-        <FormField
-          control={form.control}
-          name="originalAmount"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{isCreditCard ? "Credit Limit" : "Original Amount"}<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={field.value ?? ""}
-                    onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
-                    className="pl-7 focus:ring-primary/20 focus:border-primary"
-                  />
-                </div>
-              </FormControl>
-              <p className="text-xs text-muted-foreground">
-                {isCreditCard
-                  ? "Your total credit line. Used to calculate utilization."
-                  : "The total amount you originally borrowed or charged. Used to track payoff progress."}
-              </p>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {!isLumpSum && (
+          <FormField
+            control={form.control}
+            name="originalAmount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{isCreditCard ? "Credit Limit" : "Original Amount"}<span className="text-xs text-muted-foreground ml-1">optional</span></FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={field.value ?? ""}
+                      onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                      className="pl-7 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  {isCreditCard
+                    ? "Your total credit line. Used to calculate utilization."
+                    : "The total amount you originally borrowed or charged. Used to track payoff progress."}
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
-        {!isRecurringFrequency && (
+        {!isRecurringFrequency && !isLumpSum && (
         <FormField
           control={form.control}
           name="billAsBalanced"

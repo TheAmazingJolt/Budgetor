@@ -205,6 +205,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
       const dueDayRaw = getNum("dueday");
       const originalAmount = getNum("originalamount");
       const billAsBalancedStr = getStr("billasbalanced");
+      const dueDateStr = getStr("duedate");
       debts.push({
         id,
         name,
@@ -215,6 +216,7 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
         dueDay: isNaN(dueDayRaw) || dueDayRaw < 1 || dueDayRaw > 31 ? null : dueDayRaw,
         originalAmount: isNaN(originalAmount) ? null : originalAmount,
         billAsBalanced: billAsBalancedStr === "true" || hasBalancedSuffix,
+        dueDate: dueDateStr || null,
       });
     }
   }
@@ -617,6 +619,7 @@ interface DebtItem {
   dueDay?: number | null;
   originalAmount?: number | null;
   billAsBalanced?: boolean | null;
+  dueDate?: string | null;
 }
 
 interface BillMeta {
@@ -1292,86 +1295,152 @@ function buildSavingsGoalRows(
   savingsBills: BillMeta[],
   afterRow: number,
   sheetId: number,
+  lumpSumDebts: DebtItem[] = [],
 ) {
-  if (!savingsBills || savingsBills.length === 0) return { savingsRows: [], savingsRequests: [], savingsRowCount: 0 };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const activeLumpSum = lumpSumDebts.filter(
+    d => d.type === "lump_sum" && d.dueDate && d.balance > 0 && new Date(d.dueDate + "T00:00:00") > today,
+  );
 
-  const gapRow = afterRow;
-  const headerRow = gapRow + 1;
-  const colHeaderRow = headerRow + 1;
-  const firstDataRow = colHeaderRow + 1;
-
-  const savingsRows: any[][] = [];
-  savingsRows.push([]);
-  savingsRows.push(["Savings Goals", "", ""]);
-  savingsRows.push(["Goal", "Weekly $", "Target Date"]);
-
-  for (const bill of savingsBills) {
-    // Extract target date suffix from name: "Goal Name [→ May 18]" → "May 18"
-    const match = bill.name.match(/\[→\s*(.+?)\]$/);
-    const targetDate = match ? match[1] : "";
-    // Strip the suffix for the display name
-    const displayName = bill.name.replace(/\s*\[→.+?\]$/, "").trim();
-    savingsRows.push([displayName, Math.abs(bill.amount), targetDate]);
+  if ((!savingsBills || savingsBills.length === 0) && activeLumpSum.length === 0) {
+    return { savingsRows: [], savingsRequests: [], savingsRowCount: 0 };
   }
 
+  const gapRow = afterRow;
+  const savingsRows: any[][] = [];
+  savingsRows.push([]);
+
+  const savingsRequests: sheets_v4.Schema$Request[] = [];
   const teal = { red: 15 / 255, green: 118 / 255, blue: 110 / 255 };
   const tealLight = { red: 204 / 255, green: 251 / 255, blue: 241 / 255 };
   const tealLighter = { red: 240 / 255, green: 253 / 255, blue: 250 / 255 };
+  const rose = { red: 190 / 255, green: 18 / 255, blue: 60 / 255 };
+  const roseLight = { red: 255 / 255, green: 228 / 255, blue: 230 / 255 };
+  const roseLighter = { red: 255 / 255, green: 241 / 255, blue: 242 / 255 };
 
-  const savingsRequests: sheets_v4.Schema$Request[] = [];
+  // ── Savings Goals block ──────────────────────────────────────────────────
+  if (savingsBills && savingsBills.length > 0) {
+    const headerRow = gapRow + savingsRows.length;
+    const colHeaderRow = headerRow + 1;
+    const firstDataRow = colHeaderRow + 1;
 
-  // Unmerge covers 2 rows (header + sub-header) to clear any stale multi-row merges.
-  savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: colHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
-  savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 }, mergeType: "MERGE_ALL" } });
+    savingsRows.push(["Savings Goals", "", ""]);
+    savingsRows.push(["Goal", "Weekly $", "Target Date"]);
 
-  // Section header style
-  savingsRequests.push({
-    repeatCell: {
-      range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
-      cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: teal }, backgroundColor: tealLight, horizontalAlignment: "CENTER" } },
-      fields: "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)",
-    },
-  });
+    for (const bill of savingsBills) {
+      const match = bill.name.match(/\[→\s*(.+?)\]$/);
+      const targetDate = match ? match[1] : "";
+      const displayName = bill.name.replace(/\s*\[→.+?\]$/, "").trim();
+      savingsRows.push([displayName, Math.abs(bill.amount), targetDate]);
+    }
 
-  // Column header style
-  savingsRequests.push({
-    repeatCell: {
-      range: { sheetId, startRowIndex: colHeaderRow, endRowIndex: colHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
-      cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: tealLighter } },
-      fields: "userEnteredFormat(textFormat,backgroundColor)",
-    },
-  });
-
-  // Data row styles
-  for (let i = 0; i < savingsBills.length; i++) {
-    const dataRow = firstDataRow + i;
+    savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: colHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
+    savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 }, mergeType: "MERGE_ALL" } });
     savingsRequests.push({
       repeatCell: {
-        range: { sheetId, startRowIndex: dataRow, endRowIndex: dataRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
-        cell: { userEnteredFormat: { backgroundColor: tealLighter } },
-        fields: "userEnteredFormat(backgroundColor)",
+        range: { sheetId, startRowIndex: headerRow, endRowIndex: headerRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: teal }, backgroundColor: tealLight, horizontalAlignment: "CENTER" } },
+        fields: "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)",
       },
     });
+    savingsRequests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: colHeaderRow, endRowIndex: colHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: tealLighter } },
+        fields: "userEnteredFormat(textFormat,backgroundColor)",
+      },
+    });
+    for (let i = 0; i < savingsBills.length; i++) {
+      const dataRow = firstDataRow + i;
+      savingsRequests.push({
+        repeatCell: {
+          range: { sheetId, startRowIndex: dataRow, endRowIndex: dataRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+          cell: { userEnteredFormat: { backgroundColor: tealLighter } },
+          fields: "userEnteredFormat(backgroundColor)",
+        },
+      });
+    }
+    savingsRequests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: firstDataRow, endRowIndex: firstDataRow + savingsBills.length, startColumnIndex: 1, endColumnIndex: 2 },
+        cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' } } },
+        fields: "userEnteredFormat(numberFormat)",
+      },
+    });
+    for (const col of [1, 2]) {
+      savingsRequests.push({
+        repeatCell: {
+          range: { sheetId, startRowIndex: colHeaderRow, endRowIndex: firstDataRow + savingsBills.length, startColumnIndex: col, endColumnIndex: col + 1 },
+          cell: { userEnteredFormat: { horizontalAlignment: "CENTER" } },
+          fields: "userEnteredFormat(horizontalAlignment)",
+        },
+      });
+    }
   }
 
-  // Format Weekly $ column as currency
-  savingsRequests.push({
-    repeatCell: {
-      range: { sheetId, startRowIndex: firstDataRow, endRowIndex: firstDataRow + savingsBills.length, startColumnIndex: 1, endColumnIndex: 2 },
-      cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' } } },
-      fields: "userEnteredFormat(numberFormat)",
-    },
-  });
+  // ── Lump-Sum Payments block ──────────────────────────────────────────────
+  if (activeLumpSum.length > 0) {
+    if (savingsBills && savingsBills.length > 0) {
+      savingsRows.push([]); // gap between sections
+    }
+    const lsHeaderRow = gapRow + savingsRows.length;
+    const lsColHeaderRow = lsHeaderRow + 1;
+    const lsFirstDataRow = lsColHeaderRow + 1;
 
-  // Center-align Weekly $ and Target Date columns
-  for (const col of [1, 2]) {
+    savingsRows.push(["Lump-Sum Payments", "", ""]);
+    savingsRows.push(["Name", "Weekly Set-Aside", "Due Date"]);
+    for (const d of activeLumpSum) {
+      const due = new Date(d.dueDate! + "T00:00:00");
+      const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
+      const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
+      const dueDateStr = `${MONTH_SHORT_SHEETS[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
+      savingsRows.push([d.name, weeklySetAside, dueDateStr]);
+    }
+
+    savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
+    savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 }, mergeType: "MERGE_ALL" } });
     savingsRequests.push({
       repeatCell: {
-        range: { sheetId, startRowIndex: colHeaderRow, endRowIndex: firstDataRow + savingsBills.length, startColumnIndex: col, endColumnIndex: col + 1 },
-        cell: { userEnteredFormat: { horizontalAlignment: "CENTER" } },
-        fields: "userEnteredFormat(horizontalAlignment)",
+        range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: rose }, backgroundColor: roseLight, horizontalAlignment: "CENTER" } },
+        fields: "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)",
       },
     });
+    savingsRequests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: lsColHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: roseLighter } },
+        fields: "userEnteredFormat(textFormat,backgroundColor)",
+      },
+    });
+    for (let i = 0; i < activeLumpSum.length; i++) {
+      const dataRow = lsFirstDataRow + i;
+      savingsRequests.push({
+        repeatCell: {
+          range: { sheetId, startRowIndex: dataRow, endRowIndex: dataRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+          cell: { userEnteredFormat: { backgroundColor: roseLighter } },
+          fields: "userEnteredFormat(backgroundColor)",
+        },
+      });
+    }
+    savingsRequests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: lsFirstDataRow, endRowIndex: lsFirstDataRow + activeLumpSum.length, startColumnIndex: 1, endColumnIndex: 2 },
+        cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' } } },
+        fields: "userEnteredFormat(numberFormat)",
+      },
+    });
+    for (const col of [1, 2]) {
+      savingsRequests.push({
+        repeatCell: {
+          range: { sheetId, startRowIndex: lsColHeaderRow, endRowIndex: lsFirstDataRow + activeLumpSum.length, startColumnIndex: col, endColumnIndex: col + 1 },
+          cell: { userEnteredFormat: { horizontalAlignment: "CENTER" } },
+          fields: "userEnteredFormat(horizontalAlignment)",
+        },
+      });
+    }
   }
 
   return { savingsRows, savingsRequests, savingsRowCount: savingsRows.length };
@@ -1559,27 +1628,30 @@ async function writeBudgetToSheet(
     ]);
   }
 
-  // Savings Goals section — bills with sourceGoalId
+  // Savings Goals + Lump-Sum section — bills with sourceGoalId and lump_sum debts
   const savingsBills = (bills ?? []).filter((b) => b.sourceGoalId);
-  if (savingsBills.length > 0) {
+  const lumpSumDebtsForSavings = (debts ?? []).filter(d => d.type === "lump_sum");
+  if (savingsBills.length > 0 || lumpSumDebtsForSavings.length > 0) {
     const savingsStartRow = totalRows + billRowCount + debtRowCount;
-    const { savingsRows, savingsRequests } = buildSavingsGoalRows(savingsBills, savingsStartRow, sheetId);
+    const { savingsRows, savingsRequests } = buildSavingsGoalRows(savingsBills, savingsStartRow, sheetId, lumpSumDebtsForSavings);
 
-    const savingsRangeStart = `A${savingsStartRow + 1}`;
-    const savingsRangeEnd = `C${savingsStartRow + savingsRows.length}`;
-    const savingsRange = `'${escapedTitle}'!${savingsRangeStart}:${savingsRangeEnd}`;
+    if (savingsRows.length > 0) {
+      const savingsRangeStart = `A${savingsStartRow + 1}`;
+      const savingsRangeEnd = `C${savingsStartRow + savingsRows.length}`;
+      const savingsRange = `'${escapedTitle}'!${savingsRangeStart}:${savingsRangeEnd}`;
 
-    await Promise.all([
-      sheetsApi.spreadsheets.values.update({
-        spreadsheetId,
-        range: savingsRange,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: savingsRows },
-      }),
-      savingsRequests.length > 0
-        ? sheetsApi.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: savingsRequests } })
-        : Promise.resolve(),
-    ]);
+      await Promise.all([
+        sheetsApi.spreadsheets.values.update({
+          spreadsheetId,
+          range: savingsRange,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: savingsRows },
+        }),
+        savingsRequests.length > 0
+          ? sheetsApi.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: savingsRequests } })
+          : Promise.resolve(),
+      ]);
+    }
   }
 
 }
@@ -1652,7 +1724,7 @@ async function writeHiddenBillsSheet(
   if (debts && debts.length > 0) {
     grid.push([]);
     grid.push(["Debts"]);
-    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced"]);
+    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced", "DueDate"]);
     for (const d of debts) {
       grid.push([
         d.id,
@@ -1664,6 +1736,7 @@ async function writeHiddenBillsSheet(
         d.dueDay != null ? d.dueDay : "",
         d.originalAmount != null ? d.originalAmount : "",
         d.billAsBalanced ? "true" : "false",
+        d.dueDate != null ? d.dueDate : "",
       ]);
     }
   }
@@ -1722,6 +1795,7 @@ async function writeSavingsTabToSheet(
   goals: SavingsGoalRow[] = [],
   tz?: string,
   checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [],
+  debts: DebtItem[] = [],
 ): Promise<void> {
   const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
@@ -1906,6 +1980,20 @@ async function writeSavingsTabToSheet(
     grid.push([]);
   }
 
+  const activeLumpSum = debts.filter(d => d.type === "lump_sum" && d.dueDate && d.balance > 0 && new Date(d.dueDate + "T00:00:00") > today);
+  if (activeLumpSum.length > 0) {
+    grid.push(["Lump-Sum Payments"]);
+    grid.push(["Name", "Weekly Set-Aside", "Due Date"]);
+    for (const d of activeLumpSum) {
+      const due = new Date(d.dueDate! + "T00:00:00");
+      const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
+      const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
+      const dueDateStr = `${MONTH_SHORT_SHEETS[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
+      grid.push([d.name, weeklySetAside, dueDateStr]);
+    }
+    grid.push([]);
+  }
+
   grid.push(["Sinking fund progress counts contributions since the last annual due date. Monthly set-aside resets each calendar month."]);
 
   const maxCols = Math.max(...grid.map((r) => r.length));
@@ -2051,6 +2139,39 @@ async function writeSavingsTabToSheet(
           fields: "userEnteredFormat.numberFormat",
         },
       });
+      r = goalDataEnd;
+      r++; // blank gap
+    }
+
+    if (activeLumpSum.length > 0) {
+      const rose = { red: 190 / 255, green: 18 / 255, blue: 60 / 255 };
+      const roseLight = { red: 255 / 255, green: 228 / 255, blue: 230 / 255 };
+      const roseLighter = { red: 255 / 255, green: 241 / 255, blue: 242 / 255 };
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: rose }, backgroundColor: roseLight } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 3 },
+          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: roseLighter } },
+          fields: "userEnteredFormat(textFormat,backgroundColor)",
+        },
+      });
+      r++;
+      const lsDataStart = r;
+      const lsDataEnd = r + activeLumpSum.length;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: lsDataStart, endRowIndex: lsDataEnd, startColumnIndex: 1, endColumnIndex: 2 },
+          cell: { userEnteredFormat: currencyFmt },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      });
     }
   }
 
@@ -2152,7 +2273,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
           } finally { cl.release(); }
         } catch { }
       }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins); } catch { }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins, body.debts ?? []); } catch { }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -2255,7 +2376,7 @@ router.post("/sheets/:id/write", async (req, res): Promise<void> => {
             } finally { cl2.release(); }
           } catch { }
         }
-        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins2); } catch { }
+        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins2, body.debts ?? []); } catch { }
       })().catch(() => {});
     }
   } catch (err: any) {

@@ -15,4 +15,5 @@ export const DebtType = {
   car_loan: "car_loan",
   installment: "installment",
   collections: "collections",
+  lump_sum: "lump_sum",
 } as const;

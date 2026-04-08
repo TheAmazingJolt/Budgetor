@@ -9,4 +9,5 @@
 export interface MicrosoftAuthStatus {
   configured: boolean;
   authenticated: boolean;
+  accountEmail?: string | null;
 }

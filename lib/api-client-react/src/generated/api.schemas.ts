@@ -215,6 +215,7 @@ export const DebtType = {
   car_loan: "car_loan",
   installment: "installment",
   collections: "collections",
+  lump_sum: "lump_sum",
 } as const;
 
 /**
@@ -265,6 +266,8 @@ export interface Debt {
    * @minimum 1
    */
   paymentsRemaining?: number | null;
+  /** ISO date string for the payment due date (used by lump_sum debts as the single payoff date). */
+  dueDate?: string | null;
 }
 
 export type SavedBudgetSettings = { [key: string]: unknown };
@@ -294,16 +297,16 @@ export interface SavedBudget {
   linkedSheetName?: string | null;
   /** Type of linked sheet ('google' or 'excel') */
   linkedSheetType?: SavedBudgetLinkedSheetType;
+  /** Web URL to open the linked Excel file (null for Google Sheets or if not saved) */
+  linkedSheetUrl?: string | null;
   /** ID of the linked Google Sheet (null if no link) */
   linkedGoogleSheetId?: string | null;
   /** Display name of the linked Google Sheet */
   linkedGoogleSheetName?: string | null;
-  /** ID of the linked Excel/OneDrive file (null if no link) */
+  /** ID of the linked Excel file (null if no link) */
   linkedExcelSheetId?: string | null;
-  /** Display name of the linked Excel/OneDrive file */
+  /** Display name of the linked Excel file */
   linkedExcelSheetName?: string | null;
-  /** Web URL to open the linked Excel file (null for Google Sheets or if not saved) */
-  linkedSheetUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -350,16 +353,16 @@ export interface SavedBudgetUpdateRequest {
   linkedSheetName?: string | null;
   /** Type of linked sheet ('google' or 'excel') */
   linkedSheetType?: SavedBudgetUpdateRequestLinkedSheetType;
+  /** Web URL to open the linked Excel file (null to clear) */
+  linkedSheetUrl?: string | null;
   /** ID of the linked Google Sheet (null clears the link) */
   linkedGoogleSheetId?: string | null;
   /** Display name of the linked Google Sheet */
   linkedGoogleSheetName?: string | null;
-  /** ID of the linked Excel/OneDrive file (null clears the link) */
+  /** ID of the linked Excel file (null clears the link) */
   linkedExcelSheetId?: string | null;
-  /** Display name of the linked Excel/OneDrive file */
+  /** Display name of the linked Excel file */
   linkedExcelSheetName?: string | null;
-  /** Web URL to open the linked Excel file (null to clear) */
-  linkedSheetUrl?: string | null;
 }
 
 export interface GoogleAuthStatus {

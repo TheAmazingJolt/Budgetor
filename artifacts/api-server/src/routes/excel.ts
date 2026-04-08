@@ -125,7 +125,7 @@ function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | 
   if (debts && debts.length > 0) {
     grid.push(Array(9).fill(""));
     grid.push(["Debts", "", "", "", "", "", "", "", ""]);
-    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced"]);
+    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced", "DueDate"]);
     for (const d of debts) {
       grid.push([
         d.id, d.name, d.type ?? "credit_card", d.balance ?? 0,
@@ -133,6 +133,7 @@ function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | 
         d.minimumPayment ?? 0, d.dueDay != null ? d.dueDay : "",
         d.originalAmount != null ? d.originalAmount : "",
         d.billAsBalanced ? "true" : "false",
+        d.dueDate != null ? d.dueDate : "",
       ]);
     }
   }
@@ -548,6 +549,7 @@ function parseDebtMetaRows(
       ? cells[colMap["originalamount"] ?? 7] as number
       : parseFloat(String(cells[colMap["originalamount"] ?? 7] ?? ""));
     const billAsBalancedStr = String(cells[colMap["billasbalanced"] ?? 8] ?? "").trim().toLowerCase();
+    const dueDateRaw = String(cells[colMap["duedate"] ?? 9] ?? "").trim();
     debts.push({
       id: id || `meta-${i}`,
       name,
@@ -558,6 +560,7 @@ function parseDebtMetaRows(
       dueDay: isNaN(dueDayRaw as number) || (dueDayRaw as number) < 1 || (dueDayRaw as number) > 31 ? null : dueDayRaw,
       originalAmount: isNaN(originalAmount as number) ? null : originalAmount,
       billAsBalanced: billAsBalancedStr === "true" || hasBalancedSuffix,
+      dueDate: dueDateRaw || null,
     });
   }
   return debts;
@@ -885,6 +888,7 @@ interface DebtItem {
   dueDay?: number | null;
   originalAmount?: number | null;
   billAsBalanced?: boolean | null;
+  dueDate?: string | null;
 }
 
 interface BillMeta {
@@ -1189,9 +1193,9 @@ async function writeHiddenExcelBillsSheet(
   ];
 
   if (debts && debts.length > 0) {
-    grid.push(Array(9).fill(""));
-    grid.push(["Debts", "", "", "", "", "", "", "", ""]);
-    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced"]);
+    grid.push(Array(10).fill(""));
+    grid.push(["Debts", "", "", "", "", "", "", "", "", ""]);
+    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced", "DueDate"]);
     for (const d of debts) {
       grid.push([
         d.id,
@@ -1203,6 +1207,7 @@ async function writeHiddenExcelBillsSheet(
         d.dueDay != null ? d.dueDay : "",
         d.originalAmount != null ? d.originalAmount : "",
         d.billAsBalanced ? "true" : "false",
+        d.dueDate != null ? d.dueDate : "",
       ]);
     }
   }
@@ -1276,7 +1281,7 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
           );
           checkins = ciRes.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
         } finally { client.release(); }
-        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz, checkins);
+        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz, checkins, body.debts ?? []);
       } catch { /* non-fatal */ }
     }
 
@@ -1318,6 +1323,7 @@ function writeExcelSavingsSheetXL(
   goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
   tz?: string,
   checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [],
+  debts: DebtItem[] = [],
 ): void {
   const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
@@ -1416,7 +1422,8 @@ function writeExcelSavingsSheetXL(
     }
   }
 
-  if (sinkingFunds.length === 0 && balanced.length === 0 && goals.length === 0) return;
+  const activeLumpSum = debts.filter(d => d.type === "lump_sum" && d.dueDate && d.balance > 0 && new Date(d.dueDate + "T00:00:00") > today);
+  if (sinkingFunds.length === 0 && balanced.length === 0 && goals.length === 0 && activeLumpSum.length === 0) return;
 
   const SAVINGS_SHEET = "Savings";
   let ws = wb.getWorksheet(SAVINGS_SHEET) ?? wb.getWorksheet("Savings Progress");
@@ -1503,6 +1510,21 @@ function writeExcelSavingsSheetXL(
         [g.name, g.targetAmount, g.savedSoFar, `${Math.round(progressPct)}%`, targetDateStr, weeksLeft, weeklyNeeded],
         { numFmtCols: [1, 2, 6] },
       );
+    }
+    r++;
+  }
+
+  const ROSE       = "FFBe123C";
+  const ROSE_LT    = "FFFCE7EB";
+  if (activeLumpSum.length > 0) {
+    writeRow(["Lump-Sum Payments"], { bg: ROSE_LT, fontColor: ROSE, bold: true, size: 11 });
+    writeRow(["Name", "Weekly Set-Aside", "Due Date"], { bg: ROSE_LT, bold: true });
+    for (const d of activeLumpSum) {
+      const due = new Date(d.dueDate! + "T00:00:00");
+      const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
+      const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
+      const dueDateStr = `${MONTH_SHORT_XL[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
+      writeRow([d.name, weeklySetAside, dueDateStr], { numFmtCols: [1] });
     }
     r++;
   }
@@ -1596,7 +1618,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
           );
           checkins = ciRes.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
         } finally { client2.release(); }
-        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz, checkins);
+        writeExcelSavingsSheetXL(wb, body.bills ?? [], weeks, contributions, goalData, body.tz, checkins, body.debts ?? []);
       } catch { /* non-fatal */ }
     }
 

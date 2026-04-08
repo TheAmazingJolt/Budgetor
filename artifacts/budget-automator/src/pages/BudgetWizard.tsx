@@ -205,6 +205,7 @@ const DEBT_TYPE_LABELS: Record<string, string> = {
   installment: "Installments",
   collections: "Collections",
   loan: "Loan",
+  lump_sum: "Lump Sum",
 };
 
 function DebtTypeIcon({ type }: { type: string }) {
@@ -213,6 +214,7 @@ function DebtTypeIcon({ type }: { type: string }) {
   if (type === "student_loan") return <GraduationCap className="w-4 h-4 text-sky-600" />;
   if (type === "car_loan") return <Car className="w-4 h-4 text-amber-600" />;
   if (type === "installment") return <Receipt className="w-4 h-4 text-teal-600" />;
+  if (type === "lump_sum") return <CalendarDays className="w-4 h-4 text-rose-600" />;
   return <AlertTriangle className="w-4 h-4 text-amber-600" />;
 }
 
@@ -222,6 +224,7 @@ function debtTypeBadgeClass(type: string): string {
   if (type === "student_loan") return "bg-sky-100 text-sky-700 border-sky-200";
   if (type === "car_loan") return "bg-amber-100 text-amber-700 border-amber-200";
   if (type === "installment") return "bg-teal-100 text-teal-700 border-teal-200";
+  if (type === "lump_sum") return "bg-rose-100 text-rose-700 border-rose-200";
   return "bg-amber-100 text-amber-700 border-amber-200";
 }
 
@@ -231,6 +234,7 @@ function debtTypeLeftBar(type: string): string {
   if (type === "student_loan") return "bg-sky-500";
   if (type === "car_loan") return "bg-amber-500";
   if (type === "installment") return "bg-teal-500";
+  if (type === "lump_sum") return "bg-rose-500";
   return "bg-amber-500";
 }
 
@@ -568,6 +572,35 @@ function computeSavingsGoalBills(
       color: "teal",
       sourceGoalId: g.id,
       payoffDate: g.targetDate,
+    });
+  }
+  return result;
+}
+
+function computeLumpSumDebtBills(
+  debts: Array<{ id: string; name: string; type: string; balance: number; dueDate?: string | null }>,
+  today?: Date,
+): Bill[] {
+  const now = today ?? new Date();
+  now.setHours(0, 0, 0, 0);
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const result: Bill[] = [];
+  for (const d of debts) {
+    if (d.type !== "lump_sum") continue;
+    if (!d.dueDate) continue;
+    if (d.balance <= 0) continue;
+    const dueDate = new Date(d.dueDate + "T00:00:00");
+    if (dueDate <= now) continue;
+    const weeksLeft = Math.max(1, Math.ceil((dueDate.getTime() - now.getTime()) / msPerWeek));
+    const weeklyAmount = Math.round((d.balance / weeksLeft) * 100) / 100;
+    result.push({
+      name: `${d.name}`,
+      amount: -weeklyAmount,
+      type: "weekly",
+      category: "Debt Payment",
+      color: "red",
+      sourceDebtId: d.id,
+      payoffDate: d.dueDate,
     });
   }
   return result;
@@ -1017,7 +1050,8 @@ export function BudgetWizard({
       if (!sheetsToSync.length) return;
       const weeks = buildWriteWeeks();
       if (!weeks?.length) return;
-      const allBillsForSync = [...bills, ...savingsGoalBills];
+      const syncLumpSumDebtIds = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
+      const allBillsForSync = [...bills.filter(b => !b.sourceDebtId || !syncLumpSumDebtIds.has(b.sourceDebtId)), ...savingsGoalBills];
       const writePayload = {
         weeks,
         startCol: 0,
@@ -1061,7 +1095,8 @@ export function BudgetWizard({
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
     }
-    const allBillsForSync = [...bills, ...savingsGoalBills];
+    const manualSyncLumpSumDebtIds = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
+    const allBillsForSync = [...bills.filter(b => !b.sourceDebtId || !manualSyncLumpSumDebtIds.has(b.sourceDebtId)), ...savingsGoalBills];
     const writePayload = {
       weeks,
       startCol: 0,
@@ -1246,7 +1281,7 @@ export function BudgetWizard({
         // Strip orphaned bills (ghost bills from deleted+recreated debts) first
         const cleaned = removeOrphanedDebtBills(prev, validDebtIds);
         const existingDebtIds = new Set(cleaned.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
-        const missing = serverDebts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
+        const missing = serverDebts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill && d.type !== "lump_sum");
         // Names of legacy bills we're about to replace with properly-linked versions
         const replacingNames = new Set(missing.map(d => `${d.name} (min payment)`));
         // Remove legacy (no-sourceDebtId) bills for debts we're about to add, then
@@ -1275,7 +1310,7 @@ export function BudgetWizard({
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
         }))];
       });
-      setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill).map(d => d.id)));
+      setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill && d.type !== "lump_sum").map(d => d.id)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userDebtsQuery.data]);
@@ -1348,7 +1383,7 @@ export function BudgetWizard({
       // Strip orphaned bills (ghost bills from deleted+recreated debts) before computing missing
       const cleanedServerBills = removeOrphanedDebtBills(serverBills, validDebtIds);
       const existingDebtIds = new Set(cleanedServerBills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId));
-      const missing = debts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill);
+      const missing = debts.filter(d => !existingDebtIds.has(d.id) && !d.excludeFromBill && d.type !== "lump_sum");
       // Names of legacy bills we're about to replace with properly-linked versions
       const replacingNames = new Set(missing.map(d => `${d.name} (min payment)`));
       // Remove legacy (no-sourceDebtId) bills for debts we're about to add, then
@@ -1380,7 +1415,7 @@ export function BudgetWizard({
       } else {
         setBills(refreshed);
       }
-      setDebtBillImports(new Set(debts.filter(d => !d.excludeFromBill).map(d => d.id)));
+      setDebtBillImports(new Set(debts.filter(d => !d.excludeFromBill && d.type !== "lump_sum").map(d => d.id)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, currentUser?.id, userBillsQuery.data]);
@@ -1468,12 +1503,15 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
-  bgSyncRef.current.savingsGoalBills = computeSavingsGoalBills(
-    budgetGoalsQuery.data?.goals ?? [],
-    budgetContributionsQuery.data?.contributions ?? [],
-    cloudExistingWeeks,
-    checkinsQuery.data?.checkins,
-  );
+  bgSyncRef.current.savingsGoalBills = [
+    ...computeSavingsGoalBills(
+      budgetGoalsQuery.data?.goals ?? [],
+      budgetContributionsQuery.data?.contributions ?? [],
+      cloudExistingWeeks,
+      checkinsQuery.data?.checkins,
+    ),
+    ...computeLumpSumDebtBills(debts),
+  ];
 
   useEffect(() => {
     if (inputMode !== "cloud") return;
@@ -2641,11 +2679,16 @@ export function BudgetWizard({
       cloudExistingWeeks,
       checkinsQuery.data?.checkins,
     );
+    const lumpSumBills = computeLumpSumDebtBills(debts);
     // Deduplicate then strip orphaned debt bills (ghost entries from deleted+recreated debts)
     const validDebtIdsForGen = new Set(debts.map(d => d.id));
+    // Exclude any bills linked to lump_sum debts from the raw bills list (they're computed dynamically)
+    const lumpSumDebtIds = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
+    const rawBillsWithoutLumpSum = rawBills.filter(b => !b.sourceDebtId || !lumpSumDebtIds.has(b.sourceDebtId));
     const allBillsForGeneration = [
-      ...removeOrphanedDebtBills(dedupeDebtBills(rawBills), validDebtIdsForGen),
+      ...removeOrphanedDebtBills(dedupeDebtBills(rawBillsWithoutLumpSum), validDebtIdsForGen),
       ...savingsGoalBills,
+      ...lumpSumBills,
     ];
 
     const effectiveIncomeSources = incomeSources.length > 0
@@ -2983,6 +3026,21 @@ export function BudgetWizard({
         : incomeSources.length > 0 ? incomeSources : undefined;
       const exportStartDate = exportIncomeSources && exportIncomeSources.length > 1
         ? exportIncomeSources[0].nextPayDate : newWeekStartDate;
+      const exportSavingsGoalBills = computeSavingsGoalBills(
+        budgetGoalsQuery.data?.goals ?? [],
+        budgetContributionsQuery.data?.contributions ?? [],
+        cloudExistingWeeks,
+        checkinsQuery.data?.checkins,
+      );
+      const exportLumpSumBills = computeLumpSumDebtBills(debts);
+      const exportLumpSumDebtIds = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
+      const exportValidDebtIds = new Set(debts.map(d => d.id));
+      const exportRawBills = bills.filter(b => !b.sourceDebtId || !exportLumpSumDebtIds.has(b.sourceDebtId));
+      const exportAllBills = [
+        ...removeOrphanedDebtBills(dedupeDebtBills(exportRawBills), exportValidDebtIds),
+        ...exportSavingsGoalBills,
+        ...exportLumpSumBills,
+      ];
       const data = await generateMutation.mutateAsync({
         data: {
           startDate: exportStartDate,
@@ -2990,7 +3048,7 @@ export function BudgetWizard({
           openingBalance: effectiveOpeningBalance,
           paycheckAmount,
           numberOfWeeks: weekCount,
-          bills,
+          bills: exportAllBills,
           payPeriod,
           incomeSources: exportIncomeSources,
         },
@@ -3156,13 +3214,18 @@ export function BudgetWizard({
     if (!activeGoogleSheet && !activeExcelSheet) return;
     setIsUpdatingLinkedSheet(true);
     try {
-      const savingsBillsForSync = computeSavingsGoalBills(
-        budgetGoalsQuery.data?.goals ?? [],
-        budgetContributionsQuery.data?.contributions ?? [],
-        cloudExistingWeeks,
-        checkinsQuery.data?.checkins,
-      );
-      const allBillsForSync = [...bills, ...savingsBillsForSync];
+      const savingsBillsForSync = [
+        ...computeSavingsGoalBills(
+          budgetGoalsQuery.data?.goals ?? [],
+          budgetContributionsQuery.data?.contributions ?? [],
+          cloudExistingWeeks,
+          checkinsQuery.data?.checkins,
+        ),
+        ...computeLumpSumDebtBills(debts),
+      ];
+      const lumpSumDebtIdsForSync = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
+      const regularBillsForSync = bills.filter(b => !b.sourceDebtId || !lumpSumDebtIdsForSync.has(b.sourceDebtId));
+      const allBillsForSync = [...regularBillsForSync, ...savingsBillsForSync];
       const colorLookup = buildBillColorLookup(allBillsForSync);
       const syncIncomeSources = incomeSources.length === 1
         ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
@@ -3372,11 +3435,11 @@ export function BudgetWizard({
   const toggleAllDebtsAsBills = (enable: boolean) => {
     if (enable) {
       setDebts(debts.map(d => ({ ...d, excludeFromBill: false })));
-      const newImports = new Set(debts.map(d => d.id));
+      const newImports = new Set(debts.filter(d => d.type !== "lump_sum").map(d => d.id));
       setDebtBillImports(newImports);
       const debtIdsWithBill = new Set(bills.filter(b => b.sourceDebtId).map(b => b.sourceDebtId as string));
       const newDebtBills = debts
-        .filter(d => !debtIdsWithBill.has(d.id))
+        .filter(d => d.type !== "lump_sum" && !debtIdsWithBill.has(d.id))
         .map(d => ({
           name: `${d.name} (min payment)`,
           amount: -Math.abs(d.minimumPayment),
@@ -3392,9 +3455,9 @@ export function BudgetWizard({
       }
     } else {
       setDebts(debts.map(d => ({ ...d, excludeFromBill: true })));
-      const debtIds = new Set(debts.map(d => d.id));
+      const nonLumpSumDebtIds = new Set(debts.filter(d => d.type !== "lump_sum").map(d => d.id));
       setDebtBillImports(new Set());
-      setBills(bills.filter(b => !b.sourceDebtId || !debtIds.has(b.sourceDebtId)));
+      setBills(bills.filter(b => !b.sourceDebtId || !nonLumpSumDebtIds.has(b.sourceDebtId)));
     }
   };
 
@@ -3449,7 +3512,8 @@ export function BudgetWizard({
   const billsFilterActive = billsCategoryFilter !== "all" || billsSort !== "default";
   const debtsFilterActive = debtsTypeFilter !== "all" || debtsSort !== "default";
 
-  const canGenerate = bills.length > 0 && !generateMutation.isPending;
+  const hasActiveLumpSumDebts = computeLumpSumDebtBills(debts).length > 0;
+  const canGenerate = (bills.length > 0 || hasActiveLumpSumDebts) && !generateMutation.isPending;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -4465,12 +4529,13 @@ export function BudgetWizard({
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const allActive = debts.every(d => debtBillImports.has(d.id));
+                        const billableDebts = debts.filter(d => d.type !== "lump_sum");
+                        const allActive = billableDebts.length > 0 && billableDebts.every(d => debtBillImports.has(d.id));
                         preserveScroll(() => toggleAllDebtsAsBills(!allActive));
                       }}
                       className="rounded-xl border-red-300 text-red-700 hover:bg-red-50"
                     >
-                      {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                      {debts.filter(d => d.type !== "lump_sum").every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
                     </Button>
                   </div>
                 )}
@@ -4570,17 +4635,34 @@ export function BudgetWizard({
                                 </div>
                                 <div className="flex items-center justify-between mt-3">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">
-                                      Min: ${debt.minimumPayment.toFixed(2)}/mo
-                                    </span>
-                                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                      <Checkbox
-                                        checked={debtBillImports.has(debt.id)}
-                                        onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
-                                        className="rounded h-3.5 w-3.5"
-                                      />
-                                      <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
-                                    </label>
+                                    {debt.type === "lump_sum" ? (() => {
+                                      const dd = debt.dueDate;
+                                      const today = new Date(); today.setHours(0,0,0,0);
+                                      const msPerWeek = 7*24*60*60*1000;
+                                      const dueDate = dd ? new Date(dd + "T00:00:00") : null;
+                                      const weeksLeft = dueDate && dueDate > today ? Math.max(1, Math.ceil((dueDate.getTime() - today.getTime()) / msPerWeek)) : null;
+                                      const weeklyAmt = weeksLeft ? Math.round((debt.balance / weeksLeft) * 100) / 100 : null;
+                                      return (
+                                        <div className="flex flex-col gap-0.5">
+                                          {dd && <span className="text-xs text-muted-foreground">Due: {new Date(dd + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
+                                          {weeklyAmt != null && <span className="text-xs text-rose-600 font-medium">${weeklyAmt.toFixed(2)}/wk set aside</span>}
+                                        </div>
+                                      );
+                                    })() : (
+                                      <>
+                                        <span className="text-xs text-muted-foreground">
+                                          Min: ${debt.minimumPayment.toFixed(2)}/mo
+                                        </span>
+                                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                          <Checkbox
+                                            checked={debtBillImports.has(debt.id)}
+                                            onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
+                                            className="rounded h-3.5 w-3.5"
+                                          />
+                                          <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
+                                        </label>
+                                      </>
+                                    )}
                                   </div>
                                   <div className="flex gap-1">
                                     <Button
@@ -4991,6 +5073,7 @@ export function BudgetWizard({
                             weeks={allWeeks}
                             budgetId={activeCloudBudgetId ?? undefined}
                             checkins={checkinsQuery.data?.checkins}
+                            lumpSumDebts={debts.filter(d => d.type === "lump_sum").map(d => ({ id: d.id, name: d.name, balance: d.balance, dueDate: d.dueDate ?? null, originalAmount: d.originalAmount ?? d.balance }))}
                             onContributionChange={triggerBackgroundSheetSync}
                             onOpenCheckIn={() => {
                               const today = new Date();
@@ -5550,37 +5633,46 @@ export function BudgetWizard({
           <DebtForm
             initialData={editingDebtIndex !== null ? debts[editingDebtIndex] : undefined}
             onSubmit={(data: Debt) => {
+              const isLumpSum = data.type === "lump_sum";
               if (editingDebtIndex !== null) {
                 updateDebt(editingDebtIndex, data);
-                const linkedBillIdx = bills.findIndex(b => b.sourceDebtId === data.id);
-                if (linkedBillIdx >= 0) {
-                  updateBill(linkedBillIdx, {
-                    ...bills[linkedBillIdx],
-                    type: debtBillType(data),
-                    dayOfMonth: debtBillDayOfMonth(data),
-                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
-                  });
+                if (!isLumpSum) {
+                  const linkedBillIdx = bills.findIndex(b => b.sourceDebtId === data.id);
+                  if (linkedBillIdx >= 0) {
+                    updateBill(linkedBillIdx, {
+                      ...bills[linkedBillIdx],
+                      type: debtBillType(data),
+                      dayOfMonth: debtBillDayOfMonth(data),
+                      payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
+                    });
+                  }
+                } else {
+                  // Remove any old standard bill linked to this debt (in case type was changed)
+                  const linkedBillIdx = bills.findIndex(b => b.sourceDebtId === data.id);
+                  if (linkedBillIdx >= 0) preserveScroll(() => removeBill(linkedBillIdx));
                 }
                 triggerBackgroundSheetSync();
               } else {
                 addDebt(data);
-                setDebtBillImports(prev => {
-                  const next = new Set(prev);
-                  next.add(data.id);
-                  return next;
-                });
-                const alreadyExists = bills.some(b => b.sourceDebtId === data.id);
-                if (!alreadyExists) {
-                  addBill({
-                    name: `${data.name} (min payment)`,
-                    amount: -Math.abs(data.minimumPayment),
-                    dayOfMonth: debtBillDayOfMonth(data),
-                    category: "Debt Payment",
-                    type: debtBillType(data),
-                    color: "red",
-                    sourceDebtId: data.id,
-                    payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
+                if (!isLumpSum) {
+                  setDebtBillImports(prev => {
+                    const next = new Set(prev);
+                    next.add(data.id);
+                    return next;
                   });
+                  const alreadyExists = bills.some(b => b.sourceDebtId === data.id);
+                  if (!alreadyExists) {
+                    addBill({
+                      name: `${data.name} (min payment)`,
+                      amount: -Math.abs(data.minimumPayment),
+                      dayOfMonth: debtBillDayOfMonth(data),
+                      category: "Debt Payment",
+                      type: debtBillType(data),
+                      color: "red",
+                      sourceDebtId: data.id,
+                      payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
+                    });
+                  }
                 }
               }
               setIsDebtDialogOpen(false);
@@ -5796,12 +5888,13 @@ export function BudgetWizard({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      const allActive = debts.every(d => debtBillImports.has(d.id));
+                      const billableDebts = debts.filter(d => d.type !== "lump_sum");
+                      const allActive = billableDebts.length > 0 && billableDebts.every(d => debtBillImports.has(d.id));
                       preserveScroll(() => toggleAllDebtsAsBills(!allActive));
                     }}
                     className="rounded-xl border-red-300 text-red-700 hover:bg-red-50 shrink-0"
                   >
-                    {debts.every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
+                    {debts.filter(d => d.type !== "lump_sum").every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
                   </Button>
                 )}
                 <Button
@@ -6002,17 +6095,34 @@ export function BudgetWizard({
                         })()}
                         <div className="flex items-center justify-between mt-3">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              Min: ${debt.minimumPayment.toFixed(2)}/mo
-                            </span>
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                              <Checkbox
-                                checked={debtBillImports.has(debt.id)}
-                                onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
-                                className="rounded h-3.5 w-3.5"
-                              />
-                              <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
-                            </label>
+                            {debt.type === "lump_sum" ? (() => {
+                              const dd = debt.dueDate;
+                              const todayD = new Date(); todayD.setHours(0,0,0,0);
+                              const msPerWeek = 7*24*60*60*1000;
+                              const dueDateD = dd ? new Date(dd + "T00:00:00") : null;
+                              const weeksLeftD = dueDateD && dueDateD > todayD ? Math.max(1, Math.ceil((dueDateD.getTime() - todayD.getTime()) / msPerWeek)) : null;
+                              const weeklyAmtD = weeksLeftD ? Math.round((debt.balance / weeksLeftD) * 100) / 100 : null;
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  {dd && <span className="text-xs text-muted-foreground">Due: {new Date(dd + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
+                                  {weeklyAmtD != null && <span className="text-xs text-rose-600 font-medium">${weeklyAmtD.toFixed(2)}/wk set aside</span>}
+                                </div>
+                              );
+                            })() : (
+                              <>
+                                <span className="text-xs text-muted-foreground">
+                                  Min: ${debt.minimumPayment.toFixed(2)}/mo
+                                </span>
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                  <Checkbox
+                                    checked={debtBillImports.has(debt.id)}
+                                    onCheckedChange={(v) => toggleDebtAsBill(debt.id, !!v)}
+                                    className="rounded h-3.5 w-3.5"
+                                  />
+                                  <span className="text-[10px] text-muted-foreground font-medium">As bill</span>
+                                </label>
+                              </>
+                            )}
                           </div>
                           <div className="flex gap-1">
                             <Button

@@ -20,14 +20,14 @@ export interface SavedBudgetUpdateRequest {
   linkedSheetName?: string | null;
   /** Type of linked sheet ('google' or 'excel') */
   linkedSheetType?: SavedBudgetUpdateRequestLinkedSheetType;
+  /** Web URL to open the linked Excel file (null to clear) */
+  linkedSheetUrl?: string | null;
   /** ID of the linked Google Sheet (null clears the link) */
   linkedGoogleSheetId?: string | null;
   /** Display name of the linked Google Sheet */
   linkedGoogleSheetName?: string | null;
-  /** ID of the linked Excel/OneDrive file (null clears the link) */
+  /** ID of the linked Excel file (null clears the link) */
   linkedExcelSheetId?: string | null;
-  /** Display name of the linked Excel/OneDrive file */
+  /** Display name of the linked Excel file */
   linkedExcelSheetName?: string | null;
-  /** Web URL to open the linked Excel file (null to clear) */
-  linkedSheetUrl?: string | null;
 }

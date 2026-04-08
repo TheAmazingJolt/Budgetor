@@ -1294,6 +1294,7 @@ components:
         - car_loan
         - installment
         - collections
+        - lump_sum
 
     Debt:
       type: object
@@ -1354,6 +1355,10 @@ components:
           nullable: true
           minimum: 1
           description: Optional count of payments remaining (for fixed-installment debts). When provided, payoff date is derived from this count × payment frequency, overriding the balance/rate formula.
+        dueDate:
+          type: string
+          nullable: true
+          description: ISO date string for the payment due date (used by lump_sum debts as the single payoff date).
       required:
         - id
         - name
@@ -1396,6 +1401,22 @@ components:
           type: string
           nullable: true
           description: Web URL to open the linked Excel file (null for Google Sheets or if not saved)
+        linkedGoogleSheetId:
+          type: string
+          nullable: true
+          description: ID of the linked Google Sheet (null if no link)
+        linkedGoogleSheetName:
+          type: string
+          nullable: true
+          description: Display name of the linked Google Sheet
+        linkedExcelSheetId:
+          type: string
+          nullable: true
+          description: ID of the linked Excel file (null if no link)
+        linkedExcelSheetName:
+          type: string
+          nullable: true
+          description: Display name of the linked Excel file
         createdAt:
           type: string
           format: date-time
@@ -1479,6 +1500,22 @@ components:
           type: string
           nullable: true
           description: Web URL to open the linked Excel file (null to clear)
+        linkedGoogleSheetId:
+          type: string
+          nullable: true
+          description: ID of the linked Google Sheet (null clears the link)
+        linkedGoogleSheetName:
+          type: string
+          nullable: true
+          description: Display name of the linked Google Sheet
+        linkedExcelSheetId:
+          type: string
+          nullable: true
+          description: ID of the linked Excel file (null clears the link)
+        linkedExcelSheetName:
+          type: string
+          nullable: true
+          description: Display name of the linked Excel file
 
     GoogleAuthStatus:
       type: object
