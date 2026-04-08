@@ -27,11 +27,16 @@ if (sessionSecret === DEV_SESSION_SECRET) {
 }
 
 const encryptionKey = process.env["ENCRYPTION_KEY"];
-if (!encryptionKey) {
-  console.error("[startup] ENCRYPTION_KEY is required but was not set. Refusing to start.");
-  process.exit(1);
-}
-if (!/^[0-9a-fA-F]{64}$/.test(encryptionKey)) {
+if (process.env["NODE_ENV"] === "production") {
+  if (!encryptionKey) {
+    console.error("[startup] ENCRYPTION_KEY is required but was not set. Refusing to start.");
+    process.exit(1);
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(encryptionKey)) {
+    console.error("[startup] ENCRYPTION_KEY must be exactly 64 hex characters. Refusing to start.");
+    process.exit(1);
+  }
+} else if (encryptionKey && !/^[0-9a-fA-F]{64}$/.test(encryptionKey)) {
   console.error("[startup] ENCRYPTION_KEY must be exactly 64 hex characters. Refusing to start.");
   process.exit(1);
 }
