@@ -1579,135 +1579,97 @@ function parseLabelEndDateExcel(label: string): Date | null {
   return new Date(year, parseInt(m[4]) - 1, parseInt(m[5]));
 }
 
-async function archivePastWeeksInExcel(
-  token: string,
-  fileId: string,
+function archivePastWeeksInExcel(
+  wb: ExcelJS.Workbook,
   budgetSheetName: string,
-): Promise<void> {
+): void {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const encodedBudget = encodeURIComponent(budgetSheetName);
+  const budgetWs = wb.getWorksheet(budgetSheetName);
+  if (!budgetWs) return;
 
-  // Read the budget sheet header row
-  let headerRow: any[] = [];
-  try {
-    const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${encodedBudget}/usedRange`);
-    headerRow = usedRange.values?.[0] ?? [];
-  } catch {
-    return;
-  }
+  // Read the header row (row 1) from the Budget sheet
+  const headerRow = budgetWs.getRow(1);
+  const headerValues: (string | null)[] = [];
+  headerRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+    headerValues[colNum - 1] = cell.text ?? null;
+  });
 
-  // Find past-week column groups (each week spans 2 columns)
-  const pastColGroups: { startCol: number; endCol: number; label: string }[] = [];
-  for (let c = 0; c < headerRow.length; c++) {
-    const label = String(headerRow[c] ?? "").trim();
+  // Find past-week column groups (each week spans 2 columns: label col + value col)
+  const pastColGroups: { startCol: number; endCol: number }[] = [];
+  for (let c = 0; c < headerValues.length; c++) {
+    const label = String(headerValues[c] ?? "").trim();
     if (!label.toLowerCase().startsWith("budget")) continue;
     const endDate = parseLabelEndDateExcel(label);
     if (!endDate) continue;
     if (endDate < today) {
-      pastColGroups.push({ startCol: c, endCol: c + 1, label });
+      pastColGroups.push({ startCol: c + 1, endCol: c + 2 }); // 1-indexed
       c++; // skip the value column
     }
   }
 
   if (pastColGroups.length === 0) return;
 
-  // Read all data for past columns
-  const fullUsedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${encodedBudget}/usedRange`);
-  const allRows: any[][] = fullUsedRange.values ?? [];
-  const totalRows = allRows.length;
-
-  // Extract column data for each past week group
-  const pastColData: any[][][] = pastColGroups.map(g => {
-    return allRows.map(row => [
-      row[g.startCol] ?? "",
-      row[g.endCol] ?? "",
-    ]);
-  });
-
   // Ensure Archive worksheet exists
-  const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`);
-  const allSheets: any[] = sheetsData.value ?? [];
-  let archiveSheet = allSheets.find((s: any) => s.name === "Archive");
+  let archiveWs = wb.getWorksheet("Archive");
+  if (!archiveWs) archiveWs = wb.addWorksheet("Archive");
 
-  if (!archiveSheet) {
-    await graphPost(token, `/me/drive/items/${fileId}/workbook/worksheets/add`, { name: "Archive" });
-    archiveSheet = { name: "Archive" };
-  }
+  // Find the next free column in the Archive sheet (1-indexed)
+  let archiveStartCol = 1;
+  archiveWs.getRow(1).eachCell({ includeEmpty: false }, (_cell, colNum) => {
+    if (colNum >= archiveStartCol) archiveStartCol = colNum + 1;
+  });
+  if ((archiveStartCol - 1) % 2 !== 0) archiveStartCol++;
 
-  const encodedArchive = encodeURIComponent("Archive");
-
-  // Find the next free column in the Archive sheet
-  let archiveStartCol = 0;
-  try {
-    const archiveUsed = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${encodedArchive}/usedRange`);
-    const archiveHeader: any[] = archiveUsed.values?.[0] ?? [];
-    let lastNonEmpty = -1;
-    for (let c = archiveHeader.length - 1; c >= 0; c--) {
-      if (archiveHeader[c] && String(archiveHeader[c]).trim() !== "") {
-        lastNonEmpty = c;
-        break;
-      }
+  // Copy each past-week column pair into the Archive sheet then clear from Budget
+  const budgetRowCount = budgetWs.rowCount;
+  pastColGroups.forEach((g, i) => {
+    const destLc = archiveStartCol + i * 2;
+    const destVc = destLc + 1;
+    for (let r = 1; r <= budgetRowCount; r++) {
+      const srcLcCell = budgetWs.getCell(r, g.startCol);
+      const srcVcCell = budgetWs.getCell(r, g.endCol);
+      archiveWs!.getCell(r, destLc).value = srcLcCell.value;
+      archiveWs!.getCell(r, destVc).value = srcVcCell.value;
     }
-    archiveStartCol = lastNonEmpty + 1;
-    if (archiveStartCol % 2 !== 0) archiveStartCol++;
-  } catch { /* start at 0 */ }
+    // Clear past-week columns from Budget sheet
+    for (let r = 1; r <= budgetRowCount; r++) {
+      budgetWs.getCell(r, g.startCol).value = null;
+      budgetWs.getCell(r, g.endCol).value = null;
+    }
+  });
+}
 
-  // Append each past week group to the Archive sheet
-  for (let i = 0; i < pastColData.length; i++) {
-    const colData = pastColData[i];
-    if (!colData || colData.length === 0) continue;
-    const destStartLetter = colLetter(archiveStartCol + i * 2);
-    const destEndLetter = colLetter(archiveStartCol + i * 2 + 1);
-    const destRange = `${destStartLetter}1:${destEndLetter}${colData.length}`;
-    try {
-      await graphPatch(
-        token,
-        `/me/drive/items/${fileId}/workbook/worksheets/${encodedArchive}/range(address='${destRange}')`,
-        { values: colData },
-      );
-    } catch { /* continue */ }
-  }
-
-  // Clear past-week columns from the Budget sheet by writing empty strings
-  for (const g of pastColGroups) {
-    const clearRange = `${colLetter(g.startCol)}1:${colLetter(g.endCol)}${totalRows}`;
-    try {
-      await graphPatch(
-        token,
-        `/me/drive/items/${fileId}/workbook/worksheets/${encodedBudget}/range(address='${clearRange}')`,
-        { values: Array.from({ length: totalRows }, () => ["", ""]) },
-      );
-    } catch { /* non-fatal */ }
+async function uploadWorkbookToOneDrive(token: string, fileId: string, wb: ExcelJS.Workbook): Promise<void> {
+  const outBuf = await wb.xlsx.writeBuffer();
+  const uploadRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    body: outBuf,
+  });
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    throw Object.assign(new Error(`Failed to upload Excel file: ${errText}`), { status: uploadRes.status });
   }
 }
 
-async function writeSavingsTabToExcel(
-  token: string,
-  fileId: string,
-  bills: BillMeta[],
-  weeks: ExcelWriteRequest["weeks"],
-  contributions: { billName: string; amount: number; date: string }[],
-  goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
-  tz?: string,
-  debts?: DebtItem[],
-): Promise<void> {
+async function downloadWorkbookFromOneDrive(token: string, fileId: string): Promise<ExcelJS.Workbook> {
   const downloadRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
     headers: { Authorization: `Bearer ${token}` },
     redirect: "follow",
   });
-  if (!downloadRes.ok) return;
+  if (!downloadRes.ok) {
+    const errText = await downloadRes.text();
+    throw Object.assign(new Error(`Failed to download Excel file: ${errText}`), { status: downloadRes.status });
+  }
   const rawBuf = await downloadRes.arrayBuffer();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(rawBuf as any);
-  writeExcelSavingsSheetXL(wb, bills, weeks, contributions, goals, tz, [], debts ?? []);
-  const outBuf = await wb.xlsx.writeBuffer();
-  await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-    body: outBuf,
-  });
+  return wb;
 }
 
 router.post("/excel/:id/write", async (req, res): Promise<void> => {
@@ -1719,7 +1681,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
 
   const fileId = req.params["id"];
   const body = req.body as ExcelWriteRequest;
-  const { weeks, startCol, includeRemainingAcct, sheetTitle } = body;
+  const { weeks, includeRemainingAcct, sheetTitle } = body;
 
   if (!weeks?.length) {
     res.status(400).json({ error: "No weeks to write" });
@@ -1728,175 +1690,65 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
 
   try {
     const targetSheetName = sheetTitle ?? "Budget";
-    const sheetName = encodeURIComponent(targetSheetName);
 
-    // Archive past weeks before writing; recalculate startCol based on remaining columns
-    let effectiveStartCol = startCol;
+    // Download the existing workbook and operate on it entirely with ExcelJS —
+    // no Graph workbook API calls, which return 405 on personal OneDrive accounts.
+    const wb = await downloadWorkbookFromOneDrive(token, fileId);
+
+    // Archive any past weeks (moves them to the Archive sheet in memory)
     try {
-      await archivePastWeeksInExcel(token, fileId, targetSheetName);
-      // Re-read the header to count remaining current-week columns
-      try {
-        const postArchiveRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`);
-        const postHeader: any[] = postArchiveRange.values?.[0] ?? [];
-        let lastCurrentCol = -1;
-        for (let c = 0; c < postHeader.length; c++) {
-          const lbl = String(postHeader[c] ?? "").trim();
-          if (lbl.toLowerCase().startsWith("budget")) lastCurrentCol = c + 1; // +1 for value col
-        }
-        effectiveStartCol = lastCurrentCol >= 0 ? lastCurrentCol + 1 : 0;
-      } catch { /* fall back to original startCol */ }
+      archivePastWeeksInExcel(wb, targetSheetName);
     } catch (archiveErr: any) {
       console.log("[excel/write] archive step error (non-fatal):", archiveErr?.message);
     }
 
-    const maxBills = Math.max(...weeks.map((w) => w.bills.length));
-    const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
-    const totalCols = effectiveStartCol + weeks.length * 2;
-
-    // Find the sheet's current used extent so we can clear any old week columns
-    // that lie beyond the new weeks (handles reducing week count on re-sync).
-    let clearEndColIdx = totalCols - 1;
-    try {
-      const usedRangeRes = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`);
-      const usedAddr = usedRangeRes.address?.split("!")?.[1] ?? "";
-      const endCell = usedAddr.split(":")?.[1] ?? "";
-      const oldLastColLetters = endCell.replace(/[0-9]/g, "");
-      if (oldLastColLetters) {
-        const oldLastColIdx = letterToColIndex(oldLastColLetters);
-        clearEndColIdx = Math.max(clearEndColIdx, oldLastColIdx);
-      }
-    } catch { /* proceed without extra clearing */ }
-
-    // Build the grid wide enough to overwrite all previously-used columns with "".
-    const grid: (string | number)[][] = Array.from({ length: totalRows }, () =>
-      Array(clearEndColIdx + 1).fill("")
-    );
-
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const week = weeks[wIdx];
-      const lc = effectiveStartCol + wIdx * 2;
-      const vc = lc + 1;
-      let row = 0;
-
-      grid[row][lc] = week.weekLabel;
-      row++;
-
-      const sumStartRow = row;
-
-      if (includeRemainingAcct) {
-        grid[row][lc] = "Remaining Acct";
-        grid[row][vc] = week.openingBalance;
-        row++;
-      }
-
-      grid[row][lc] = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
-        ? "Paycheck (" + week.paycheckBreakdown.map(b => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ") + ")"
-        : "Paycheck";
-      grid[row][vc] = week.paycheck;
-      row++;
-
-      for (const bill of week.bills) {
-        grid[row][lc] = bill.name;
-        grid[row][vc] = bill.amount;
-        row++;
-      }
-
-      while (row < totalRows - 1) {
-        grid[row][lc] = "";
-        grid[row][vc] = "";
-        row++;
-      }
-
-      const vcLetter = colLetter(vc);
-      grid[totalRows - 1][lc] = "Remaining";
-      grid[totalRows - 1][vc] = `=SUM(${vcLetter}${sumStartRow + 1}:${vcLetter}${totalRows - 1})`;
+    // Locate (or create) the Budget worksheet and rewrite it entirely
+    let ws = wb.getWorksheet(targetSheetName);
+    if (!ws) {
+      ws = wb.worksheets.find(
+        (s) => s.state !== "hidden" && s.state !== "veryHidden"
+          && s.name !== "_BudgifyData" && s.name !== "_MoneyPalData" && s.name !== "Savings" && s.name !== "Archive"
+      );
+      if (!ws) ws = wb.addWorksheet(targetSheetName);
     }
 
-    const startAddr = `${colLetter(effectiveStartCol)}1`;
-    const endAddr = `${colLetter(clearEndColIdx)}${totalRows}`;
-    const rangeAddr = `${startAddr}:${endAddr}`;
+    writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct ?? false, 0);
 
-    const slicedGrid = grid.map((row) => row.slice(effectiveStartCol));
-
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${rangeAddr}')`,
-      { values: slicedGrid }
-    );
-
-    const boldRowRange = `${colLetter(effectiveStartCol)}1:${colLetter(totalCols - 1)}1`;
-    await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRange}')/format/font`,
-      { bold: true, name: "Arial", size: 10 }
-    );
-
-    const bodyRange = `${colLetter(effectiveStartCol)}2:${colLetter(totalCols - 1)}${totalRows}`;
-    await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${bodyRange}')/format/font`,
-      { bold: false, name: "Arial", size: 10 }
-    );
-
-    // Clear fill for all columns from effectiveStartCol to clearEndColIdx (covers old weeks too).
-    const fullWeekRangeWrite = `${colLetter(effectiveStartCol)}1:${colLetter(clearEndColIdx)}${totalRows}`;
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fullWeekRangeWrite}')/format/fill`,
-      { patternType: "none" }
-    );
-
-    // Re-apply cornflower blue to the week header label row (row 1) after the full clear.
-    const boldRowRangeWrite = `${colLetter(effectiveStartCol)}1:${colLetter(totalCols - 1)}1`;
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${boldRowRangeWrite}')/format/fill`,
-      { color: "#BDD7EE" }
-    );
-
-    // Apply user-chosen fill colors to individual bill rows (run in parallel).
-    const billRowBaseWrite = 3 + (includeRemainingAcct ? 1 : 0);
-    const billFillWrite: Promise<void>[] = [];
-    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-      const lc = effectiveStartCol + wIdx * 2;
-      const vc = lc + 1;
-      weeks[wIdx].bills.forEach((bill, j) => {
-        const hex = bill.color ? BILL_COLOR_HEX[bill.color] : undefined;
-        if (!hex) return;
-        const rowNum = billRowBaseWrite + j;
-        const fillRange = `${colLetter(lc)}${rowNum}:${colLetter(vc)}${rowNum}`;
-        billFillWrite.push(
-          graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='${fillRange}')/format/fill`, { color: `#${hex}` }).then(() => {})
-        );
-      });
+    // Update or create the _BudgifyData hidden sheet
+    const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
+    if (hasMeta) {
+      let dataWs = wb.getWorksheet("_BudgifyData") ?? wb.getWorksheet("_MoneyPalData");
+      if (!dataWs) dataWs = wb.addWorksheet("_BudgifyData");
+      writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
     }
+
+    // Update the Savings tab in the same workbook pass (single upload instead of two)
+    if (body.bills && body.bills.length > 0 && body.budgetId && (req as any).user?.id) {
+      try {
+        const userId = (req as any).user.id;
+        const budgetId = body.budgetId;
+        const contribRows = await db.select().from(savingsContributionsTable)
+          .where(and(eq(savingsContributionsTable.budgetId, budgetId), eq(savingsContributionsTable.userId, userId)));
+        const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+        const goalRows = await db.select().from(savingsGoalsTable)
+          .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
+        const goals = goalRows.map(g => ({
+          name: g.name,
+          targetAmount: Number(g.targetAmount),
+          targetDate: g.targetDate,
+          savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+        }));
+        writeExcelSavingsSheetXL(wb, body.bills, weeks, contribs, goals, body.tz, [], body.debts ?? []);
+      } catch { /* non-fatal — savings tab update failure should not block the main write */ }
+    }
+
+    // Re-upload the modified workbook in a single PUT request
+    await uploadWorkbookToOneDrive(token, fileId, wb);
 
     res.json({
       ok: true,
-      message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} starting at column ${colLetter(effectiveStartCol)}`,
+      message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} to ${targetSheetName}`,
     });
-
-    if (body.bills && body.bills.length > 0 && body.budgetId && (req as any).user?.id) {
-      const userId = (req as any).user.id;
-      const budgetId = body.budgetId;
-      const bills = body.bills;
-      ;(async () => {
-        try {
-          const contribRows = await db.select().from(savingsContributionsTable)
-            .where(and(eq(savingsContributionsTable.budgetId, budgetId), eq(savingsContributionsTable.userId, userId)));
-          const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
-          const goalRows = await db.select().from(savingsGoalsTable)
-            .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
-          const goals = goalRows.map(g => ({
-            name: g.name,
-            targetAmount: Number(g.targetAmount),
-            targetDate: g.targetDate,
-            savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
-          }));
-          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals, body.tz, body.debts);
-        } catch { /* non-fatal */ }
-      })().catch(() => {});
-    }
   } catch (err: any) {
     handleGraphError(err, req, res, "write Excel file");
   }
