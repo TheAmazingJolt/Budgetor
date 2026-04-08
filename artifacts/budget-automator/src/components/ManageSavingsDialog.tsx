@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PiggyBank, Plus, Pencil, Trash2, Check, X, Calendar, Target, TrendingUp, Crown } from "lucide-react";
