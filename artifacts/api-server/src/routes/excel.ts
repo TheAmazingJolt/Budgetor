@@ -1579,6 +1579,77 @@ function parseLabelEndDateExcel(label: string): Date | null {
   return new Date(year, parseInt(m[4]) - 1, parseInt(m[5]));
 }
 
+function writeWeeksToWorksheetColumns(
+  ws: ExcelJS.Worksheet,
+  weeks: ExcelWriteRequest["weeks"],
+  startCol: number,
+  includeRemainingAcct: boolean,
+): void {
+  const maxBills = weeks.length > 0 ? Math.max(...weeks.map((w) => w.bills.length)) : 0;
+  const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    const week = weeks[wIdx];
+    const lc = startCol + 1 + wIdx * 2; // 1-indexed ExcelJS column
+    const vc = lc + 1;
+    let r = 1;
+
+    ws.getCell(r, lc).value = week.weekLabel;
+    ws.getCell(r, vc).value = "";
+    for (const c of [lc, vc]) {
+      ws.getCell(r, c).fill = xlFill("FFBDD7EE");
+      ws.getCell(r, c).font = xlFont(true);
+    }
+    r++;
+
+    const sumStartRow = r;
+
+    if (includeRemainingAcct) {
+      ws.getCell(r, lc).value = "Remaining Acct";
+      ws.getCell(r, vc).value = week.openingBalance;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+      r++;
+    }
+
+    const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+      ? `Paycheck (${week.paycheckBreakdown.map((b) => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ")})`
+      : "Paycheck";
+    ws.getCell(r, lc).value = paycheckLabel;
+    ws.getCell(r, vc).value = week.paycheck;
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY;
+    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    r++;
+
+    for (const bill of week.bills) {
+      const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
+      ws.getCell(r, lc).value = bill.name;
+      ws.getCell(r, vc).value = bill.amount;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      for (const c of [lc, vc]) {
+        ws.getCell(r, c).font = xlFont();
+        if (argb) ws.getCell(r, c).fill = xlFill(argb);
+      }
+      r++;
+    }
+
+    while (r < totalRows) {
+      ws.getCell(r, lc).value = "";
+      ws.getCell(r, vc).value = "";
+      r++;
+    }
+
+    const vcLetter = colLetter(vc - 1);
+    ws.getCell(r, lc).value = "Remaining";
+    ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+
+    ws.getColumn(lc).width = 28;
+    ws.getColumn(vc).width = 14;
+  }
+}
+
 function archivePastWeeksInExcel(
   wb: ExcelJS.Workbook,
   budgetSheetName: string,
@@ -1702,7 +1773,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       console.log("[excel/write] archive step error (non-fatal):", archiveErr?.message);
     }
 
-    // Locate (or create) the Budget worksheet and rewrite it entirely
+    // Locate (or create) the Budget worksheet
     let ws = wb.getWorksheet(targetSheetName);
     if (!ws) {
       ws = wb.worksheets.find(
@@ -1712,7 +1783,17 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       if (!ws) ws = wb.addWorksheet(targetSheetName);
     }
 
-    writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct ?? false, 0);
+    const startCol = body.startCol ?? 0;
+
+    if (startCol === 0) {
+      // Full overwrite — clear the Budget sheet and rewrite all weeks from column A
+      writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct ?? false, 0);
+    } else {
+      // Incremental — write only the target column pair(s) without touching other columns.
+      // startCol is 0-indexed (matches the read-side FIRST_BUDGET_COL convention),
+      // ExcelJS uses 1-indexed, so offset by 1.
+      writeWeeksToWorksheetColumns(ws, weeks, startCol, includeRemainingAcct ?? false);
+    }
 
     // Update or create the _BudgifyData hidden sheet
     const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
