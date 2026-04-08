@@ -43,7 +43,7 @@ function getAuthedClient(req: any) {
       if (newTokens.refresh_token) update.googleRefreshToken = maybeEncrypt(newTokens.refresh_token);
       if (newTokens.expiry_date) update.googleTokenExpiry = newTokens.expiry_date;
       db.update(usersTable).set(update as any).where(eq(usersTable.id, user.id)).catch((err) => {
-        console.error("Failed to persist refreshed Google tokens:", err);
+        console.error("[token-refresh] failed to persist tokens:", user.id, "google", err.message);
       });
     });
 

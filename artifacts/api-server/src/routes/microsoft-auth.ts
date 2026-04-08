@@ -201,7 +201,9 @@ export async function refreshMicrosoftToken(req: any): Promise<string | null> {
 
             return newTokens.access_token;
           }
-        } catch {
+        } catch (err: unknown) {
+          const userId = user?.id ?? "unknown";
+          console.warn("[token-refresh] Microsoft token refresh failed for user", userId, err instanceof Error ? err.message : String(err));
         }
       }
     }
@@ -252,12 +254,14 @@ export async function refreshMicrosoftToken(req: any): Promise<string | null> {
         microsoftTokenExpiry: newExpiry,
         updatedAt: new Date(),
       }).where(eq(usersTable.id, user.id)).catch((err) => {
-        console.error("Failed to persist refreshed Microsoft tokens:", err);
+        console.error("[token-refresh] failed to persist tokens:", user.id, "microsoft", err instanceof Error ? err.message : String(err));
       });
     }
 
     return newTokens.access_token;
-  } catch {
+  } catch (err: unknown) {
+    const userId = user?.id ?? "unknown";
+    console.warn("[token-refresh] Microsoft session token refresh failed for user", userId, err instanceof Error ? err.message : String(err));
     return null;
   }
 }
