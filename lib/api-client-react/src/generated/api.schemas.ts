@@ -145,6 +145,7 @@ export interface AuthUser {
   name: string;
   avatarUrl?: string | null;
   provider: string;
+  plan?: 'free' | 'pro';
   createdAt: string;
 }
 

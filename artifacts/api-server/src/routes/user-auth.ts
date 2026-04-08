@@ -62,8 +62,21 @@ function serializeUser(user: User) {
     name: user.name,
     avatarUrl: user.avatarUrl,
     provider: user.provider,
+    plan: (user.plan ?? "free") as "free" | "pro",
     createdAt: user.createdAt,
   };
+}
+
+export function requirePro(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ error: "Not signed in" });
+    return;
+  }
+  if ((req.user.plan ?? "free") !== "pro") {
+    res.status(403).json({ error: "Pro plan required", upgradeRequired: true });
+    return;
+  }
+  next();
 }
 
 function isAllowedRedirect(url: string): boolean {
@@ -576,6 +589,15 @@ router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
   const { bills } = req.body as { bills: unknown[] };
   if (!Array.isArray(bills)) {
     res.status(400).json({ error: "bills must be an array" });
+    return;
+  }
+  const FREE_BILL_LIMIT = 5;
+  if ((req.user!.plan ?? "free") === "free" && bills.length > FREE_BILL_LIMIT) {
+    res.status(403).json({
+      error: `Free plan is limited to ${FREE_BILL_LIMIT} spending categories. Upgrade to Pro for unlimited categories.`,
+      upgradeRequired: true,
+      limit: FREE_BILL_LIMIT,
+    });
     return;
   }
   await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));

@@ -399,6 +399,13 @@ export function SignInPage({
                 </li>
               ))}
             </ul>
+            <Button
+              variant="outline"
+              className="w-full rounded-xl h-11 mt-auto"
+              onClick={scrollToSignIn}
+            >
+              Get started free
+            </Button>
           </div>
 
           {/* Pro */}
@@ -424,6 +431,29 @@ export function SignInPage({
                 </li>
               ))}
             </ul>
+            <Button
+              className="w-full rounded-xl h-11 mt-auto bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 gap-2"
+              onClick={() => {
+                localStorage.setItem("upgrade_intent", "pro");
+                if (googleLoginAvailable) {
+                  setClickedProvider("google");
+                  onGoogleLogin();
+                } else if (appleLoginAvailable) {
+                  setClickedProvider("apple");
+                  onAppleLogin();
+                } else {
+                  scrollToSignIn();
+                }
+              }}
+              disabled={isLoggingIn}
+            >
+              {isLoggingIn && (clickedProvider === "google" || clickedProvider === "apple") ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Star className="w-4 h-4" />
+              )}{" "}
+              Get started — $5/mo
+            </Button>
           </div>
         </div>
       </section>

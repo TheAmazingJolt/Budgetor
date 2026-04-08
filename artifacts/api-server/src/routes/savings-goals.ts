@@ -81,6 +81,23 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
       return;
     }
 
+    const FREE_GOAL_LIMIT = 1;
+    const user = (req as any).user;
+    if ((user?.plan ?? "free") === "free") {
+      const existingGoals = await db
+        .select({ id: savingsGoalsTable.id })
+        .from(savingsGoalsTable)
+        .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
+      if (existingGoals.length >= FREE_GOAL_LIMIT) {
+        res.status(403).json({
+          error: `Free plan is limited to ${FREE_GOAL_LIMIT} savings goal. Upgrade to Pro for unlimited goals.`,
+          upgradeRequired: true,
+          limit: FREE_GOAL_LIMIT,
+        });
+        return;
+      }
+    }
+
     await pool.query(`ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS include_in_budget BOOLEAN NOT NULL DEFAULT false`);
 
     const { rows: [row] } = await pool.query(

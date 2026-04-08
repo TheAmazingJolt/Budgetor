@@ -17,6 +17,9 @@ export const usersTable = pgTable("users", {
   debts: jsonb("debts").default([]),
   bills: jsonb("bills").default([]),
   preferences: jsonb("preferences").default({}),
+  plan: text("plan").notNull().default("free").$type<"free" | "pro">(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

@@ -15,6 +15,7 @@ import {
   authLoginApple,
   getAuthMeQueryKey,
   getAuthProvidersQueryKey,
+  stripeCheckout,
 } from "@workspace/api-client-react";
 import { DollarSign, Loader2, RefreshCw } from "lucide-react";
 
@@ -128,6 +129,13 @@ function AppRouting() {
         if (data.user) {
           qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
           qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
+          const intent = localStorage.getItem("upgrade_intent");
+          if (intent === "pro") {
+            localStorage.removeItem("upgrade_intent");
+            stripeCheckout()
+              .then(({ url }) => { window.location.href = url; })
+              .catch(() => {});
+          }
         }
       })
       .catch(() => {
@@ -182,6 +190,18 @@ function AppRouting() {
       },
     });
   };
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === "/upgrade/success") {
+      window.history.replaceState({}, "", "/");
+      toast({ title: "Welcome to Pro!", description: "Your subscription is active. Enjoy all Pro features." });
+    } else if (path === "/upgrade/cancelled") {
+      window.history.replaceState({}, "", "/");
+      toast({ title: "Upgrade cancelled", description: "Your plan has not changed. Upgrade any time from your account." });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (authQuery.isLoading || providersQuery.isLoading) {
     return <SplashScreen />;

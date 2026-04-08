@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { google, type sheets_v4 } from "googleapis";
 import { db, usersTable, maybeEncrypt, maybeDecrypt, savingsContributionsTable, savingsGoalsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { requireAuth, requirePro } from "./user-auth";
 
 const router: IRouter = Router();
 
@@ -2034,7 +2035,7 @@ async function writeSavingsTabToSheet(
   }
 }
 
-router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
+router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res): Promise<void> => {
   const auth = getAuthedClient(req);
   if (!auth) {
     res.status(401).json({ error: "Not authenticated with Google" });
@@ -2107,7 +2108,7 @@ router.post("/sheets/create-and-write", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/sheets/:id/write", async (req, res): Promise<void> => {
+router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Promise<void> => {
   const auth = getAuthedClient(req);
   if (!auth) {
     console.log("[sheets/write] no auth — returning 401");

@@ -19,7 +19,8 @@
     "express": "^5",
     "express-session": "^1.19.0",
     "googleapis": "^171.4.0",
-    "jose": "^6.2.1"
+    "jose": "^6.2.1",
+    "stripe": "^22.0.1"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",

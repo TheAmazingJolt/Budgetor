@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { PiggyBank, Plus, Pencil, Trash2, Check, X, Calendar, Target, TrendingUp } from "lucide-react";
+import { PiggyBank, Plus, Pencil, Trash2, Check, X, Calendar, Target, TrendingUp, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,9 +55,13 @@ function formatTargetDate(dateStr: string): string {
 interface ManageSavingsDialogProps {
   budgetId: string;
   onGoalsChanged?: () => void;
+  isPro?: boolean;
+  isSignedIn?: boolean;
+  isGuest?: boolean;
+  onUpgrade?: () => void;
 }
 
-export function ManageSavingsDialog({ budgetId, onGoalsChanged }: ManageSavingsDialogProps) {
+export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, isSignedIn = false, isGuest = false, onUpgrade }: ManageSavingsDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -321,11 +325,22 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged }: ManageSavingsD
 
       {!showAddForm && !editingId && (
         <Button
-          onClick={openAddForm}
+          onClick={() => {
+            if (isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 1) {
+              toast({ title: "Free plan: 1 savings goal limit", description: "Upgrade to Pro for unlimited savings goals.", variant: "destructive" });
+              onUpgrade?.();
+              return;
+            }
+            openAddForm();
+          }}
           size="sm"
-          className="w-full rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white"
+          className={`w-full rounded-xl text-white ${isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 1 ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-gradient-to-r from-teal-500 to-emerald-600"}`}
         >
-          <Plus className="w-4 h-4 mr-1" /> Add Savings Goal
+          {isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 1 ? (
+            <><Crown className="w-4 h-4 mr-1" /> Upgrade for more goals</>
+          ) : (
+            <><Plus className="w-4 h-4 mr-1" /> Add Savings Goal</>
+          )}
         </Button>
       )}
     </div>
