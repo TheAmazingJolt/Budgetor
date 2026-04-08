@@ -1049,6 +1049,7 @@ async function writeSavingsTabToExcel(
   contributions: { billName: string; amount: number; date: string }[],
   goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
   tz?: string,
+  debts?: DebtItem[],
 ): Promise<void> {
   const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
@@ -1137,6 +1138,33 @@ async function writeSavingsTabToExcel(
     grid.push([]);
   }
 
+  const lumpSumBills = bills.filter(
+    (b) => (b.type === "weekly" || b.type === "biweekly") && b.payoffDate && b.sourceDebtId
+  );
+  if (lumpSumBills.length > 0) {
+    const debtMap = new Map((debts ?? []).map((d) => [d.id, d]));
+    grid.push(["Lump-Sum Payments"]);
+    grid.push(["Name", "Weekly Set-Aside", "Due Date", "Remaining Balance", "Percent Left"]);
+    for (const b of lumpSumBills) {
+      const debt = debtMap.get(b.sourceDebtId!);
+      const payoffDateStr = b.payoffDate
+        ? (() => {
+            const d = new Date(b.payoffDate + "T00:00:00");
+            return `${MONTH_SHORT_EXCEL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+          })()
+        : "";
+      if (debt) {
+        const balance = debt.balance ?? 0;
+        const original = debt.originalAmount ?? debt.balance ?? 0;
+        const pctLeft = original > 0 ? Math.round((balance / original) * 100) : 0;
+        grid.push([b.name, Math.abs(b.amount), payoffDateStr, balance, `${pctLeft}%`]);
+      } else {
+        grid.push([b.name, Math.abs(b.amount), payoffDateStr, "", ""]);
+      }
+    }
+    grid.push([]);
+  }
+
   if (goals.length > 0) {
     grid.push(["Savings Goals"]);
     grid.push(["Goal Name", "Target Amount", "Saved So Far", "Progress", "Target Date", "Weeks Left", "Weekly Needed"]);
@@ -1199,6 +1227,17 @@ async function writeSavingsTabToExcel(
       } catch {}
     }
     cr += balanced.length + 1;
+  }
+  if (lumpSumBills.length > 0) {
+    cr += 2;
+    for (let i = 0; i < lumpSumBills.length; i++) {
+      const row1 = cr + i + 1;
+      try {
+        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='B${row1}:B${row1}')`, { numberFormat: fmtCurrency });
+        await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/range(address='D${row1}:D${row1}')`, { numberFormat: fmtCurrency });
+      } catch {}
+    }
+    cr += lumpSumBills.length + 1;
   }
   if (goals.length > 0) {
     cr += 2;
@@ -1526,7 +1565,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
             targetDate: g.targetDate,
             savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
           }));
-          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals, body.tz);
+          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals, body.tz, body.debts);
         } catch { /* non-fatal */ }
       })().catch(() => {});
     }
