@@ -1588,6 +1588,15 @@ function writeWeeksToWorksheetColumns(
   const maxBills = weeks.length > 0 ? Math.max(...weeks.map((w) => w.bills.length)) : 0;
   const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
 
+  // Find the column extent currently used in the sheet so we can clear stale week columns
+  // that lie beyond the new write range (handles reducing week count on re-sync).
+  let oldLastBudgetColIdx = startCol - 1; // 0-indexed, will be updated below
+  const headerRow1 = ws.getRow(1);
+  headerRow1.eachCell({ includeEmpty: false }, (cell, colNum) => {
+    const lbl = String(cell.text ?? "").trim().toLowerCase();
+    if (lbl.startsWith("budget")) oldLastBudgetColIdx = Math.max(oldLastBudgetColIdx, colNum - 1 + 1); // 0-indexed end of pair
+  });
+
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const week = weeks[wIdx];
     const lc = startCol + 1 + wIdx * 2; // 1-indexed ExcelJS column
@@ -1647,6 +1656,14 @@ function writeWeeksToWorksheetColumns(
 
     ws.getColumn(lc).width = 28;
     ws.getColumn(vc).width = 14;
+  }
+
+  // Clear any stale week columns beyond the last written column (e.g. when week count shrinks)
+  const lastWrittenCol1Idx = startCol + weeks.length * 2; // 0-indexed, last column pair written
+  for (let staleCol0 = lastWrittenCol1Idx; staleCol0 <= oldLastBudgetColIdx; staleCol0++) {
+    for (let r = 1; r <= totalRows; r++) {
+      ws.getCell(r, staleCol0 + 1).value = null; // +1 for ExcelJS 1-indexed
+    }
   }
 }
 
