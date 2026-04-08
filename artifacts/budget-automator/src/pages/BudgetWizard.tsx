@@ -398,10 +398,14 @@ function parseLabelDates(label: string): { start: Date; end: Date } | null {
 }
 
 function weekOwnerMonth(start: Date, end: Date): { year: number; month: number } {
-  if (start.getMonth() === end.getMonth() || end.getDate() < 4) {
-    return { year: start.getFullYear(), month: start.getMonth() };
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    if (cursor.getDate() === 1) {
+      return { year: cursor.getFullYear(), month: cursor.getMonth() };
+    }
+    cursor.setDate(cursor.getDate() + 1);
   }
-  return { year: end.getFullYear(), month: end.getMonth() };
+  return { year: start.getFullYear(), month: start.getMonth() };
 }
 
 function computePriorSavings(
