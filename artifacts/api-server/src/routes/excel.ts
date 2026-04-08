@@ -1710,7 +1710,6 @@ function archivePastWeeksInExcel(
   });
   if ((archiveStartCol - 1) % 2 !== 0) archiveStartCol++;
 
-  // Copy each past-week column pair into the Archive sheet then clear from Budget.
   // Resolve formula cells to their computed scalar result so archived rows remain
   // correct after the source Budget columns are nulled.
   const resolveCell = (cell: ExcelJS.Cell): ExcelJS.CellValue => {
@@ -1721,15 +1720,36 @@ function archivePastWeeksInExcel(
     return v;
   };
 
+  // Find the row where the Bills section begins (1-indexed) so we only archive budget rows
   const budgetRowCount = budgetWs.rowCount;
+  let billsStartRow = budgetRowCount + 1; // default: copy everything
+  for (let r = 1; r <= budgetRowCount; r++) {
+    const cellVal = String(budgetWs.getCell(r, 1).text ?? "").trim().toLowerCase();
+    if (cellVal === "bills") {
+      billsStartRow = r;
+      break;
+    }
+  }
+  const archiveRowCount = billsStartRow - 1;
+
+  // Copy each past-week column pair into the Archive sheet then clear from Budget.
+  // Only copies budget rows (above Bills section), preserving values (formula-resolved) and formatting.
   pastColGroups.forEach((g, i) => {
     const destLc = archiveStartCol + i * 2;
     const destVc = destLc + 1;
-    for (let r = 1; r <= budgetRowCount; r++) {
-      archiveWs!.getCell(r, destLc).value = resolveCell(budgetWs.getCell(r, g.startCol));
-      archiveWs!.getCell(r, destVc).value = resolveCell(budgetWs.getCell(r, g.endCol));
+    for (let r = 1; r <= archiveRowCount; r++) {
+      const srcLcCell = budgetWs.getCell(r, g.startCol);
+      const srcVcCell = budgetWs.getCell(r, g.endCol);
+      const destLcCell = archiveWs!.getCell(r, destLc);
+      const destVcCell = archiveWs!.getCell(r, destVc);
+
+      destLcCell.value = resolveCell(srcLcCell);
+      destVcCell.value = resolveCell(srcVcCell);
+
+      if (srcLcCell.style) destLcCell.style = { ...srcLcCell.style };
+      if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
     }
-    // Clear past-week columns from Budget sheet
+    // Clear past-week columns from Budget sheet (all rows including bills)
     for (let r = 1; r <= budgetRowCount; r++) {
       budgetWs.getCell(r, g.startCol).value = null;
       budgetWs.getCell(r, g.endCol).value = null;
@@ -1789,6 +1809,21 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       console.log("[excel/write] archive step error (non-fatal):", archiveErr?.message);
     }
 
+    // Filter out past weeks so they are not re-written after archiving
+    const todayExcel = new Date();
+    todayExcel.setHours(0, 0, 0, 0);
+    const currentWeeksExcel = weeks.filter(w => {
+      const endDate = parseLabelEndDateExcel(w.weekLabel);
+      return !endDate || endDate >= todayExcel;
+    });
+
+    if (currentWeeksExcel.length === 0) {
+      // Nothing current to write — upload the workbook with only archived changes applied
+      await uploadWorkbookToOneDrive(token, fileId, wb);
+      res.json({ ok: true, message: "All weeks archived; no current weeks to write." });
+      return;
+    }
+
     // Locate (or create) the Budget worksheet
     let ws = wb.getWorksheet(targetSheetName);
     if (!ws) {
@@ -1803,12 +1838,12 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
 
     if (startCol === 0) {
       // Full overwrite — clear the Budget sheet and rewrite all weeks from column A
-      writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct ?? false, 0);
+      writeExcelBudgetSheetXL(ws, currentWeeksExcel, body.bills, body.debts, includeRemainingAcct ?? false, 0);
     } else {
       // Incremental — write only the target column pair(s) without touching other columns.
       // startCol is 0-indexed (matches the read-side FIRST_BUDGET_COL convention),
       // ExcelJS uses 1-indexed, so offset by 1.
-      writeWeeksToWorksheetColumns(ws, weeks, startCol, includeRemainingAcct ?? false);
+      writeWeeksToWorksheetColumns(ws, currentWeeksExcel, startCol, includeRemainingAcct ?? false);
     }
 
     // Update or create the _BudgifyData hidden sheet
@@ -1835,7 +1870,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
           targetDate: g.targetDate,
           savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
         }));
-        writeExcelSavingsSheetXL(wb, body.bills, weeks, contribs, goals, body.tz, [], body.debts ?? []);
+        writeExcelSavingsSheetXL(wb, body.bills, currentWeeksExcel, contribs, goals, body.tz, [], body.debts ?? []);
       } catch { /* non-fatal — savings tab update failure should not block the main write */ }
     }
 
@@ -1844,7 +1879,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
 
     res.json({
       ok: true,
-      message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} to ${targetSheetName}`,
+      message: `Wrote ${currentWeeksExcel.length} budget week${currentWeeksExcel.length !== 1 ? "s" : ""} to ${targetSheetName}`,
     });
   } catch (err: any) {
     handleGraphError(err, req, res, "write Excel file");

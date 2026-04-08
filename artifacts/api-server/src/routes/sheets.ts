@@ -1492,32 +1492,29 @@ async function archivePastWeeksInSheet(
 
   if (pastColGroups.length === 0) return 0;
 
-  // Determine the full row count (need to read the budget sheet's used range)
-  let totalRows = 30;
+  // Read the full budget sheet with formatting to determine row count, Bills boundary, and cell data
+  let budgetSheetData: sheets_v4.Schema$RowData[] = [];
   try {
-    const usedRangeResp = await sheetsApi.spreadsheets.get({
+    const fullResp = await sheetsApi.spreadsheets.get({
       spreadsheetId,
-      ranges: [`'${escapedBudget}'!A1:A`],
-      fields: "sheets.data.rowData.values",
+      ranges: [`'${escapedBudget}'!A1:ZZ`],
+      fields: "sheets.data.rowData",
     });
-    const rowCount = usedRangeResp.data.sheets?.[0]?.data?.[0]?.rowData?.length ?? 30;
-    totalRows = rowCount;
-  } catch { /* use default */ }
+    budgetSheetData = fullResp.data.sheets?.[0]?.data?.[0]?.rowData ?? [];
+  } catch { return 0; }
 
-  // Read all past-week column data
-  const pastRanges = pastColGroups.map(g =>
-    `'${escapedBudget}'!${columnToLetter(g.startCol)}1:${columnToLetter(g.endCol)}${totalRows}`
-  );
+  const totalRows = budgetSheetData.length || 30;
 
-  let pastData: any[][][] = [];
-  try {
-    const batchResp = await sheetsApi.spreadsheets.values.batchGet({
-      spreadsheetId,
-      ranges: pastRanges,
-    });
-    pastData = (batchResp.data.valueRanges ?? []).map(vr => vr.values ?? []);
-  } catch {
-    return 0;
+  // Find the row index where "Bills" section begins (0-indexed) so we only archive budget rows
+  let billsStartRowIndex = totalRows; // default: copy everything if no Bills section found
+  for (let r = 0; r < budgetSheetData.length; r++) {
+    const firstCellVal = String(
+      budgetSheetData[r]?.values?.[0]?.formattedValue ?? ""
+    ).trim();
+    if (firstCellVal.toLowerCase() === "bills") {
+      billsStartRowIndex = r;
+      break;
+    }
   }
 
   // Ensure Archive sheet exists; create it if not
@@ -1559,21 +1556,52 @@ async function archivePastWeeksInSheet(
     if (archiveStartCol % 2 !== 0) archiveStartCol++;
   } catch { /* start at 0 */ }
 
-  // Append past-week data to Archive sheet
-  for (let i = 0; i < pastData.length; i++) {
-    const colData = pastData[i];
-    if (!colData || colData.length === 0) continue;
-    const destStartCol = columnToLetter(archiveStartCol + i * 2);
-    const destEndCol = columnToLetter(archiveStartCol + i * 2 + 1);
-    const destRange = `Archive!${destStartCol}1:${destEndCol}${colData.length}`;
-    try {
-      await sheetsApi.spreadsheets.values.update({
-        spreadsheetId,
-        range: destRange,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: colData },
+  // Build updateCells requests for each past-week column group, copying values + formatting
+  const archiveUpdateRequests: sheets_v4.Schema$Request[] = [];
+
+  for (let i = 0; i < pastColGroups.length; i++) {
+    const g = pastColGroups[i];
+    const destLcIndex = archiveStartCol + i * 2;
+    const destVcIndex = archiveStartCol + i * 2 + 1;
+
+    // Build row data for budget rows only (up to billsStartRowIndex)
+    const rowDataForArchive: sheets_v4.Schema$RowData[] = [];
+    for (let r = 0; r < billsStartRowIndex; r++) {
+      const srcRow = budgetSheetData[r];
+      const srcLcCell = srcRow?.values?.[g.startCol] ?? {};
+      const srcVcCell = srcRow?.values?.[g.endCol] ?? {};
+      rowDataForArchive.push({
+        values: [
+          { userEnteredValue: srcLcCell.userEnteredValue, userEnteredFormat: srcLcCell.userEnteredFormat },
+          { userEnteredValue: srcVcCell.userEnteredValue, userEnteredFormat: srcVcCell.userEnteredFormat },
+        ],
       });
-    } catch { /* continue with other groups */ }
+    }
+
+    if (rowDataForArchive.length === 0) continue;
+
+    archiveUpdateRequests.push({
+      updateCells: {
+        range: {
+          sheetId: archiveSheetId,
+          startRowIndex: 0,
+          endRowIndex: rowDataForArchive.length,
+          startColumnIndex: destLcIndex,
+          endColumnIndex: destVcIndex + 1,
+        },
+        rows: rowDataForArchive,
+        fields: "userEnteredValue,userEnteredFormat",
+      },
+    });
+  }
+
+  if (archiveUpdateRequests.length > 0) {
+    try {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: archiveUpdateRequests },
+      });
+    } catch { /* non-fatal */ }
   }
 
   // Clear past-week columns from Budget sheet (values + formatting)
@@ -2520,8 +2548,24 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
       console.log("[sheets/write] archive step error (non-fatal):", archiveErr?.message);
     }
 
+    // Filter out past weeks so they are not re-written after archiving
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentWeeks = weeks.filter(w => {
+      const endDate = parseLabelEndDate(w.weekLabel);
+      return !endDate || endDate >= today;
+    });
+
+    if (currentWeeks.length === 0) {
+      console.log("[sheets/write] all weeks are past — skipping writeBudgetToSheet");
+      clearTimeout(timeout);
+      if (res.headersSent) return;
+      res.json({ ok: true, message: "All weeks archived; no current weeks to write." });
+      return;
+    }
+
     console.log("[sheets/write] calling writeBudgetToSheet");
-    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, weeks, effectiveStartCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
+    await writeBudgetToSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId, currentWeeks, effectiveStartCol, includeRemainingAcct ?? false, body.debts, sheetColumnCount, existingLastCol, body.bills);
     console.log("[sheets/write] writeBudgetToSheet OK");
     clearTimeout(timeout);
     if (res.headersSent) return;
