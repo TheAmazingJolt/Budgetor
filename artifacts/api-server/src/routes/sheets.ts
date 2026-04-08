@@ -1680,6 +1680,17 @@ async function writeHiddenBillsSheet(
 
 const MONTH_SHORT_SHEETS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+function parseLabelDatesSrv(label: string): { start: Date; end: Date } | null {
+  const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
+  if (!m) return null;
+  const toFull = (yy: string) => { const n = parseInt(yy); return n < 100 ? 2000 + n : n; };
+  const start = new Date(toFull(m[3]), parseInt(m[1]) - 1, parseInt(m[2]));
+  const end   = new Date(toFull(m[6]), parseInt(m[4]) - 1, parseInt(m[5]));
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
 function getNextYearlyDueSrv(from: Date, month: number, day: number): Date {
   const m = month - 1;
   let year = from.getFullYear();
@@ -1742,6 +1753,7 @@ async function writeSavingsTabToSheet(
 
       const prefix = `${bill.name} [annual:`;
       let savedInCycle = 0;
+      const activeWeekLabelsSrvYearly = new Set(weeks.map(w => w.weekLabel));
       for (const w of weeks) {
         const wStart = new Date(w.startDate);
         wStart.setHours(0, 0, 0, 0);
@@ -1758,6 +1770,14 @@ async function writeSavingsTabToSheet(
             if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
           }
         }
+      }
+      for (const c of checkins) {
+        if (c.itemName !== bill.name || c.itemType !== "yearly") continue;
+        if (activeWeekLabelsSrvYearly.has(c.weekLabel)) continue;
+        const dates = parseLabelDatesSrv(c.weekLabel);
+        if (!dates) continue;
+        if (dates.start <= cycleStart || dates.start > today) continue;
+        savedInCycle += c.actualAmount;
       }
       let manualInCycle = 0;
       for (const c of contributions) {
@@ -1778,6 +1798,7 @@ async function writeSavingsTabToSheet(
       const monthlyGoal = Math.abs(bill.amount);
       const prefix = `Partial ${bill.name}`;
       let savedThisMonth = 0;
+      const activeWeekLabelsSrvBalanced = new Set(weeks.map(w => w.weekLabel));
       for (const w of weeks) {
         const wStart = new Date(w.startDate);
         wStart.setHours(0, 0, 0, 0);
@@ -1795,6 +1816,15 @@ async function writeSavingsTabToSheet(
             if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
           }
         }
+      }
+      for (const c of checkins) {
+        if (c.itemName !== bill.name || c.itemType !== "balanced") continue;
+        if (activeWeekLabelsSrvBalanced.has(c.weekLabel)) continue;
+        const dates = parseLabelDatesSrv(c.weekLabel);
+        if (!dates) continue;
+        if (dates.end >= today) continue;
+        if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
+        savedThisMonth += c.actualAmount;
       }
       let manualThisMonth = 0;
       for (const c of contributions) {

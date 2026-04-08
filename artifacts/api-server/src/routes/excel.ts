@@ -1292,6 +1292,17 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
 });
 
 
+function parseLabelDatesXL(label: string): { start: Date; end: Date } | null {
+  const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
+  if (!m) return null;
+  const toFull = (yy: string) => { const n = parseInt(yy); return n < 100 ? 2000 + n : n; };
+  const start = new Date(toFull(m[3]), parseInt(m[1]) - 1, parseInt(m[2]));
+  const end   = new Date(toFull(m[6]), parseInt(m[4]) - 1, parseInt(m[5]));
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
 function getNextYearlyDueExcel(today: Date, dueMonth: number, dueDay: number): Date {
   const year = today.getFullYear();
   const candidate = new Date(year, dueMonth - 1, dueDay);
@@ -1327,6 +1338,7 @@ function writeExcelSavingsSheetXL(
       cycleStart.setFullYear(cycleStart.getFullYear() - 1);
       const prefix = `${bill.name} [annual:`;
       let savedInCycle = 0;
+      const activeWeekLabelsXLYearly = new Set(weeks.map(w => w.weekLabel));
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
         const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
@@ -1341,6 +1353,14 @@ function writeExcelSavingsSheetXL(
             if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
           }
         }
+      }
+      for (const c of checkins) {
+        if (c.itemName !== bill.name || c.itemType !== "yearly") continue;
+        if (activeWeekLabelsXLYearly.has(c.weekLabel)) continue;
+        const dates = parseLabelDatesXL(c.weekLabel);
+        if (!dates) continue;
+        if (dates.start <= cycleStart || dates.start > today) continue;
+        savedInCycle += c.actualAmount;
       }
       let manualInCycle = 0;
       for (const c of contributions) {
@@ -1358,6 +1378,7 @@ function writeExcelSavingsSheetXL(
       const monthlyGoal = Math.abs(bill.amount);
       const prefix = `Partial ${bill.name}`;
       let savedThisMonth = 0;
+      const activeWeekLabelsXLBalanced = new Set(weeks.map(w => w.weekLabel));
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
         const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
@@ -1373,6 +1394,15 @@ function writeExcelSavingsSheetXL(
             if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
           }
         }
+      }
+      for (const c of checkins) {
+        if (c.itemName !== bill.name || c.itemType !== "balanced") continue;
+        if (activeWeekLabelsXLBalanced.has(c.weekLabel)) continue;
+        const dates = parseLabelDatesXL(c.weekLabel);
+        if (!dates) continue;
+        if (dates.end >= today) continue;
+        if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
+        savedThisMonth += c.actualAmount;
       }
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;

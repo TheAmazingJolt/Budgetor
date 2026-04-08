@@ -174,6 +174,8 @@ export function computeSavings(
       const prefix = `${bill.name} [annual:`;
       let savedInCycle = 0;
 
+      const activeWeekLabelsYearly = new Set(weeks.map(w => w.label));
+
       for (const w of weeks) {
         const dates = parseLabelDates(w.label);
         if (!dates) continue;
@@ -191,6 +193,15 @@ export function computeSavings(
             }
           }
         }
+      }
+
+      for (const c of checkins) {
+        if (c.itemName !== bill.name || c.itemType !== "yearly") continue;
+        if (activeWeekLabelsYearly.has(c.weekLabel)) continue;
+        const dates = parseLabelDates(c.weekLabel);
+        if (!dates) continue;
+        if (dates.start <= cycleStart || dates.start > today) continue;
+        savedInCycle += c.actualAmount;
       }
 
       let manualInCycle = 0;
@@ -236,6 +247,8 @@ export function computeSavings(
         }
       }
 
+      const activeWeekLabelsBalanced = new Set(weeks.map(w => w.label));
+
       for (const { w, dates } of sortedWeeks) {
         const owner = getWeekOwnerMonth(dates.start, dates.end);
         if (owner.month !== currentMonth || owner.year !== currentYear) continue;
@@ -254,6 +267,16 @@ export function computeSavings(
           }
         }
         // Weeks without a check-in whose end date is today or in the future are not yet set aside — skip them
+      }
+
+      for (const c of checkins) {
+        if (c.itemName !== bill.name || c.itemType !== "balanced") continue;
+        if (activeWeekLabelsBalanced.has(c.weekLabel)) continue;
+        const dates = parseLabelDates(c.weekLabel);
+        if (!dates) continue;
+        const owner = getWeekOwnerMonth(dates.start, dates.end);
+        if (owner.month !== currentMonth || owner.year !== currentYear) continue;
+        checkedInThisMonth += c.actualAmount;
       }
 
       let manualThisMonth = 0;
