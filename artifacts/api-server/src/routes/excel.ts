@@ -1495,6 +1495,33 @@ function writeExcelSavingsSheetXL(
     r++;
   }
 
+  const lumpSumBills = bills.filter(
+    (b) => (b.type === "weekly" || b.type === "biweekly") && b.payoffDate && b.sourceDebtId
+  );
+  if (lumpSumBills.length > 0) {
+    const debtMap = new Map((debts ?? []).map((d) => [d.id, d]));
+    grid.push(["Lump-Sum Payments"]);
+    grid.push(["Name", "Weekly Set-Aside", "Due Date", "Remaining Balance", "Percent Left"]);
+    for (const b of lumpSumBills) {
+      const debt = debtMap.get(b.sourceDebtId!);
+      const payoffDateStr = b.payoffDate
+        ? (() => {
+            const d = new Date(b.payoffDate + "T00:00:00");
+            return `${MONTH_SHORT_EXCEL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+          })()
+        : "";
+      if (debt) {
+        const balance = debt.balance ?? 0;
+        const original = debt.originalAmount ?? debt.balance ?? 0;
+        const pctLeft = original > 0 ? Math.round((balance / original) * 100) : 0;
+        grid.push([b.name, Math.abs(b.amount), payoffDateStr, balance, `${pctLeft}%`]);
+      } else {
+        grid.push([b.name, Math.abs(b.amount), payoffDateStr, "", ""]);
+      }
+    }
+    grid.push([]);
+  }
+
   if (goals.length > 0) {
     writeRow(["Savings Goals"], { bg: AMBER_LT, fontColor: AMBER, bold: true, size: 11 });
     writeRow(["Goal Name", "Target Amount", "Saved So Far", "Progress", "Target Date", "Weeks Left", "Weekly Needed"],
@@ -1843,6 +1870,28 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       ok: true,
       message: `Wrote ${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} starting at column ${colLetter(effectiveStartCol)}`,
     });
+
+    if (body.bills && body.bills.length > 0 && body.budgetId && (req as any).user?.id) {
+      const userId = (req as any).user.id;
+      const budgetId = body.budgetId;
+      const bills = body.bills;
+      ;(async () => {
+        try {
+          const contribRows = await db.select().from(savingsContributionsTable)
+            .where(and(eq(savingsContributionsTable.budgetId, budgetId), eq(savingsContributionsTable.userId, userId)));
+          const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+          const goalRows = await db.select().from(savingsGoalsTable)
+            .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
+          const goals = goalRows.map(g => ({
+            name: g.name,
+            targetAmount: Number(g.targetAmount),
+            targetDate: g.targetDate,
+            savedSoFar: contribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
+          }));
+          await writeSavingsTabToExcel(token, fileId, bills, weeks, contribs, goals, body.tz, body.debts);
+        } catch { /* non-fatal */ }
+      })().catch(() => {});
+    }
   } catch (err: any) {
     handleGraphError(err, req, res, "write Excel file");
   }
