@@ -85,6 +85,13 @@ async function verifyUserJwt(token: string): Promise<string | null> {
   }
 }
 
+const stripeConfigured = !!process.env["STRIPE_SECRET_KEY"];
+
+function effectivePlan(user: User): "free" | "pro" {
+  if (!stripeConfigured && user.provider !== "guest") return "pro";
+  return (user.plan ?? "free") as "free" | "pro";
+}
+
 function serializeUser(user: User) {
   return {
     id: user.id,
@@ -92,7 +99,7 @@ function serializeUser(user: User) {
     name: user.name,
     avatarUrl: user.avatarUrl,
     provider: user.provider,
-    plan: (user.plan ?? "free") as "free" | "pro",
+    plan: effectivePlan(user),
     createdAt: user.createdAt,
     hasPassword: !!user.passwordHash,
   };
@@ -103,7 +110,7 @@ export function requirePro(req: Request, res: Response, next: NextFunction) {
     res.status(401).json({ error: "Not signed in" });
     return;
   }
-  if ((req.user.plan ?? "free") !== "pro") {
+  if (effectivePlan(req.user as User) !== "pro") {
     res.status(403).json({ error: "Pro plan required", upgradeRequired: true });
     return;
   }
@@ -1044,7 +1051,7 @@ router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
     return;
   }
   const FREE_BILL_LIMIT = 5;
-  if ((req.user!.plan ?? "free") === "free" && bills.length > FREE_BILL_LIMIT) {
+  if (effectivePlan(req.user! as User) === "free" && bills.length > FREE_BILL_LIMIT) {
     res.status(403).json({
       error: `Free plan is limited to ${FREE_BILL_LIMIT} spending categories. Upgrade to Pro for unlimited categories.`,
       upgradeRequired: true,
