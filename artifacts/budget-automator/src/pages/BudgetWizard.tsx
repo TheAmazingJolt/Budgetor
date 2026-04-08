@@ -397,14 +397,7 @@ function parseLabelDates(label: string): { start: Date; end: Date } | null {
   };
 }
 
-function weekOwnerMonth(start: Date, end: Date): { year: number; month: number } {
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    if (cursor.getDate() === 1) {
-      return { year: cursor.getFullYear(), month: cursor.getMonth() };
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
+function weekOwnerMonth(start: Date): { year: number; month: number } {
   return { year: start.getFullYear(), month: start.getMonth() };
 }
 
@@ -437,7 +430,7 @@ function computePriorSavings(
     const dates = parseLabelDates(ci.weekLabel);
     if (!dates) continue;
     if (dates.end >= start) continue;
-    const owner = weekOwnerMonth(dates.start, dates.end);
+    const owner = weekOwnerMonth(dates.start);
     if (owner.year !== startYear || owner.month !== startMonth) continue;
     if (!result[mk]) result[mk] = {};
     result[mk][ci.itemName] = (result[mk][ci.itemName] ?? 0) + ci.actualAmount;
