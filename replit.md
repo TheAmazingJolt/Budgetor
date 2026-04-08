@@ -150,3 +150,9 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+## Git Workflow
+
+- **`develop`** — the active development branch. Railway deploys from this branch. All code changes must be pushed here only.
+- **`master`** — release branch. Only the user decides when to merge/push to master. Never push to master automatically.
+- **GitHub push**: Use `GITHUB_TOKEN` secret with `git remote set-url origin https://${GITHUB_TOKEN}@github.com/TheAmazingJolt/Budgetor.git` before pushing, then reset the URL back to plain HTTPS after. Always push to `develop`, never `master`.
