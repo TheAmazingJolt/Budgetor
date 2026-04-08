@@ -1710,16 +1710,24 @@ function archivePastWeeksInExcel(
   });
   if ((archiveStartCol - 1) % 2 !== 0) archiveStartCol++;
 
-  // Copy each past-week column pair into the Archive sheet then clear from Budget
+  // Copy each past-week column pair into the Archive sheet then clear from Budget.
+  // Resolve formula cells to their computed scalar result so archived rows remain
+  // correct after the source Budget columns are nulled.
+  const resolveCell = (cell: ExcelJS.Cell): ExcelJS.CellValue => {
+    const v = cell.value;
+    if (v !== null && typeof v === "object" && "formula" in (v as any)) {
+      return (v as any).result ?? null;
+    }
+    return v;
+  };
+
   const budgetRowCount = budgetWs.rowCount;
   pastColGroups.forEach((g, i) => {
     const destLc = archiveStartCol + i * 2;
     const destVc = destLc + 1;
     for (let r = 1; r <= budgetRowCount; r++) {
-      const srcLcCell = budgetWs.getCell(r, g.startCol);
-      const srcVcCell = budgetWs.getCell(r, g.endCol);
-      archiveWs!.getCell(r, destLc).value = srcLcCell.value;
-      archiveWs!.getCell(r, destVc).value = srcVcCell.value;
+      archiveWs!.getCell(r, destLc).value = resolveCell(budgetWs.getCell(r, g.startCol));
+      archiveWs!.getCell(r, destVc).value = resolveCell(budgetWs.getCell(r, g.endCol));
     }
     // Clear past-week columns from Budget sheet
     for (let r = 1; r <= budgetRowCount; r++) {
