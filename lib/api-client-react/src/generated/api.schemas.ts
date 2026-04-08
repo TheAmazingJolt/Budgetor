@@ -156,6 +156,7 @@ export interface AuthUser {
   provider: string;
   /** Whether the user has a password set (for email/password auth) */
   hasPassword?: boolean;
+  plan?: 'free' | 'pro';
   createdAt: string;
 }
 

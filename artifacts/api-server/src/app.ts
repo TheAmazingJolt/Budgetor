@@ -3,6 +3,7 @@ import cors from "cors";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import router from "./routes";
+import { stripeWebhookHandler } from "./routes/stripe";
 
 const app: Express = express();
 
@@ -16,6 +17,12 @@ app.use(cors({
   origin: allowedOrigins ?? true,
   credentials: true,
 }));
+
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler,
+);
 
 const STRIPE_WEBHOOK_PATH = "/api/referral/stripe-webhook";
 app.use((req, res, next) => {

@@ -37,6 +37,8 @@ import {
   MessageSquareWarning,
   ExternalLink,
   Loader2,
+  Crown,
+  Zap,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -90,6 +92,8 @@ import {
   excelWrite,
   getSheetReadQueryKey,
   getExcelReadQueryKey,
+  stripeCheckout,
+  stripePortal,
 } from "@workspace/api-client-react";
 import type { BudgetResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -946,6 +950,39 @@ export function BudgetWizard({
   const [isWritingToExcel, setIsWritingToExcel] = useState(false);
   const [excelWriteSuccess, setExcelWriteSuccess] = useState(false);
   const [scratchExistingWeeks, setScratchExistingWeeks] = useState<any[]>([]);
+
+  const isPro = (currentUser?.plan ?? "free") === "pro";
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  const handleUpgradeToPro = async () => {
+    setIsUpgrading(true);
+    try {
+      const { url } = await stripeCheckout();
+      window.location.href = url;
+    } catch (err) {
+      toast({
+        title: "Could not start checkout",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+      setIsUpgrading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setIsUpgrading(true);
+    try {
+      const { url } = await stripePortal();
+      window.location.href = url;
+    } catch (err) {
+      toast({
+        title: "Could not open billing portal",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+      setIsUpgrading(false);
+    }
+  };
 
   const {
     bills: _bills,
@@ -3669,6 +3706,19 @@ export function BudgetWizard({
               <HelpCircle className="w-4.5 h-4.5" />
             </Button>
 
+            {isSignedIn && !isGuest && !isPro && (
+              <Button
+                size="sm"
+                onClick={handleUpgradeToPro}
+                disabled={isUpgrading}
+                className="hidden sm:flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm text-xs font-semibold px-3 h-8"
+                title="Upgrade to Pro"
+              >
+                {isUpgrading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-3.5 h-3.5" />}
+                Upgrade
+              </Button>
+            )}
+
             {isSignedIn && (
               <>
                 <Button
@@ -3742,10 +3792,49 @@ export function BudgetWizard({
                     {isGuest && (
                       <Badge variant="outline" className="mt-1 text-xs">Guest</Badge>
                     )}
+                    {!isGuest && (
+                      <Badge variant="outline" className={`mt-1 text-xs ${isPro ? "border-amber-400 text-amber-700 bg-amber-50" : "border-slate-300 text-slate-500"}`}>
+                        {isPro ? "Pro" : "Free"}
+                      </Badge>
+                    )}
                   </div>
                   <DropdownMenuSeparator />
                   {!isGuest && (
                     <>
+                      <DropdownMenuItem onClick={handleBackToMenu}>
+                        <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  {isGuest && (
+                    <>
+                      <DropdownMenuSeparator />
+                      {googleLoginAvailable && (
+                        <DropdownMenuItem onClick={handleAccountGoogleLogin}>
+                          <LogIn className="w-4 h-4 mr-2" /> Sign in with Google
+                        </DropdownMenuItem>
+                      )}
+                      {appleLoginAvailable && (
+                        <DropdownMenuItem onClick={handleAccountAppleLogin}>
+                          <LogIn className="w-4 h-4 mr-2" /> Sign in with Apple
+                        </DropdownMenuItem>
+                      )}
+                    </>
+                  )}
+                  {!isGuest && (
+                    <>
+                      <DropdownMenuSeparator />
+                      {!isPro && (
+                        <DropdownMenuItem onClick={handleUpgradeToPro} disabled={isUpgrading} className="text-amber-700 focus:text-amber-700 focus:bg-amber-50">
+                          <Crown className="w-4 h-4 mr-2 text-amber-500" /> Upgrade to Pro
+                        </DropdownMenuItem>
+                      )}
+                      {isPro && (
+                        <DropdownMenuItem onClick={handleManageSubscription} disabled={isUpgrading}>
+                          <Crown className="w-4 h-4 mr-2 text-amber-500" /> Manage subscription
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => setIsPrefsDialogOpen(true)}>
                         <Settings2 className="w-4 h-4 mr-2" /> Preferences
                       </DropdownMenuItem>
@@ -4415,7 +4504,14 @@ export function BudgetWizard({
                   </div>
                   <Button
                     size="sm"
-                    onClick={() => { setEditingBillIndex(null); setIsBillDialogOpen(true); }}
+                    onClick={() => {
+                      if (isSignedIn && !isGuest && !isPro && bills.length >= 5) {
+                        toast({ title: "Free plan: 5 category limit", description: "Upgrade to Pro for unlimited spending categories.", variant: "destructive" });
+                        return;
+                      }
+                      setEditingBillIndex(null);
+                      setIsBillDialogOpen(true);
+                    }}
                     className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
                   >
                     <Plus className="w-4 h-4 mr-1" /> Add Bill
@@ -5449,15 +5545,25 @@ export function BudgetWizard({
                   <div className="flex flex-col gap-2 flex-1">
                     <Button
                       size="lg"
-                      onClick={handleWriteToGoogleSheets}
+                      onClick={() => {
+                        if (isSignedIn && !isGuest && !isPro) {
+                          toast({ title: "Pro feature", description: "Upgrade to Pro to sync budgets to Google Sheets.", variant: "destructive" });
+                          return;
+                        }
+                        handleWriteToGoogleSheets();
+                      }}
                       disabled={isWritingToSheet || sheetWriteSuccess}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
-                        sheetWriteSuccess
+                        !isPro && isSignedIn && !isGuest
+                          ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/25 hover:shadow-amber-500/30"
+                          : sheetWriteSuccess
                           ? "bg-emerald-600"
                           : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
                       }`}
                     >
-                      {isWritingToSheet ? (
+                      {!isPro && isSignedIn && !isGuest ? (
+                        <><Crown className="w-5 h-5 mr-2" /> Upgrade to sync Google Sheets</>
+                      ) : isWritingToSheet ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Writing to Google Sheets…</>
                       ) : sheetWriteSuccess ? (
                         <><Check className="w-5 h-5 mr-2" /> Written to Google Sheets</>
@@ -5551,18 +5657,26 @@ export function BudgetWizard({
                     <Button
                       size="lg"
                       onClick={() => {
+                        if (isSignedIn && !isGuest && !isPro) {
+                          toast({ title: "Pro feature", description: "Upgrade to Pro to save budgets to Google Sheets.", variant: "destructive" });
+                          return;
+                        }
                         if (newSheetSaveSuccess) return;
                         setExportNameInput(newCloudSaveSuccess && savedCloudName ? savedCloudName : buildDefaultExportTitle());
                         setPendingExportType("google");
                       }}
                       disabled={isSavingToNewSheet || newSheetSaveSuccess || isRegeneratingForExport}
                       className={`w-full h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all ${
-                        newSheetSaveSuccess
+                        !isPro && isSignedIn && !isGuest
+                          ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/25 hover:shadow-amber-500/30"
+                          : newSheetSaveSuccess
                           ? "bg-emerald-600"
                           : "bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-500/25 hover:shadow-blue-500/30"
                       }`}
                     >
-                      {isRegeneratingForExport ? (
+                      {!isPro && isSignedIn && !isGuest ? (
+                        <><Crown className="w-5 h-5 mr-2" /> Upgrade to save to Google Sheets</>
+                      ) : isRegeneratingForExport ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Regenerating…</>
                       ) : isSavingToNewSheet ? (
                         <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Saving to Google Sheets…</>
@@ -5917,6 +6031,10 @@ export function BudgetWizard({
               onGoalsChanged={() => {
                 queryClient.invalidateQueries({ queryKey: ["savings-goals", activeCloudBudgetId] });
               }}
+              isPro={isPro}
+              isSignedIn={isSignedIn}
+              isGuest={isGuest}
+              onUpgrade={handleUpgradeToPro}
             />
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
@@ -6255,7 +6373,14 @@ export function BudgetWizard({
               <div className="ml-auto">
                 <Button
                   size="sm"
-                  onClick={() => { setEditingBillInManagerIndex(null); setIsBillManagerFormOpen(true); }}
+                  onClick={() => {
+                    if (isSignedIn && !isGuest && !isPro && bills.length >= 5) {
+                      toast({ title: "Free plan: 5 category limit", description: "Upgrade to Pro for unlimited spending categories.", variant: "destructive" });
+                      return;
+                    }
+                    setEditingBillInManagerIndex(null);
+                    setIsBillManagerFormOpen(true);
+                  }}
                   className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
                 >
                   <Plus className="w-4 h-4 mr-1" /> Add Bill

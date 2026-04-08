@@ -13,6 +13,7 @@ import savingsGoalsRouter from "./savings-goals";
 import paydayCheckinsRouter from "./payday-checkins";
 import bugReportsRouter from "./bug-reports";
 import referralRouter from "./referral";
+import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
 
@@ -31,5 +32,6 @@ router.use(savingsGoalsRouter);
 router.use(paydayCheckinsRouter);
 router.use(bugReportsRouter);
 router.use(referralRouter);
+router.use(stripeRouter);
 
 export default router;

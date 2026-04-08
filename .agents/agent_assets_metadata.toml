@@ -6,3 +6,9 @@ id = "MmtcgSxvH5E26Mx845biO"
 uri = "file://docs/setup-guide.md"
 type = "text"
 title = "Budget Automator — Integration Setup Guide"
+
+[[outputs]]
+id = "L0aTa5J1LRVv5uiPzxb1e"
+uri = "file://STRIPE_SETUP.md"
+type = "text"
+title = "Stripe Billing Setup — Step by Step"

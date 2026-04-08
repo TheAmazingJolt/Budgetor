@@ -35,6 +35,7 @@ export const usersTable = pgTable("users", {
   debts: jsonb("debts").default([]),
   bills: jsonb("bills").default([]),
   preferences: jsonb("preferences").default({}),
+  plan: text("plan").notNull().default("free").$type<"free" | "pro">(),
   referralCode: text("referral_code"),
   referredBy: text("referred_by"),
   stripeCustomerId: text("stripe_customer_id"),

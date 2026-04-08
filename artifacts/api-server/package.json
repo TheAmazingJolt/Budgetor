@@ -23,7 +23,7 @@
     "googleapis": "^171.4.0",
     "jose": "^6.2.1",
     "nodemailer": "^8.0.4",
-    "stripe": "^22.0.0"
+    "stripe": "^22.0.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
