@@ -917,6 +917,7 @@ router.get("/auth/login/apple", authInitiationLimiter, (req: Request, res: Respo
     response_mode: "form_post",
     state,
   });
+  res.redirect(`https://appleid.apple.com/auth/authorize?${params.toString()}`);
 });
 
 router.post("/auth/login/apple/callback", authInitiationLimiter, async (req: Request, res: Response): Promise<void> => {

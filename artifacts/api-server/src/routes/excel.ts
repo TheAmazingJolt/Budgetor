@@ -1495,31 +1495,33 @@ function writeExcelSavingsSheetXL(
     r++;
   }
 
+  const ROSE_EARLY    = "FFBe123C";
+  const ROSE_LT_EARLY = "FFFCE7EB";
   const lumpSumBills = bills.filter(
     (b) => (b.type === "weekly" || b.type === "biweekly") && b.payoffDate && b.sourceDebtId
   );
   if (lumpSumBills.length > 0) {
     const debtMap = new Map((debts ?? []).map((d) => [d.id, d]));
-    grid.push(["Lump-Sum Payments"]);
-    grid.push(["Name", "Weekly Set-Aside", "Due Date", "Remaining Balance", "Percent Left"]);
+    writeRow(["Lump-Sum Payments (Debt Progress)"], { bg: ROSE_LT_EARLY, fontColor: ROSE_EARLY, bold: true, size: 11 });
+    writeRow(["Name", "Weekly Set-Aside", "Due Date", "Remaining Balance", "Percent Left"], { bg: ROSE_LT_EARLY, bold: true });
     for (const b of lumpSumBills) {
       const debt = debtMap.get(b.sourceDebtId!);
       const payoffDateStr = b.payoffDate
         ? (() => {
             const d = new Date(b.payoffDate + "T00:00:00");
-            return `${MONTH_SHORT_EXCEL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+            return `${MONTH_SHORT_XL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
           })()
         : "";
       if (debt) {
         const balance = debt.balance ?? 0;
         const original = debt.originalAmount ?? debt.balance ?? 0;
         const pctLeft = original > 0 ? Math.round((balance / original) * 100) : 0;
-        grid.push([b.name, Math.abs(b.amount), payoffDateStr, balance, `${pctLeft}%`]);
+        writeRow([b.name, Math.abs(b.amount), payoffDateStr, balance, `${pctLeft}%`], { numFmtCols: [1, 3] });
       } else {
-        grid.push([b.name, Math.abs(b.amount), payoffDateStr, "", ""]);
+        writeRow([b.name, Math.abs(b.amount), payoffDateStr, "", ""], { numFmtCols: [1] });
       }
     }
-    grid.push([]);
+    r++;
   }
 
   if (goals.length > 0) {
@@ -1681,6 +1683,33 @@ async function archivePastWeeksInExcel(
   }
 }
 
+async function writeSavingsTabToExcel(
+  token: string,
+  fileId: string,
+  bills: BillMeta[],
+  weeks: ExcelWriteRequest["weeks"],
+  contributions: { billName: string; amount: number; date: string }[],
+  goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
+  tz?: string,
+  debts?: DebtItem[],
+): Promise<void> {
+  const downloadRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+    redirect: "follow",
+  });
+  if (!downloadRes.ok) return;
+  const rawBuf = await downloadRes.arrayBuffer();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(rawBuf as any);
+  writeExcelSavingsSheetXL(wb, bills, weeks, contributions, goals, tz, [], debts ?? []);
+  const outBuf = await wb.xlsx.writeBuffer();
+  await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    body: outBuf,
+  });
+}
+
 router.post("/excel/:id/write", async (req, res): Promise<void> => {
   const token = await getAccessToken(req);
   if (!token) {
@@ -1698,37 +1727,13 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
   }
 
   try {
-    // Download the existing file, modify it with ExcelJS, then re-upload.
-    // This avoids the Graph workbook API entirely (which returns 405 on many account types).
-    const downloadRes = await fetch(`${GRAPH}/me/drive/items/${fileId}/content`, {
-      headers: { Authorization: `Bearer ${token}` },
-      redirect: "follow",
-    });
-    if (!downloadRes.ok) {
-      const errText = await downloadRes.text();
-      throw Object.assign(new Error(`Failed to download file: ${errText}`), { status: downloadRes.status });
-    }
-    const rawBuf = await downloadRes.arrayBuffer();
-
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(Buffer.from(rawBuf));
-
     const targetSheetName = sheetTitle ?? "Budget";
-    let ws = wb.getWorksheet(targetSheetName);
-    if (!ws) {
-      ws = wb.worksheets.find(
-        (s) => s.state !== "hidden" && s.state !== "veryHidden"
-          && s.name !== "_BudgifyData" && s.name !== "_MoneyPalData" && s.name !== "Savings"
-      );
-      if (!ws) ws = wb.addWorksheet(targetSheetName);
-    }
-
-    const sheetName = encodeURIComponent(targetSheet.name);
+    const sheetName = encodeURIComponent(targetSheetName);
 
     // Archive past weeks before writing; recalculate startCol based on remaining columns
     let effectiveStartCol = startCol;
     try {
-      await archivePastWeeksInExcel(token, fileId, targetSheet.name);
+      await archivePastWeeksInExcel(token, fileId, targetSheetName);
       // Re-read the header to count remaining current-week columns
       try {
         const postArchiveRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${sheetName}/usedRange`);
