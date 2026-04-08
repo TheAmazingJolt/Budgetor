@@ -1131,6 +1131,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Bill"
+        priorSavings:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: number
+          description: >
+            Map of monthKey (YYYY-M, 0-indexed month) to billName to positive
+            amount already saved this month before the budget start date. When
+            present, balanced bill allocations for the matching month are reduced
+            by the saved amount before being spread across weeks.
       required:
         - startDate
         - endDate

@@ -397,6 +397,51 @@ function parseLabelDates(label: string): { start: Date; end: Date } | null {
   };
 }
 
+function weekOwnerMonth(start: Date, end: Date): { year: number; month: number } {
+  if (start.getMonth() === end.getMonth() || end.getDate() < 4) {
+    return { year: start.getFullYear(), month: start.getMonth() };
+  }
+  return { year: end.getFullYear(), month: end.getMonth() };
+}
+
+function computePriorSavings(
+  balancedBills: Bill[],
+  contributions: { billName: string; amount: number; date: string }[],
+  checkins: import("@/components/CheckInDialog").WeeklyCheckIn[],
+  budgetStartDate: string,
+): Record<string, Record<string, number>> {
+  const result: Record<string, Record<string, number>> = {};
+  const start = new Date(budgetStartDate + "T00:00:00");
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth();
+  const mk = `${startYear}-${startMonth}`;
+  const balancedNames = new Set(balancedBills.filter((b) => b.type === "balanced").map((b) => b.name));
+
+  for (const c of contributions) {
+    if (!balancedNames.has(c.billName)) continue;
+    const cDate = new Date(c.date + "T00:00:00");
+    if (cDate.getFullYear() !== startYear || cDate.getMonth() !== startMonth) continue;
+    if (cDate >= start) continue;
+    if (!result[mk]) result[mk] = {};
+    result[mk][c.billName] = (result[mk][c.billName] ?? 0) + c.amount;
+  }
+
+  for (const ci of checkins) {
+    if (ci.itemType !== "balanced") continue;
+    if (!balancedNames.has(ci.itemName)) continue;
+    if (ci.actualAmount <= 0) continue;
+    const dates = parseLabelDates(ci.weekLabel);
+    if (!dates) continue;
+    if (dates.end >= start) continue;
+    const owner = weekOwnerMonth(dates.start, dates.end);
+    if (owner.year !== startYear || owner.month !== startMonth) continue;
+    if (!result[mk]) result[mk] = {};
+    result[mk][ci.itemName] = (result[mk][ci.itemName] ?? 0) + ci.actualAmount;
+  }
+
+  return result;
+}
+
 interface BudgetWizardProps {
   currentUser: import("@workspace/api-client-react").AuthUser;
   isSignedIn: boolean;
@@ -2701,6 +2746,13 @@ export function BudgetWizard({
       ? effectiveIncomeSources[0].nextPayDate
       : overrides?.startDate ?? newWeekStartDate;
 
+    const priorSavingsMap = computePriorSavings(
+      allBillsForGeneration,
+      budgetContributionsQuery.data?.contributions ?? [],
+      checkinsQuery.data?.checkins ?? [],
+      anchoredStartDate,
+    );
+
     generateMutation.mutate(
       {
         data: {
@@ -2712,6 +2764,7 @@ export function BudgetWizard({
           bills: allBillsForGeneration,
           payPeriod,
           incomeSources: effectiveIncomeSources,
+          priorSavings: Object.keys(priorSavingsMap).length > 0 ? priorSavingsMap : undefined,
         },
       },
       {
@@ -3041,6 +3094,12 @@ export function BudgetWizard({
         ...exportSavingsGoalBills,
         ...exportLumpSumBills,
       ];
+      const exportPriorSavings = computePriorSavings(
+        exportAllBills,
+        budgetContributionsQuery.data?.contributions ?? [],
+        checkinsQuery.data?.checkins ?? [],
+        exportStartDate,
+      );
       const data = await generateMutation.mutateAsync({
         data: {
           startDate: exportStartDate,
@@ -3051,6 +3110,7 @@ export function BudgetWizard({
           bills: exportAllBills,
           payPeriod,
           incomeSources: exportIncomeSources,
+          priorSavings: Object.keys(exportPriorSavings).length > 0 ? exportPriorSavings : undefined,
         },
       });
       if (!data.weeks?.length) throw new Error("Generation returned no weeks");
@@ -3232,6 +3292,12 @@ export function BudgetWizard({
         : incomeSources.length > 0 ? incomeSources : undefined;
       const syncStartDate = syncIncomeSources && syncIncomeSources.length > 1
         ? syncIncomeSources[0].nextPayDate : newWeekStartDate;
+      const syncPriorSavings = computePriorSavings(
+        allBillsForSync,
+        budgetContributionsQuery.data?.contributions ?? [],
+        checkinsQuery.data?.checkins ?? [],
+        syncStartDate,
+      );
       const generated = await generateBudget({
         startDate: syncStartDate,
         endDate: newWeekEndDate,
@@ -3241,6 +3307,7 @@ export function BudgetWizard({
         payPeriod,
         incomeSources: syncIncomeSources,
         bills: allBillsForSync,
+        priorSavings: Object.keys(syncPriorSavings).length > 0 ? syncPriorSavings : undefined,
       });
       const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
       // Build a paycheck lookup from currently stored weeks (including explicit $0 values)

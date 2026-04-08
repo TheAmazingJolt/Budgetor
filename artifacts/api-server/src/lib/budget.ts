@@ -125,6 +125,7 @@ export function generateWeeklyBudgets(
   bills: Bill[],
   payPeriod: "weekly" | "biweekly" | "monthly" = "weekly",
   incomeSources?: IncomeSource[],
+  priorSavings?: Record<string, Record<string, number>>,
 ): WeeklyBudget[] {
   const balancedBills = bills.filter((b) => b.type === "balanced");
   const fixedBills = bills.filter((b) => b.type === "fixed");
@@ -449,11 +450,14 @@ export function generateWeeklyBudgets(
         : [...monthWeekIndices];
       if (eligibleIndices.length === 0) continue;
 
+      const alreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
+      const effectiveAmount = Math.min(0, bill.amount + alreadySaved);
+
       const baseTotals = eligibleIndices.map((idx) =>
         weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
         weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
       );
-      const slotAmounts = equalizeAcrossSlots(baseTotals, bill.amount);
+      const slotAmounts = equalizeAcrossSlots(baseTotals, effectiveAmount);
       for (let j = 0; j < eligibleIndices.length; j++) {
         const idx = eligibleIndices[j];
         const amt = Math.round(slotAmounts[j] * 100) / 100;
@@ -504,7 +508,9 @@ export function generateWeeklyBudgets(
         weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
       );
 
-      const slotAmounts = equalizeAcrossSlots(baseTotals, bill.amount);
+      const timedAlreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
+      const timedEffectiveAmount = Math.min(0, bill.amount + timedAlreadySaved);
+      const slotAmounts = equalizeAcrossSlots(baseTotals, timedEffectiveAmount);
 
       for (let a = 0; a < activeIndices.length; a++) {
         const idx = activeIndices[a];

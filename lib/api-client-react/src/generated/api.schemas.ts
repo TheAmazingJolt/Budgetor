@@ -138,6 +138,8 @@ export interface BudgetRequest {
   /** Multiple income sources. When provided and non-empty, overrides paycheckAmount. */
   incomeSources?: IncomeSource[];
   bills: Bill[];
+  /** Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved before the budget start date */
+  priorSavings?: Record<string, Record<string, number>> | null;
 }
 
 export interface BudgetResponse {

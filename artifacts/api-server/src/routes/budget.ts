@@ -19,7 +19,7 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const { startDate, endDate, openingBalance, paycheckAmount, numberOfWeeks, bills, payPeriod, incomeSources } = parsed.data;
+  const { startDate, endDate, openingBalance, paycheckAmount, numberOfWeeks, bills, payPeriod, incomeSources, priorSavings } = parsed.data;
 
   for (const bill of bills) {
     if (bill.type === "yearly" || bill.type === "yearly-flat") {
@@ -51,6 +51,7 @@ router.post("/budget/generate", async (req, res): Promise<void> => {
     bills,
     payPeriod ?? "weekly",
     incomeSources,
+    priorSavings ?? undefined,
   );
 
   const totalMonthlyBills = bills.reduce(

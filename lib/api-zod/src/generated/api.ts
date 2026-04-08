@@ -108,6 +108,13 @@ export const GenerateBudgetBody = zod.object({
         ),
     }),
   ),
+  priorSavings: zod
+    .record(zod.record(zod.number()))
+    .nullable()
+    .optional()
+    .describe(
+      "Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved before the budget start date",
+    ),
 });
 
 export const GenerateBudgetResponse = zod.object({
