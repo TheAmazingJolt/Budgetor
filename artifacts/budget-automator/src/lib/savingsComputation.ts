@@ -236,17 +236,6 @@ export function computeSavings(
         .filter((x): x is { w: WeekForSavings; dates: { start: Date; end: Date } } => x.dates !== null)
         .sort((a, b) => a.dates.start.getTime() - b.dates.start.getTime());
 
-      // Determine the date range of the current owner-month cycle
-      let cycleRangeStart: Date | null = null;
-      let cycleRangeEnd: Date | null = null;
-      for (const { dates } of sortedWeeks) {
-        const owner = getWeekOwnerMonth(dates.start, dates.end);
-        if (owner.month === currentMonth && owner.year === currentYear) {
-          if (!cycleRangeStart || dates.start < cycleRangeStart) cycleRangeStart = dates.start;
-          if (!cycleRangeEnd || dates.end > cycleRangeEnd) cycleRangeEnd = dates.end;
-        }
-      }
-
       const activeWeekLabelsBalanced = new Set(weeks.map(w => w.label));
 
       for (const { w, dates } of sortedWeeks) {
@@ -283,11 +272,7 @@ export function computeSavings(
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
-        if (
-          cycleRangeStart && cycleRangeEnd
-            ? cDate >= cycleRangeStart && cDate <= cycleRangeEnd
-            : cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear
-        ) {
+        if (cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear) {
           manualThisMonth += c.amount;
         }
       }
