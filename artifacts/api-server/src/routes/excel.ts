@@ -1543,13 +1543,16 @@ function writeExcelSavingsSheetXL(
   const ROSE_LT    = "FFFCE7EB";
   if (activeLumpSum.length > 0) {
     writeRow(["Lump-Sum Payments"], { bg: ROSE_LT, fontColor: ROSE, bold: true, size: 11 });
-    writeRow(["Name", "Balance Left", "Weekly $", "Due Date"], { bg: ROSE_LT, bold: true });
+    writeRow(["Name", "Weekly $", "Balance Left", "Due Date"], { bg: ROSE_LT, bold: true });
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
       const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
-      const dueDateStr = `${MONTH_SHORT_XL[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
-      writeRow([d.name, d.balance, weeklySetAside, dueDateStr], { numFmtCols: [1, 2] });
+      const mo = String(due.getMonth() + 1).padStart(2, "0");
+      const dy = String(due.getDate()).padStart(2, "0");
+      const yr = String(due.getFullYear()).slice(-2);
+      const dueDateStr = `${mo}/${dy}/${yr}`;
+      writeRow([d.name, weeklySetAside, d.balance, dueDateStr], { numFmtCols: [1, 2] });
     }
     r++;
   }

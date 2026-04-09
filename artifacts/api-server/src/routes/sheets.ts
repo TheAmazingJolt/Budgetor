@@ -1391,13 +1391,16 @@ function buildSavingsGoalRows(
     const lsFirstDataRow = lsColHeaderRow + 1;
 
     savingsRows.push(["Lump-Sum Payments", "", "", ""]);
-    savingsRows.push(["Name", "Balance Left", "Weekly $", "Due Date"]);
+    savingsRows.push(["Name", "Weekly $", "Balance Left", "Due Date"]);
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
       const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
-      const dueDateStr = `${MONTH_SHORT_SHEETS[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
-      savingsRows.push([d.name, d.balance, weeklySetAside, dueDateStr]);
+      const mo = String(due.getMonth() + 1).padStart(2, "0");
+      const dy = String(due.getDate()).padStart(2, "0");
+      const yr = String(due.getFullYear()).slice(-2);
+      const dueDateStr = `${mo}/${dy}/${yr}`;
+      savingsRows.push([d.name, weeklySetAside, d.balance, dueDateStr]);
     }
 
     savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 4 } } });
@@ -2193,13 +2196,16 @@ async function writeSavingsTabToSheet(
   const activeLumpSum = debts.filter(d => d.type === "lump_sum" && d.dueDate && d.balance > 0 && new Date(d.dueDate + "T00:00:00") > today);
   if (activeLumpSum.length > 0) {
     grid.push(["Lump-Sum Payments"]);
-    grid.push(["Name", "Balance Left", "Weekly Set-Aside", "Due Date"]);
+    grid.push(["Name", "Weekly Set-Aside", "Balance Left", "Due Date"]);
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
       const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
-      const dueDateStr = `${MONTH_SHORT_SHEETS[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
-      grid.push([d.name, d.balance, weeklySetAside, dueDateStr]);
+      const mo = String(due.getMonth() + 1).padStart(2, "0");
+      const dy = String(due.getDate()).padStart(2, "0");
+      const yr = String(due.getFullYear()).slice(-2);
+      const dueDateStr = `${mo}/${dy}/${yr}`;
+      grid.push([d.name, weeklySetAside, d.balance, dueDateStr]);
     }
     grid.push([]);
   }
