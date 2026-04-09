@@ -1664,7 +1664,8 @@ export function BudgetWizard({
       checkinsQuery.data?.checkins,
     );
     const debtBillsList = bills.filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"));
-    if (balancedBillsList.length === 0 && savingsGoalBillsList.length === 0 && debtBillsList.length === 0) return;
+    const lumpSumBillsList = computeLumpSumDebtBills(debts);
+    if (balancedBillsList.length === 0 && savingsGoalBillsList.length === 0 && debtBillsList.length === 0 && lumpSumBillsList.length === 0) return;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1704,7 +1705,7 @@ export function BudgetWizard({
 
     setCheckInWeek(bestWeek);
     setCheckInDialogOpen(true);
-  }, [inputMode, activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data, paydayDialogOpen, budgetGoalsQuery.data, budgetContributionsQuery.data]);
+  }, [inputMode, activeCloudBudgetId, checkinsQuery.data, paydayCheckinsQuery.data, paydayDialogOpen, budgetGoalsQuery.data, budgetContributionsQuery.data, debts]);
 
   const savedBudgetsQuery = useSavedBudgetList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

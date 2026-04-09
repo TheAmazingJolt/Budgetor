@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ClipboardCheck, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,6 +150,42 @@ export function CheckInDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notBudgetedOpen, setNotBudgetedOpen] = useState(false);
+
+  const prevDebtBillsRef = useRef<DebtBillInfo[] | undefined>(debtBills);
+  useEffect(() => {
+    const prev = prevDebtBillsRef.current ?? [];
+    const next = debtBills ?? [];
+    prevDebtBillsRef.current = debtBills;
+    const prevIds = new Set(prev.map(d => d.debtId));
+    const added = next.filter(d => !prevIds.has(d.debtId));
+    if (added.length === 0) return;
+    setItems(current => {
+      const currentIds = new Set(
+        current.filter(it => it.billType === "debt").map(it => it.debtId).filter(Boolean),
+      );
+      const newItems: CheckInItem[] = added
+        .filter(({ debtId }) => !!debtId && !currentIds.has(debtId))
+        .map(({ bill, debtId, currentBalance }) => {
+          const planned = getDebtPlannedAmount(bill, week.items);
+          const existing =
+            existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
+            existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
+          const actual = existing ? existing.actualAmount : planned;
+          const autoSkip = !existing && planned === 0;
+          return {
+            billName: bill.name,
+            billType: "debt" as const,
+            plannedAmount: planned,
+            actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
+            skipped: existing ? existing.actualAmount === 0 : autoSkip,
+            debtId,
+            currentBalance,
+          };
+        });
+      if (newItems.length === 0) return current;
+      return [...current, ...newItems];
+    });
+  }, [debtBills]);
 
   const findExisting = (it: CheckInItem) => {
     if (it.billType === "debt" && it.debtId) {
