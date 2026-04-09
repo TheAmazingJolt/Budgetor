@@ -1107,7 +1107,7 @@ export function BudgetWizard({
     activeCloudBudgetId: null as string | null,
     googleFirstBudgetCol: 0 as number,
     excelFirstBudgetCol: 0 as number,
-    buildWriteWeeks: null as (() => any[]) | null,
+    buildWriteWeeks: null as ((existingWeeksOverride?: any[]) => any[]) | null,
     weeklyCheckins: [] as { weekLabel: string; itemName: string; itemType?: string; actualAmount: number }[],
     debtIdToBillName: new Map<string, string>(),
   });
@@ -1175,7 +1175,12 @@ export function BudgetWizard({
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
     }
-    const weeks = buildWriteWeeks();
+    // Consume and clear the fresh-weeks ref (populated right after a Quick Update)
+    // so that a manual Sync triggered immediately after Save Changes uses the
+    // latest merged data rather than potentially stale cloudExistingWeeks state.
+    const freshWeeks = freshWeeksForSyncRef.current ?? undefined;
+    freshWeeksForSyncRef.current = null;
+    const weeks = buildWriteWeeks(freshWeeks);
     if (!weeks?.length) {
       toast({ title: "Nothing to sync", description: "No budget weeks found. Generate your budget first.", variant: "destructive" });
       return;
@@ -2994,7 +2999,7 @@ export function BudgetWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekEdits]);
 
-  const buildAllWriteWeeks = () => {
+  const buildAllWriteWeeks = (existingWeeksOverride?: any[]) => {
     const colorLookup = buildBillColorLookup(bills);
     // Savings goals are NOT in the `bills` state, so they're missing from colorLookup.
     // Add them explicitly — using both the full name (e.g. "Madison Appt [→ May 18]")
@@ -3057,13 +3062,19 @@ export function BudgetWizard({
       }
     }
 
-    const source = getExistingWeeks()
+    const source = (existingWeeksOverride ?? getExistingWeeks())
       .filter((w: any) => {
         if (!(w.items || w.openingBalance !== undefined)) return false;
         if (weekEdits[w.label]?.deleted) return false;
         if (genStart && genEnd) {
           const d = parseLabelDates(w.label);
-          if (d && d.start <= genEnd && d.end >= genStart) return false;
+          if (d && d.start <= genEnd && d.end >= genStart) {
+            // Only exclude summary-only weeks (no explicit items). Weeks that were
+            // explicitly saved via Quick Update have items and should take priority
+            // over the freshly-generated equivalents.
+            const hasExplicitItems = Array.isArray(w.items) && w.items.length > 0;
+            if (!hasExplicitItems) return false;
+          }
         }
         return true;
       })
