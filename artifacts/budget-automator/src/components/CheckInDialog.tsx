@@ -78,6 +78,8 @@ function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: num
   if (matchingItems.length > 0) {
     const exactMatch = matchingItems.find(it => Math.abs(it.amount) === Math.abs(bill.amount));
     if (exactMatch) return Math.abs(exactMatch.amount);
+    // Lump-sum debt bills: fall back to the bill's own computed weekly amount
+    if (bill.sourceDebtId) return Math.abs(bill.amount);
     return 0;
   }
   if (bill.type === "balanced") {
@@ -86,6 +88,9 @@ function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: num
       .filter(it => it.name === prefix)
       .reduce((s, it) => s + Math.abs(it.amount), 0);
   }
+  // Lump-sum debt bills with no matching week item: use the bill's own computed weekly amount.
+  // This handles the case where the budget was generated before the debt was added.
+  if (bill.sourceDebtId) return Math.abs(bill.amount);
   return 0;
 }
 
