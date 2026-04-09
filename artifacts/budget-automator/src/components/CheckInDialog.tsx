@@ -203,6 +203,8 @@ export function CheckInDialog({
     if (ex && ex.actualAmount === 0) return false;
     // Previously confirmed at a non-zero amount → keep in main list
     if (ex && ex.actualAmount > 0) return true;
+    // Debt items with a non-zero balance or planned amount always appear in the main list
+    if (it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return true;
     // Not yet processed: show in main list only if it has a planned amount
     return it.plannedAmount > 0;
   });
@@ -210,6 +212,8 @@ export function CheckInDialog({
     const ex = findExisting(it);
     // Already processed at $0 (skipped) → not budgeted
     if (ex && ex.actualAmount === 0) return true;
+    // Debt items with a non-zero balance or planned amount are always budgeted (never in this list)
+    if (!ex && it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return false;
     // Not yet processed with no planned amount → not budgeted
     return !ex && it.plannedAmount === 0;
   });
