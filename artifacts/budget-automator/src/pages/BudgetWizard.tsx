@@ -1378,6 +1378,7 @@ export function BudgetWizard({
               ...b,
               amount: -Math.abs(d.minimumPayment),
               payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+              anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
             };
           });
         if (missing.length === 0) return refreshed;
@@ -1390,6 +1391,7 @@ export function BudgetWizard({
           color: "red",
           sourceDebtId: d.id,
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
         }))];
       });
       setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill && d.type !== "lump_sum").map(d => d.id)));
@@ -1480,6 +1482,7 @@ export function BudgetWizard({
             ...b,
             amount: -Math.abs(d.minimumPayment),
             payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+            anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
           };
         });
       if (missing.length > 0) {
@@ -1492,6 +1495,7 @@ export function BudgetWizard({
           color: "red",
           sourceDebtId: d.id,
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
         }));
         setBills([...refreshed, ...newDebtBills]);
       } else {
@@ -1988,6 +1992,7 @@ export function BudgetWizard({
         color: "red",
         sourceDebtId: d.id,
         payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+        ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
       }));
     if (newDebtBills.length > 0) {
       setBills(prev => [...prev, ...newDebtBills]);
@@ -2430,6 +2435,7 @@ export function BudgetWizard({
         ...bill,
         amount: -Math.abs(refreshed.minimumPayment),
         payoffDate: calcDebtPayoffDate(refreshed.balance, refreshed.minimumPayment, refreshed.interestRate, refreshed.paymentFrequency, refreshed.paymentsRemaining),
+        anchorDate: refreshed.paymentFrequency === "biweekly" ? (refreshed.anchorDate ?? null) : null,
       };
     });
 
@@ -2446,6 +2452,7 @@ export function BudgetWizard({
         color: "red",
         sourceDebtId: d.id,
         payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+        ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
       }));
       billsToSet = [...billsToSet, ...autoBills];
     }
@@ -3591,6 +3598,7 @@ export function BudgetWizard({
           color: "red",
           sourceDebtId: debtId,
           payoffDate: calcDebtPayoffDate(debt.balance, debt.minimumPayment, debt.interestRate, debt.paymentFrequency, debt.paymentsRemaining),
+          ...(debt.paymentFrequency === "biweekly" ? { anchorDate: debt.anchorDate ?? null } : {}),
         });
       }
     } else {
@@ -3618,6 +3626,7 @@ export function BudgetWizard({
           color: "red",
           sourceDebtId: d.id,
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
         }));
       if (newDebtBills.length > 0) {
         setBills([...bills, ...newDebtBills]);
@@ -6039,6 +6048,7 @@ export function BudgetWizard({
                       type: debtBillType(data),
                       dayOfMonth: debtBillDayOfMonth(data),
                       payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
+                      anchorDate: data.paymentFrequency === "biweekly" ? (data.anchorDate ?? null) : null,
                     });
                   }
                 } else {
@@ -6066,6 +6076,7 @@ export function BudgetWizard({
                       color: "red",
                       sourceDebtId: data.id,
                       payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
+                      ...(data.paymentFrequency === "biweekly" ? { anchorDate: data.anchorDate ?? null } : {}),
                     });
                   }
                 }

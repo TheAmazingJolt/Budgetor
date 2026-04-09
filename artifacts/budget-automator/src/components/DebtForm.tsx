@@ -32,6 +32,7 @@ const formSchema = z.object({
   paymentFrequency: z.enum(PAYMENT_FREQUENCIES).optional(),
   paymentsRemaining: z.coerce.number().int().min(1, "Must be at least 1").nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  anchorDate: z.string().nullable().optional(),
 }).refine(
   (data) => {
     if (data.type === "lump_sum") return true;
@@ -79,6 +80,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           paymentFrequency: (PAYMENT_FREQUENCIES as readonly string[]).includes(initialData.paymentFrequency ?? "") ? initialData.paymentFrequency as typeof PAYMENT_FREQUENCIES[number] : "monthly",
           paymentsRemaining: initialData.paymentsRemaining ?? null,
           dueDate: initialData.dueDate ?? null,
+          anchorDate: initialData.anchorDate ?? null,
         }
       : {
           name: "",
@@ -92,6 +94,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           paymentFrequency: "monthly" as const,
           paymentsRemaining: null,
           dueDate: null,
+          anchorDate: null,
         },
   });
 
@@ -106,6 +109,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
     const isNew = !initialData;
     const recurring = values.type === "installment" && (values.paymentFrequency === "weekly" || values.paymentFrequency === "biweekly");
+    const isBiweeklyInstallment = values.type === "installment" && values.paymentFrequency === "biweekly";
     onSubmit({
       id: initialData?.id ?? crypto.randomUUID(),
       name: values.name,
@@ -122,6 +126,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       lastPaymentAmount: initialData?.lastPaymentAmount ?? undefined,
       createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
       ...(isLumpSum ? { dueDate: values.dueDate ?? undefined } : { dueDate: undefined }),
+      anchorDate: isBiweeklyInstallment ? (values.anchorDate || null) : null,
     } as Debt);
   };
 
@@ -282,6 +287,30 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   {isRecurringFrequency
                     ? "This payment will appear in every applicable budget period automatically."
                     : "The payment appears once per month on its due day."}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {isInstallment && paymentFrequency === "biweekly" && (
+          <FormField
+            control={form.control}
+            name="anchorDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Last due date <span className="text-muted-foreground font-normal text-xs">optional</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="date"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value || null)}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
+                </FormControl>
+                <FormDescription className="text-xs">
+                  When was this last paid? Sets the exact every-14-day schedule for the linked bill.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
