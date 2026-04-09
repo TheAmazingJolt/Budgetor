@@ -1382,12 +1382,10 @@ function writeExcelSavingsSheetXL(
       sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle, progressPct, nextDueDateStr, weeksRemaining });
     } else if (bill.type === "balanced") {
       const monthlyGoal = Math.abs(bill.amount);
-      const prefix = `Partial ${bill.name}`;
       let savedThisMonth = 0;
       const activeWeekLabelsXLBalanced = new Set(weeks.map(w => w.weekLabel));
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
-        const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
         if (wStart > today) continue;
         if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
         const weekCheckin = checkins.find(
