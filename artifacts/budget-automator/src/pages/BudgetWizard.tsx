@@ -3001,6 +3001,30 @@ export function BudgetWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGenerateTick]);
 
+  // Opens the date/week-count dialog before regenerating, pre-filled with the
+  // next week after the last saved cloud week so the user doesn't accidentally
+  // overwrite a week they already finalized.
+  const openRegenerateDialog = () => {
+    const allSavedLabels = [
+      ...(cloudExistingWeeks ?? []).map((w: any) => w.label as string),
+      ...(generatedWeek?.weeks ?? []).map(w => w.weekLabel),
+    ].filter(Boolean);
+
+    if (allSavedLabels.length > 0) {
+      // Find the label whose end date is latest
+      let latestLabel = allSavedLabels[0];
+      let latestEnd = parseLabelDates(latestLabel)?.end ?? new Date(0);
+      for (const label of allSavedLabels) {
+        const d = parseLabelDates(label);
+        if (d && d.end > latestEnd) { latestEnd = d.end; latestLabel = label; }
+      }
+      const next = nextStartAfterLabel(latestLabel);
+      if (next) setStartDatePreserveCount(next);
+    }
+
+    setIsGenerateDateDialogOpen(true);
+  };
+
   useEffect(() => {
     if (Object.keys(weekEdits).length > 0) {
       if (sheetWriteSuccess) setSheetWriteSuccess(false);
@@ -4564,7 +4588,7 @@ export function BudgetWizard({
                       )}
                       <Button
                         size="default"
-                        onClick={() => handleGenerate()}
+                        onClick={() => generatedWeek ? openRegenerateDialog() : handleGenerate()}
                         disabled={!canGenerate}
                         className="flex-1 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                       >
@@ -5007,7 +5031,7 @@ export function BudgetWizard({
               <div className="flex justify-end pt-2">
                 <Button
                   size="lg"
-                  onClick={() => handleGenerate()}
+                  onClick={() => generatedWeek ? openRegenerateDialog() : handleGenerate()}
                   disabled={!canGenerate}
                   className="rounded-xl px-8 h-12 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                 >
