@@ -3460,11 +3460,18 @@ export function BudgetWizard({
         priorSavings: Object.keys(syncPriorSavings).length > 0 ? syncPriorSavings : undefined,
       });
       const generatedLabels = new Set(generated.weeks.map((w: any) => w.weekLabel));
-      // Build a paycheck lookup from currently stored weeks (including explicit $0 values)
-      // so we can selectively restore them when the generated paycheck is $0.
+      // Build lookup maps from currently stored weeks so we can restore edits that were
+      // already flushed to cloud (and thus cleared from weekEdits) by handleQuickUpdate
+      // before this sync runs. This covers the case where a bill is edited to $0 and then
+      // Quick Updated — weekEdits gets cleared on save success, but we still need the
+      // cloud-saved $0 items to reach the sheet instead of the freshly-generated values.
       const storedPaycheckMap = new Map<string, number>();
+      const storedItemsMap = new Map<string, any[]>();
+      const storedOpeningMap = new Map<string, number>();
       for (const sw of weeksForSync) {
         if (sw.paycheck != null) storedPaycheckMap.set(sw.label, sw.paycheck);
+        if (Array.isArray(sw.items) && sw.items.length > 0) storedItemsMap.set(sw.label, sw.items);
+        if (sw.openingBalance != null) storedOpeningMap.set(sw.label, sw.openingBalance);
       }
       const historicalWeeks = weeksForSync
         .filter((w: any) => !generatedLabels.has(w.label) && (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
@@ -3491,7 +3498,12 @@ export function BudgetWizard({
         .filter((w: any) => !weekEdits[w.weekLabel]?.deleted)
         .map((w: any) => {
           const e = weekEdits[w.weekLabel];
-          const items = injectBillColors(e?.items ?? w.bills, colorLookup);
+          // For items: prefer in-memory edit override first, then cloud-stored items
+          // (covers the case where weekEdits was cleared after a Quick Update but the
+          // user-edited $0 values were already flushed to weeksForSync), then fall back
+          // to freshly-generated bills.
+          const storedItems = storedItemsMap.get(w.weekLabel);
+          const items = injectBillColors(e?.items ?? storedItems ?? w.bills, colorLookup);
           // Prefer the edit override, then — only when the generated paycheck is $0 —
           // restore any explicitly stored paycheck for this week label (preserves $638.15
           // etc. when paycheckAmount in the UI is temporarily $0 after session reload).
@@ -3499,11 +3511,13 @@ export function BudgetWizard({
           // we honour the freshly generated value regardless of what was stored.
           const storedPaycheck = storedPaycheckMap.get(w.weekLabel);
           const paycheck = e?.paycheck ?? (w.paycheck === 0 && storedPaycheck != null ? storedPaycheck : w.paycheck);
-          const ob = e?.openingBalance ?? w.openingBalance;
+          const storedOb = storedOpeningMap.get(w.weekLabel);
+          const ob = e?.openingBalance ?? (w.openingBalance === 0 && storedOb != null ? storedOb : w.openingBalance);
           const totalBills = items.reduce((s: number, b: any) => s + b.amount, 0);
           // Recalculate closing when any override was applied (edit, stored paycheck, or items).
           const restoredPaycheck = w.paycheck === 0 && storedPaycheck != null && storedPaycheck !== 0;
-          const needsRecalc = e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items || restoredPaycheck;
+          const usedStoredItems = !e?.items && !!storedItems;
+          const needsRecalc = e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items || restoredPaycheck || usedStoredItems;
           const closing = needsRecalc ? (ob + paycheck + totalBills) : w.closingBalance;
           return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
         });
