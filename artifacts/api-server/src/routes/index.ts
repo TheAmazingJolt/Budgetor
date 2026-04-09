@@ -14,6 +14,7 @@ import paydayCheckinsRouter from "./payday-checkins";
 import bugReportsRouter from "./bug-reports";
 import referralRouter from "./referral";
 import stripeRouter from "./stripe";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -33,5 +34,6 @@ router.use(paydayCheckinsRouter);
 router.use(bugReportsRouter);
 router.use(referralRouter);
 router.use(stripeRouter);
+router.use(adminRouter);
 
 export default router;

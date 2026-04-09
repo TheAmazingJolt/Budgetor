@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { BudgetWizard } from "@/pages/BudgetWizard";
 import { SignInPage } from "@/pages/SignInPage";
+import { AdminPage } from "@/pages/AdminPage";
 import { BugReportDialog } from "@/components/BugReportDialog";
 import type { AuthUser } from "@workspace/api-client-react";
 import {
@@ -346,6 +347,10 @@ function AppRouting() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (window.location.pathname === "/admin") {
+    return <AdminPage />;
+  }
 
   if (authQuery.isLoading || providersQuery.isLoading || !referralReady) {
     return <SplashScreen />;
