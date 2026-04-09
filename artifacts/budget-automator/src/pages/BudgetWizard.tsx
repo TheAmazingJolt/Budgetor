@@ -1551,6 +1551,9 @@ export function BudgetWizard({
       const debtId = b.sourceDebtId ?? debts.find(d => b.name === `${d.name} (min payment)`)?.id;
       if (debtId) map.set(debtId, b.name);
     }
+    for (const d of debts) {
+      if (d.type === "lump_sum" && !map.has(d.id)) map.set(d.id, d.name);
+    }
     return map;
   }, [bills, debts]);
 
