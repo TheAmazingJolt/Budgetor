@@ -31,6 +31,7 @@ export interface DebtBillInfo {
   bill: Bill;
   debtId: string;
   currentBalance: number;
+  isLumpSum?: boolean;
 }
 
 interface CheckInItem {
@@ -138,10 +139,10 @@ export function CheckInDialog({
           existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
           existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
         const actual = existing ? existing.actualAmount : planned;
-        // Lump-sum debt bills are identified by bill.type === "weekly" (set by
-        // computeLumpSumDebtBills). They should never be auto-skipped so the user
-        // always sees them in the main check-in section with their payment pre-filled.
-        const isLumpSum = bill.type === "weekly" && !!bill.sourceDebtId;
+        // isLumpSum is set by BudgetWizard based on debt.type === "lump_sum".
+        // Lump-sum debts should never be auto-skipped — the user should always see
+        // them in the main check-in section so they can record each weekly set-aside.
+        const isLumpSum = !!info.isLumpSum;
         const autoSkip = !existing && planned === 0 && !isLumpSum;
         return {
           billName: bill.name,
@@ -183,7 +184,7 @@ export function CheckInDialog({
             existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
             existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
           const actual = existing ? existing.actualAmount : planned;
-          const isLumpSum = bill.type === "weekly" && !!bill.sourceDebtId;
+          const isLumpSum = !!info.isLumpSum;
           const autoSkip = !existing && planned === 0 && !isLumpSum;
           return {
             billName: bill.name,

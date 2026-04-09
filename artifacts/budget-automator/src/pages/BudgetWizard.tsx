@@ -7194,6 +7194,7 @@ export function BudgetWizard({
                   bill: b,
                   debtId: debt?.id ?? b.sourceDebtId ?? "",
                   currentBalance: debt?.balance ?? 0,
+                  isLumpSum: debt?.type === "lump_sum",
                 };
               }),
             ...computeLumpSumDebtBills(debts).map(b => {
@@ -7202,6 +7203,7 @@ export function BudgetWizard({
                 bill: b,
                 debtId: debt?.id ?? b.sourceDebtId ?? "",
                 currentBalance: debt?.balance ?? 0,
+                isLumpSum: true,
               };
             }),
           ].filter((entry, index, arr) =>
