@@ -1390,28 +1390,28 @@ function buildSavingsGoalRows(
     const lsColHeaderRow = lsHeaderRow + 1;
     const lsFirstDataRow = lsColHeaderRow + 1;
 
-    savingsRows.push(["Lump-Sum Payments", "", ""]);
-    savingsRows.push(["Name", "Weekly $", "Due Date"]);
+    savingsRows.push(["Lump-Sum Payments", "", "", ""]);
+    savingsRows.push(["Name", "Balance Left", "Weekly $", "Due Date"]);
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
       const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
       const dueDateStr = `${MONTH_SHORT_SHEETS[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
-      savingsRows.push([d.name, weeklySetAside, dueDateStr]);
+      savingsRows.push([d.name, d.balance, weeklySetAside, dueDateStr]);
     }
 
-    savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 } } });
-    savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 }, mergeType: "MERGE_ALL" } });
+    savingsRequests.push({ unmergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 4 } } });
+    savingsRequests.push({ mergeCells: { range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 4 }, mergeType: "MERGE_ALL" } });
     savingsRequests.push({
       repeatCell: {
-        range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        range: { sheetId, startRowIndex: lsHeaderRow, endRowIndex: lsHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 4 },
         cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: rose }, backgroundColor: roseLight, horizontalAlignment: "CENTER" } },
         fields: "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)",
       },
     });
     savingsRequests.push({
       repeatCell: {
-        range: { sheetId, startRowIndex: lsColHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+        range: { sheetId, startRowIndex: lsColHeaderRow, endRowIndex: lsColHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 4 },
         cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: roseLighter } },
         fields: "userEnteredFormat(textFormat,backgroundColor)",
       },
@@ -1420,20 +1420,21 @@ function buildSavingsGoalRows(
       const dataRow = lsFirstDataRow + i;
       savingsRequests.push({
         repeatCell: {
-          range: { sheetId, startRowIndex: dataRow, endRowIndex: dataRow + 1, startColumnIndex: 0, endColumnIndex: 3 },
+          range: { sheetId, startRowIndex: dataRow, endRowIndex: dataRow + 1, startColumnIndex: 0, endColumnIndex: 4 },
           cell: { userEnteredFormat: { backgroundColor: roseLighter } },
           fields: "userEnteredFormat(backgroundColor)",
         },
       });
     }
+    // Currency format for Balance Left (col 1) and Weekly $ (col 2)
     savingsRequests.push({
       repeatCell: {
-        range: { sheetId, startRowIndex: lsFirstDataRow, endRowIndex: lsFirstDataRow + activeLumpSum.length, startColumnIndex: 1, endColumnIndex: 2 },
+        range: { sheetId, startRowIndex: lsFirstDataRow, endRowIndex: lsFirstDataRow + activeLumpSum.length, startColumnIndex: 1, endColumnIndex: 3 },
         cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"$"#,##0.00' } } },
         fields: "userEnteredFormat(numberFormat)",
       },
     });
-    for (const col of [1, 2]) {
+    for (const col of [1, 2, 3]) {
       savingsRequests.push({
         repeatCell: {
           range: { sheetId, startRowIndex: lsColHeaderRow, endRowIndex: lsFirstDataRow + activeLumpSum.length, startColumnIndex: col, endColumnIndex: col + 1 },
@@ -1851,7 +1852,7 @@ async function writeBudgetToSheet(
 
     if (savingsRows.length > 0) {
       const savingsRangeStart = `A${savingsStartRow + 1}`;
-      const savingsRangeEnd = `C${savingsStartRow + savingsRows.length}`;
+      const savingsRangeEnd = `D${savingsStartRow + savingsRows.length}`;
       const savingsRange = `'${escapedTitle}'!${savingsRangeStart}:${savingsRangeEnd}`;
 
       await Promise.all([
@@ -2192,13 +2193,13 @@ async function writeSavingsTabToSheet(
   const activeLumpSum = debts.filter(d => d.type === "lump_sum" && d.dueDate && d.balance > 0 && new Date(d.dueDate + "T00:00:00") > today);
   if (activeLumpSum.length > 0) {
     grid.push(["Lump-Sum Payments"]);
-    grid.push(["Name", "Weekly Set-Aside", "Due Date"]);
+    grid.push(["Name", "Balance Left", "Weekly Set-Aside", "Due Date"]);
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
       const weeklySetAside = Math.round((d.balance / weeksLeft) * 100) / 100;
       const dueDateStr = `${MONTH_SHORT_SHEETS[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
-      grid.push([d.name, weeklySetAside, dueDateStr]);
+      grid.push([d.name, d.balance, weeklySetAside, dueDateStr]);
     }
     grid.push([]);
   }
@@ -2374,9 +2375,10 @@ async function writeSavingsTabToSheet(
       r++;
       const lsDataStart = r;
       const lsDataEnd = r + activeLumpSum.length;
+      // Currency format for Balance Left (col 1) and Weekly Set-Aside (col 2)
       formatRequests.push({
         repeatCell: {
-          range: { sheetId: savingsSheetId, startRowIndex: lsDataStart, endRowIndex: lsDataEnd, startColumnIndex: 1, endColumnIndex: 2 },
+          range: { sheetId: savingsSheetId, startRowIndex: lsDataStart, endRowIndex: lsDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
           cell: { userEnteredFormat: currencyFmt },
           fields: "userEnteredFormat.numberFormat",
         },
