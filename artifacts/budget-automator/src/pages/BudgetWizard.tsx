@@ -7184,6 +7184,20 @@ export function BudgetWizard({
             ),
           ]}
           debtBills={[
+            // Lump-sum computed bills come FIRST so they win the deduplication below.
+            // Their bill.name matches the week-item name ("Cashapp") and their
+            // bill.amount is the correct weekly set-aside, so plannedAmount resolves.
+            ...computeLumpSumDebtBills(debts).map(b => {
+              const debt = debts.find(d => d.id === b.sourceDebtId);
+              return {
+                bill: b,
+                debtId: debt?.id ?? b.sourceDebtId ?? "",
+                currentBalance: debt?.balance ?? 0,
+                isLumpSum: true,
+              };
+            }),
+            // Regular linked bills come second; if a lump-sum bill for the same
+            // debtId already appears above, this entry is dropped by the dedup filter.
             ...bills
               .filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"))
               .map(b => {
@@ -7197,15 +7211,6 @@ export function BudgetWizard({
                   isLumpSum: debt?.type === "lump_sum",
                 };
               }),
-            ...computeLumpSumDebtBills(debts).map(b => {
-              const debt = debts.find(d => d.id === b.sourceDebtId);
-              return {
-                bill: b,
-                debtId: debt?.id ?? b.sourceDebtId ?? "",
-                currentBalance: debt?.balance ?? 0,
-                isLumpSum: true,
-              };
-            }),
           ].filter((entry, index, arr) =>
             !entry.debtId || arr.findIndex(e => e.debtId === entry.debtId) === index
           )}

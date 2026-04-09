@@ -144,12 +144,18 @@ export function CheckInDialog({
         // them in the main check-in section so they can record each weekly set-aside.
         const isLumpSum = !!debtIsLumpSum;
         const autoSkip = !existing && planned === 0 && !isLumpSum;
+        // Lump-sum debts with outstanding balance should never start as skipped —
+        // a prior $0 check-in on this week was caused by the auto-skip bug, not
+        // by the user intentionally choosing to skip the payment.
+        const skipped = isLumpSum && (currentBalance ?? 0) > 0
+          ? false
+          : existing ? existing.actualAmount === 0 : autoSkip;
         return {
           billName: bill.name,
           billType: "debt" as const,
           plannedAmount: planned,
           actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
-          skipped: existing ? existing.actualAmount === 0 : autoSkip,
+          skipped,
           debtId,
           currentBalance,
           isLumpSum,
@@ -186,12 +192,15 @@ export function CheckInDialog({
           const actual = existing ? existing.actualAmount : planned;
           const isLumpSum = !!debtIsLumpSum;
           const autoSkip = !existing && planned === 0 && !isLumpSum;
+          const skipped = isLumpSum && (currentBalance ?? 0) > 0
+            ? false
+            : existing ? existing.actualAmount === 0 : autoSkip;
           return {
             billName: bill.name,
             billType: "debt" as const,
             plannedAmount: planned,
             actualStr: actual > 0 ? actual.toFixed(2) : planned > 0 ? planned.toFixed(2) : "0.00",
-            skipped: existing ? existing.actualAmount === 0 : autoSkip,
+            skipped,
             debtId,
             currentBalance,
             isLumpSum,
