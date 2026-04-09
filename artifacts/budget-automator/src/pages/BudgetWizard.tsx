@@ -6996,85 +6996,8 @@ export function BudgetWizard({
           <DialogHeader className="mb-4">
             <DialogTitle className="text-xl font-bold">Preferences</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between py-3 border-b border-border/40">
-              <div>
-                <p className="text-sm font-medium">Auto-open last budget</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Automatically open your last cloud budget when you sign in</p>
-              </div>
-              <Switch
-                className="ml-4 shrink-0"
-                checked={autoOpenLastSheet}
-                onCheckedChange={(checked) => {
-                  const previousValue = autoOpenLastSheet;
-                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                    ...old,
-                    preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: checked },
-                  }));
-                  updateUserPrefsMutation.mutate(
-                    { data: { preferences: { autoOpenLastSheet: checked } } },
-                    {
-                      onError: () => {
-                        queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                          ...old,
-                          preferences: { ...(old?.preferences ?? {}), autoOpenLastSheet: previousValue },
-                        }));
-                        toast({ title: "Failed to save preference", variant: "destructive" });
-                      },
-                    },
-                  );
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-border/40">
-              <div>
-                <p className="text-sm font-medium">Payment due reminders</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Show a badge on debt cards when a payment is likely due based on the due date</p>
-              </div>
-              <Switch
-                className="ml-4 shrink-0"
-                checked={showPaymentReminders}
-                onCheckedChange={(checked) => {
-                  const previousValue = showPaymentReminders;
-                  queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                    ...old,
-                    preferences: { ...(old?.preferences ?? {}), showPaymentReminders: checked },
-                  }));
-                  updateUserPrefsMutation.mutate(
-                    { data: { preferences: { showPaymentReminders: checked } } },
-                    {
-                      onError: () => {
-                        queryClient.setQueryData<UserPreferencesResponse | undefined>(getGetUserPreferencesQueryKey(), (old) => ({
-                          ...old,
-                          preferences: { ...(old?.preferences ?? {}), showPaymentReminders: previousValue },
-                        }));
-                        toast({ title: "Failed to save preference", variant: "destructive" });
-                      },
-                    },
-                  );
-                }}
-              />
-            </div>
-            {microsoftConfigured && (
-              <div className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-medium">Microsoft / OneDrive</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {microsoftAuthenticated ? "Connected — export budgets to Excel Online" : "Connect to export budgets to Excel Online"}
-                  </p>
-                </div>
-                {!microsoftAuthenticated && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="ml-4 shrink-0 rounded-xl text-xs bg-gradient-to-r from-teal-600 to-teal-500 text-white border-0"
-                    onClick={handleConnectMicrosoft}
-                  >
-                    Connect
-                  </Button>
-                )}
-              </div>
-            )}
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            No preferences configured yet.
           </div>
         </DialogContent>
       </Dialog>
