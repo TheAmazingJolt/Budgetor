@@ -1005,6 +1005,9 @@ components:
         anchorDate:
           type: ["string", "null"]
           description: ISO date string of the most recent due date for biweekly bills (anchor for scheduling)
+        startDate:
+          type: ["string", "null"]
+          description: ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)
       required:
         - name
         - amount
@@ -1378,6 +1381,10 @@ components:
           type: string
           nullable: true
           description: ISO date string for the payment due date (used by lump_sum debts as the single payoff date).
+        startDate:
+          type: string
+          nullable: true
+          description: ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).
         anchorDate:
           type: string
           nullable: true

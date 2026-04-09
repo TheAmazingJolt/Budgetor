@@ -625,7 +625,7 @@ function computeSavingsGoalBills(
 }
 
 function computeLumpSumDebtBills(
-  debts: Array<{ id: string; name: string; type: string; balance: number; dueDate?: string | null }>,
+  debts: Array<{ id: string; name: string; type: string; balance: number; dueDate?: string | null; startDate?: string | null }>,
   today?: Date,
 ): Bill[] {
   const now = today ?? new Date();
@@ -638,7 +638,9 @@ function computeLumpSumDebtBills(
     if (d.balance <= 0) continue;
     const dueDate = new Date(d.dueDate + "T00:00:00");
     if (dueDate <= now) continue;
-    const weeksLeft = Math.max(1, Math.ceil((dueDate.getTime() - now.getTime()) / msPerWeek));
+    const parsedStartDate = d.startDate ? new Date(d.startDate + "T00:00:00") : null;
+    const effectiveStart = parsedStartDate && parsedStartDate > now ? parsedStartDate : now;
+    const weeksLeft = Math.max(1, Math.ceil((dueDate.getTime() - effectiveStart.getTime()) / msPerWeek));
     const weeklyAmount = Math.round((d.balance / weeksLeft) * 100) / 100;
     result.push({
       name: `${d.name}`,
@@ -648,7 +650,8 @@ function computeLumpSumDebtBills(
       color: "red",
       sourceDebtId: d.id,
       payoffDate: d.dueDate,
-    });
+      ...(parsedStartDate && parsedStartDate > now ? { startDate: d.startDate } : {}),
+    } as Bill);
   }
   return result;
 }

@@ -32,6 +32,7 @@ const formSchema = z.object({
   paymentFrequency: z.enum(PAYMENT_FREQUENCIES).optional(),
   paymentsRemaining: z.coerce.number().int().min(1, "Must be at least 1").nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  startDate: z.string().nullable().optional(),
   anchorDate: z.string().nullable().optional(),
 }).refine(
   (data) => {
@@ -80,6 +81,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           paymentFrequency: (PAYMENT_FREQUENCIES as readonly string[]).includes(initialData.paymentFrequency ?? "") ? initialData.paymentFrequency as typeof PAYMENT_FREQUENCIES[number] : "monthly",
           paymentsRemaining: initialData.paymentsRemaining ?? null,
           dueDate: initialData.dueDate ?? null,
+          startDate: initialData.startDate ?? null,
           anchorDate: initialData.anchorDate ?? null,
         }
       : {
@@ -94,6 +96,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           paymentFrequency: "monthly" as const,
           paymentsRemaining: null,
           dueDate: null,
+          startDate: null,
           anchorDate: null,
         },
   });
@@ -125,7 +128,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       lastPaymentDate: initialData?.lastPaymentDate ?? undefined,
       lastPaymentAmount: initialData?.lastPaymentAmount ?? undefined,
       createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
-      ...(isLumpSum ? { dueDate: values.dueDate ?? undefined } : { dueDate: undefined }),
+      ...(isLumpSum ? { dueDate: values.dueDate ?? undefined, startDate: values.startDate ?? undefined } : { dueDate: undefined, startDate: undefined }),
       anchorDate: isBiweeklyInstallment ? (values.anchorDate || null) : null,
     } as Debt);
   };
@@ -258,6 +261,28 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                   />
                 </FormControl>
                 <FormDescription>The date the full amount is due.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {isLumpSum && (
+          <FormField
+            control={form.control}
+            name="startDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Start Date <span className="text-muted-foreground font-normal text-xs">optional</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="date"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value || null)}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
+                </FormControl>
+                <FormDescription>First week to begin setting aside money. Defaults to the current week if left blank.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}

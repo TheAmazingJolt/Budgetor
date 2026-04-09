@@ -267,8 +267,12 @@ export function generateWeeklyBudgets(
   // ── Add weekly bills to every period ────────────────────────────────────
   for (const bill of weeklyBills) {
     const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+    const billStartDate = (bill as Bill & { startDate?: string | null }).startDate
+      ? new Date((bill as Bill & { startDate?: string | null }).startDate! + "T00:00:00")
+      : null;
     for (let i = 0; i < weeks.length; i++) {
       if (billPayoffDate && weeks[i].start >= billPayoffDate) continue;
+      if (billStartDate && weeks[i].start < billStartDate) continue;
       if (payPeriod === "weekly") {
         weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
       } else {
