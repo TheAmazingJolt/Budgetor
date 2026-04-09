@@ -2099,11 +2099,9 @@ async function writeSavingsTabToSheet(
         );
         if (weekCheckin) {
           savedThisMonth += weekCheckin.actualAmount;
-        } else if (wEnd < today) {
-          for (const item of w.bills) {
-            if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
-          }
         }
+        // Weeks without an explicit check-in are not auto-credited —
+        // only confirmed check-ins and manual contributions count.
       }
       for (const c of checkins) {
         if (c.itemName !== bill.name || c.itemType !== "balanced") continue;
