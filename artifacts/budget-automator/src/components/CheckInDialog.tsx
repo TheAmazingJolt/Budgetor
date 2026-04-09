@@ -162,14 +162,20 @@ export function CheckInDialog({
   };
 
   const budgetedItems = items.filter(it => {
-    if (it.plannedAmount > 0) return true;
     const ex = findExisting(it);
-    return !!ex && ex.actualAmount > 0;
+    // Already processed at $0 (skipped in a prior check-in) → not budgeted section
+    if (ex && ex.actualAmount === 0) return false;
+    // Previously confirmed at a non-zero amount → keep in main list
+    if (ex && ex.actualAmount > 0) return true;
+    // Not yet processed: show in main list only if it has a planned amount
+    return it.plannedAmount > 0;
   });
   const notBudgetedItems = items.filter(it => {
-    if (it.plannedAmount > 0) return false;
     const ex = findExisting(it);
-    return !ex || ex.actualAmount === 0;
+    // Already processed at $0 (skipped) → not budgeted
+    if (ex && ex.actualAmount === 0) return true;
+    // Not yet processed with no planned amount → not budgeted
+    return !ex && it.plannedAmount === 0;
   });
 
   const setActual = (idx: number, val: string) => {

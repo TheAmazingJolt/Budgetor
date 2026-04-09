@@ -1348,13 +1348,13 @@ function writeExcelSavingsSheetXL(
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
         const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
-        if (wStart <= cycleStart || wEnd >= today) continue;
+        if (wStart <= cycleStart || wStart > today) continue;
         const weekCheckin = checkins.find(
           c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "yearly",
         );
         if (weekCheckin) {
           savedInCycle += weekCheckin.actualAmount;
-        } else {
+        } else if (wEnd < today) {
           for (const item of w.bills) {
             if (item.name.startsWith(prefix)) savedInCycle += Math.abs(item.amount);
           }
@@ -1388,14 +1388,14 @@ function writeExcelSavingsSheetXL(
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
         const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
-        if (wEnd >= today) continue;
+        if (wStart > today) continue;
         if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
         const weekCheckin = checkins.find(
           c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "balanced",
         );
         if (weekCheckin) {
           savedThisMonth += weekCheckin.actualAmount;
-        } else {
+        } else if (wEnd < today) {
           for (const item of w.bills) {
             if (item.name === prefix) savedThisMonth += Math.abs(item.amount);
           }
@@ -1406,7 +1406,7 @@ function writeExcelSavingsSheetXL(
         if (activeWeekLabelsXLBalanced.has(c.weekLabel)) continue;
         const dates = parseLabelDatesXL(c.weekLabel);
         if (!dates) continue;
-        if (dates.end >= today) continue;
+        if (dates.start > today) continue;
         if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
         savedThisMonth += c.actualAmount;
       }
