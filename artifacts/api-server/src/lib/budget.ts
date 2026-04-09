@@ -289,29 +289,83 @@ export function generateWeeklyBudgets(
 
   // ── Add biweekly bills ───────────────────────────────────────────────────
   // Weekly budget: every other period (periods 0, 2, 4, …)
+  //   If anchorDate is set, use date-math to check whether any multiple of
+  //   14 days from the anchor falls within the period window instead.
   // Biweekly budget: every period (one payment per 14-day period)
+  //   If anchorDate is set, only include if the anchor-aligned due date lands
+  //   within the period.
   // Monthly budget: Math.round(days/14) occurrences per period (~2/month)
+  //   If anchorDate is set, count anchor-aligned due dates inside the period.
+  /** Convert a Date to an integer day index (days since epoch, local midnight). */
+  function toDayIndex(d: Date): number {
+    return Math.round(d.getTime() / 86400000);
+  }
+
   for (const bill of biweeklyBills) {
     const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+
+    // Parse anchorDate as a local midnight date (day-only arithmetic avoids
+    // DST / noon-vs-midnight boundary issues when comparing to period start/end).
+    const anchorDay = bill.anchorDate ? toDayIndex(new Date(bill.anchorDate)) : null;
+
     for (let i = 0; i < weeks.length; i++) {
       if (billPayoffDate && weeks[i].start >= billPayoffDate) continue;
+      const periodStartDay = toDayIndex(weeks[i].start);
+      const periodEndDay = toDayIndex(weeks[i].end);
+
       if (payPeriod === "weekly") {
-        if (i % 2 === 0) {
-          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+        if (anchorDay !== null) {
+          // Find the first anchor-aligned day >= periodStart
+          const diff = periodStartDay - anchorDay;
+          const n = Math.ceil(diff / 14);
+          const candidateDay = anchorDay + n * 14;
+          if (candidateDay <= periodEndDay) {
+            weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+          }
+        } else {
+          if (i % 2 === 0) {
+            weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+          }
         }
       } else if (payPeriod === "biweekly") {
-        weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+        if (anchorDay !== null) {
+          const diff = periodStartDay - anchorDay;
+          const n = Math.ceil(diff / 14);
+          const candidateDay = anchorDay + n * 14;
+          if (candidateDay <= periodEndDay) {
+            weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+          }
+        } else {
+          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+        }
       } else {
-        const periodStart = weeks[i].start;
-        const periodEnd = weeks[i].end;
-        const diffDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000) + 1;
-        const occurrences = Math.max(1, Math.round(diffDays / 14));
-        for (let o = 0; o < occurrences; o++) {
-          weeks[i].fixedWeeklyBills.push({
-            name: occurrences > 1 ? `${bill.name} (pmt ${o + 1})` : bill.name,
-            amount: bill.amount,
-            color: bill.sourceDebtId ? undefined : bill.color,
-          });
+        if (anchorDay !== null) {
+          // Count how many anchor-aligned due dates fall within this period (day-based)
+          const diff = periodStartDay - anchorDay;
+          const firstN = Math.ceil(diff / 14);
+          let occurrences = 0;
+          let candidateDay = anchorDay + firstN * 14;
+          while (candidateDay <= periodEndDay) {
+            occurrences++;
+            candidateDay += 14;
+          }
+          for (let o = 0; o < occurrences; o++) {
+            weeks[i].fixedWeeklyBills.push({
+              name: occurrences > 1 ? `${bill.name} (pmt ${o + 1})` : bill.name,
+              amount: bill.amount,
+              color: bill.sourceDebtId ? undefined : bill.color,
+            });
+          }
+        } else {
+          const diffDays = Math.round((weeks[i].end.getTime() - weeks[i].start.getTime()) / 86400000) + 1;
+          const occurrences = Math.max(1, Math.round(diffDays / 14));
+          for (let o = 0; o < occurrences; o++) {
+            weeks[i].fixedWeeklyBills.push({
+              name: occurrences > 1 ? `${bill.name} (pmt ${o + 1})` : bill.name,
+              amount: bill.amount,
+              color: bill.sourceDebtId ? undefined : bill.color,
+            });
+          }
         }
       }
     }

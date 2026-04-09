@@ -58,6 +58,11 @@ export interface Bill {
    * @nullable
    */
   annualDueMonth?: number | null;
+  /**
+   * ISO date string of the most recent due date for biweekly bills (anchor for scheduling)
+   * @nullable
+   */
+  anchorDate?: string | null;
 }
 
 export interface WeeklyBill {
@@ -122,6 +127,14 @@ export const BudgetRequestPayPeriod = {
   monthly: "monthly",
 } as const;
 
+/**
+ * Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved this month before the budget start date. When present, balanced bill allocations for the matching month are reduced by the saved amount before being spread across weeks.
+
+ */
+export type BudgetRequestPriorSavings = {
+  [key: string]: { [key: string]: number };
+} | null;
+
 export interface BudgetRequest {
   /** ISO date string for first week start */
   startDate: string;
@@ -138,8 +151,9 @@ export interface BudgetRequest {
   /** Multiple income sources. When provided and non-empty, overrides paycheckAmount. */
   incomeSources?: IncomeSource[];
   bills: Bill[];
-  /** Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved before the budget start date */
-  priorSavings?: Record<string, Record<string, number>> | null;
+  /** Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved this month before the budget start date. When present, balanced bill allocations for the matching month are reduced by the saved amount before being spread across weeks.
+   */
+  priorSavings?: BudgetRequestPriorSavings;
 }
 
 export interface BudgetResponse {
@@ -147,6 +161,16 @@ export interface BudgetResponse {
   totalMonthlyBills: number;
   averageWeeklyBills: number;
 }
+
+/**
+ * Subscription plan for the user
+ */
+export type AuthUserPlan = (typeof AuthUserPlan)[keyof typeof AuthUserPlan];
+
+export const AuthUserPlan = {
+  free: "free",
+  pro: "pro",
+} as const;
 
 export interface AuthUser {
   id: string;
@@ -156,7 +180,8 @@ export interface AuthUser {
   provider: string;
   /** Whether the user has a password set (for email/password auth) */
   hasPassword?: boolean;
-  plan?: 'free' | 'pro';
+  /** Subscription plan for the user */
+  plan?: AuthUserPlan;
   createdAt: string;
 }
 

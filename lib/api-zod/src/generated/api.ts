@@ -106,14 +106,19 @@ export const GenerateBudgetBody = zod.object({
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
     }),
   ),
   priorSavings: zod
-    .record(zod.record(zod.number()))
-    .nullable()
-    .optional()
+    .record(zod.string(), zod.record(zod.string(), zod.number()))
+    .nullish()
     .describe(
-      "Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved before the budget start date",
+      "Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved this month before the budget start date. When present, balanced bill allocations for the matching month are reduced by the saved amount before being spread across weeks.\n",
     ),
 });
 
@@ -180,6 +185,10 @@ export const AuthMeResponse = zod.object({
         .describe(
           "Whether the user has a password set (for email\/password auth)",
         ),
+      plan: zod
+        .enum(["free", "pro"])
+        .optional()
+        .describe("Subscription plan for the user"),
       createdAt: zod.date(),
     }),
     zod.null(),
@@ -203,6 +212,10 @@ export const AuthGuestLoginResponse = zod.object({
       .describe(
         "Whether the user has a password set (for email\/password auth)",
       ),
+    plan: zod
+      .enum(["free", "pro"])
+      .optional()
+      .describe("Subscription plan for the user"),
     createdAt: zod.date(),
   }),
   token: zod.string().optional(),
@@ -241,6 +254,10 @@ export const AuthEmailRegisterResponse = zod.object({
       .describe(
         "Whether the user has a password set (for email\/password auth)",
       ),
+    plan: zod
+      .enum(["free", "pro"])
+      .optional()
+      .describe("Subscription plan for the user"),
     createdAt: zod.date(),
   }),
   token: zod.string().optional(),
@@ -268,6 +285,10 @@ export const AuthEmailLoginResponse = zod.object({
       .describe(
         "Whether the user has a password set (for email\/password auth)",
       ),
+    plan: zod
+      .enum(["free", "pro"])
+      .optional()
+      .describe("Subscription plan for the user"),
     createdAt: zod.date(),
   }),
   token: zod.string().optional(),
@@ -313,6 +334,10 @@ export const AuthResetPasswordResponse = zod.object({
       .describe(
         "Whether the user has a password set (for email\/password auth)",
       ),
+    plan: zod
+      .enum(["free", "pro"])
+      .optional()
+      .describe("Subscription plan for the user"),
     createdAt: zod.date(),
   }),
   token: zod.string().optional(),
@@ -347,6 +372,10 @@ export const AuthClaimAccountResponse = zod.object({
       .describe(
         "Whether the user has a password set (for email\/password auth)",
       ),
+    plan: zod
+      .enum(["free", "pro"])
+      .optional()
+      .describe("Subscription plan for the user"),
     createdAt: zod.date(),
   }),
   token: zod.string().optional(),
@@ -1147,6 +1176,12 @@ export const SheetReadResponse = zod.object({
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -1225,6 +1260,12 @@ export const SheetReadByUrlResponse = zod.object({
         .nullish()
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+        ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
     }),
   ),
@@ -1347,6 +1388,12 @@ export const SheetWriteBody = zod.object({
           .nullish()
           .describe(
             "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
           ),
       }),
     )
@@ -1657,6 +1704,12 @@ export const SheetCreateAndWriteBody = zod.object({
           .describe(
             "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
           ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+          ),
       }),
     )
     .optional(),
@@ -1769,6 +1822,12 @@ export const ExcelReadResponse = zod.object({
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -1847,6 +1906,12 @@ export const ExcelReadByUrlResponse = zod.object({
         .nullish()
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+        ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
     }),
   ),
@@ -2058,6 +2123,12 @@ export const ExcelWriteBody = zod.object({
           .nullish()
           .describe(
             "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
           ),
       }),
     )
@@ -2278,6 +2349,12 @@ export const ExcelCreateAndWriteBody = zod.object({
           .describe(
             "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
           ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+          ),
       }),
     )
     .optional(),
@@ -2370,6 +2447,12 @@ export const GetUserBillsResponse = zod.object({
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
     }),
   ),
 });
@@ -2432,6 +2515,12 @@ export const UpdateUserBillsBody = zod.object({
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
         ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
     }),
   ),
 });
@@ -2489,6 +2578,12 @@ export const UpdateUserBillsResponse = zod.object({
         .nullish()
         .describe(
           "Month (1-12) in which a yearly bill is due (null for non-yearly bills)",
+        ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
     }),
   ),

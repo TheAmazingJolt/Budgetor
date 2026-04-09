@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AuthUserPlan } from "./authUserPlan";
 
 export interface AuthUser {
   id: string;
@@ -14,5 +15,7 @@ export interface AuthUser {
   provider: string;
   /** Whether the user has a password set (for email/password auth) */
   hasPassword?: boolean;
+  /** Subscription plan for the user */
+  plan?: AuthUserPlan;
   createdAt: Date;
 }

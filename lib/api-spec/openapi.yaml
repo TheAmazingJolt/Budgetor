@@ -1002,6 +1002,9 @@ components:
         annualDueMonth:
           type: ["integer", "null"]
           description: Month (1-12) in which a yearly bill is due (null for non-yearly bills)
+        anchorDate:
+          type: ["string", "null"]
+          description: ISO date string of the most recent due date for biweekly bills (anchor for scheduling)
       required:
         - name
         - amount
@@ -1185,6 +1188,10 @@ components:
         hasPassword:
           type: boolean
           description: Whether the user has a password set (for email/password auth)
+        plan:
+          type: string
+          enum: [free, pro]
+          description: Subscription plan for the user
         createdAt:
           type: string
           format: date-time

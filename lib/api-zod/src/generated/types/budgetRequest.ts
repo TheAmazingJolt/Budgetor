@@ -7,6 +7,7 @@
  */
 import type { Bill } from "./bill";
 import type { BudgetRequestPayPeriod } from "./budgetRequestPayPeriod";
+import type { BudgetRequestPriorSavings } from "./budgetRequestPriorSavings";
 import type { IncomeSource } from "./incomeSource";
 
 export interface BudgetRequest {
@@ -25,6 +26,7 @@ export interface BudgetRequest {
   /** Multiple income sources. When provided and non-empty, overrides paycheckAmount. */
   incomeSources?: IncomeSource[];
   bills: Bill[];
-  /** Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved before the budget start date */
-  priorSavings?: Record<string, Record<string, number>> | null;
+  /** Map of monthKey (YYYY-M, 0-indexed month) to billName to positive amount already saved this month before the budget start date. When present, balanced bill allocations for the matching month are reduced by the saved amount before being spread across weeks.
+   */
+  priorSavings?: BudgetRequestPriorSavings;
 }

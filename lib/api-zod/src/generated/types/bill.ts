@@ -38,4 +38,9 @@ export interface Bill {
    * @nullable
    */
   annualDueMonth?: number | null;
+  /**
+   * ISO date string of the most recent due date for biweekly bills (anchor for scheduling)
+   * @nullable
+   */
+  anchorDate?: string | null;
 }

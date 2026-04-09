@@ -50,6 +50,7 @@ const formSchema = z.object({
   type: z.enum(["balanced", "fixed", "weekly", "biweekly", "yearly", "yearly-flat"]),
   color: z.string().default("none"),
   payoffDate: z.string().nullable().optional(),
+  anchorDate: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.type === "yearly" || data.type === "yearly-flat") {
     if (data.annualDueMonth == null) {
@@ -189,6 +190,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
           type: d.type ?? "fixed",
           color: d.color ?? "none",
           payoffDate: d.payoffDate ?? null,
+          anchorDate: d.anchorDate ?? null,
         }
       : {
           name: "",
@@ -199,6 +201,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
           type: "fixed",
           color: "none",
           payoffDate: null,
+          anchorDate: null,
         },
   });
 
@@ -246,6 +249,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
       userColor: values.color !== "none",
       annualDueMonth: isAnyYearly ? (values.annualDueMonth ?? 1) : undefined,
       payoffDate: isWeeklyOrBiweekly ? (values.payoffDate || null) : undefined,
+      anchorDate: values.type === "biweekly" ? (values.anchorDate || null) : undefined,
     } as Bill;
     onSubmit(result);
   }
@@ -419,6 +423,29 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
                       {billType === "fixed"
                         ? "Full amount appears in the week this day falls."
                         : "Bill is only spread across weeks leading up to and including this day. \"Varies\" spreads across all weeks."}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {billType === "biweekly" && (
+              <FormField
+                control={form.control}
+                name="anchorDate"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Last due date <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        value={field.value ?? ""}
+                        onChange={e => field.onChange(e.target.value || null)}
+                        className="focus:ring-primary/20 focus:border-primary"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      When was this last paid? Sets the exact schedule — every 14 days from this date.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
