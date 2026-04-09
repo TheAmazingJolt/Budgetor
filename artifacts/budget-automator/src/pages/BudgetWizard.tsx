@@ -1554,8 +1554,15 @@ export function BudgetWizard({
   const debtIdToBillName = useMemo(() => {
     const map = new Map<string, string>();
     for (const b of bills) {
-      const debtId = b.sourceDebtId ?? debts.find(d => b.name === `${d.name} (min payment)`)?.id;
-      if (debtId) map.set(debtId, b.name);
+      const debt = b.sourceDebtId
+        ? debts.find(d => d.id === b.sourceDebtId)
+        : debts.find(d => b.name === `${d.name} (min payment)`);
+      const debtId = debt?.id ?? b.sourceDebtId;
+      if (!debtId) continue;
+      // Lump-sum debts use the debt's own name in week items (from computeLumpSumDebtBills),
+      // not the "(min payment)" bill name — so applyCheckinMarks can match and add ✓.
+      const billName = debt?.type === "lump_sum" ? debt.name : b.name;
+      map.set(debtId, billName);
     }
     for (const d of debts) {
       if (d.type === "lump_sum" && !map.has(d.id)) map.set(d.id, d.name);
