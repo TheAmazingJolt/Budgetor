@@ -1046,6 +1046,7 @@ export function BudgetWizard({
   const [isImportConflictDialogOpen, setIsImportConflictDialogOpen] = useState(false);
   const billsFromImportPendingRef = useRef(false);
   const pendingImportCallbackRef = useRef<((useBills: Bill[]) => void) | null>(null);
+  const freshWeeksForSyncRef = useRef<any[] | null>(null);
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
   const [cloudSaveCountdown, setCloudSaveCountdown] = useState<number | null>(null);
   const [newCloudSaveSuccess, setNewCloudSaveSuccess] = useState(false);
@@ -2820,6 +2821,8 @@ export function BudgetWizard({
           cloudBudgetLoadedBillsRef.current = JSON.stringify(bills);
           queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() });
           toast({ title: "Budget updated", description: `"${activeCloudBudgetName}" has been updated.` });
+          // Pass merged weeks to sync so it doesn't read stale cloudExistingWeeks state
+          freshWeeksForSyncRef.current = mergedExistingWeeks;
           afterSuccess?.();
         },
         onError: (err: unknown) => {
@@ -3401,6 +3404,10 @@ export function BudgetWizard({
 
   const handleGenerateAndUpdateSheet = async (target: "google" | "excel" | "all" = "all") => {
     if (!activeGoogleSheet && !activeExcelSheet) return;
+    // Capture and immediately clear the fresh-weeks ref so a subsequent direct sync
+    // call (not triggered by handleQuickUpdate) always falls back to the live state.
+    const weeksForSync = freshWeeksForSyncRef.current ?? getExistingWeeks();
+    freshWeeksForSyncRef.current = null;
     if (target === "excel") setIsUpdatingExcelSync(true);
     else if (target === "google") setIsUpdatingSheetsSync(true);
     else { setIsUpdatingSheetsSync(true); setIsUpdatingExcelSync(true); }
@@ -3444,10 +3451,10 @@ export function BudgetWizard({
       // Build a paycheck lookup from currently stored weeks (including explicit $0 values)
       // so we can selectively restore them when the generated paycheck is $0.
       const storedPaycheckMap = new Map<string, number>();
-      for (const sw of getExistingWeeks()) {
+      for (const sw of weeksForSync) {
         if (sw.paycheck != null) storedPaycheckMap.set(sw.label, sw.paycheck);
       }
-      const historicalWeeks = getExistingWeeks()
+      const historicalWeeks = weeksForSync
         .filter((w: any) => !generatedLabels.has(w.label) && (w.items || w.openingBalance !== undefined) && !weekEdits[w.label]?.deleted)
         .map((w: any) => {
           const e = weekEdits[w.label];
