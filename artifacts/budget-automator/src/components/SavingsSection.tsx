@@ -176,8 +176,8 @@ export function SavingsSection({
     },
   });
 
-  const [sinkingCollapsed, setSinkingCollapsed] = useState(false);
-  const [balancedCollapsed, setBalancedCollapsed] = useState(false);
+  const [sinkingCollapsed, setSinkingCollapsed] = useState(true);
+  const [balancedCollapsed, setBalancedCollapsed] = useState(true);
 
   const { sinkingFunds, balanced } = computeSavings(
     bills, weeks, today, contributions, checkins,
@@ -400,7 +400,7 @@ function todayStr() {
 }
 
 function LumpSumSection({ debts, today }: { debts: LumpSumDebtForSavings[]; today: Date }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const items = debts.map(d => {
     const due = new Date(d.dueDate! + "T00:00:00");
@@ -759,6 +759,7 @@ interface SavingsGoalsSectionProps {
 }
 
 function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onCreate, onUpdate, onDelete, onToggleBudget, onAddBillForGoal }: SavingsGoalsSectionProps) {
+  const [collapsed, setCollapsed] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
   const [addAmount, setAddAmount] = useState("");
@@ -788,89 +789,98 @@ function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onC
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Target className="w-4 h-4 text-teal-600" />
-          <h4 className="text-sm font-semibold uppercase tracking-wider text-teal-700">
-            Savings Goals
-          </h4>
-        </div>
         <button
           type="button"
-          onClick={() => { setShowAddForm(f => !f); setAddError(""); }}
-          className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 flex-1 text-left"
+          onClick={() => setCollapsed(c => !c)}
+        >
+          <Target className="w-4 h-4 text-teal-600 shrink-0" />
+          <h4 className="text-sm font-semibold uppercase tracking-wider text-teal-700 flex-1">
+            Savings Goals
+          </h4>
+          <ChevronDown className={`w-4 h-4 text-teal-500 shrink-0 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`} />
+        </button>
+        <button
+          type="button"
+          onClick={() => { setShowAddForm(f => !f); setAddError(""); if (collapsed) setCollapsed(false); }}
+          className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:opacity-80 transition-opacity ml-2"
         >
           <Plus className="w-3.5 h-3.5" />
           Add Goal
         </button>
       </div>
 
-      {showAddForm && (
-        <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
-          <p className="text-xs font-semibold text-teal-800">New Savings Goal</p>
-          <Input
-            placeholder="Goal name (e.g. Vacation, Car repair)"
-            value={addName}
-            onChange={e => setAddName(e.target.value)}
-            className="h-8 text-sm"
-          />
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+      {!collapsed && (
+        <>
+          {showAddForm && (
+            <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
+              <p className="text-xs font-semibold text-teal-800">New Savings Goal</p>
               <Input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Target amount"
-                value={addAmount}
-                onChange={e => setAddAmount(e.target.value)}
-                className="pl-6 h-8 text-sm"
+                placeholder="Goal name (e.g. Vacation, Car repair)"
+                value={addName}
+                onChange={e => setAddName(e.target.value)}
+                className="h-8 text-sm"
               />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Target amount"
+                    value={addAmount}
+                    onChange={e => setAddAmount(e.target.value)}
+                    className="pl-6 h-8 text-sm"
+                  />
+                </div>
+                <Input
+                  type="date"
+                  value={addDate}
+                  onChange={e => setAddDate(e.target.value)}
+                  className="h-8 text-sm w-36"
+                />
+              </div>
+              <Input
+                placeholder="Note (optional)"
+                value={addNote}
+                onChange={e => setAddNote(e.target.value)}
+                className="h-8 text-sm"
+              />
+              {addError && <p className="text-xs text-red-500">{addError}</p>}
+              <div className="flex gap-2">
+                <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleCreate} disabled={addSaving}>
+                  {addSaving ? "Saving…" : "Save"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowAddForm(false); setAddError(""); }}>
+                  Cancel
+                </Button>
+              </div>
             </div>
-            <Input
-              type="date"
-              value={addDate}
-              onChange={e => setAddDate(e.target.value)}
-              className="h-8 text-sm w-36"
-            />
-          </div>
-          <Input
-            placeholder="Note (optional)"
-            value={addNote}
-            onChange={e => setAddNote(e.target.value)}
-            className="h-8 text-sm"
-          />
-          {addError && <p className="text-xs text-red-500">{addError}</p>}
-          <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleCreate} disabled={addSaving}>
-              {addSaving ? "Saving…" : "Save"}
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowAddForm(false); setAddError(""); }}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
+          )}
 
-      {goals.length === 0 && !showAddForm && (
-        <p className="text-xs text-muted-foreground">No savings goals yet. Add one to get started.</p>
-      )}
+          {goals.length === 0 && !showAddForm && (
+            <p className="text-xs text-muted-foreground">No savings goals yet. Add one to get started.</p>
+          )}
 
-      {goals.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {goals.map(goal => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              contributions={contributions.filter(c => c.billName === goal.name)}
-              onAdd={(amount, date, note) => onAdd(amount, date, note, goal.name)}
-              onDeleteContrib={onDeleteContrib}
-              onUpdate={(payload) => onUpdate(goal.id, payload)}
-              onDelete={() => onDelete(goal.id)}
-              onToggleBudget={(value) => onToggleBudget(goal.id, value)}
-              onAddAsBill={onAddBillForGoal ? (amt) => onAddBillForGoal(goal.name, amt) : undefined}
-            />
-          ))}
-        </div>
+          {goals.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {goals.map(goal => (
+                <GoalCard
+                  key={goal.id}
+                  goal={goal}
+                  contributions={contributions.filter(c => c.billName === goal.name)}
+                  onAdd={(amount, date, note) => onAdd(amount, date, note, goal.name)}
+                  onDeleteContrib={onDeleteContrib}
+                  onUpdate={(payload) => onUpdate(goal.id, payload)}
+                  onDelete={() => onDelete(goal.id)}
+                  onToggleBudget={(value) => onToggleBudget(goal.id, value)}
+                  onAddAsBill={onAddBillForGoal ? (amt) => onAddBillForGoal(goal.name, amt) : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
