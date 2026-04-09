@@ -1391,7 +1391,7 @@ function buildSavingsGoalRows(
     const lsFirstDataRow = lsColHeaderRow + 1;
 
     savingsRows.push(["Lump-Sum Payments", "", ""]);
-    savingsRows.push(["Name", "Weekly Set-Aside", "Due Date"]);
+    savingsRows.push(["Name", "Weekly $", "Due Date"]);
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
@@ -1764,19 +1764,35 @@ async function writeBudgetToSheet(
     sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
-        requests: [{
-          repeatCell: {
-            range: {
-              sheetId,
-              startRowIndex: billsDebtsStartRow,
-              endRowIndex: billsDebtsStartRow + billsDebtsBufferRows,
-              startColumnIndex: 0,
-              endColumnIndex: 26,
+        requests: [
+          // Unmerge the entire Bills/Debts/Savings buffer area first so stale merges
+          // from previous syncs (when layout was at a different row position) don't
+          // bleed into data rows after the section shifts up or down.
+          {
+            unmergeCells: {
+              range: {
+                sheetId,
+                startRowIndex: billsDebtsStartRow,
+                endRowIndex: billsDebtsStartRow + billsDebtsBufferRows,
+                startColumnIndex: 0,
+                endColumnIndex: 26,
+              },
             },
-            cell: {},
-            fields: "userEnteredFormat",
           },
-        }],
+          {
+            repeatCell: {
+              range: {
+                sheetId,
+                startRowIndex: billsDebtsStartRow,
+                endRowIndex: billsDebtsStartRow + billsDebtsBufferRows,
+                startColumnIndex: 0,
+                endColumnIndex: 26,
+              },
+              cell: {},
+              fields: "userEnteredFormat",
+            },
+          },
+        ],
       },
     }),
   ]);

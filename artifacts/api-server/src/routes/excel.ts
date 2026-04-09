@@ -1503,7 +1503,7 @@ function writeExcelSavingsSheetXL(
   if (lumpSumBills.length > 0) {
     const debtMap = new Map((debts ?? []).map((d) => [d.id, d]));
     writeRow(["Lump-Sum Payments (Debt Progress)"], { bg: ROSE_LT_EARLY, fontColor: ROSE_EARLY, bold: true, size: 11 });
-    writeRow(["Name", "Weekly Set-Aside", "Due Date", "Remaining Balance", "Percent Left"], { bg: ROSE_LT_EARLY, bold: true });
+    writeRow(["Name", "Weekly $", "Due Date", "Remaining Balance", "Percent Left"], { bg: ROSE_LT_EARLY, bold: true });
     for (const b of lumpSumBills) {
       const debt = debtMap.get(b.sourceDebtId!);
       const payoffDateStr = b.payoffDate
@@ -1547,7 +1547,7 @@ function writeExcelSavingsSheetXL(
   const ROSE_LT    = "FFFCE7EB";
   if (activeLumpSum.length > 0) {
     writeRow(["Lump-Sum Payments"], { bg: ROSE_LT, fontColor: ROSE, bold: true, size: 11 });
-    writeRow(["Name", "Weekly Set-Aside", "Due Date"], { bg: ROSE_LT, bold: true });
+    writeRow(["Name", "Weekly $", "Due Date"], { bg: ROSE_LT, bold: true });
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
