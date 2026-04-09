@@ -133,7 +133,7 @@ export function CheckInDialog({
 
     const debtItems: CheckInItem[] = (debtBills ?? [])
       .filter(({ debtId }) => !!debtId)
-      .map(({ bill, debtId, currentBalance }) => {
+      .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
         const planned = getDebtPlannedAmount(bill, week.items);
         const existing =
           existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
@@ -142,7 +142,7 @@ export function CheckInDialog({
         // isLumpSum is set by BudgetWizard based on debt.type === "lump_sum".
         // Lump-sum debts should never be auto-skipped — the user should always see
         // them in the main check-in section so they can record each weekly set-aside.
-        const isLumpSum = !!info.isLumpSum;
+        const isLumpSum = !!debtIsLumpSum;
         const autoSkip = !existing && planned === 0 && !isLumpSum;
         return {
           billName: bill.name,
@@ -178,13 +178,13 @@ export function CheckInDialog({
       );
       const newItems: CheckInItem[] = added
         .filter(({ debtId }) => !!debtId && !currentIds.has(debtId))
-        .map(({ bill, debtId, currentBalance }) => {
+        .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
           const planned = getDebtPlannedAmount(bill, week.items);
           const existing =
             existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
             existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
           const actual = existing ? existing.actualAmount : planned;
-          const isLumpSum = !!info.isLumpSum;
+          const isLumpSum = !!debtIsLumpSum;
           const autoSkip = !existing && planned === 0 && !isLumpSum;
           return {
             billName: bill.name,
