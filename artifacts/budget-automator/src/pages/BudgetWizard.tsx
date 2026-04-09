@@ -1061,7 +1061,9 @@ export function BudgetWizard({
   const [exportNameInput, setExportNameInput] = useState("");
   const [activeGoogleSheet, setActiveGoogleSheet] = useState<{ id: string; name: string } | null>(null);
   const [activeExcelSheet, setActiveExcelSheet] = useState<{ id: string; name: string } | null>(null);
-  const [isUpdatingLinkedSheet, setIsUpdatingLinkedSheet] = useState(false);
+  const [isUpdatingSheetsSync, setIsUpdatingSheetsSync] = useState(false);
+  const [isUpdatingExcelSync, setIsUpdatingExcelSync] = useState(false);
+  const isUpdatingLinkedSheet = isUpdatingSheetsSync || isUpdatingExcelSync;
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
   const [syncGoogleOnUpdate, setSyncGoogleOnUpdate] = useState(false);
   const [syncExcelOnUpdate, setSyncExcelOnUpdate] = useState(false);
@@ -3381,7 +3383,9 @@ export function BudgetWizard({
 
   const handleGenerateAndUpdateSheet = async (target: "google" | "excel" | "all" = "all") => {
     if (!activeGoogleSheet && !activeExcelSheet) return;
-    setIsUpdatingLinkedSheet(true);
+    if (target === "excel") setIsUpdatingExcelSync(true);
+    else if (target === "google") setIsUpdatingSheetsSync(true);
+    else { setIsUpdatingSheetsSync(true); setIsUpdatingExcelSync(true); }
     try {
       const savingsBillsForSync = [
         ...computeSavingsGoalBills(
@@ -3498,7 +3502,8 @@ export function BudgetWizard({
         variant: "destructive",
       });
     } finally {
-      setIsUpdatingLinkedSheet(false);
+      setIsUpdatingSheetsSync(false);
+      setIsUpdatingExcelSync(false);
     }
   };
 
@@ -4522,7 +4527,7 @@ export function BudgetWizard({
                               />
                               <CloudUpload className="w-3.5 h-3.5 shrink-0" />
                               Also sync to Sheets on update
-                              {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                              {isUpdatingSheetsSync && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
                             </label>
                             <span className="text-xs text-muted-foreground/60">"{activeGoogleSheet.name}"</span>
                             <button type="button" className="text-xs text-muted-foreground/50 underline underline-offset-2 hover:text-foreground transition-colors" onClick={() => { setActiveGoogleSheet(null); setSyncGoogleOnUpdate(false); if (activeCloudBudgetId) linkSheetMutation.mutate({ id: activeCloudBudgetId, data: { linkedGoogleSheetId: null, linkedGoogleSheetName: null } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }) }); }}>Unlink</button>
@@ -4539,7 +4544,7 @@ export function BudgetWizard({
                               />
                               <CloudUpload className="w-3.5 h-3.5 shrink-0" />
                               Also sync to Excel on update
-                              {isUpdatingLinkedSheet && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
+                              {isUpdatingExcelSync && <RefreshCw className="w-3 h-3 animate-spin ml-1" />}
                             </label>
                             <span className="text-xs text-muted-foreground/60">"{activeExcelSheet.name}"</span>
                             <button type="button" className="text-xs text-muted-foreground/50 underline underline-offset-2 hover:text-foreground transition-colors" onClick={() => { setActiveExcelSheet(null); setSyncExcelOnUpdate(false); if (activeCloudBudgetId) linkSheetMutation.mutate({ id: activeCloudBudgetId, data: { linkedExcelSheetId: null, linkedExcelSheetName: null } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getSavedBudgetListQueryKey() }) }); }}>Unlink</button>
@@ -5327,7 +5332,7 @@ export function BudgetWizard({
                                   disabled={isUpdatingLinkedSheet}
                                   onClick={() => handleGenerateAndUpdateSheet("google")}
                                 >
-                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
+                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingSheetsSync ? " animate-spin" : ""}`} />
                                 </button>
                                 <a
                                   href={`https://docs.google.com/spreadsheets/d/${activeGoogleSheet.id}`}
@@ -5358,7 +5363,7 @@ export function BudgetWizard({
                                   disabled={isUpdatingLinkedSheet}
                                   onClick={() => handleGenerateAndUpdateSheet("excel")}
                                 >
-                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingLinkedSheet ? " animate-spin" : ""}`} />
+                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingExcelSync ? " animate-spin" : ""}`} />
                                 </button>
                                 {selectedExcelFileUrl && (
                                   <button
