@@ -1703,12 +1703,18 @@ function archivePastWeeksInExcel(
   let archiveWs = wb.getWorksheet("Archive");
   if (!archiveWs) archiveWs = wb.addWorksheet("Archive");
 
-  // Find the next free column in the Archive sheet (1-indexed)
+  // Find the next free column in the Archive sheet (1-indexed) and collect existing labels
   let archiveStartCol = 1;
-  archiveWs.getRow(1).eachCell({ includeEmpty: false }, (_cell, colNum) => {
+  const alreadyArchivedLabels = new Set<string>();
+  archiveWs.getRow(1).eachCell({ includeEmpty: false }, (cell, colNum) => {
     if (colNum >= archiveStartCol) archiveStartCol = colNum + 1;
+    const v = String(cell.value ?? "").trim();
+    if (v.toLowerCase().startsWith("budget")) alreadyArchivedLabels.add(v);
   });
   if ((archiveStartCol - 1) % 2 !== 0) archiveStartCol++;
+
+  // Filter to only groups whose label isn't already in Archive (prevent double-archiving)
+  const newPastGroups = pastColGroups.filter(g => !alreadyArchivedLabels.has(g.label));
 
   // Resolve formula cells to their computed scalar result so archived rows remain
   // correct after the source Budget columns are nulled.
@@ -1732,9 +1738,8 @@ function archivePastWeeksInExcel(
   }
   const archiveRowCount = billsStartRow - 1;
 
-  // Copy each past-week column pair into the Archive sheet then clear from Budget.
-  // Only copies budget rows (above Bills section), preserving values (formula-resolved) and formatting.
-  pastColGroups.forEach((g, i) => {
+  // Copy only new (not-yet-archived) past-week column pairs into the Archive sheet.
+  newPastGroups.forEach((g, i) => {
     const destLc = archiveStartCol + i * 2;
     const destVc = destLc + 1;
     for (let r = 1; r <= archiveRowCount; r++) {
@@ -1749,7 +1754,10 @@ function archivePastWeeksInExcel(
       if (srcLcCell.style) destLcCell.style = { ...srcLcCell.style };
       if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
     }
-    // Clear past-week columns from Budget sheet (all rows including bills)
+  });
+
+  // Clear ALL past-week columns from Budget (including ones already in Archive).
+  pastColGroups.forEach(g => {
     for (let r = 1; r <= budgetRowCount; r++) {
       budgetWs.getCell(r, g.startCol).value = null;
       budgetWs.getCell(r, g.endCol).value = null;
@@ -1846,10 +1854,19 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       // Full overwrite — clear the Budget sheet and rewrite all weeks from column A
       writeExcelBudgetSheetXL(ws, currentWeeksExcel, body.bills, body.debts, includeRemainingAcct ?? false, 0);
     } else {
-      // Incremental — write only the target column pair(s) without touching other columns.
-      // startCol is 0-indexed (matches the read-side FIRST_BUDGET_COL convention),
-      // ExcelJS uses 1-indexed, so offset by 1.
-      writeWeeksToWorksheetColumns(ws, currentWeeksExcel, startCol, includeRemainingAcct ?? false);
+      // Incremental — find the real next free slot after archive instead of trusting the
+      // stale frontend startCol (which may point far to the right if old weeks were archived).
+      let effectiveStartCol = startCol;
+      if (archivedExcelLabels.size > 0) {
+        let lastBudgetCol = -1;
+        ws.getRow(1).eachCell({ includeEmpty: false }, (cell, colNum) => {
+          const lbl = String(cell.value ?? "").trim().toLowerCase();
+          if (lbl.startsWith("budget")) lastBudgetCol = colNum - 1; // convert to 0-indexed
+        });
+        // If archive cleared everything, reset to col 0; otherwise write after last remaining week
+        effectiveStartCol = lastBudgetCol >= 0 ? lastBudgetCol + 2 : 0;
+      }
+      writeWeeksToWorksheetColumns(ws, currentWeeksExcel, effectiveStartCol, includeRemainingAcct ?? false);
     }
 
     // Update or create the _BudgifyData hidden sheet

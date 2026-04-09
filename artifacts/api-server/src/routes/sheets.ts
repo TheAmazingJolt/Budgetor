@@ -1535,32 +1535,35 @@ async function archivePastWeeksInSheet(
     archiveSheetId = archiveSheet.properties?.sheetId ?? 1;
   }
 
-  // Determine the next free column in the Archive sheet
+  // Determine the next free column in the Archive sheet and which labels are already archived
   let archiveStartCol = 0;
+  const alreadyArchivedLabels = new Set<string>();
   try {
     const archiveResp = await sheetsApi.spreadsheets.values.get({
       spreadsheetId,
       range: "Archive!1:1",
     });
     const archiveHeader = archiveResp.data.values?.[0] ?? [];
-    // Find the last non-empty column
     let lastNonEmpty = -1;
-    for (let c = archiveHeader.length - 1; c >= 0; c--) {
-      if (archiveHeader[c] && String(archiveHeader[c]).trim() !== "") {
+    for (let c = 0; c < archiveHeader.length; c++) {
+      const v = String(archiveHeader[c] ?? "").trim();
+      if (v !== "") {
         lastNonEmpty = c;
-        break;
+        if (v.toLowerCase().startsWith("budget")) alreadyArchivedLabels.add(v);
       }
     }
     archiveStartCol = lastNonEmpty + 1;
-    // Round up to even column if not even (weeks are 2-col groups)
     if (archiveStartCol % 2 !== 0) archiveStartCol++;
   } catch { /* start at 0 */ }
+
+  // Filter out past-week groups whose label is already in Archive (prevent double-archiving)
+  const newPastGroups = pastColGroups.filter(g => !alreadyArchivedLabels.has(g.label));
 
   // Build updateCells requests for each past-week column group, copying values + formatting
   const archiveUpdateRequests: sheets_v4.Schema$Request[] = [];
 
-  for (let i = 0; i < pastColGroups.length; i++) {
-    const g = pastColGroups[i];
+  for (let i = 0; i < newPastGroups.length; i++) {
+    const g = newPastGroups[i];
     const destLcIndex = archiveStartCol + i * 2;
     const destVcIndex = archiveStartCol + i * 2 + 1;
 
@@ -2546,7 +2549,9 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
             const lbl = String(hdr[c] ?? "").trim();
             if (lbl.toLowerCase().startsWith("budget")) lastCurrentCol = c + 1;
           }
-          if (lastCurrentCol >= 0) effectiveStartCol = lastCurrentCol + 1;
+          // If all weeks were archived (nothing left), reset to column A so the
+          // current week doesn't land at a stale far-right offset.
+          effectiveStartCol = lastCurrentCol >= 0 ? lastCurrentCol + 1 : 0;
         } catch { /* fall back to original startCol */ }
       }
     } catch (archiveErr: any) {
