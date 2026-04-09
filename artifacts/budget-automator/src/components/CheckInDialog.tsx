@@ -41,6 +41,7 @@ interface CheckInItem {
   skipped: boolean;
   debtId?: string;
   currentBalance?: number;
+  isLumpSum?: boolean;
 }
 
 export interface CheckInDialogProps {
@@ -137,10 +138,11 @@ export function CheckInDialog({
           existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
           existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
         const actual = existing ? existing.actualAmount : planned;
-        // Never auto-skip debt items that have an outstanding balance — they should
-        // always start active so the user can enter a payment amount.
-        const hasOutstandingBalance = (currentBalance ?? 0) > 0 || planned > 0;
-        const autoSkip = !existing && planned === 0 && !hasOutstandingBalance;
+        // Lump-sum debt bills are identified by bill.type === "weekly" (set by
+        // computeLumpSumDebtBills). They should never be auto-skipped so the user
+        // always sees them in the main check-in section with their payment pre-filled.
+        const isLumpSum = bill.type === "weekly" && !!bill.sourceDebtId;
+        const autoSkip = !existing && planned === 0 && !isLumpSum;
         return {
           billName: bill.name,
           billType: "debt" as const,
@@ -149,6 +151,7 @@ export function CheckInDialog({
           skipped: existing ? existing.actualAmount === 0 : autoSkip,
           debtId,
           currentBalance,
+          isLumpSum,
         };
       });
 
@@ -180,8 +183,8 @@ export function CheckInDialog({
             existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
             existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
           const actual = existing ? existing.actualAmount : planned;
-          const hasOutstandingBalance = (currentBalance ?? 0) > 0 || planned > 0;
-          const autoSkip = !existing && planned === 0 && !hasOutstandingBalance;
+          const isLumpSum = bill.type === "weekly" && !!bill.sourceDebtId;
+          const autoSkip = !existing && planned === 0 && !isLumpSum;
           return {
             billName: bill.name,
             billType: "debt" as const,
@@ -190,6 +193,7 @@ export function CheckInDialog({
             skipped: existing ? existing.actualAmount === 0 : autoSkip,
             debtId,
             currentBalance,
+            isLumpSum,
           };
         });
       if (newItems.length === 0) return current;
@@ -209,23 +213,27 @@ export function CheckInDialog({
 
   const budgetedItems = items.filter(it => {
     const ex = findExisting(it);
-    // Debt items with an outstanding balance always appear in the main list so the user
-    // can enter a payment — even if a prior check-in was saved at $0 (e.g. auto-skipped).
-    const isActiveDebt = it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0);
-    if (isActiveDebt) return true;
+    // Lump-sum debt payments always appear in the main list so the user can record
+    // their payment each week — even if a prior check-in for this week was at $0
+    // (which can happen when the item was accidentally auto-skipped).
+    if (it.isLumpSum && (it.currentBalance ?? 0) > 0) return true;
     // Already processed at $0 (skipped in a prior check-in) → not budgeted section
     if (ex && ex.actualAmount === 0) return false;
     // Previously confirmed at a non-zero amount → keep in main list
     if (ex && ex.actualAmount > 0) return true;
+    // Debt items with a non-zero balance or planned amount always appear in the main list
+    if (it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return true;
     // Not yet processed: show in main list only if it has a planned amount
     return it.plannedAmount > 0;
   });
   const notBudgetedItems = items.filter(it => {
     const ex = findExisting(it);
-    // Debt items with an outstanding balance are never in the not-budgeted list
-    if (it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return false;
+    // Lump-sum debt payments with an outstanding balance are never in the not-budgeted list
+    if (it.isLumpSum && (it.currentBalance ?? 0) > 0) return false;
     // Already processed at $0 (skipped) → not budgeted
     if (ex && ex.actualAmount === 0) return true;
+    // Debt items with a non-zero balance or planned amount are always budgeted (never in this list)
+    if (!ex && it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return false;
     // Not yet processed with no planned amount → not budgeted
     return !ex && it.plannedAmount === 0;
   });
