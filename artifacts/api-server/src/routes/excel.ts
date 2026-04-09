@@ -1670,12 +1670,12 @@ function writeWeeksToWorksheetColumns(
 function archivePastWeeksInExcel(
   wb: ExcelJS.Workbook,
   budgetSheetName: string,
-): void {
+): string[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const budgetWs = wb.getWorksheet(budgetSheetName);
-  if (!budgetWs) return;
+  if (!budgetWs) return [];
 
   // Read the header row (row 1) from the Budget sheet
   const headerRow = budgetWs.getRow(1);
@@ -1685,19 +1685,19 @@ function archivePastWeeksInExcel(
   });
 
   // Find past-week column groups (each week spans 2 columns: label col + value col)
-  const pastColGroups: { startCol: number; endCol: number }[] = [];
+  const pastColGroups: { startCol: number; endCol: number; label: string }[] = [];
   for (let c = 0; c < headerValues.length; c++) {
     const label = String(headerValues[c] ?? "").trim();
     if (!label.toLowerCase().startsWith("budget")) continue;
     const endDate = parseLabelEndDateExcel(label);
     if (!endDate) continue;
     if (endDate < today) {
-      pastColGroups.push({ startCol: c + 1, endCol: c + 2 }); // 1-indexed
+      pastColGroups.push({ startCol: c + 1, endCol: c + 2, label }); // 1-indexed
       c++; // skip the value column
     }
   }
 
-  if (pastColGroups.length === 0) return;
+  if (pastColGroups.length === 0) return [];
 
   // Ensure Archive worksheet exists
   let archiveWs = wb.getWorksheet("Archive");
@@ -1755,6 +1755,8 @@ function archivePastWeeksInExcel(
       budgetWs.getCell(r, g.endCol).value = null;
     }
   });
+
+  return pastColGroups.map(g => g.label);
 }
 
 async function uploadWorkbookToOneDrive(token: string, fileId: string, wb: ExcelJS.Workbook): Promise<void> {
@@ -1802,17 +1804,21 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     // no Graph workbook API calls, which return 405 on personal OneDrive accounts.
     const wb = await downloadWorkbookFromOneDrive(token, fileId);
 
-    // Archive any past weeks (moves them to the Archive sheet in memory)
+    // Archive any past weeks (moves them to the Archive sheet in memory; returns archived labels)
+    const archivedExcelLabels = new Set<string>();
     try {
-      archivePastWeeksInExcel(wb, targetSheetName);
+      const archived = archivePastWeeksInExcel(wb, targetSheetName);
+      archived.forEach(l => archivedExcelLabels.add(l));
     } catch (archiveErr: any) {
       console.log("[excel/write] archive step error (non-fatal):", archiveErr?.message);
     }
 
-    // Filter out past weeks so they are not re-written after archiving
+    // Filter out past weeks so they are not re-written after archiving.
+    // Use the definitive archived-labels set first, then fall back to date parsing.
     const todayExcel = new Date();
     todayExcel.setHours(0, 0, 0, 0);
     const currentWeeksExcel = weeks.filter(w => {
+      if (archivedExcelLabels.has(w.weekLabel)) return false; // just archived → skip
       const endDate = parseLabelEndDateExcel(w.weekLabel);
       return !endDate || endDate >= todayExcel;
     });

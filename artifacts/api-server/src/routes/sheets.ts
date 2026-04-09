@@ -1459,7 +1459,7 @@ async function archivePastWeeksInSheet(
   spreadsheetId: string,
   budgetSheetTitle: string,
   budgetSheetId: number,
-): Promise<number> {
+): Promise<{ count: number; labels: string[] }> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1473,11 +1473,11 @@ async function archivePastWeeksInSheet(
     });
     headerValues = resp.data.values ?? [];
   } catch {
-    return 0;
+    return { count: 0, labels: [] };
   }
 
   const headerRow = headerValues[0] ?? [];
-  const pastColGroups: { startCol: number; endCol: number }[] = [];
+  const pastColGroups: { startCol: number; endCol: number; label: string }[] = [];
 
   for (let c = 0; c < headerRow.length; c++) {
     const label = String(headerRow[c] ?? "").trim();
@@ -1485,12 +1485,12 @@ async function archivePastWeeksInSheet(
     const endDate = parseLabelEndDate(label);
     if (!endDate) continue;
     if (endDate < today) {
-      pastColGroups.push({ startCol: c, endCol: c + 1 });
+      pastColGroups.push({ startCol: c, endCol: c + 1, label });
       c++; // skip the value column
     }
   }
 
-  if (pastColGroups.length === 0) return 0;
+  if (pastColGroups.length === 0) return { count: 0, labels: [] };
 
   // Read the full budget sheet with formatting to determine row count, Bills boundary, and cell data
   let budgetSheetData: sheets_v4.Schema$RowData[] = [];
@@ -1501,7 +1501,7 @@ async function archivePastWeeksInSheet(
       fields: "sheets.data.rowData",
     });
     budgetSheetData = fullResp.data.sheets?.[0]?.data?.[0]?.rowData ?? [];
-  } catch { return 0; }
+  } catch { return { count: 0, labels: [] }; }
 
   const totalRows = budgetSheetData.length || 30;
 
@@ -1638,7 +1638,7 @@ async function archivePastWeeksInSheet(
     } catch { /* non-fatal */ }
   }
 
-  return pastColGroups.length;
+  return { count: pastColGroups.length, labels: pastColGroups.map(g => g.label) };
 }
 
 async function writeBudgetToSheet(
@@ -2526,10 +2526,15 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
 
     console.log("[sheets/write] archiving past weeks");
     let effectiveStartCol = startCol;
+    const archivedWeekLabels = new Set<string>();
     try {
-      const archivedCount = await archivePastWeeksInSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId);
-      if (archivedCount > 0) {
-        // Re-read the header to find how many current-week columns remain
+      const archived = await archivePastWeeksInSheet(sheetsApi, spreadsheetId, sheetTitleStr, sheetId);
+      archived.labels.forEach(l => archivedWeekLabels.add(l));
+
+      // For incremental writes (startCol > 0) only: recalculate effectiveStartCol to the
+      // next free slot after remaining current-week columns. For full overwrite (startCol === 0)
+      // we always rewrite from the beginning, so effectiveStartCol stays at 0.
+      if (archived.count > 0 && startCol > 0) {
         try {
           const hdrResp = await sheetsApi.spreadsheets.values.get({
             spreadsheetId,
@@ -2539,19 +2544,22 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
           let lastCurrentCol = -1;
           for (let c = 0; c < hdr.length; c++) {
             const lbl = String(hdr[c] ?? "").trim();
-            if (lbl.toLowerCase().startsWith("budget")) lastCurrentCol = c + 1; // +1 for the value col
+            if (lbl.toLowerCase().startsWith("budget")) lastCurrentCol = c + 1;
           }
-          effectiveStartCol = lastCurrentCol >= 0 ? lastCurrentCol + 1 : 0;
+          if (lastCurrentCol >= 0) effectiveStartCol = lastCurrentCol + 1;
         } catch { /* fall back to original startCol */ }
       }
     } catch (archiveErr: any) {
       console.log("[sheets/write] archive step error (non-fatal):", archiveErr?.message);
     }
 
-    // Filter out past weeks so they are not re-written after archiving
+    // Filter out past weeks so they are not re-written after archiving.
+    // Prefer the definitive "archived labels" set from the archive step, and fall back to
+    // date-parsing for any week whose label was not in the file (newly generated weeks etc.).
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const currentWeeks = weeks.filter(w => {
+      if (archivedWeekLabels.has(w.weekLabel)) return false; // was just archived → do not re-write
       const endDate = parseLabelEndDate(w.weekLabel);
       return !endDate || endDate >= today;
     });
