@@ -7132,21 +7132,30 @@ export function BudgetWizard({
               budgetContributionsQuery.data?.contributions ?? [],
             ),
           ]}
-          debtBills={bills
-            .filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"))
-            .map(b => {
-              const debt = b.sourceDebtId
-                ? debts.find(d => d.id === b.sourceDebtId)
-                : debts.find(d => b.name === `${d.name} (min payment)`);
+          debtBills={[
+            ...bills
+              .filter(b => b.sourceDebtId || b.name.endsWith(" (min payment)"))
+              .map(b => {
+                const debt = b.sourceDebtId
+                  ? debts.find(d => d.id === b.sourceDebtId)
+                  : debts.find(d => b.name === `${d.name} (min payment)`);
+                return {
+                  bill: b,
+                  debtId: debt?.id ?? b.sourceDebtId ?? "",
+                  currentBalance: debt?.balance ?? 0,
+                };
+              }),
+            ...computeLumpSumDebtBills(debts).map(b => {
+              const debt = debts.find(d => d.id === b.sourceDebtId);
               return {
                 bill: b,
                 debtId: debt?.id ?? b.sourceDebtId ?? "",
                 currentBalance: debt?.balance ?? 0,
               };
-            })
-            .filter((entry, index, arr) =>
-              !entry.debtId || arr.findIndex(e => e.debtId === entry.debtId) === index
-            )}
+            }),
+          ].filter((entry, index, arr) =>
+            !entry.debtId || arr.findIndex(e => e.debtId === entry.debtId) === index
+          )}
           existingCheckins={checkinsQuery.data?.checkins.filter(c => c.weekLabel === checkInWeek.label) ?? []}
           budgetId={activeCloudBudgetId}
           onDebtPayments={(payments) => {
