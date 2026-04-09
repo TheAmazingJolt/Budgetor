@@ -43,4 +43,9 @@ export interface Bill {
    * @nullable
    */
   anchorDate?: string | null;
+  /**
+   * ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)
+   * @nullable
+   */
+  startDate?: string | null;
 }

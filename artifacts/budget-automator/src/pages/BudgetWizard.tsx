@@ -651,7 +651,7 @@ function computeLumpSumDebtBills(
       sourceDebtId: d.id,
       payoffDate: d.dueDate,
       ...(parsedStartDate && parsedStartDate > now ? { startDate: d.startDate } : {}),
-    } as Bill);
+    });
   }
   return result;
 }

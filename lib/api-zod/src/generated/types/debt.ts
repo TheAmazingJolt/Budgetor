@@ -45,6 +45,8 @@ export interface Debt {
   paymentsRemaining?: number | null;
   /** ISO date string for the payment due date (used by lump_sum debts as the single payoff date). */
   dueDate?: string | null;
+  /** ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted). */
+  startDate?: string | null;
   /**
    * ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).
    * @nullable
