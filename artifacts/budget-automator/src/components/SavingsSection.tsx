@@ -130,6 +130,9 @@ export function SavingsSection({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
     },
+    onError: () => {
+      toast({ title: "Failed to create goal", variant: "destructive" });
+    },
   });
 
   const updateGoalMutation = useMutation({
@@ -142,6 +145,9 @@ export function SavingsSection({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
     },
+    onError: () => {
+      toast({ title: "Failed to update goal", variant: "destructive" });
+    },
   });
 
   const deleteGoalMutation = useMutation({
@@ -149,6 +155,9 @@ export function SavingsSection({
       apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete goal", variant: "destructive" });
     },
   });
 
