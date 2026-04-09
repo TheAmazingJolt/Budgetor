@@ -2756,7 +2756,7 @@ export function BudgetWizard({
   const handleQuickUpdate = (afterSuccess?: () => void) => {
     if (!activeCloudBudgetId) return;
 
-    const mergedExistingWeeks = cloudExistingWeeks
+    const editedCloudWeeks = cloudExistingWeeks
       .filter((w: any) => !weekEdits[w.label]?.deleted)
       .map((w: any) => {
         const e = weekEdits[w.label];
@@ -2774,6 +2774,21 @@ export function BudgetWizard({
           remaining: hasChange ? recalc : w.remaining,
         };
       });
+    const newWeeks = generatedWeek
+      ? generatedWeek.weeks
+          .filter((w) => !weekEdits[w.weekLabel]?.deleted)
+          .map((w) => {
+            const e = weekEdits[w.weekLabel];
+            const openingBalance = e?.openingBalance ?? w.openingBalance;
+            const paycheck = e?.paycheck ?? w.paycheck;
+            const items = e?.items ?? w.bills;
+            const closing = e ? (openingBalance + paycheck + items.reduce((s, b) => s + b.amount, 0)) : w.closingBalance;
+            return { label: w.weekLabel, remaining: closing, openingBalance, paycheck, items };
+          })
+      : [];
+    const generatedLabels = new Set(newWeeks.map((w) => w.label));
+    const keptExistingWeeks = editedCloudWeeks.filter((w: any) => !generatedLabels.has(w.label));
+    const mergedExistingWeeks = [...keptExistingWeeks, ...newWeeks];
 
     cloudSaveMutation.mutate(
       {
