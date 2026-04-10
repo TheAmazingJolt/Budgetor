@@ -2286,12 +2286,19 @@ export function BudgetWizard({
     const sourceExisting = getExistingWeeks();
     const budgetStartDate = newWeekStartDate ? new Date(newWeekStartDate + 'T00:00:00') : null;
     const isBeforeBudgetStart = (label: string) => {
-      // Cloud weeks are explicitly saved — never filter them by regeneration start date
-      if (inputMode === "cloud") return false;
       if (!budgetStartDate) return false;
       const parsed = parseLabelDates(label);
       if (!parsed) return false;
-      return parsed.start < budgetStartDate;
+      // For cloud mode, use the earliest saved week as the lower boundary so that
+      // weeks saved before the current regeneration start date are still preserved.
+      let effectiveStart = budgetStartDate;
+      if (inputMode === "cloud") {
+        for (const w of cloudExistingWeeks) {
+          const wd = parseLabelDates(w.label);
+          if (wd && wd.start < effectiveStart) effectiveStart = wd.start;
+        }
+      }
+      return parsed.start < effectiveStart;
     };
     const rawHistory: UnifiedWeek[] = sourceExisting
       .filter((w: any) => w.items || w.openingBalance !== undefined)
@@ -5056,12 +5063,19 @@ export function BudgetWizard({
                 const sourceExisting = getExistingWeeks();
                 const budgetStartDate = newWeekStartDate ? new Date(newWeekStartDate + 'T00:00:00') : null;
                 const isBeforeBudgetStart = (label: string) => {
-                  // Cloud weeks are explicitly saved — never filter them by regeneration start date
-                  if (inputMode === "cloud") return false;
                   if (!budgetStartDate) return false;
                   const parsed = parseLabelDates(label);
                   if (!parsed) return false;
-                  return parsed.start < budgetStartDate;
+                  // For cloud mode, use the earliest saved week as the lower boundary so that
+                  // weeks saved before the current regeneration start date are still preserved.
+                  let effectiveStart = budgetStartDate;
+                  if (inputMode === "cloud") {
+                    for (const w of cloudExistingWeeks) {
+                      const wd = parseLabelDates(w.label);
+                      if (wd && wd.start < effectiveStart) effectiveStart = wd.start;
+                    }
+                  }
+                  return parsed.start < effectiveStart;
                 };
                 const rawHistoryWeeks: UnifiedWeek[] = sourceExisting
                   .filter((w: any) => w.items || w.openingBalance !== undefined)
