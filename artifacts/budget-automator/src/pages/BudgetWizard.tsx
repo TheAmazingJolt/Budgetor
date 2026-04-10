@@ -3011,8 +3011,32 @@ export function BudgetWizard({
   }, [autoGenerateTick]);
 
   // Opens the date/week-count dialog before regenerating.
-  // Dates are left as-is so the user sees the current range and can adjust.
+  // Defaults the start date to the next week after the week that contains today,
+  // keeping the existing end date fixed so the week count adjusts automatically.
   const openRegenerateDialog = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const allLabels = [
+      ...(cloudExistingWeeks ?? []).map((w: any) => w.label as string),
+      ...(generatedWeek?.weeks ?? []).map(w => w.weekLabel),
+    ].filter(Boolean);
+
+    let todayWeekLabel: string | null = null;
+    for (const label of allLabels) {
+      const d = parseLabelDates(label);
+      if (d && today >= d.start && today <= d.end) {
+        todayWeekLabel = label;
+        break;
+      }
+    }
+
+    if (todayWeekLabel) {
+      const next = nextStartAfterLabel(todayWeekLabel);
+      // setStartDate keeps the existing end date and recalculates week count
+      if (next) setStartDate(next);
+    }
+
     setIsGenerateDateDialogOpen(true);
   };
 
