@@ -392,7 +392,8 @@ async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<
   const smtpHost = process.env["SMTP_HOST"];
   const smtpPort = parseInt(process.env["SMTP_PORT"] ?? "587", 10);
   const smtpUser = process.env["SMTP_USER"];
-  const smtpPass = process.env["SMTP_PASS"];
+  // Strip whitespace — Gmail app passwords are often copied with spaces between groups
+  const smtpPass = process.env["SMTP_PASS"]?.replace(/\s/g, "");
   const smtpFrom = process.env["SMTP_FROM"] ?? smtpUser ?? "noreply@budgify.org";
 
   if (!smtpHost || !smtpUser || !smtpPass) {
@@ -404,6 +405,7 @@ async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<
     host: smtpHost,
     port: smtpPort,
     secure: smtpPort === 465,
+    requireTLS: smtpPort === 587,
     auth: { user: smtpUser, pass: smtpPass },
   });
 
