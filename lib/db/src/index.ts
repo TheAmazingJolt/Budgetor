@@ -2,7 +2,6 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 import path from "path";
-import { fileURLToPath } from "url";
 import * as schema from "./schema";
 
 const { Pool } = pg;
@@ -226,10 +225,8 @@ export async function initDb(): Promise<void> {
   // Run any versioned Drizzle migrations from the migrations/ folder.
   // New schema changes should be added via `pnpm --filter @workspace/db generate`
   // rather than appending more raw SQL above.
-  const migrationsFolder = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "../migrations",
-  );
+  // process.cwd() = /app (WORKDIR in Dockerfile); migrations live at /app/lib/db/migrations
+  const migrationsFolder = path.join(process.cwd(), "lib/db/migrations");
   await migrate(db, { migrationsFolder });
   console.log("[initDb] schema migrations complete");
 }
