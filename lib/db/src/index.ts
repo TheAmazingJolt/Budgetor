@@ -1,5 +1,8 @@
 import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
+import path from "path";
+import { fileURLToPath } from "url";
 import * as schema from "./schema";
 
 const { Pool } = pg;
@@ -10,7 +13,12 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: parseInt(process.env["DB_POOL_MAX"] ?? "10", 10),
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
+});
 export const db = drizzle(pool, { schema });
 
 export async function initDb(): Promise<void> {
@@ -194,6 +202,10 @@ export async function initDb(): Promise<void> {
         ON users (email)
         WHERE email IS NOT NULL;
 
+      CREATE INDEX IF NOT EXISTS users_password_reset_token_idx
+        ON users (password_reset_token)
+        WHERE password_reset_token IS NOT NULL;
+
       CREATE TABLE IF NOT EXISTS bug_reports (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -206,10 +218,20 @@ export async function initDb(): Promise<void> {
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
-    console.log("[initDb] schema migrations complete");
+    console.log("[initDb] bootstrap SQL complete");
   } finally {
     client.release();
   }
+
+  // Run any versioned Drizzle migrations from the migrations/ folder.
+  // New schema changes should be added via `pnpm --filter @workspace/db generate`
+  // rather than appending more raw SQL above.
+  const migrationsFolder = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../migrations",
+  );
+  await migrate(db, { migrationsFolder });
+  console.log("[initDb] schema migrations complete");
 }
 
 export * from "./schema";

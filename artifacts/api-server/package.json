@@ -23,7 +23,6 @@
     "express-session": "^1.19.0",
     "googleapis": "^171.4.0",
     "jose": "^6.2.1",
-    "nodemailer": "^8.0.4",
     "resend": "^6.10.0",
     "stripe": "^22.0.1"
   },
@@ -35,7 +34,6 @@
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.18.2",
     "@types/node": "catalog:",
-    "@types/nodemailer": "^8.0.0",
     "esbuild": "^0.27.3",
     "tsx": "catalog:",
     "xlsx": "^0.18.5"

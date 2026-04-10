@@ -1,4 +1,20 @@
-import { initDb } from "@workspace/db";
+import { initDb, db, usersTable } from "@workspace/db";
+import { and, eq, lt } from "drizzle-orm";
+
+async function purgeStaleGuests(): Promise<void> {
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  try {
+    const result = await db
+      .delete(usersTable)
+      .where(and(eq(usersTable.provider, "guest"), lt(usersTable.createdAt, cutoff)))
+      .returning({ id: usersTable.id });
+    if (result.length > 0) {
+      console.log(`[guest-cleanup] Removed ${result.length} stale guest account(s)`);
+    }
+  } catch (err: unknown) {
+    console.warn("[guest-cleanup] Scheduled purge failed:", err);
+  }
+}
 
 const rawPort = process.env["PORT"];
 
@@ -46,6 +62,10 @@ import("./app").then(({ default: app }) => {
     app.listen(port, () => {
       console.log(`Server listening on port ${port}`);
     });
+
+    // Run once at startup to catch any backlog, then every 24 hours
+    purgeStaleGuests();
+    setInterval(purgeStaleGuests, 24 * 60 * 60 * 1000);
   });
 }).catch((err) => {
   console.error("Failed to initialize server:", err);

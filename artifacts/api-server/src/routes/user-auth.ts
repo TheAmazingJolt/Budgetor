@@ -459,6 +459,8 @@ router.post("/auth/reset-password", async (req: Request, res: Response): Promise
     return;
   }
   if (!user.passwordResetExpires || Date.now() > user.passwordResetExpires) {
+    // Clean up the expired token so it can't be probed further
+    await db.update(usersTable).set({ passwordResetToken: null, passwordResetExpires: null, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
     res.status(400).json({ error: "Reset link has expired. Please request a new one." });
     return;
   }

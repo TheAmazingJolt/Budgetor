@@ -51,6 +51,7 @@ export const usersTable = pgTable("users", {
     .where(sql`provider_id IS NOT NULL`),
   uniqueIndex("users_referral_code_unique").on(table.referralCode).where(sql`referral_code IS NOT NULL`),
   index("users_email_idx").on(table.email).where(sql`email IS NOT NULL`),
+  index("users_password_reset_token_idx").on(table.passwordResetToken).where(sql`password_reset_token IS NOT NULL`),
 ]);
 
 export type InsertUser = {
