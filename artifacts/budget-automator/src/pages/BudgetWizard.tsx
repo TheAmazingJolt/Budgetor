@@ -6295,12 +6295,28 @@ export function BudgetWizard({
               <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                 <CalendarDays className="w-4 h-4" /> Start Date
               </Label>
-              <Input
-                type="date"
-                value={newWeekStartDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-11 rounded-xl w-full"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={newWeekStartDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-11 rounded-xl flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="+7 days"
+                  className="h-11 w-11 rounded-xl shrink-0"
+                  onClick={() => {
+                    const d = new Date(newWeekStartDate + "T12:00:00");
+                    d.setDate(d.getDate() + 7);
+                    setStartDate(d.toISOString().split("T")[0]);
+                  }}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             <div className="space-y-2 min-w-0">
               <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
@@ -6326,12 +6342,28 @@ export function BudgetWizard({
                 <CalendarDays className="w-4 h-4" /> End Date
                 <span className="text-xs font-normal text-muted-foreground/70 ml-1">(auto-calculated, editable)</span>
               </Label>
-              <Input
-                type="date"
-                value={newWeekEndDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="h-11 rounded-xl w-full"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={newWeekEndDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-11 rounded-xl flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="+7 days"
+                  className="h-11 w-11 rounded-xl shrink-0"
+                  onClick={() => {
+                    const d = new Date(newWeekEndDate + "T12:00:00");
+                    d.setDate(d.getDate() + 7);
+                    setEndDate(d.toISOString().split("T")[0]);
+                  }}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter className="mt-6 flex gap-2">
