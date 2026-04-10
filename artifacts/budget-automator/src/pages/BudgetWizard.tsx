@@ -3001,27 +3001,9 @@ export function BudgetWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGenerateTick]);
 
-  // Opens the date/week-count dialog before regenerating, pre-filled with the
-  // next week after the last saved cloud week so the user doesn't accidentally
-  // overwrite a week they already finalized.
+  // Opens the date/week-count dialog before regenerating.
+  // Dates are left as-is so the user sees the current range and can adjust.
   const openRegenerateDialog = () => {
-    const allSavedLabels = [
-      ...(cloudExistingWeeks ?? []).map((w: any) => w.label as string),
-      ...(generatedWeek?.weeks ?? []).map(w => w.weekLabel),
-    ].filter(Boolean);
-
-    if (allSavedLabels.length > 0) {
-      // Find the label whose end date is latest
-      let latestLabel = allSavedLabels[0];
-      let latestEnd = parseLabelDates(latestLabel)?.end ?? new Date(0);
-      for (const label of allSavedLabels) {
-        const d = parseLabelDates(label);
-        if (d && d.end > latestEnd) { latestEnd = d.end; latestLabel = label; }
-      }
-      const next = nextStartAfterLabel(latestLabel);
-      if (next) setStartDatePreserveCount(next);
-    }
-
     setIsGenerateDateDialogOpen(true);
   };
 
