@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const savedBudgetsTable = pgTable("saved_budgets", {
@@ -18,7 +18,9 @@ export const savedBudgetsTable = pgTable("saved_budgets", {
   linkedSheetUrl: text("linked_sheet_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("saved_budgets_user_idx").on(table.userId),
+]);
 
 export type InsertSavedBudget = {
   userId: string;

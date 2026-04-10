@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, numeric, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { savedBudgetsTable } from "./saved-budgets";
 
@@ -11,7 +11,9 @@ export const savingsContributionsTable = pgTable("savings_contributions", {
   date: text("date").notNull(),
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("savings_contributions_user_budget_idx").on(table.userId, table.budgetId),
+]);
 
 export type SavingsContribution = typeof savingsContributionsTable.$inferSelect;
 export type InsertSavingsContribution = {

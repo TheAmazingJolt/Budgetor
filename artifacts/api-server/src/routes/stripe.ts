@@ -31,7 +31,7 @@ router.post("/stripe/checkout", requireAuth, async (req: Request, res: Response)
     return;
   }
 
-  const user = req.user!;
+  const user = req.user as import("@workspace/db").User;
   const frontendUrl = getFrontendUrl(req);
 
   try {
@@ -73,7 +73,7 @@ router.post("/stripe/portal", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  const user = req.user!;
+  const user = req.user as import("@workspace/db").User;
   const frontendUrl = getFrontendUrl(req);
 
   if (!user.stripeCustomerId) {

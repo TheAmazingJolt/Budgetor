@@ -40,7 +40,7 @@ async function ensureReferralCode(userId: string): Promise<string> {
 
 router.get("/referral/info", requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.id;
+    const userId = (req.user as import("@workspace/db").User).id;
     const code = await ensureReferralCode(userId);
 
     const appUrl = process.env["CORS_ORIGIN"]?.split(",")[0]?.trim() ?? "";

@@ -18,7 +18,7 @@ function decryptBudget(budget: Record<string, unknown>) {
 }
 
 router.get("/budgets", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.id;
+  const userId = (req.user as import("@workspace/db").User).id;
 
   try {
     const budgets = await db
@@ -35,7 +35,7 @@ router.get("/budgets", requireAuth, async (req: Request, res: Response): Promise
 });
 
 router.post("/budgets", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user!.id;
+  const userId = (req.user as import("@workspace/db").User).id;
   const { name, bills, settings, debts } = req.body as { name?: string; bills?: unknown[]; settings?: unknown; debts?: unknown[] };
 
   if (!name || typeof name !== "string") {
@@ -67,7 +67,7 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
 });
 
 router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
-  const userId = req.user!.id;
+  const userId = (req.user as import("@workspace/db").User).id;
   const budgetId = req.params.id;
   const {
     name, bills, settings, debts,
@@ -130,7 +130,7 @@ router.put("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res
 });
 
 router.delete("/budgets/:id", requireAuth, async (req: Request<{ id: string }>, res: Response): Promise<void> => {
-  const userId = req.user!.id;
+  const userId = (req.user as import("@workspace/db").User).id;
   const budgetId = req.params.id;
 
   try {

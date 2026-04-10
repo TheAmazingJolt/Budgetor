@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, numeric, boolean, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { savedBudgetsTable } from "./saved-budgets";
 
@@ -13,7 +13,9 @@ export const savingsGoalsTable = pgTable("savings_goals", {
   includeInBudget: boolean("include_in_budget").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("savings_goals_user_budget_idx").on(table.userId, table.budgetId),
+]);
 
 export type SavingsGoal = typeof savingsGoalsTable.$inferSelect;
 export type InsertSavingsGoal = {

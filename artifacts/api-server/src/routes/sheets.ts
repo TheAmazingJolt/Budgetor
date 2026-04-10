@@ -2456,7 +2456,7 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
     if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
-      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch { }
+      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch (e) { console.warn("[sheets/create] writeHiddenBillsSheet failed (non-fatal):", (e as Error).message); }
     }
     if (body.bills && body.bills.length > 0) {
       let savingsContribs: ManualContribRow[] = [];
@@ -2468,7 +2468,7 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
           const rows = await db.select().from(savingsContributionsTable)
             .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, uid)));
           savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
-        } catch { }
+        } catch (e) { console.warn("[sheets/create] failed to fetch savings contributions (non-fatal):", (e as Error).message); }
         try {
           const goalRows = await db.select().from(savingsGoalsTable)
             .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, uid)));
@@ -2478,7 +2478,7 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
             targetDate: g.targetDate,
             savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
           }));
-        } catch { }
+        } catch (e) { console.warn("[sheets/create] failed to fetch savings goals (non-fatal):", (e as Error).message); }
         try {
           const cl = await pool.connect();
           try {
@@ -2488,9 +2488,9 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
             );
             savingsCheckins = ciRes.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
           } finally { cl.release(); }
-        } catch { }
+        } catch (e) { console.warn("[sheets/create] failed to fetch checkins (non-fatal):", (e as Error).message); }
       }
-      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins, body.debts ?? []); } catch { }
+      try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins, body.debts ?? []); } catch (e) { console.warn("[sheets/create] writeSavingsTabToSheet failed (non-fatal):", (e as Error).message); }
     }
 
     res.json({ spreadsheetId, spreadsheetUrl });
@@ -2607,7 +2607,7 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
     });
 
     if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
-      writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts).catch(() => {});
+      writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts).catch((e: unknown) => { console.warn("[sheets/write] writeHiddenBillsSheet failed (non-fatal):", (e as Error).message); });
     }
 
     if (body.bills && body.bills.length > 0) {
@@ -2621,7 +2621,7 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
             const rows = await db.select().from(savingsContributionsTable)
               .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, uid2)));
             savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
-          } catch { }
+          } catch (e) { console.warn("[sheets/write] failed to fetch savings contributions (non-fatal):", (e as Error).message); }
           try {
             const goalRows = await db.select().from(savingsGoalsTable)
               .where(and(eq(savingsGoalsTable.budgetId, body.budgetId), eq(savingsGoalsTable.userId, uid2)));
@@ -2631,7 +2631,7 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
               targetDate: g.targetDate,
               savedSoFar: savingsContribs.filter(c => c.billName === g.name).reduce((s, c) => s + c.amount, 0),
             }));
-          } catch { }
+          } catch (e) { console.warn("[sheets/write] failed to fetch savings goals (non-fatal):", (e as Error).message); }
           try {
             const cl2 = await pool.connect();
             try {
@@ -2641,10 +2641,10 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
               );
               savingsCheckins2 = ciRes2.rows.map((r: any) => ({ weekLabel: r.week_label, itemName: r.item_name, itemType: r.item_type, actualAmount: Number(r.actual_amount) }));
             } finally { cl2.release(); }
-          } catch { }
+          } catch (e) { console.warn("[sheets/write] failed to fetch checkins (non-fatal):", (e as Error).message); }
         }
-        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins2, body.debts ?? []); } catch { }
-      })().catch(() => {});
+        try { await writeSavingsTabToSheet(sheetsApi, spreadsheetId, body.bills!, weeks, savingsContribs, savingsGoals, body.tz, savingsCheckins2, body.debts ?? []); } catch (e) { console.warn("[sheets/write] writeSavingsTabToSheet failed (non-fatal):", (e as Error).message); }
+      })().catch((e: unknown) => { console.warn("[sheets/write] post-response sync failed:", (e as Error).message); });
     }
   } catch (err: any) {
     clearTimeout(timeout);

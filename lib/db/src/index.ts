@@ -175,6 +175,25 @@ export async function initDb(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS payday_checkins_unique_week
         ON payday_checkins (budget_id, week_label);
 
+      CREATE INDEX IF NOT EXISTS savings_contributions_user_budget_idx
+        ON savings_contributions (user_id, budget_id);
+
+      CREATE INDEX IF NOT EXISTS savings_goals_user_budget_idx
+        ON savings_goals (user_id, budget_id);
+
+      CREATE INDEX IF NOT EXISTS weekly_checkins_user_budget_idx
+        ON weekly_checkins (user_id, budget_id);
+
+      CREATE INDEX IF NOT EXISTS payday_checkins_user_budget_idx
+        ON payday_checkins (user_id, budget_id);
+
+      CREATE INDEX IF NOT EXISTS saved_budgets_user_idx
+        ON saved_budgets (user_id);
+
+      CREATE INDEX IF NOT EXISTS users_email_idx
+        ON users (email)
+        WHERE email IS NOT NULL;
+
       CREATE TABLE IF NOT EXISTS bug_reports (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID REFERENCES users(id) ON DELETE SET NULL,

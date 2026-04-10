@@ -319,7 +319,7 @@ router.post("/auth/register", async (req: Request, res: Response): Promise<void>
   const pendingReferralCode = req.session?.pendingReferralCode ?? null;
   if (pendingReferralCode) {
     req.session.pendingReferralCode = null;
-    await saveSession(req).catch(() => {});
+    await saveSession(req).catch((err: unknown) => { console.warn("[session] failed to clear pendingReferralCode:", err); });
   }
 
   const currentGuestUser = req.session?.userId
@@ -571,7 +571,7 @@ export async function upsertOrUpgradeUser(
   if (existingUser) {
     if (req.session?.pendingReferralCode) {
       req.session.pendingReferralCode = null;
-      await saveSession(req).catch(() => {});
+      await saveSession(req).catch((err: unknown) => { console.warn("[session] failed to clear pendingReferralCode:", err); });
     }
 
     await db
@@ -602,7 +602,7 @@ export async function upsertOrUpgradeUser(
       currentGuestUser.referredBy ?? (pendingReferralCode || null);
     if (pendingReferralCode) {
       req.session.pendingReferralCode = null;
-      await saveSession(req).catch(() => {});
+      await saveSession(req).catch((err: unknown) => { console.warn("[session] failed to clear pendingReferralCode:", err); });
     }
     await db
       .update(usersTable)
@@ -622,7 +622,7 @@ export async function upsertOrUpgradeUser(
   const pendingReferralCode = req.session?.pendingReferralCode ?? null;
   if (pendingReferralCode) {
     req.session.pendingReferralCode = null;
-    await saveSession(req).catch(() => {});
+    await saveSession(req).catch((err: unknown) => { console.warn("[session] failed to clear pendingReferralCode:", err); });
   }
 
   const [newUser] = await db
@@ -1008,7 +1008,7 @@ router.put("/user/debts", requireAuth, async (req: Request, res: Response) => {
     res.status(400).json({ error: "debts must be an array" });
     return;
   }
-  await db.update(usersTable).set({ debts: encryptJson(debts), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  await db.update(usersTable).set({ debts: encryptJson(debts), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
   res.json({ debts });
 });
 
@@ -1025,7 +1025,7 @@ router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
     return;
   }
   const FREE_BILL_LIMIT = 5;
-  if (effectivePlan(req.user! as User) === "free" && bills.length > FREE_BILL_LIMIT) {
+  if (effectivePlan(req.user as User) === "free" && bills.length > FREE_BILL_LIMIT) {
     res.status(403).json({
       error: `Free plan is limited to ${FREE_BILL_LIMIT} spending categories. Upgrade to Pro for unlimited categories.`,
       upgradeRequired: true,
@@ -1033,7 +1033,7 @@ router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
     });
     return;
   }
-  await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
   res.json({ bills });
 });
 
@@ -1052,7 +1052,7 @@ router.put("/user/preferences", requireAuth, async (req: Request, res: Response)
   const rawCurrent = (req.user as User).preferences;
   const current = rawCurrent != null ? decryptJson<Record<string, unknown>>(rawCurrent) : {};
   const merged = { ...current, ...preferences };
-  await db.update(usersTable).set({ preferences: encryptJson(merged), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
+  await db.update(usersTable).set({ preferences: encryptJson(merged), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
   res.json({ preferences: merged });
 });
 
