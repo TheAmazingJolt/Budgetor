@@ -32,8 +32,11 @@ export async function sendBugReportEmail(opts: BugReportEmailOptions): Promise<v
   const smtpHost = process.env["SMTP_HOST"];
   const smtpPort = parseInt(process.env["SMTP_PORT"] ?? "587", 10);
   const smtpUser = process.env["SMTP_USER"];
-  const smtpPass = process.env["SMTP_PASS"];
+  // Strip whitespace — Gmail app passwords are often copied with spaces between groups
+  const smtpPass = process.env["SMTP_PASS"]?.replace(/\s/g, "");
   const smtpFrom = process.env["SMTP_FROM"] ?? smtpUser ?? "noreply@budget-automator.app";
+
+  console.log(`[email/bug-report] host=${smtpHost} port=${smtpPort} user=${smtpUser} from=${smtpFrom} passLength=${smtpPass?.length ?? 0} adminEmail=${adminEmail}`);
 
   if (!smtpHost || !smtpUser || !smtpPass) {
     console.log("[email] SMTP not configured (SMTP_HOST, SMTP_USER, SMTP_PASS required), skipping bug report notification");
@@ -45,8 +48,18 @@ export async function sendBugReportEmail(opts: BugReportEmailOptions): Promise<v
       host: smtpHost,
       port: smtpPort,
       secure: smtpPort === 465,
+      requireTLS: smtpPort === 587,
       auth: { user: smtpUser, pass: smtpPass },
     });
+
+    try {
+      console.log("[email/bug-report] Verifying SMTP connection…");
+      await transporter.verify();
+      console.log("[email/bug-report] SMTP connection OK");
+    } catch (verifyErr) {
+      console.error("[email/bug-report] SMTP connection verify failed:", verifyErr);
+      throw verifyErr;
+    }
 
     const userInfo = opts.userId
       ? `User: ${opts.userName ?? "Unknown"} (${opts.userEmail ?? "no email"}) — ID: ${opts.userId}`
