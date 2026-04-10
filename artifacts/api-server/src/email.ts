@@ -49,12 +49,20 @@ export async function sendBugReportEmail(opts: BugReportEmailOptions): Promise<v
       port: smtpPort,
       secure: smtpPort === 465,
       requireTLS: smtpPort === 587,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
       auth: { user: smtpUser, pass: smtpPass },
     });
 
     try {
       console.log("[email/bug-report] Verifying SMTP connection…");
-      await transporter.verify();
+      await Promise.race([
+        transporter.verify(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("SMTP verify timed out after 15s")), 15000)
+        ),
+      ]);
       console.log("[email/bug-report] SMTP connection OK");
     } catch (verifyErr) {
       console.error("[email/bug-report] SMTP connection verify failed:", verifyErr);
