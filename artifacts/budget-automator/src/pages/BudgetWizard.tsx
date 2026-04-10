@@ -2286,6 +2286,8 @@ export function BudgetWizard({
     const sourceExisting = getExistingWeeks();
     const budgetStartDate = newWeekStartDate ? new Date(newWeekStartDate + 'T00:00:00') : null;
     const isBeforeBudgetStart = (label: string) => {
+      // Cloud weeks are explicitly saved — never filter them by regeneration start date
+      if (inputMode === "cloud") return false;
       if (!budgetStartDate) return false;
       const parsed = parseLabelDates(label);
       if (!parsed) return false;
@@ -5054,6 +5056,8 @@ export function BudgetWizard({
                 const sourceExisting = getExistingWeeks();
                 const budgetStartDate = newWeekStartDate ? new Date(newWeekStartDate + 'T00:00:00') : null;
                 const isBeforeBudgetStart = (label: string) => {
+                  // Cloud weeks are explicitly saved — never filter them by regeneration start date
+                  if (inputMode === "cloud") return false;
                   if (!budgetStartDate) return false;
                   const parsed = parseLabelDates(label);
                   if (!parsed) return false;
