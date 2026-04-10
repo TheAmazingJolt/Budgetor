@@ -396,8 +396,10 @@ async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<
   const smtpPass = process.env["SMTP_PASS"]?.replace(/\s/g, "");
   const smtpFrom = process.env["SMTP_FROM"] ?? smtpUser ?? "noreply@budgify.org";
 
+  console.log(`[smtp] host=${smtpHost} port=${smtpPort} user=${smtpUser} from=${smtpFrom} passLength=${smtpPass?.length ?? 0}`);
+
   if (!smtpHost || !smtpUser || !smtpPass) {
-    console.log(`[password-reset] Reset link for ${email}: ${resetUrl}`);
+    console.warn(`[smtp] Missing config — host:${!!smtpHost} user:${!!smtpUser} pass:${!!smtpPass}. Reset link: ${resetUrl}`);
     return;
   }
 
@@ -409,13 +411,23 @@ async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<
     auth: { user: smtpUser, pass: smtpPass },
   });
 
-  await transporter.sendMail({
+  try {
+    console.log(`[smtp] Verifying connection…`);
+    await transporter.verify();
+    console.log(`[smtp] Connection OK — sending to ${email}`);
+  } catch (verifyErr) {
+    console.error(`[smtp] Connection verify failed:`, verifyErr);
+    throw verifyErr;
+  }
+
+  const info = await transporter.sendMail({
     from: `"Budgify" <${smtpFrom}>`,
     to: email,
     subject: "Reset your Budgify password",
     text: `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
     html: `<p>Click the link below to reset your password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
   });
+  console.log(`[smtp] Email sent — messageId: ${info.messageId} response: ${info.response}`);
 }
 
 router.post("/auth/forgot-password", async (req: Request, res: Response): Promise<void> => {
