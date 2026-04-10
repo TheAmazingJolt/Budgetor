@@ -5,6 +5,8 @@ import { sendBugReportEmail } from "../email";
 const router: IRouter = Router();
 
 router.post("/bug-reports", async (req: Request, res: Response): Promise<void> => {
+  console.log("[POST /bug-reports] Request received");
+
   const { description, errorMessage, errorStack, pageUrl, userAgent, appVersion } = req.body as {
     description?: string;
     errorMessage?: string | null;
@@ -15,18 +17,22 @@ router.post("/bug-reports", async (req: Request, res: Response): Promise<void> =
   };
 
   if (!description || typeof description !== "string" || description.trim().length === 0) {
+    console.warn("[POST /bug-reports] Rejected: missing or invalid 'description'");
     res.status(400).json({ error: "Missing or invalid 'description'" });
     return;
   }
   if (!pageUrl || typeof pageUrl !== "string") {
+    console.warn("[POST /bug-reports] Rejected: missing or invalid 'pageUrl'");
     res.status(400).json({ error: "Missing or invalid 'pageUrl'" });
     return;
   }
   if (!userAgent || typeof userAgent !== "string") {
+    console.warn("[POST /bug-reports] Rejected: missing or invalid 'userAgent'");
     res.status(400).json({ error: "Missing or invalid 'userAgent'" });
     return;
   }
   if (!appVersion || typeof appVersion !== "string") {
+    console.warn("[POST /bug-reports] Rejected: missing or invalid 'appVersion'");
     res.status(400).json({ error: "Missing or invalid 'appVersion'" });
     return;
   }
@@ -48,6 +54,8 @@ router.post("/bug-reports", async (req: Request, res: Response): Promise<void> =
         appVersion,
       })
       .returning();
+
+    console.log(`[POST /bug-reports] Saved report id=${report.id}, userId=${userId ?? "anon"}`);
 
     sendBugReportEmail({
       description: description.trim(),
