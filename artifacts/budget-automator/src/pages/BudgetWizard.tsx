@@ -4588,14 +4588,14 @@ export function BudgetWizard({
                       )}
                       <Button
                         size="default"
-                        onClick={() => generatedWeek ? openRegenerateDialog() : handleGenerate()}
+                        onClick={() => (generatedWeek || cloudExistingWeeks.length > 0) ? openRegenerateDialog() : handleGenerate()}
                         disabled={!canGenerate}
                         className="flex-1 rounded-xl px-6 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20"
                       >
                         {generateMutation.isPending ? (
-                          <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}</>
+                          <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {(generatedWeek || cloudExistingWeeks.length > 0) ? "Regenerating…" : "Generating…"}</>
                         ) : (
-                          <>{generatedWeek ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
+                          <>{(generatedWeek || cloudExistingWeeks.length > 0) ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-1" /></>
                         )}
                       </Button>
                     </div>
@@ -5031,17 +5031,17 @@ export function BudgetWizard({
               <div className="flex justify-end pt-2">
                 <Button
                   size="lg"
-                  onClick={() => generatedWeek ? openRegenerateDialog() : handleGenerate()}
+                  onClick={() => (generatedWeek || cloudExistingWeeks.length > 0) ? openRegenerateDialog() : handleGenerate()}
                   disabled={!canGenerate}
                   className="rounded-xl px-8 h-12 bg-gradient-to-r from-primary to-emerald-600 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                 >
                   {generateMutation.isPending ? (
                     <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {generatedWeek ? "Regenerating…" : "Generating…"}
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> {(generatedWeek || cloudExistingWeeks.length > 0) ? "Regenerating…" : "Generating…"}
                     </>
                   ) : (
                     <>
-                      {generatedWeek ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-2" />
+                      {(generatedWeek || cloudExistingWeeks.length > 0) ? "Regenerate Budget" : "Generate Budget"} <ChevronRight className="w-4 h-4 ml-2" />
                     </>
                   )}
                 </Button>
