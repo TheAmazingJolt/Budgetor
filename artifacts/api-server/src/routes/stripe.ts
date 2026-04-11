@@ -54,7 +54,7 @@ router.post("/stripe/checkout", requireAuth, async (req: Request, res: Response)
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${frontendUrl}/upgrade/success`,
+      success_url: `${frontendUrl}/upgrade/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/upgrade/cancelled`,
     });
 
@@ -62,6 +62,57 @@ router.post("/stripe/checkout", requireAuth, async (req: Request, res: Response)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[stripe/checkout]", message);
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/stripe/verify-session", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const stripe = getStripe();
+  if (!stripe) {
+    res.status(503).json({ error: "Stripe is not configured" });
+    return;
+  }
+
+  const { sessionId } = req.body as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required" });
+    return;
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["subscription"],
+    });
+
+    if (session.payment_status !== "paid" && session.status !== "complete") {
+      res.json({ upgraded: false });
+      return;
+    }
+
+    const user = req.user as import("@workspace/db").User;
+    const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
+    const subscriptionId = typeof session.subscription === "string"
+      ? session.subscription
+      : (session.subscription as any)?.id ?? null;
+
+    // Only update if this session's customer matches the logged-in user
+    if (customerId && customerId === user.stripeCustomerId) {
+      await db.update(usersTable)
+        .set({ plan: "pro", stripeSubscriptionId: subscriptionId, updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id));
+      res.json({ upgraded: true });
+    } else if (!user.stripeCustomerId && customerId) {
+      // Edge case: customer ID not yet saved (race with checkout route)
+      await db.update(usersTable)
+        .set({ plan: "pro", stripeCustomerId: customerId, stripeSubscriptionId: subscriptionId, updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id));
+      res.json({ upgraded: true });
+    } else {
+      res.json({ upgraded: false });
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[stripe/verify-session]", message);
     res.status(500).json({ error: message });
   }
 });

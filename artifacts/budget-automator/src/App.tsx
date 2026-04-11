@@ -23,6 +23,7 @@ import {
   authResetPassword,
   authClaimAccount,
   stripeCheckout,
+  stripeVerifySession,
 } from "@workspace/api-client-react";
 import { DollarSign, Loader2, RefreshCw, Bug } from "lucide-react";
 
@@ -340,7 +341,22 @@ function AppRouting() {
     const path = window.location.pathname;
     if (path === "/upgrade/success") {
       window.history.replaceState({}, "", "/");
-      toast({ title: "Welcome to Pro!", description: "Your subscription is active. Enjoy all Pro features." });
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get("session_id");
+      if (sessionId) {
+        // Verify the session directly with Stripe so plan is updated immediately,
+        // regardless of webhook delivery timing.
+        stripeVerifySession({ sessionId })
+          .then(() => queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() }))
+          .catch(() => {})
+          .finally(() => {
+            toast({ title: "Welcome to Pro!", description: "Your subscription is active. Enjoy all Pro features." });
+          });
+      } else {
+        // Fallback: just refetch to pick up any webhook-applied plan change
+        queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
+        toast({ title: "Welcome to Pro!", description: "Your subscription is active. Enjoy all Pro features." });
+      }
     } else if (path === "/upgrade/cancelled") {
       window.history.replaceState({}, "", "/");
       toast({ title: "Upgrade cancelled", description: "Your plan has not changed. Upgrade any time from your account." });

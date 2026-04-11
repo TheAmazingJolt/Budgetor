@@ -1052,6 +1052,10 @@ export function BudgetWizard({
   const [isImportConflictDialogOpen, setIsImportConflictDialogOpen] = useState(false);
   const billsFromImportPendingRef = useRef(false);
   const pendingImportCallbackRef = useRef<((useBills: Bill[]) => void) | null>(null);
+  // Track the last sheet/excel data timestamp we processed to avoid re-triggering
+  // the import conflict dialog on re-renders or dropdown interactions.
+  const lastProcessedSheetUpdateRef = useRef<number | null>(null);
+  const lastProcessedExcelUpdateRef = useRef<number | null>(null);
   const freshWeeksForSyncRef = useRef<any[] | null>(null);
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false);
   const [cloudSaveCountdown, setCloudSaveCountdown] = useState<number | null>(null);
@@ -1780,6 +1784,9 @@ export function BudgetWizard({
 
   useEffect(() => {
     if (sheetReadQuery.data && selectedSheetId) {
+      const updatedAt = (sheetReadQuery as any).dataUpdatedAt as number | undefined;
+      if (updatedAt !== undefined && lastProcessedSheetUpdateRef.current === updatedAt) return;
+      if (updatedAt !== undefined) lastProcessedSheetUpdateRef.current = updatedAt;
       const data = sheetReadQuery.data;
       const sheetBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
       const sheetDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
@@ -1835,6 +1842,9 @@ export function BudgetWizard({
 
   useEffect(() => {
     if (excelReadQuery.data && selectedExcelFileId) {
+      const updatedAt = (excelReadQuery as any).dataUpdatedAt as number | undefined;
+      if (updatedAt !== undefined && lastProcessedExcelUpdateRef.current === updatedAt) return;
+      if (updatedAt !== undefined) lastProcessedExcelUpdateRef.current = updatedAt;
       const data = excelReadQuery.data;
       const excelBills = stripHeuristicColors(stripDebtMinPayments(data.bills as Bill[]));
       const excelDebts = Array.isArray((data as any).debts) ? (data as any).debts as Debt[] : [];
