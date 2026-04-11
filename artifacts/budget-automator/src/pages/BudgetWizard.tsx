@@ -4688,20 +4688,28 @@ export function BudgetWizard({
                       </p>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (isSignedIn && !isGuest && !isPro && bills.length >= 5) {
-                        toast({ title: "Free plan: 5 category limit", description: "Upgrade to Pro for unlimited spending categories.", variant: "destructive" });
-                        return;
-                      }
-                      setEditingBillIndex(null);
-                      setIsBillDialogOpen(true);
-                    }}
-                    className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Add Bill
-                  </Button>
+                  {isSignedIn && !isGuest && !isPro && bills.length >= 5 ? (
+                    <Button
+                      size="sm"
+                      onClick={handleUpgradeToPro}
+                      disabled={isUpgrading}
+                      className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+                    >
+                      {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
+                      Upgrade for more bills
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setEditingBillIndex(null);
+                        setIsBillDialogOpen(true);
+                      }}
+                      className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add Bill
+                    </Button>
+                  )}
                 </div>
 
                 {!billsCollapsed && bills.length === 0 ? (
@@ -6745,20 +6753,28 @@ export function BudgetWizard({
                 </Button>
               )}
               <div className="ml-auto">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    if (isSignedIn && !isGuest && !isPro && bills.length >= 5) {
-                      toast({ title: "Free plan: 5 category limit", description: "Upgrade to Pro for unlimited spending categories.", variant: "destructive" });
-                      return;
-                    }
-                    setEditingBillInManagerIndex(null);
-                    setIsBillManagerFormOpen(true);
-                  }}
-                  className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add Bill
-                </Button>
+                {isSignedIn && !isGuest && !isPro && bills.length >= 5 ? (
+                  <Button
+                    size="sm"
+                    onClick={handleUpgradeToPro}
+                    disabled={isUpgrading}
+                    className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+                  >
+                    {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
+                    Upgrade for more bills
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditingBillInManagerIndex(null);
+                      setIsBillManagerFormOpen(true);
+                    }}
+                    className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add Bill
+                  </Button>
+                )}
               </div>
             </div>
 
