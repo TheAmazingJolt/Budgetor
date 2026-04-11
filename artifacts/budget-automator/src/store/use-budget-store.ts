@@ -74,7 +74,7 @@ interface BudgetState {
 const getThisFriday = () => {
   const d = new Date();
   const day = d.getDay();
-  const diff = day <= 3 ? (3 - day) : (10 - day);
+  const diff = day <= 5 ? (5 - day) : (12 - day);
   d.setDate(d.getDate() + diff);
   return toISO(d);
 };
