@@ -909,6 +909,9 @@ function openInExcel(webUrl: string, fileId?: string | null) {
   window.open(webUrl, "_blank", "noopener,noreferrer");
 }
 
+/** Maximum bills/debts allowed on the free plan. Change this one value to adjust the limit. */
+const FREE_PLAN_ITEM_LIMIT = 5;
+
 export function BudgetWizard({
   currentUser,
   isSignedIn,
@@ -4688,7 +4691,7 @@ export function BudgetWizard({
                       </p>
                     </div>
                   </div>
-                  {isSignedIn && !isGuest && !isPro && bills.length >= 5 ? (
+                  {isSignedIn && !isGuest && !isPro && bills.length >= FREE_PLAN_ITEM_LIMIT ? (
                     <Button
                       size="sm"
                       onClick={handleUpgradeToPro}
@@ -4852,13 +4855,25 @@ export function BudgetWizard({
                       </p>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
-                    className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Add Debt
-                  </Button>
+                  {isSignedIn && !isGuest && !isPro && debts.length >= FREE_PLAN_ITEM_LIMIT ? (
+                    <Button
+                      size="sm"
+                      onClick={handleUpgradeToPro}
+                      disabled={isUpgrading}
+                      className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+                    >
+                      {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
+                      Upgrade for more debts
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                      className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add Debt
+                    </Button>
+                  )}
                 </div>
 
                 {!debtsCollapsed && debts.length > 0 && (
@@ -6461,13 +6476,25 @@ export function BudgetWizard({
                     {debts.filter(d => d.type !== "lump_sum").every(d => debtBillImports.has(d.id)) ? "Remove all as bills" : "Add all as bills"}
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
-                  className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600 shrink-0"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add Debt
-                </Button>
+                {isSignedIn && !isGuest && !isPro && debts.length >= FREE_PLAN_ITEM_LIMIT ? (
+                  <Button
+                    size="sm"
+                    onClick={handleUpgradeToPro}
+                    disabled={isUpgrading}
+                    className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 shrink-0"
+                  >
+                    {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
+                    Upgrade for more debts
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => { setEditingDebtIndex(null); setIsDebtDialogOpen(true); }}
+                    className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600 shrink-0"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add Debt
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -6753,7 +6780,7 @@ export function BudgetWizard({
                 </Button>
               )}
               <div className="ml-auto">
-                {isSignedIn && !isGuest && !isPro && bills.length >= 5 ? (
+                {isSignedIn && !isGuest && !isPro && bills.length >= FREE_PLAN_ITEM_LIMIT ? (
                   <Button
                     size="sm"
                     onClick={handleUpgradeToPro}
