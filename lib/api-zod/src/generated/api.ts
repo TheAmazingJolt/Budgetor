@@ -112,6 +112,12 @@ export const GenerateBudgetBody = zod.object({
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
     }),
   ),
   priorSavings: zod

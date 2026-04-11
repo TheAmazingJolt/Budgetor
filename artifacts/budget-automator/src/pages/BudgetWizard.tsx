@@ -5009,7 +5009,9 @@ export function BudgetWizard({
                                       const today = new Date(); today.setHours(0,0,0,0);
                                       const msPerWeek = 7*24*60*60*1000;
                                       const dueDate = dd ? new Date(dd + "T00:00:00") : null;
-                                      const weeksLeft = dueDate && dueDate > today ? Math.max(1, Math.ceil((dueDate.getTime() - today.getTime()) / msPerWeek)) : null;
+                                      const parsedStart = debt.startDate ? new Date(debt.startDate + "T00:00:00") : null;
+                                      const effectiveStart = parsedStart && parsedStart > today ? parsedStart : today;
+                                      const weeksLeft = dueDate && dueDate > today ? Math.max(1, Math.ceil((dueDate.getTime() - effectiveStart.getTime()) / msPerWeek)) : null;
                                       const weeklyAmt = weeksLeft ? Math.round((debt.balance / weeksLeft) * 100) / 100 : null;
                                       return (
                                         <div className="flex flex-col gap-0.5">
