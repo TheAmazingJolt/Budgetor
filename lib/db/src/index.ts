@@ -182,6 +182,8 @@ export async function initDb(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS payday_checkins_unique_week
         ON payday_checkins (budget_id, week_label);
 
+      ALTER TABLE savings_contributions ADD COLUMN IF NOT EXISTS is_extra BOOLEAN NOT NULL DEFAULT false;
+
       CREATE INDEX IF NOT EXISTS savings_contributions_user_budget_idx
         ON savings_contributions (user_id, budget_id);
 

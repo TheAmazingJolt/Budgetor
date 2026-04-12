@@ -11,6 +11,7 @@ export interface ManualContribution {
   amount: number;
   date: string;
   note?: string | null;
+  isExtra?: boolean;
 }
 
 export interface WeeklyCheckIn {

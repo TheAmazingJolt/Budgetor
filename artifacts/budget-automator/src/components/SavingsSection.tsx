@@ -99,7 +99,7 @@ export function SavingsSection({
   const goals: SavingsGoal[] = goalsData?.goals ?? [];
 
   const addMutation = useMutation({
-    mutationFn: (payload: { billName: string; amount: number; date: string; note?: string }) =>
+    mutationFn: (payload: { billName: string; amount: number; date: string; note?: string; isExtra?: boolean }) =>
       apiFetch(`/api/budgets/${budgetId}/contributions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -312,8 +312,8 @@ export function SavingsSection({
                   data={sf}
                   contributions={contributions.filter(c => c.billName === sf.bill.name)}
                   canLog={canLog}
-                  onAdd={(amount, date, note) =>
-                    addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
+                  onAdd={(amount, date, note, isExtra) =>
+                    addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note, isExtra })
                   }
                   onDelete={id => deleteMutation.mutateAsync(id)}
                   onAddAsBill={handleAddBill ? (amt) => handleAddBill({ name: sf.bill.name ?? "", amount: -Math.abs(amt), type: "weekly", color: "purple", category: "Savings", userColor: true }) : undefined}
@@ -350,8 +350,8 @@ export function SavingsSection({
                     contributions={contributions.filter(c => c.billName === b.bill.name)}
                     checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
                     canLog={canLog}
-                    onAdd={(amount, date, note) =>
-                      addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note })
+                    onAdd={(amount, date, note, isExtra) =>
+                      addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note, isExtra })
                     }
                     onDelete={id => deleteMutation.mutateAsync(id)}
                   />
@@ -465,17 +465,19 @@ interface CardActionsProps {
   canLog: boolean;
   contributions: ManualContribution[];
   cycleLabel?: string;
-  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  showExtraToggle?: boolean;
+  onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
   accentClass: string;
 }
 
-function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd, onDelete, accentClass }: CardActionsProps) {
+function ContributionPanel({ billName, canLog, contributions, cycleLabel, showExtraToggle = false, onAdd, onDelete, accentClass }: CardActionsProps) {
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [amountStr, setAmountStr] = useState("");
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState("");
+  const [isExtra, setIsExtra] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -489,10 +491,11 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
     setError("");
     setSaving(true);
     try {
-      await onAdd(amount, date, note.trim() || undefined);
+      await onAdd(amount, date, note.trim() || undefined, isExtra || undefined);
       setAmountStr("");
       setNote("");
       setDate(todayStr());
+      setIsExtra(false);
       setShowForm(false);
       setShowHistory(true);
     } catch (e: any) {
@@ -557,6 +560,20 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
             onChange={e => setNote(e.target.value)}
             className="h-8 text-sm"
           />
+          {showExtraToggle && (
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isExtra}
+                onChange={e => setIsExtra(e.target.checked)}
+                className="mt-0.5 accent-amber-500"
+              />
+              <span className="text-xs text-muted-foreground leading-tight">
+                <span className="font-medium text-foreground">Extra payment</span>
+                {" "}— don't apply toward monthly total (weekly budget amounts stay the same)
+              </span>
+            </label>
+          )}
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={saving}>
@@ -577,6 +594,9 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
                 <span className="font-semibold text-foreground">${fmt(c.amount)}</span>
                 <span className="text-muted-foreground mx-1.5">·</span>
                 <span className="text-muted-foreground">{c.date}</span>
+                {c.isExtra && (
+                  <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">extra</span>
+                )}
                 {c.note && <span className="text-muted-foreground ml-1.5 italic truncate">{c.note}</span>}
               </div>
               <button
@@ -599,7 +619,7 @@ interface SinkingCardProps {
   data: SinkingFundProgress;
   contributions: ManualContribution[];
   canLog: boolean;
-  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
   onAddAsBill?: (weeklyAmount: number) => void;
 }
@@ -681,7 +701,7 @@ interface BalancedCardProps {
   contributions: ManualContribution[];
   checkins: WeeklyCheckIn[];
   canLog: boolean;
-  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
 }
 
@@ -737,6 +757,7 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
         billName={bill.name ?? ""}
         canLog={canLog}
         contributions={contributions}
+        showExtraToggle
         onAdd={onAdd}
         onDelete={onDelete}
         accentClass="text-indigo-600"

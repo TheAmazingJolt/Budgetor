@@ -421,6 +421,7 @@ function computePriorSavings(
 
   for (const c of contributions) {
     if (!balancedNames.has(c.billName)) continue;
+    if ((c as any).isExtra) continue;
     const cDate = new Date(c.date + "T00:00:00");
     if (cDate.getFullYear() !== startYear || cDate.getMonth() !== startMonth) continue;
     if (cDate >= start) continue;
