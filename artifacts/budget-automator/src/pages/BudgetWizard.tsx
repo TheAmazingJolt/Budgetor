@@ -6319,7 +6319,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isGenerateDateDialogOpen} onOpenChange={setIsGenerateDateDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onOpenAutoFocus={(e) => e.preventDefault()} onCloseAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">Generate next week(s)</DialogTitle>
             <DialogDescription className="text-muted-foreground">
