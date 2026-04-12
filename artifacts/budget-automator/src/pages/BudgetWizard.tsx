@@ -2670,6 +2670,39 @@ export function BudgetWizard({
     );
   };
 
+  const handleDeleteArchiveWeek = (label: string) => {
+    const filtered = cloudExistingWeeks.filter((w: any) => w.label !== label);
+    setCloudExistingWeeks(filtered);
+    if (activeCloudBudgetId) {
+      cloudSaveMutation.mutate(
+        {
+          id: activeCloudBudgetId,
+          data: {
+            bills,
+            settings: {
+              openingBalance,
+              paycheckAmount,
+              weekCount,
+              newWeekStartDate,
+              newWeekEndDate,
+              zeroOpeningBalance,
+              inputMode: "cloud",
+              existingWeeks: filtered,
+              payPeriod,
+              incomeSources: incomeSources.length > 0 ? incomeSources : undefined,
+            },
+            debts,
+          },
+        },
+        {
+          onSuccess: () => {
+            toast({ title: "Week removed from archive" });
+          },
+        }
+      );
+    }
+  };
+
   const handleRenameSavedBudget = () => {
     if (!renameBudgetId || !renameBudgetValue.trim()) return;
     renameBudgetMutation.mutate(
@@ -5568,10 +5601,22 @@ export function BudgetWizard({
                                       colSpan={2}
                                       className="px-4 py-3 text-left font-bold border-r border-border/30 last:border-r-0 whitespace-nowrap bg-slate-200 text-slate-500"
                                     >
-                                      {week.label}
-                                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded-full">
-                                        Past
-                                      </span>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                          {week.label}
+                                          <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded-full">
+                                            Past
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          title="Remove from archive"
+                                          onClick={() => handleDeleteArchiveWeek(week.label)}
+                                          className="p-1 rounded hover:bg-red-100 hover:text-red-600 text-slate-400 transition-colors shrink-0"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </th>
                                   ))}
                                 </tr>
