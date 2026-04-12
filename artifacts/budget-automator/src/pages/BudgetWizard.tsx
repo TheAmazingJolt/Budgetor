@@ -6155,7 +6155,7 @@ export function BudgetWizard({
       </main>
 
       <Dialog open={isBillDialogOpen} onOpenChange={setIsBillDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingBillIndex !== null ? "Edit Bill" : "Add Bill"}
@@ -6178,7 +6178,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isDebtDialogOpen} onOpenChange={setIsDebtDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingDebtIndex !== null ? "Edit Debt" : "Add Debt"}
@@ -6239,7 +6239,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={!!logPaymentDebtId} onOpenChange={(open) => { if (!open) setLogPaymentDebtId(null); }}>
-        <DialogContent className="sm:max-w-xs rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-xs rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Banknote className="w-5 h-5 text-emerald-600" /> Log Payment
@@ -6319,7 +6319,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isGenerateDateDialogOpen} onOpenChange={setIsGenerateDateDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6" onOpenAutoFocus={(e) => e.preventDefault()} onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">Generate next week(s)</DialogTitle>
             <DialogDescription className="text-muted-foreground">
@@ -6960,7 +6960,7 @@ export function BudgetWizard({
       </Dialog>
 
       <Dialog open={isBillManagerFormOpen} onOpenChange={setIsBillManagerFormOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border-border/40 shadow-2xl p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl font-bold">
               {editingBillInManagerIndex !== null ? "Edit Bill" : "Add Bill"}
