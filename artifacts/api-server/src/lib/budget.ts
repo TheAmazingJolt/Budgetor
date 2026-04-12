@@ -238,6 +238,25 @@ export function generateWeeklyBudgets(
     weeksPerMonth[w.month] = (weeksPerMonth[w.month] || 0) + 1;
   }
 
+  // ── Total periods a full calendar month would contain ───────────────────
+  // Used to pro-rate balanced bills when the user generates fewer weeks than
+  // the full month. E.g. generating 1 week of a 5-week month gives 1/5 of the
+  // monthly bill instead of the whole amount.
+  // For monthly pay periods this is always 1 (no scaling needed).
+  const totalPeriodsInFullMonth: Record<string, number> = {};
+  for (const mk of monthsInRange) {
+    const [yearStr, monthStr] = mk.split("-");
+    const yr = parseInt(yearStr);
+    const mo = parseInt(monthStr);
+    const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+    if (payPeriod === "monthly") {
+      totalPeriodsInFullMonth[mk] = 1;
+    } else {
+      const daysPerPeriod = payPeriod === "biweekly" ? 14 : 7;
+      totalPeriodsInFullMonth[mk] = Math.ceil(daysInMonth / daysPerPeriod);
+    }
+  }
+
   // ── Allocate fixed bills to the week containing their due date ──────────
   for (const bill of fixedBills) {
     const day = bill.dayOfMonth;
@@ -535,7 +554,13 @@ export function generateWeeklyBudgets(
       if (eligibleIndices.length === 0) continue;
 
       const alreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
-      const effectiveAmount = Math.min(0, bill.amount + alreadySaved);
+      // Pro-rate: only allocate the share of the monthly bill that corresponds
+      // to the weeks being generated. E.g. 1 generated week in a 5-week month
+      // = 1/5 of the monthly amount, so the user sees a realistic per-week figure
+      // rather than the entire month's obligation dumped into a single week.
+      const fullPeriods = totalPeriodsInFullMonth[mk] ?? eligibleIndices.length;
+      const monthFraction = payPeriod === "monthly" ? 1 : Math.min(1, eligibleIndices.length / fullPeriods);
+      const effectiveAmount = Math.min(0, (bill.amount + alreadySaved) * monthFraction);
 
       const baseTotals = eligibleIndices.map((idx) =>
         weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
@@ -593,7 +618,9 @@ export function generateWeeklyBudgets(
       );
 
       const timedAlreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
-      const timedEffectiveAmount = Math.min(0, bill.amount + timedAlreadySaved);
+      const timedFullPeriods = totalPeriodsInFullMonth[mk] ?? activeIndices.length;
+      const timedMonthFraction = payPeriod === "monthly" ? 1 : Math.min(1, activeIndices.length / timedFullPeriods);
+      const timedEffectiveAmount = Math.min(0, (bill.amount + timedAlreadySaved) * timedMonthFraction);
       const slotAmounts = equalizeAcrossSlots(baseTotals, timedEffectiveAmount);
 
       for (let a = 0; a < activeIndices.length; a++) {
