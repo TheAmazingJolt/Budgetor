@@ -4557,7 +4557,6 @@ export function BudgetWizard({
                           <h3 className="text-lg font-semibold text-foreground">
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
-                          <div className="flex-1 min-w-0" />
                           <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5 shrink-0">
                             <button
                               type="button"
@@ -4585,6 +4584,7 @@ export function BudgetWizard({
                               </button>
                             )}
                           </div>
+                          <div className="flex-1 min-w-0" />
                           {step2Tab === "budget" && (
                             <>
                               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0" onClick={handleJumpToToday}>
