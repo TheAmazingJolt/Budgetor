@@ -400,6 +400,49 @@ function stripDebtMinPayments(bills: Bill[]): Bill[] {
   return bills.filter(b => !b.name.endsWith(" (min payment)"));
 }
 
+function weekOwnerMonth(start: Date): { year: number; month: number } {
+  return { year: start.getFullYear(), month: start.getMonth() };
+}
+
+function computePriorSavings(
+  balancedBills: Bill[],
+  contributions: { billName: string; amount: number; date: string; isExtra?: boolean }[],
+  checkins: import("@/components/CheckInDialog").WeeklyCheckIn[],
+  budgetStartDate: string,
+): Record<string, Record<string, number>> {
+  const result: Record<string, Record<string, number>> = {};
+  const start = new Date(budgetStartDate + "T00:00:00");
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth();
+  const mk = `${startYear}-${startMonth}`;
+  const balancedNames = new Set(balancedBills.filter((b) => b.type === "balanced").map((b) => b.name));
+
+  for (const c of contributions) {
+    if (!balancedNames.has(c.billName)) continue;
+    if (c.isExtra) continue;
+    const cDate = new Date(c.date + "T00:00:00");
+    if (cDate.getFullYear() !== startYear || cDate.getMonth() !== startMonth) continue;
+    if (cDate >= start) continue;
+    if (!result[mk]) result[mk] = {};
+    result[mk][c.billName] = (result[mk][c.billName] ?? 0) + c.amount;
+  }
+
+  for (const ci of checkins) {
+    if (ci.itemType !== "balanced") continue;
+    if (!balancedNames.has(ci.itemName)) continue;
+    if (ci.actualAmount <= 0) continue;
+    const dates = parseLabelDates(ci.weekLabel);
+    if (!dates) continue;
+    if (dates.end >= start) continue;
+    const owner = weekOwnerMonth(dates.start);
+    if (owner.year !== startYear || owner.month !== startMonth) continue;
+    if (!result[mk]) result[mk] = {};
+    result[mk][ci.itemName] = (result[mk][ci.itemName] ?? 0) + ci.actualAmount;
+  }
+
+  return result;
+}
+
 const OLD_HEURISTIC_COLORS: Record<string, string[]> = {
   balanced: ["blue", "orange", "purple"],
   fixed: ["slate"],
@@ -1240,7 +1283,7 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
-  const budgetContributionsQuery = useQuery<{ contributions: { id: string; billName: string; amount: number; date: string; note?: string | null }[] }>({
+  const budgetContributionsQuery = useQuery<{ contributions: { id: string; billName: string; amount: number; date: string; note?: string | null; isExtra?: boolean }[] }>({
     queryKey: ["savings-contributions", activeCloudBudgetId],
     queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/contributions`),
     enabled: !!activeCloudBudgetId,
@@ -2438,6 +2481,13 @@ export function BudgetWizard({
       ? effectiveIncomeSources[0].nextPayDate
       : overrides?.startDate ?? newWeekStartDate;
 
+    const priorSavingsMap = computePriorSavings(
+      allBillsForGeneration,
+      budgetContributionsQuery.data?.contributions ?? [],
+      checkinsQuery.data?.checkins ?? [],
+      anchoredStartDate,
+    );
+
     generateMutation.mutate(
       {
         data: {
@@ -2449,6 +2499,7 @@ export function BudgetWizard({
           bills: allBillsForGeneration,
           payPeriod,
           incomeSources: effectiveIncomeSources,
+          priorSavings: Object.keys(priorSavingsMap).length > 0 ? priorSavingsMap : undefined,
         },
       },
       {
@@ -2732,6 +2783,12 @@ export function BudgetWizard({
         : incomeSources.length > 0 ? incomeSources : undefined;
       const exportStartDate = exportIncomeSources && exportIncomeSources.length > 1
         ? exportIncomeSources[0].nextPayDate : newWeekStartDate;
+      const exportPriorSavingsMap = computePriorSavings(
+        bills,
+        budgetContributionsQuery.data?.contributions ?? [],
+        checkinsQuery.data?.checkins ?? [],
+        exportStartDate,
+      );
       const data = await generateMutation.mutateAsync({
         data: {
           startDate: exportStartDate,
@@ -2742,6 +2799,7 @@ export function BudgetWizard({
           bills,
           payPeriod,
           incomeSources: exportIncomeSources,
+          priorSavings: Object.keys(exportPriorSavingsMap).length > 0 ? exportPriorSavingsMap : undefined,
         },
       });
       if (!data.weeks?.length) throw new Error("Generation returned no weeks");
