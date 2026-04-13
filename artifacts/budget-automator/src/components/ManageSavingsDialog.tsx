@@ -326,17 +326,17 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, is
       {!showAddForm && !editingId && (
         <Button
           onClick={() => {
-            if (isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 1) {
-              toast({ title: "Free plan: 1 savings goal limit", description: "Upgrade to Pro for unlimited savings goals.", variant: "destructive" });
+            if (isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 3) {
+              toast({ title: "Free plan: 3 savings goals included", description: "Upgrade to Pro for unlimited savings goals.", variant: "destructive" });
               onUpgrade?.();
               return;
             }
             openAddForm();
           }}
           size="sm"
-          className={`w-full rounded-xl text-white ${isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 1 ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-gradient-to-r from-teal-500 to-emerald-600"}`}
+          className={`w-full rounded-xl text-white ${isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 3 ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-gradient-to-r from-teal-500 to-emerald-600"}`}
         >
-          {isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 1 ? (
+          {isSignedIn && !isGuest && !isPro && (goals?.length ?? 0) >= 3 ? (
             <><Crown className="w-4 h-4 mr-1" /> Upgrade for more goals</>
           ) : (
             <><Plus className="w-4 h-4 mr-1" /> Add Savings Goal</>

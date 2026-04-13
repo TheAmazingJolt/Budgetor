@@ -618,15 +618,6 @@ router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
     res.status(400).json({ error: "bills must be an array" });
     return;
   }
-  const FREE_BILL_LIMIT = 5;
-  if ((req.user!.plan ?? "free") === "free" && bills.length > FREE_BILL_LIMIT) {
-    res.status(403).json({
-      error: `Free plan is limited to ${FREE_BILL_LIMIT} spending categories. Upgrade to Pro for unlimited categories.`,
-      upgradeRequired: true,
-      limit: FREE_BILL_LIMIT,
-    });
-    return;
-  }
   await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, req.user!.id));
   res.json({ bills });
 });

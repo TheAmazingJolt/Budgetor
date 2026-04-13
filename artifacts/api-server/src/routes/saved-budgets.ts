@@ -47,6 +47,28 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
     return;
   }
 
+  const FREE_CLOUD_BUDGET_LIMIT = 1;
+  if (((req.user as any).plan ?? "free") === "free") {
+    try {
+      const existing = await db
+        .select({ id: savedBudgetsTable.id })
+        .from(savedBudgetsTable)
+        .where(eq(savedBudgetsTable.userId, userId));
+      if (existing.length >= FREE_CLOUD_BUDGET_LIMIT) {
+        res.status(403).json({
+          error: `Free plan is limited to ${FREE_CLOUD_BUDGET_LIMIT} saved cloud budget. Upgrade to Pro for unlimited budgets.`,
+          upgradeRequired: true,
+          limit: FREE_CLOUD_BUDGET_LIMIT,
+        });
+        return;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: "Failed to check budget limit: " + message });
+      return;
+    }
+  }
+
   try {
     const [budget] = await db
       .insert(savedBudgetsTable)
