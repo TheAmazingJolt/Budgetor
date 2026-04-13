@@ -857,7 +857,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
       fill: { patternType: 'solid' as const, fgColor: { rgb: 'E0E7FF' } },
     };
     set(ss, row, 0, makeCell(`Monthly Set-Aside — ${currentMonthStr}`, balSectionStyle));
-    addMerge(ss, row, 0, row, 3);
+    addMerge(ss, row, 0, row, 4);
     row++;
 
     const balColHdrStyle = {
@@ -865,7 +865,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
       fill: { patternType: 'solid' as const, fgColor: { rgb: 'EEF2FF' } },
       border: { bottom: { style: 'thin' as const, color: { rgb: 'A5B4FC' } } },
     };
-    const balCols = ['Bill Name', 'Monthly Goal', 'Set Aside This Month', 'Progress'];
+    const balCols = ['Bill Name', 'Monthly Goal', 'Set Aside This Month', 'Extra', 'Progress'];
     for (let c = 0; c < balCols.length; c++) {
       set(ss, row, c, makeCell(balCols[c], balColHdrStyle));
     }
@@ -874,10 +874,11 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
     for (const b of balanced) {
       set(ss, row, 0, makeCell(b.bill.name ?? ''));
       set(ss, row, 1, { v: b.monthlyGoal, t: 'n', z: MONEY_FMT });
-      set(ss, row, 2, { v: b.savedThisMonth + b.manualThisMonth, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: b.savedThisMonth + b.manualThisMonth + b.checkedInThisMonth, t: 'n', z: MONEY_FMT });
+      set(ss, row, 3, { v: b.extraThisMonth, t: 'n', z: MONEY_FMT });
       const balPct: any = { v: b.progressPct / 100, t: 'n', z: '0%' };
       if (b.progressPct >= 100) balPct.s = { font: { color: { rgb: '059669' }, bold: true } };
-      set(ss, row, 3, balPct);
+      set(ss, row, 4, balPct);
       row++;
     }
     row++;

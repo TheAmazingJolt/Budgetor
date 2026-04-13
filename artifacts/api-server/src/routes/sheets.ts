@@ -1860,7 +1860,7 @@ function getNextYearlyDueSrv(from: Date, month: number, day: number): Date {
   return due;
 }
 
-interface ManualContribRow { billName: string; amount: number; date: string; }
+interface ManualContribRow { billName: string; amount: number; date: string; isExtra?: boolean; }
 
 interface SavingsGoalRow {
   name: string;
@@ -1891,7 +1891,7 @@ async function writeSavingsTabToSheet(
     progressPct: number; nextDueDateStr: string; cycleStartStr: string; weeksRemaining: number;
   }
   interface BalancedRow {
-    name: string; monthlyGoal: number; savedThisMonth: number; progressPct: number;
+    name: string; monthlyGoal: number; savedThisMonth: number; extraThisMonth: number; progressPct: number;
   }
 
   const sinkingFunds: SinkingRow[] = [];
@@ -1945,16 +1945,21 @@ async function writeSavingsTabToSheet(
         }
       }
       let manualThisMonth = 0;
+      let extraThisMonth = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
         if (cDate > today) continue;
         if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
-        manualThisMonth += c.amount;
+        if (c.isExtra) {
+          extraThisMonth += c.amount;
+        } else {
+          manualThisMonth += c.amount;
+        }
       }
-      const totalSavedMonth = savedThisMonth + manualThisMonth;
+      const totalSavedMonth = savedThisMonth + manualThisMonth + extraThisMonth;
       const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSavedMonth / monthlyGoal) * 100) : 0;
-      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth: totalSavedMonth, progressPct });
+      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth: savedThisMonth + manualThisMonth, extraThisMonth, progressPct });
     }
   }
 
@@ -2001,9 +2006,9 @@ async function writeSavingsTabToSheet(
 
   if (balanced.length > 0) {
     grid.push([`Monthly Set-Aside — ${currentMonthStr}`]);
-    grid.push(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress"]);
+    grid.push(["Bill Name", "Monthly Goal", "Set Aside This Month", "Extra", "Progress"]);
     for (const b of balanced) {
-      grid.push([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`]);
+      grid.push([b.name, b.monthlyGoal, b.savedThisMonth, b.extraThisMonth, `${Math.round(b.progressPct)}%`]);
     }
     grid.push([]);
   }
@@ -2245,7 +2250,7 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
         try {
           const rows = await db.select().from(savingsContributionsTable)
             .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
-          savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+          savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date, isExtra: r.isExtra }));
         } catch { }
         try {
           const goalRows = await db.select().from(savingsGoalsTable)
@@ -2360,7 +2365,7 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
           try {
             const rows = await db.select().from(savingsContributionsTable)
               .where(and(eq(savingsContributionsTable.budgetId, body.budgetId), eq(savingsContributionsTable.userId, (req as any).user.id)));
-            savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+            savingsContribs = rows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date, isExtra: r.isExtra }));
           } catch { }
           try {
             const goalRows = await db.select().from(savingsGoalsTable)

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, numeric, boolean } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { savedBudgetsTable } from "./saved-budgets";
 
@@ -10,6 +10,7 @@ export const savingsContributionsTable = pgTable("savings_contributions", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   date: text("date").notNull(),
   note: text("note"),
+  isExtra: boolean("is_extra").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -21,4 +22,5 @@ export type InsertSavingsContribution = {
   amount: string;
   date: string;
   note?: string | null;
+  isExtra?: boolean;
 };

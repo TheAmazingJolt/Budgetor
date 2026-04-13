@@ -11,6 +11,7 @@ export interface ManualContribution {
   amount: number;
   date: string;
   note?: string | null;
+  isExtra?: boolean;
 }
 
 export interface WeeklyCheckIn {
@@ -27,6 +28,7 @@ export interface SinkingFundProgress {
   annualGoal: number;
   savedInCycle: number;
   manualInCycle: number;
+  extraManualInCycle: number;
   progressPct: number;
   nextDueDateStr: string;
   cycleStartStr: string;
@@ -39,6 +41,7 @@ export interface BalancedProgress {
   monthlyGoal: number;
   savedThisMonth: number;
   manualThisMonth: number;
+  extraThisMonth: number;
   checkedInThisMonth: number;
   progressPct: number;
   currentMonth: number;
@@ -194,21 +197,26 @@ export function computeSavings(
       }
 
       let manualInCycle = 0;
+      let extraManualInCycle = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
         if (cDate <= cycleStart || cDate > today) continue;
-        manualInCycle += c.amount;
+        if (c.isExtra) {
+          extraManualInCycle += c.amount;
+        } else {
+          manualInCycle += c.amount;
+        }
       }
 
-      const totalSaved = savedInCycle + manualInCycle;
+      const totalSaved = savedInCycle + manualInCycle + extraManualInCycle;
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const cycleStartStr = `${MONTH_SHORT[cycleStart.getMonth()]} ${cycleStart.getDate()}`;
       const progressPct = annualGoal > 0 ? Math.min(100, (totalSaved / annualGoal) * 100) : 0;
 
       sinkingFunds.push({
-        bill, annualGoal, savedInCycle, manualInCycle, progressPct,
+        bill, annualGoal, savedInCycle, manualInCycle, extraManualInCycle, progressPct,
         nextDueDateStr, cycleStartStr, cycleStart, weeksRemaining,
       });
 
@@ -257,6 +265,7 @@ export function computeSavings(
       }
 
       let manualThisMonth = 0;
+      let extraThisMonth = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
@@ -265,14 +274,18 @@ export function computeSavings(
             ? cDate >= cycleRangeStart && cDate <= cycleRangeEnd
             : cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear
         ) {
-          manualThisMonth += c.amount;
+          if (c.isExtra) {
+            extraThisMonth += c.amount;
+          } else {
+            manualThisMonth += c.amount;
+          }
         }
       }
 
-      const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
+      const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth + extraThisMonth;
       const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSaved / monthlyGoal) * 100) : 0;
       balanced.push({
-        bill, monthlyGoal, savedThisMonth, manualThisMonth, checkedInThisMonth, progressPct,
+        bill, monthlyGoal, savedThisMonth, manualThisMonth, extraThisMonth, checkedInThisMonth, progressPct,
         currentMonth, currentYear,
       });
     }

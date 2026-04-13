@@ -125,6 +125,8 @@ export async function initDb(): Promise<void> {
 
       CREATE UNIQUE INDEX IF NOT EXISTS payday_checkins_unique_week
         ON payday_checkins (budget_id, week_label);
+
+      ALTER TABLE savings_contributions ADD COLUMN IF NOT EXISTS is_extra BOOLEAN NOT NULL DEFAULT false;
     `);
     console.log("[initDb] schema migrations complete");
   } finally {

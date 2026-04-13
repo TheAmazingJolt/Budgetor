@@ -43,11 +43,12 @@ router.post("/budgets/:budgetId/contributions", requireAuth, async (req, res): P
   try {
     const userId = (req as any).user?.id as string;
     const { budgetId } = req.params as { budgetId: string };
-    const { billName, amount, date, note } = req.body as {
+    const { billName, amount, date, note, isExtra } = req.body as {
       billName?: string;
       amount?: number;
       date?: string;
       note?: string;
+      isExtra?: boolean;
     };
 
     if (!billName || typeof billName !== "string") {
@@ -83,6 +84,7 @@ router.post("/budgets/:budgetId/contributions", requireAuth, async (req, res): P
         amount: amount.toFixed(2),
         date,
         note: note ?? null,
+        isExtra: isExtra === true,
       })
       .returning();
 

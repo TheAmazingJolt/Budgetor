@@ -8,6 +8,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   computeSavings,
   parseLabelDates,
@@ -87,7 +89,7 @@ export function SavingsSection({
   const goals: SavingsGoal[] = goalsData?.goals ?? [];
 
   const addMutation = useMutation({
-    mutationFn: (payload: { billName: string; amount: number; date: string; note?: string }) =>
+    mutationFn: (payload: { billName: string; amount: number; date: string; note?: string; isExtra?: boolean }) =>
       apiFetch(`/api/budgets/${budgetId}/contributions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,7 +206,7 @@ export function SavingsSection({
           contributions={contributions}
           budgetId={budgetId}
           onAdd={(amount, date, note, goalName) =>
-            addMutation.mutateAsync({ billName: goalName, amount, date, note })
+            addMutation.mutateAsync({ billName: goalName, amount, date, note, isExtra: false })
           }
           onDeleteContrib={id => deleteMutation.mutateAsync(id)}
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
@@ -270,8 +272,8 @@ export function SavingsSection({
                   data={sf}
                   contributions={contributions.filter(c => c.billName === sf.bill.name)}
                   canLog={canLog}
-                  onAdd={(amount, date, note) =>
-                    addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note })
+                  onAdd={(amount, date, note, isExtra) =>
+                    addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note, isExtra })
                   }
                   onDelete={id => deleteMutation.mutateAsync(id)}
                   onAddAsBill={handleAddBill ? (amt) => handleAddBill({ name: sf.bill.name ?? "", amount: -Math.abs(amt), type: "weekly", color: "purple", category: "Savings", userColor: true }) : undefined}
@@ -308,8 +310,8 @@ export function SavingsSection({
                     contributions={contributions.filter(c => c.billName === b.bill.name)}
                     checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
                     canLog={canLog}
-                    onAdd={(amount, date, note) =>
-                      addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note })
+                    onAdd={(amount, date, note, isExtra) =>
+                      addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note, isExtra })
                     }
                     onDelete={id => deleteMutation.mutateAsync(id)}
                   />
@@ -330,7 +332,7 @@ export function SavingsSection({
           contributions={contributions}
           budgetId={budgetId}
           onAdd={(amount, date, note, goalName) =>
-            addMutation.mutateAsync({ billName: goalName, amount, date, note })
+            addMutation.mutateAsync({ billName: goalName, amount, date, note, isExtra: false })
           }
           onDeleteContrib={id => deleteMutation.mutateAsync(id)}
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
@@ -357,7 +359,7 @@ interface CardActionsProps {
   canLog: boolean;
   contributions: ManualContribution[];
   cycleLabel?: string;
-  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
   accentClass: string;
 }
@@ -368,6 +370,7 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
   const [amountStr, setAmountStr] = useState("");
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState("");
+  const [isExtra, setIsExtra] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -381,10 +384,11 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
     setError("");
     setSaving(true);
     try {
-      await onAdd(amount, date, note.trim() || undefined);
+      await onAdd(amount, date, note.trim() || undefined, isExtra);
       setAmountStr("");
       setNote("");
       setDate(todayStr());
+      setIsExtra(false);
       setShowForm(false);
       setShowHistory(true);
     } catch (e: any) {
@@ -449,6 +453,17 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
             onChange={e => setNote(e.target.value)}
             className="h-8 text-sm"
           />
+          <div className="flex items-center gap-2">
+            <Switch
+              id={`extra-toggle-${billName}`}
+              checked={isExtra}
+              onCheckedChange={setIsExtra}
+              className="data-[state=checked]:bg-amber-500"
+            />
+            <Label htmlFor={`extra-toggle-${billName}`} className="text-xs text-muted-foreground cursor-pointer">
+              Extra payment <span className="text-amber-600">(beyond monthly goal)</span>
+            </Label>
+          </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={saving}>
@@ -465,11 +480,16 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, onAdd,
         <div className="rounded-lg border divide-y text-xs overflow-hidden">
           {contributions.map(c => (
             <div key={c.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 flex items-center flex-wrap gap-x-1.5 gap-y-0.5">
                 <span className="font-semibold text-foreground">${fmt(c.amount)}</span>
-                <span className="text-muted-foreground mx-1.5">·</span>
+                {c.isExtra && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                    Extra
+                  </span>
+                )}
+                <span className="text-muted-foreground">·</span>
                 <span className="text-muted-foreground">{c.date}</span>
-                {c.note && <span className="text-muted-foreground ml-1.5 italic truncate">{c.note}</span>}
+                {c.note && <span className="text-muted-foreground italic truncate">{c.note}</span>}
               </div>
               <button
                 type="button"
@@ -491,15 +511,15 @@ interface SinkingCardProps {
   data: SinkingFundProgress;
   contributions: ManualContribution[];
   canLog: boolean;
-  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
   onAddAsBill?: (weeklyAmount: number) => void;
 }
 
 function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete, onAddAsBill }: SinkingCardProps) {
-  const { bill, annualGoal, savedInCycle, manualInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining } = data;
+  const { bill, annualGoal, savedInCycle, manualInCycle, extraManualInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining } = data;
   const pct = Math.round(progressPct);
-  const totalSaved = savedInCycle + manualInCycle;
+  const totalSaved = savedInCycle + manualInCycle + extraManualInCycle;
   const isComplete = totalSaved >= annualGoal;
   const [addedToBills, setAddedToBills] = useState(false);
 
@@ -573,14 +593,15 @@ interface BalancedCardProps {
   contributions: ManualContribution[];
   checkins: WeeklyCheckIn[];
   canLog: boolean;
-  onAdd: (amount: number, date: string, note?: string) => Promise<unknown>;
+  onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
 }
 
 function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }: BalancedCardProps) {
-  const { bill, monthlyGoal, savedThisMonth, manualThisMonth, checkedInThisMonth, progressPct } = data;
+  const { bill, monthlyGoal, savedThisMonth, manualThisMonth, extraThisMonth, checkedInThisMonth, progressPct } = data;
   const pct = Math.round(progressPct);
-  const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
+  const regularSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
+  const totalSaved = regularSaved + extraThisMonth;
   const isComplete = totalSaved >= monthlyGoal;
 
   return (
@@ -598,7 +619,7 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Set aside this month</span>
-          <span className="font-semibold text-foreground">${fmt(totalSaved)}</span>
+          <span className="font-semibold text-foreground">${fmt(regularSaved)}</span>
         </div>
         {checkedInThisMonth > 0 && (
           <div className="flex items-center justify-between text-xs">
@@ -616,8 +637,14 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
         )}
         {manualThisMonth > 0 && (
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground ml-2">· Extra contributions</span>
+            <span className="text-muted-foreground ml-2">· Logged</span>
             <span className="text-muted-foreground">${fmt(manualThisMonth)}</span>
+          </div>
+        )}
+        {extraThisMonth > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-amber-600 ml-2">· Extra</span>
+            <span className="text-amber-600">${fmt(extraThisMonth)}</span>
           </div>
         )}
         <div className="flex items-center justify-between text-xs">
