@@ -117,6 +117,7 @@ router.post("/stripe/verify-session", requireAuth, async (req: Request, res: Res
   }
 });
 
+
 router.post("/stripe/portal", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const stripe = getStripe();
   if (!stripe) {

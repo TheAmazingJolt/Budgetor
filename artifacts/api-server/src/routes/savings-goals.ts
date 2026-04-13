@@ -81,7 +81,7 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
       return;
     }
 
-    const FREE_GOAL_LIMIT = 1;
+    const FREE_GOAL_LIMIT = 3;
     const user = (req as any).user;
     if ((user?.plan ?? "free") === "free") {
       const existingGoals = await db
@@ -90,7 +90,7 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
         .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
       if (existingGoals.length >= FREE_GOAL_LIMIT) {
         res.status(403).json({
-          error: `Free plan is limited to ${FREE_GOAL_LIMIT} savings goal. Upgrade to Pro for unlimited goals.`,
+          error: `Free plan includes up to ${FREE_GOAL_LIMIT} savings goals. Upgrade to Pro for unlimited goals.`,
           upgradeRequired: true,
           limit: FREE_GOAL_LIMIT,
         });

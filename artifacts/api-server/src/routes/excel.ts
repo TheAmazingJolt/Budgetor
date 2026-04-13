@@ -1319,7 +1319,7 @@ function writeExcelSavingsSheetXL(
   wb: ExcelJS.Workbook,
   bills: BillMeta[],
   weeks: ExcelWriteRequest["weeks"],
-  contributions: { billName: string; amount: number; date: string }[],
+  contributions: { billName: string; amount: number; date: string; isExtra?: boolean }[],
   goals: { name: string; targetAmount: number; targetDate: string; savedSoFar: number }[],
   tz?: string,
   checkins: { weekLabel: string; itemName: string; itemType: string; actualAmount: number }[] = [],
@@ -1332,7 +1332,7 @@ function writeExcelSavingsSheetXL(
   const currentYear = today.getFullYear();
 
   const sinkingFunds: { name: string; annualGoal: number; savedInCycle: number; progressPct: number; nextDueDateStr: string; weeksRemaining: number }[] = [];
-  const balanced: { name: string; monthlyGoal: number; savedThisMonth: number; progressPct: number }[] = [];
+  const balanced: { name: string; monthlyGoal: number; savedThisMonth: number; extraThisMonth: number; progressPct: number }[] = [];
 
   for (const bill of bills) {
     if (bill.type === "yearly") {
@@ -1406,15 +1406,20 @@ function writeExcelSavingsSheetXL(
         if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
         savedThisMonth += c.actualAmount;
       }
+      let extraThisMonth = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
         if (cDate > today) continue;
         if (cDate.getMonth() !== currentMonth || cDate.getFullYear() !== currentYear) continue;
-        savedThisMonth += c.amount;
+        if (c.isExtra) {
+          extraThisMonth += c.amount;
+        } else {
+          savedThisMonth += c.amount;
+        }
       }
-      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
-      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, progressPct });
+      const progressPct = monthlyGoal > 0 ? Math.min(100, ((savedThisMonth + extraThisMonth) / monthlyGoal) * 100) : 0;
+      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, extraThisMonth, progressPct });
     }
   }
 
@@ -1484,9 +1489,9 @@ function writeExcelSavingsSheetXL(
 
   if (balanced.length > 0) {
     writeRow([`Monthly Set-Aside — ${currentMonthStr}`], { bg: INDIGO_LT, fontColor: INDIGO, bold: true, size: 11 });
-    writeRow(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress"], { bg: INDIGO_LTR, bold: true });
+    writeRow(["Bill Name", "Monthly Goal", "Set Aside This Month", "Extra", "Progress"], { bg: INDIGO_LTR, bold: true });
     for (const b of balanced) {
-      writeRow([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`], { numFmtCols: [1, 2] });
+      writeRow([b.name, b.monthlyGoal, b.savedThisMonth, b.extraThisMonth, `${Math.round(b.progressPct)}%`], { numFmtCols: [1, 2, 3] });
     }
     r++;
   }
@@ -1883,7 +1888,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
         const budgetId = body.budgetId;
         const contribRows = await db.select().from(savingsContributionsTable)
           .where(and(eq(savingsContributionsTable.budgetId, budgetId), eq(savingsContributionsTable.userId, userId)));
-        const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date }));
+        const contribs = contribRows.map(r => ({ billName: r.billName, amount: Number(r.amount), date: r.date, isExtra: r.isExtra }));
         const goalRows = await db.select().from(savingsGoalsTable)
           .where(and(eq(savingsGoalsTable.budgetId, budgetId), eq(savingsGoalsTable.userId, userId)));
         const goals = goalRows.map(g => ({

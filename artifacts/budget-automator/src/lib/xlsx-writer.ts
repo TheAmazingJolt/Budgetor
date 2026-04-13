@@ -863,7 +863,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
       fill: { patternType: 'solid' as const, fgColor: { rgb: 'E0E7FF' } },
     };
     set(ss, row, 0, makeCell(`Monthly Set-Aside — ${currentMonthStr}`, balSectionStyle));
-    addMerge(ss, row, 0, row, 3);
+    addMerge(ss, row, 0, row, 4);
     row++;
 
     const balColHdrStyle = {
@@ -871,7 +871,7 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
       fill: { patternType: 'solid' as const, fgColor: { rgb: 'EEF2FF' } },
       border: { bottom: { style: 'thin' as const, color: { rgb: 'A5B4FC' } } },
     };
-    const balCols = ['Bill Name', 'Monthly Goal', 'Set Aside This Month', 'Progress'];
+    const balCols = ['Bill Name', 'Monthly Goal', 'Set Aside This Month', 'Extra', 'Progress'];
     for (let c = 0; c < balCols.length; c++) {
       set(ss, row, c, makeCell(balCols[c], balColHdrStyle));
     }
@@ -880,10 +880,57 @@ function writeSavingsSheet(wb: XLSX.WorkBook, weekBudgets: WeeklyBudget[], bills
     for (const b of balanced) {
       set(ss, row, 0, makeCell(b.bill.name ?? ''));
       set(ss, row, 1, { v: b.monthlyGoal, t: 'n', z: MONEY_FMT });
-      set(ss, row, 2, { v: b.savedThisMonth + b.manualThisMonth, t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, { v: b.savedThisMonth + b.manualThisMonth + b.checkedInThisMonth, t: 'n', z: MONEY_FMT });
+      set(ss, row, 3, { v: b.extraThisMonth, t: 'n', z: MONEY_FMT });
       const balPct: any = { v: b.progressPct / 100, t: 'n', z: '0%' };
       if (b.progressPct >= 100) balPct.s = { font: { color: { rgb: '059669' }, bold: true } };
-      set(ss, row, 3, balPct);
+      set(ss, row, 4, balPct);
+      row++;
+    }
+    row++;
+  }
+
+  if (hasLumpSum) {
+    const debtMap = new Map((debts ?? []).map(d => [d.id, d]));
+    const lumpSectionStyle = {
+      font: { bold: true, sz: 11, name: 'Arial', color: { rgb: '92400E' } },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'FEF3C7' } },
+    };
+    set(ss, row, 0, makeCell('Lump-Sum Payments', lumpSectionStyle));
+    addMerge(ss, row, 0, row, 4);
+    row++;
+
+    const lumpColHdrStyle = {
+      font: { bold: true, sz: 10, name: 'Arial' },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFFBEB' } },
+      border: { bottom: { style: 'thin' as const, color: { rgb: 'FCD34D' } } },
+    };
+    const lumpCols = ['Name', 'Weekly Set-Aside', 'Due Date', 'Remaining Balance', 'Percent Left'];
+    for (let c = 0; c < lumpCols.length; c++) {
+      set(ss, row, c, makeCell(lumpCols[c], lumpColHdrStyle));
+    }
+    row++;
+
+    for (const b of lumpSumBills) {
+      const debt = debtMap.get(b.sourceDebtId!);
+      const payoffDateStr = b.payoffDate
+        ? new Date(b.payoffDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '';
+      set(ss, row, 0, makeCell(b.name ?? ''));
+      set(ss, row, 1, { v: Math.abs(b.amount), t: 'n', z: MONEY_FMT });
+      set(ss, row, 2, makeCell(payoffDateStr));
+      if (debt) {
+        const balance = debt.balance ?? 0;
+        const original = debt.originalAmount ?? debt.balance ?? 0;
+        const pctLeft = original > 0 ? balance / original : 0;
+        set(ss, row, 3, { v: balance, t: 'n', z: MONEY_FMT });
+        const pctCell: any = { v: pctLeft, t: 'n', z: '0%' };
+        if (pctLeft <= 0) pctCell.s = { font: { color: { rgb: '059669' }, bold: true } };
+        set(ss, row, 4, pctCell);
+      } else {
+        set(ss, row, 3, makeCell(''));
+        set(ss, row, 4, makeCell(''));
+      }
       row++;
     }
     row++;

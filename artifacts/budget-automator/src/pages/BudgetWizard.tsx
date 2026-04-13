@@ -457,6 +457,49 @@ function stripDebtMinPayments(bills: Bill[]): Bill[] {
   return bills.filter(b => !b.name.endsWith(" (min payment)"));
 }
 
+function weekOwnerMonth(start: Date): { year: number; month: number } {
+  return { year: start.getFullYear(), month: start.getMonth() };
+}
+
+function computePriorSavings(
+  balancedBills: Bill[],
+  contributions: { billName: string; amount: number; date: string; isExtra?: boolean }[],
+  checkins: import("@/components/CheckInDialog").WeeklyCheckIn[],
+  budgetStartDate: string,
+): Record<string, Record<string, number>> {
+  const result: Record<string, Record<string, number>> = {};
+  const start = new Date(budgetStartDate + "T00:00:00");
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth();
+  const mk = `${startYear}-${startMonth}`;
+  const balancedNames = new Set(balancedBills.filter((b) => b.type === "balanced").map((b) => b.name));
+
+  for (const c of contributions) {
+    if (!balancedNames.has(c.billName)) continue;
+    if (c.isExtra) continue;
+    const cDate = new Date(c.date + "T00:00:00");
+    if (cDate.getFullYear() !== startYear || cDate.getMonth() !== startMonth) continue;
+    if (cDate >= start) continue;
+    if (!result[mk]) result[mk] = {};
+    result[mk][c.billName] = (result[mk][c.billName] ?? 0) + c.amount;
+  }
+
+  for (const ci of checkins) {
+    if (ci.itemType !== "balanced") continue;
+    if (!balancedNames.has(ci.itemName)) continue;
+    if (ci.actualAmount <= 0) continue;
+    const dates = parseLabelDates(ci.weekLabel);
+    if (!dates) continue;
+    if (dates.end >= start) continue;
+    const owner = weekOwnerMonth(dates.start);
+    if (owner.year !== startYear || owner.month !== startMonth) continue;
+    if (!result[mk]) result[mk] = {};
+    result[mk][ci.itemName] = (result[mk][ci.itemName] ?? 0) + ci.actualAmount;
+  }
+
+  return result;
+}
+
 const OLD_HEURISTIC_COLORS: Record<string, string[]> = {
   balanced: ["blue", "orange", "purple"],
   fixed: ["slate"],
@@ -961,6 +1004,7 @@ export function BudgetWizard({
 
   const isPro = (currentUser?.plan ?? "free") === "pro";
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isPlanComparisonOpen, setIsPlanComparisonOpen] = useState(false);
 
   const handleUpgradeToPro = async () => {
     setIsUpgrading(true);
@@ -1085,6 +1129,7 @@ export function BudgetWizard({
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
   const [step2Tab, setStep2Tab] = useState<"budget" | "savings" | "archive">("budget");
   const [pastWeeks, setPastWeeks] = useState<UnifiedWeek[]>([]);
+  const [totalPastWeeksCount, setTotalPastWeeksCount] = useState(0);
   const archiveToastFiredRef = useRef<string>("");
   const [editDraft, setEditDraft] = useState<{ paycheck: string; openingBalance: string; items: { name: string; amount: string }[] } | null>(null);
   const [showEditOb, setShowEditOb] = useState(false);
@@ -1611,7 +1656,7 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
-  const budgetContributionsQuery = useQuery<{ contributions: { id: string; billName: string; amount: number; date: string; note?: string | null }[] }>({
+  const budgetContributionsQuery = useQuery<{ contributions: { id: string; billName: string; amount: number; date: string; note?: string | null; isExtra?: boolean }[] }>({
     queryKey: ["savings-contributions", activeCloudBudgetId],
     queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/contributions`),
     enabled: !!activeCloudBudgetId,
@@ -2349,7 +2394,10 @@ export function BudgetWizard({
       return d === null || d.end >= today;
     });
     const archiveKey = computed.map(w => w.label).join("|");
-    setPastWeeks(computed);
+    const FREE_ARCHIVE_WEEKS = 4;
+    const cappedComputed = isPro ? computed : computed.slice(-FREE_ARCHIVE_WEEKS);
+    setPastWeeks(cappedComputed);
+    setTotalPastWeeksCount(computed.length);
     if (computed.length > 0 && currentWeeks.length === 0) {
       setStep2Tab("archive");
     }
@@ -2417,7 +2465,12 @@ export function BudgetWizard({
             if (data?.budget?.id) setActiveCloudBudgetId(data.budget.id);
           },
           onError: (err: unknown) => {
-            const apiErr = err as { data?: { error?: string } };
+            const apiErr = err as { data?: { error?: string; upgradeRequired?: boolean } };
+            if (apiErr?.data?.upgradeRequired) {
+              setIsSaveDialogOpen(false);
+              setIsPlanComparisonOpen(true);
+              return;
+            }
             const detail = apiErr?.data?.error ?? (err instanceof Error ? err.message : "Unknown error");
             const description = detail.length > 120 ? detail.slice(0, 119) + "…" : detail;
             toast({
@@ -3938,12 +3991,11 @@ export function BudgetWizard({
             {isSignedIn && !isGuest && !isPro && (
               <Button
                 size="sm"
-                onClick={handleUpgradeToPro}
-                disabled={isUpgrading}
+                onClick={() => setIsPlanComparisonOpen(true)}
                 className="hidden sm:flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm text-xs font-semibold px-3 h-8"
                 title="Upgrade to Pro"
               >
-                {isUpgrading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-3.5 h-3.5" />}
+                <Crown className="w-3.5 h-3.5" />
                 Upgrade
               </Button>
             )}
@@ -4055,7 +4107,7 @@ export function BudgetWizard({
                     <>
                       <DropdownMenuSeparator />
                       {!isPro && (
-                        <DropdownMenuItem onClick={handleUpgradeToPro} disabled={isUpgrading} className="text-amber-700 focus:text-amber-700 focus:bg-amber-50">
+                        <DropdownMenuItem onClick={() => setIsPlanComparisonOpen(true)} className="text-amber-700 focus:text-amber-700 focus:bg-amber-50">
                           <Crown className="w-4 h-4 mr-2 text-amber-500" /> Upgrade to Pro
                         </DropdownMenuItem>
                       )}
@@ -4641,7 +4693,13 @@ export function BudgetWizard({
                           size="default"
                           onClick={activeCloudBudgetId
                             ? () => handleQuickUpdate((syncGoogleOnUpdate || syncExcelOnUpdate) ? handleGenerateAndUpdateSheet : undefined)
-                            : () => setIsSaveDialogOpen(true)}
+                            : () => {
+                                if (!isPro && (savedBudgetsQuery.data?.budgets?.length ?? 0) >= 1) {
+                                  setIsPlanComparisonOpen(true);
+                                } else {
+                                  setIsSaveDialogOpen(true);
+                                }
+                              }}
                           disabled={bills.length === 0 || cloudSaveMutation.isPending || ((syncGoogleOnUpdate || syncExcelOnUpdate) && isUpdatingLinkedSheet)}
                           className="flex-1 rounded-xl"
                         >
@@ -4735,28 +4793,16 @@ export function BudgetWizard({
                       </p>
                     </div>
                   </div>
-                  {isSignedIn && !isGuest && !isPro && bills.length >= FREE_PLAN_ITEM_LIMIT ? (
-                    <Button
-                      size="sm"
-                      onClick={handleUpgradeToPro}
-                      disabled={isUpgrading}
-                      className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
-                    >
-                      {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
-                      Upgrade for more bills
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setEditingBillIndex(null);
-                        setIsBillDialogOpen(true);
-                      }}
-                      className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
-                    >
-                      <Plus className="w-4 h-4 mr-1" /> Add Bill
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditingBillIndex(null);
+                      setIsBillDialogOpen(true);
+                    }}
+                    className="rounded-xl bg-gradient-to-r from-primary to-emerald-600"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add Bill
+                  </Button>
                 </div>
 
                 {!billsCollapsed && bills.length === 0 ? (
@@ -5591,6 +5637,7 @@ export function BudgetWizard({
                           />
                         )}
                         {step2Tab === "archive" && pastWeeks.length > 0 && (
+                          <>
                           <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm opacity-80">
                             <table className="w-full text-sm">
                               <thead>
@@ -5663,6 +5710,19 @@ export function BudgetWizard({
                               </tfoot>
                             </table>
                           </div>
+                          {!isPro && totalPastWeeksCount > 4 && (
+                            <p className="text-xs text-center text-muted-foreground mt-2">
+                              Showing 4 of {totalPastWeeksCount} past weeks.{" "}
+                              <button
+                                className="underline text-amber-600 hover:text-amber-700"
+                                onClick={() => setIsPlanComparisonOpen(true)}
+                              >
+                                Upgrade to Pro
+                              </button>{" "}
+                              for full history.
+                            </p>
+                          )}
+                          </>
                         )}
                         {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
@@ -6057,7 +6117,13 @@ export function BudgetWizard({
                   ) : (
                     <Button
                       size="lg"
-                      onClick={() => setIsSaveDialogOpen(true)}
+                      onClick={() => {
+                        if (!isPro && (savedBudgetsQuery.data?.budgets?.length ?? 0) >= 1) {
+                          setIsPlanComparisonOpen(true);
+                        } else {
+                          setIsSaveDialogOpen(true);
+                        }
+                      }}
                       className="flex-1 h-14 text-base rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all bg-gradient-to-r from-primary to-emerald-600 shadow-primary/25 hover:shadow-primary/30"
                     >
                       <Save className="w-5 h-5 mr-2" /> Save to Cloud
@@ -6489,7 +6555,7 @@ export function BudgetWizard({
               isPro={isPro}
               isSignedIn={isSignedIn}
               isGuest={isGuest}
-              onUpgrade={handleUpgradeToPro}
+              onUpgrade={() => setIsPlanComparisonOpen(true)}
             />
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
@@ -6838,28 +6904,16 @@ export function BudgetWizard({
                 </Button>
               )}
               <div className="ml-auto">
-                {isSignedIn && !isGuest && !isPro && bills.length >= FREE_PLAN_ITEM_LIMIT ? (
-                  <Button
-                    size="sm"
-                    onClick={handleUpgradeToPro}
-                    disabled={isUpgrading}
-                    className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
-                  >
-                    {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
-                    Upgrade for more bills
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setEditingBillInManagerIndex(null);
-                      setIsBillManagerFormOpen(true);
-                    }}
-                    className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Add Bill
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingBillInManagerIndex(null);
+                    setIsBillManagerFormOpen(true);
+                  }}
+                  className="rounded-xl bg-gradient-to-r from-emerald-500 to-green-600"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Add Bill
+                </Button>
               </div>
             </div>
 
@@ -7447,6 +7501,66 @@ export function BudgetWizard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ─── Plan Comparison / Upgrade Dialog ─── */}
+      <Dialog open={isPlanComparisonOpen} onOpenChange={setIsPlanComparisonOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white">
+            <div className="flex items-center gap-2 mb-1">
+              <Crown className="w-5 h-5" />
+              <DialogTitle className="text-xl font-bold text-white">Upgrade to Pro</DialogTitle>
+            </div>
+            <DialogDescription className="text-amber-100 text-sm">
+              Unlock everything Budgetor has to offer
+            </DialogDescription>
+          </div>
+
+          <div className="p-6">
+            <div className="rounded-xl border overflow-hidden text-sm">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left p-3 font-semibold">Feature</th>
+                    <th className="text-center p-3 font-semibold text-muted-foreground">Free</th>
+                    <th className="text-center p-3 font-semibold text-amber-700">Pro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    ["Bills & categories",   "Unlimited",  "Unlimited", false],
+                    ["Debts",                "Unlimited",  "Unlimited", false],
+                    ["Savings goals",        "3",          "Unlimited", false],
+                    ["Saved cloud budgets",  "1",          "Unlimited", false],
+                    ["Archive history",      "4 weeks",    "Unlimited", false],
+                    ["Google Sheets sync",   "—",          "✓",         true],
+                    ["Excel Online sync",    "—",          "✓",         true],
+                  ] as [string, string, string, boolean][]).map(([feature, free, pro, isCheck], i) => (
+                    <tr key={feature} className={i % 2 === 1 ? "bg-muted/20 border-t" : "border-t"}>
+                      <td className="p-3">{feature}</td>
+                      <td className="text-center p-3 text-muted-foreground">{free}</td>
+                      <td className={`text-center p-3 font-medium ${isCheck ? "text-green-600" : "text-amber-700"}`}>{pro}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 pb-6 gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setIsPlanComparisonOpen(false)}>
+              Maybe later
+            </Button>
+            <Button
+              onClick={() => { setIsPlanComparisonOpen(false); handleUpgradeToPro(); }}
+              disabled={isUpgrading}
+              className="bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+            >
+              {isUpgrading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Crown className="w-4 h-4 mr-1" />}
+              Upgrade to Pro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isSignedIn && (
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-border/50 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] flex items-stretch h-16 safe-area-bottom">

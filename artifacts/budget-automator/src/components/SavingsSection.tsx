@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   computeSavings,
   parseLabelDates,
@@ -245,7 +247,7 @@ export function SavingsSection({
           contributions={contributions}
           budgetId={budgetId}
           onAdd={(amount, date, note, goalName) =>
-            addMutation.mutateAsync({ billName: goalName, amount, date, note })
+            addMutation.mutateAsync({ billName: goalName, amount, date, note, isExtra: false })
           }
           onDeleteContrib={id => deleteMutation.mutateAsync(id)}
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
@@ -372,7 +374,7 @@ export function SavingsSection({
           contributions={contributions}
           budgetId={budgetId}
           onAdd={(amount, date, note, goalName) =>
-            addMutation.mutateAsync({ billName: goalName, amount, date, note })
+            addMutation.mutateAsync({ billName: goalName, amount, date, note, isExtra: false })
           }
           onDeleteContrib={id => deleteMutation.mutateAsync(id)}
           onCreate={payload => createGoalMutation.mutateAsync(payload)}
@@ -590,9 +592,14 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, showEx
         <div className="rounded-lg border divide-y text-xs overflow-hidden">
           {contributions.map(c => (
             <div key={c.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 flex items-center flex-wrap gap-x-1.5 gap-y-0.5">
                 <span className="font-semibold text-foreground">${fmt(c.amount)}</span>
-                <span className="text-muted-foreground mx-1.5">·</span>
+                {c.isExtra && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                    Extra
+                  </span>
+                )}
+                <span className="text-muted-foreground">·</span>
                 <span className="text-muted-foreground">{c.date}</span>
                 {c.isExtra && (
                   <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">extra</span>
@@ -625,9 +632,9 @@ interface SinkingCardProps {
 }
 
 function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete, onAddAsBill }: SinkingCardProps) {
-  const { bill, annualGoal, savedInCycle, manualInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining } = data;
+  const { bill, annualGoal, savedInCycle, manualInCycle, extraManualInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining } = data;
   const pct = Math.round(progressPct);
-  const totalSaved = savedInCycle + manualInCycle;
+  const totalSaved = savedInCycle + manualInCycle + extraManualInCycle;
   const isComplete = totalSaved >= annualGoal;
   const [addedToBills, setAddedToBills] = useState(false);
 
@@ -706,9 +713,10 @@ interface BalancedCardProps {
 }
 
 function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }: BalancedCardProps) {
-  const { bill, monthlyGoal, savedThisMonth, manualThisMonth, checkedInThisMonth, progressPct } = data;
+  const { bill, monthlyGoal, savedThisMonth, manualThisMonth, extraThisMonth, checkedInThisMonth, progressPct } = data;
   const pct = Math.round(progressPct);
-  const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
+  const regularSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
+  const totalSaved = regularSaved + extraThisMonth;
   const isComplete = totalSaved >= monthlyGoal;
 
   return (
@@ -726,7 +734,7 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Set aside this month</span>
-          <span className="font-semibold text-foreground">${fmt(totalSaved)}</span>
+          <span className="font-semibold text-foreground">${fmt(regularSaved)}</span>
         </div>
         {checkedInThisMonth > 0 && (
           <div className="flex items-center justify-between text-xs">
@@ -744,8 +752,14 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
         )}
         {manualThisMonth > 0 && (
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground ml-2">· Extra contributions</span>
+            <span className="text-muted-foreground ml-2">· Logged</span>
             <span className="text-muted-foreground">${fmt(manualThisMonth)}</span>
+          </div>
+        )}
+        {extraThisMonth > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-amber-600 ml-2">· Extra</span>
+            <span className="text-amber-600">${fmt(extraThisMonth)}</span>
           </div>
         )}
         <div className="flex items-center justify-between text-xs">
