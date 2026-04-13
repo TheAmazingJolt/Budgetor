@@ -402,49 +402,6 @@ function parseLabelDates(label: string): { start: Date; end: Date } | null {
   };
 }
 
-function weekOwnerMonth(start: Date): { year: number; month: number } {
-  return { year: start.getFullYear(), month: start.getMonth() };
-}
-
-function computePriorSavings(
-  balancedBills: Bill[],
-  contributions: { billName: string; amount: number; date: string }[],
-  checkins: import("@/components/CheckInDialog").WeeklyCheckIn[],
-  budgetStartDate: string,
-): Record<string, Record<string, number>> {
-  const result: Record<string, Record<string, number>> = {};
-  const start = new Date(budgetStartDate + "T00:00:00");
-  const startYear = start.getFullYear();
-  const startMonth = start.getMonth();
-  const mk = `${startYear}-${startMonth}`;
-  const balancedNames = new Set(balancedBills.filter((b) => b.type === "balanced").map((b) => b.name));
-
-  for (const c of contributions) {
-    if (!balancedNames.has(c.billName)) continue;
-    if ((c as any).isExtra) continue;
-    const cDate = new Date(c.date + "T00:00:00");
-    if (cDate.getFullYear() !== startYear || cDate.getMonth() !== startMonth) continue;
-    if (cDate >= start) continue;
-    if (!result[mk]) result[mk] = {};
-    result[mk][c.billName] = (result[mk][c.billName] ?? 0) + c.amount;
-  }
-
-  for (const ci of checkins) {
-    if (ci.itemType !== "balanced") continue;
-    if (!balancedNames.has(ci.itemName)) continue;
-    if (ci.actualAmount <= 0) continue;
-    const dates = parseLabelDates(ci.weekLabel);
-    if (!dates) continue;
-    if (dates.end >= start) continue;
-    const owner = weekOwnerMonth(dates.start);
-    if (owner.year !== startYear || owner.month !== startMonth) continue;
-    if (!result[mk]) result[mk] = {};
-    result[mk][ci.itemName] = (result[mk][ci.itemName] ?? 0) + ci.actualAmount;
-  }
-
-  return result;
-}
-
 interface BudgetWizardProps {
   currentUser: import("@workspace/api-client-react").AuthUser;
   isSignedIn: boolean;
