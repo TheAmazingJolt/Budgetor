@@ -10,6 +10,6 @@ RUN rm -rf artifacts/budget-automator/dist
 RUN NODE_ENV=production pnpm install --frozen-lockfile && pnpm --filter @workspace/budget-automator build
 EXPOSE 3000
 # We point to the actual path inside the monorepo
-CMD ["sh", "-c", "cd artifacts/budget-automator && pnpm vite preview --host 0.0.0.0"]
+CMD ["sh", "-c", "cd artifacts/budget-automator && pnpm vite preview --host 0.0.0.0 --port ${PORT:-3000}"]
 
 
