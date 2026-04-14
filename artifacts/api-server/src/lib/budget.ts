@@ -580,7 +580,12 @@ export function generateWeeklyBudgets(
       // rather than the entire month's obligation dumped into a single week.
       const fullPeriods = totalPeriodsInFullMonth[mk] ?? eligibleIndices.length;
       const monthFraction = payPeriod === "monthly" ? 1 : Math.min(1, eligibleIndices.length / fullPeriods);
-      const effectiveAmount = Math.min(0, (bill.amount + alreadySaved) * monthFraction);
+      // When prior savings exist, the saved amount already encodes which weeks are
+      // done — applying monthFraction on top would halve the remaining balance a
+      // second time.  Use the raw remaining amount in that case.
+      const effectiveAmount = Math.min(0, alreadySaved !== 0
+        ? (bill.amount + alreadySaved)
+        : (bill.amount * monthFraction));
 
       const baseTotals = eligibleIndices.map((idx) =>
         weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
@@ -640,7 +645,9 @@ export function generateWeeklyBudgets(
       const timedAlreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
       const timedFullPeriods = totalPeriodsInFullMonth[mk] ?? activeIndices.length;
       const timedMonthFraction = payPeriod === "monthly" ? 1 : Math.min(1, activeIndices.length / timedFullPeriods);
-      const timedEffectiveAmount = Math.min(0, (bill.amount + timedAlreadySaved) * timedMonthFraction);
+      const timedEffectiveAmount = Math.min(0, timedAlreadySaved !== 0
+        ? (bill.amount + timedAlreadySaved)
+        : (bill.amount * timedMonthFraction));
       const slotAmounts = equalizeAcrossSlots(baseTotals, timedEffectiveAmount);
 
       for (let a = 0; a < activeIndices.length; a++) {
@@ -674,13 +681,17 @@ export function generateWeeklyBudgets(
             const idx = monthWeekIndices[j];
             const residual = Math.round((targetAvg - allWeekTotals[j]) * 100) / 100;
             if (Math.abs(residual) < 0.005) continue;
-            // Find the existing partial entry for this bill and adjust it
+            // Find the existing partial entry for this bill and adjust it.
+            // Clamp to ≤ 0: a balanced bill can be reduced to zero but never
+            // flipped positive by the residual correction.
             const existingEntry = weeks[idx].largeBills.find(
               (lb) => lb.name === `Partial ${unconstrainedBill.name}`
             );
             if (existingEntry) {
-              existingEntry.amount = Math.round((existingEntry.amount + residual) * 100) / 100;
-            } else {
+              existingEntry.amount = Math.min(0, Math.round((existingEntry.amount + residual) * 100) / 100);
+            } else if (residual < 0) {
+              // Only create a new entry when the residual is negative (adds expense).
+              // A positive residual with no existing entry means nothing to reduce.
               weeks[idx].largeBills.push({
                 name: `Partial ${unconstrainedBill.name}`,
                 amount: residual,

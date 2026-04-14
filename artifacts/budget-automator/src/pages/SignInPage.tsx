@@ -607,7 +607,7 @@ export function SignInPage({
           </div>
           <span className="font-semibold text-foreground">Budgify</span>
         </div>
-        <span>© {new Date().getFullYear()} Budgify. All rights reserved.</span>
+        <span>© {new Date().getFullYear()} Budgify. All rights reserved.{import.meta.env.VITE_BUILD_TIME ? ` · Build: ${import.meta.env.VITE_BUILD_TIME}` : ""}</span>
         <div className="flex gap-4">
           <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
           <a href="#" className="hover:text-foreground transition-colors">Terms</a>
