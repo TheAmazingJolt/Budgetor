@@ -130,6 +130,8 @@ export function generateWeeklyBudgets(
   const balancedBills = bills.filter((b) => b.type === "balanced");
   const fixedBills = bills.filter((b) => b.type === "fixed");
   const weeklyBills = bills.filter((b) => b.type === "weekly");
+  const equalizedWeeklyBills = weeklyBills.filter((b) => b.monthlyBalance);
+  const trueFixedWeeklyBills = weeklyBills.filter((b) => !b.monthlyBalance);
   const biweeklyBills = bills.filter((b) => b.type === "biweekly");
   const yearlyBills = bills.filter((b) => b.type === "yearly");
   const yearlyFlatBills = bills.filter((b) => b.type === "yearly-flat");
@@ -284,7 +286,7 @@ export function generateWeeklyBudgets(
   }
 
   // ── Add weekly bills to every period ────────────────────────────────────
-  for (const bill of weeklyBills) {
+  for (const bill of trueFixedWeeklyBills) {
     const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
     const billStartDate = bill.startDate
       ? new Date(bill.startDate + "T00:00:00")
@@ -394,65 +396,6 @@ export function generateWeeklyBudgets(
     }
   }
 
-  // ── Add yearly (sinking fund) bills ─────────────────────────────────────
-  // Each yearly bill contributes a fixed weekly amount (annual / weeksUntilDue)
-  // to every period up to the annual due date. After the due date passes, the
-  // next cycle's weeksUntilDue is recomputed from that week's start date.
-  for (const bill of yearlyBills) {
-    const dueMonth = bill.annualDueMonth ?? 1;
-    const dueDay = bill.dayOfMonth ?? 1;
-    const annualAbs = Math.abs(bill.amount);
-    const monthShort = MONTH_SHORT[(dueMonth - 1) % 12];
-    const label = `${bill.name} [annual: ${fmtAnnualAmount(annualAbs)}/yr → ${monthShort} ${dueDay}]`;
-    const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
-
-    let currentCycleDueDate = getNextYearlyDueDate(startDate, dueMonth, dueDay);
-    let currentCycleWeeks = Math.max(1, Math.ceil(
-      (currentCycleDueDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
-    ));
-    let weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
-
-    for (let i = 0; i < weeks.length; i++) {
-      const weekStart = weeks[i].start;
-      if (billPayoffDate && weekStart >= billPayoffDate) continue;
-
-      if (payPeriod === "weekly") {
-        // Update cycle before adding contribution
-        if (weekStart >= currentCycleDueDate) {
-          currentCycleDueDate = getNextYearlyDueDate(weekStart, dueMonth, dueDay);
-          currentCycleWeeks = Math.max(1, Math.ceil(
-            (currentCycleDueDate.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
-          ));
-          weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
-        }
-        weeks[i].fixedWeeklyBills.push({ name: label, amount: weeklyContrib, color: bill.color });
-      } else {
-        // For biweekly/monthly periods, iterate chunk-by-chunk so cycle resets
-        // correctly when the due date falls inside the period.
-        const periodEnd = weeks[i].end;
-        const diffDays = Math.round((periodEnd.getTime() - weekStart.getTime()) / 86400000) + 1;
-        const occurrences = Math.max(1, Math.ceil(diffDays / 7));
-        for (let o = 0; o < occurrences; o++) {
-          const chunkStart = addDays(weekStart, o * 7);
-          if (billPayoffDate && chunkStart >= billPayoffDate) break;
-          // Reset cycle if this chunk starts on or after current due date
-          if (chunkStart >= currentCycleDueDate) {
-            currentCycleDueDate = getNextYearlyDueDate(chunkStart, dueMonth, dueDay);
-            currentCycleWeeks = Math.max(1, Math.ceil(
-              (currentCycleDueDate.getTime() - chunkStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
-            ));
-            weeklyContrib = Math.round((-annualAbs / currentCycleWeeks) * 100) / 100;
-          }
-          weeks[i].fixedWeeklyBills.push({
-            name: occurrences > 1 ? `${label} (wk ${o + 1})` : label,
-            amount: weeklyContrib,
-            color: bill.color,
-          });
-        }
-      }
-    }
-  }
-
   // ── Add yearly-flat bills (once-per-year lump sum on the due date) ─────────
   // Places the full bill amount in the single week the due date falls within.
   for (const bill of yearlyFlatBills) {
@@ -543,6 +486,83 @@ export function generateWeeklyBudgets(
     // Each bill is then distributed individually, only across weeks that
     // start before the bill's payoff date (week.start < payoffDate).
     for (const idx of monthWeekIndices) weeks[idx].largeBills = [];
+
+    // ── Section A: Equalized weekly bills (savings goals + lump-sum debts) ──
+    // Bills with monthlyBalance=true are spread across weeks in the month so
+    // that each week bears a fair share instead of the same flat amount.
+    for (const bill of equalizedWeeklyBills) {
+      const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+      const billStartDate  = bill.startDate  ? new Date(bill.startDate + "T00:00:00") : null;
+      const eligible = monthWeekIndices.filter(idx => {
+        const w = weeks[idx];
+        if (billPayoffDate && w.start >= billPayoffDate) return false;
+        if (billStartDate  && w.start <  billStartDate)  return false;
+        return true;
+      });
+      if (eligible.length === 0) continue;
+
+      // effectiveAmount = bill.amount × eligible.length (simplified from
+      // monthlyTotal × monthFraction where fullPeriods cancels out)
+      const effectiveAmount = Math.min(0, bill.amount * eligible.length);
+      if (effectiveAmount >= -0.005) continue;
+
+      const baseTotals = eligible.map(idx =>
+        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+        weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
+      );
+      const slotAmounts = equalizeAcrossSlots(baseTotals, effectiveAmount);
+      for (let j = 0; j < eligible.length; j++) {
+        const amt = Math.round(slotAmounts[j] * 100) / 100;
+        if (Math.abs(amt) >= 0.005) {
+          weeks[eligible[j]].largeBills.push({
+            name: bill.name,
+            amount: amt,
+            color: bill.sourceDebtId ? undefined : bill.color,
+          });
+        }
+      }
+    }
+
+    // ── Section B: Yearly sinking funds (equalized per month) ───────────────
+    // Instead of pushing the same flat weekly contribution every period, compute
+    // the month's total contribution and distribute it via equalizeAcrossSlots.
+    for (const bill of yearlyBills) {
+      const dueMonth = bill.annualDueMonth ?? 1;
+      const dueDay   = bill.dayOfMonth ?? 1;
+      const annualAbs = Math.abs(bill.amount);
+      const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
+
+      const eligible = monthWeekIndices.filter(idx =>
+        !(billPayoffDate && weeks[idx].start >= billPayoffDate)
+      );
+      if (eligible.length === 0) continue;
+
+      // Use the first eligible week's start date to determine the current cycle
+      const firstStart = weeks[eligible[0]].start;
+      const cycleDue   = getNextYearlyDueDate(firstStart, dueMonth, dueDay);
+      const cycleWeeks = Math.max(1, Math.ceil(
+        (cycleDue.getTime() - firstStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
+      ));
+      const weeklyContrib = -(annualAbs / cycleWeeks); // negative, exact (rounded below)
+
+      const effectiveAmount = Math.min(0, weeklyContrib * eligible.length);
+      if (effectiveAmount >= -0.005) continue;
+
+      const monthShort = MONTH_SHORT[(dueMonth - 1) % 12];
+      const label = `${bill.name} [annual: ${fmtAnnualAmount(annualAbs)}/yr → ${monthShort} ${dueDay}]`;
+
+      const baseTotals = eligible.map(idx =>
+        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+        weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
+      );
+      const slotAmounts = equalizeAcrossSlots(baseTotals, effectiveAmount);
+      for (let j = 0; j < eligible.length; j++) {
+        const amt = Math.round(slotAmounts[j] * 100) / 100;
+        if (Math.abs(amt) >= 0.005) {
+          weeks[eligible[j]].largeBills.push({ name: label, amount: amt, color: bill.color });
+        }
+      }
+    }
 
     for (const bill of alwaysBills) {
       if (Math.abs(bill.amount) < 0.005) continue;

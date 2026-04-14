@@ -118,6 +118,12 @@ export const GenerateBudgetBody = zod.object({
         .describe(
           "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
         ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
+        ),
     }),
   ),
   priorSavings: zod
@@ -517,6 +523,18 @@ export const SavedBudgetListResponse = zod.object({
               .describe(
                 "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
               ),
+            startDate: zod
+              .string()
+              .nullish()
+              .describe(
+                "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+              ),
+            anchorDate: zod
+              .string()
+              .nullish()
+              .describe(
+                "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+              ),
           }),
         )
         .optional(),
@@ -654,6 +672,18 @@ export const SavedBudgetCreateBody = zod.object({
           .describe(
             "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+          ),
       }),
     )
     .optional(),
@@ -752,6 +782,18 @@ export const SavedBudgetCreateResponse = zod.object({
             .nullish()
             .describe(
               "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+            ),
+          startDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+            ),
+          anchorDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
             ),
         }),
       )
@@ -893,6 +935,18 @@ export const SavedBudgetUpdateBody = zod.object({
           .describe(
             "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+          ),
       }),
     )
     .optional(),
@@ -1025,6 +1079,18 @@ export const SavedBudgetUpdateResponse = zod.object({
             .nullish()
             .describe(
               "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+            ),
+          startDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+            ),
+          anchorDate: zod
+            .string()
+            .nullish()
+            .describe(
+              "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
             ),
         }),
       )
@@ -1188,6 +1254,18 @@ export const SheetReadResponse = zod.object({
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -1272,6 +1350,18 @@ export const SheetReadByUrlResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
         ),
     }),
   ),
@@ -1401,6 +1491,18 @@ export const SheetWriteBody = zod.object({
           .describe(
             "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
           ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+          ),
+        monthlyBalance: zod
+          .boolean()
+          .optional()
+          .describe(
+            "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
+          ),
       }),
     )
     .optional(),
@@ -1489,6 +1591,18 @@ export const SheetWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+          ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
           ),
       }),
     )
@@ -1653,6 +1767,18 @@ export const SheetCreateAndWriteBody = zod.object({
           .describe(
             "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+          ),
       }),
     )
     .optional(),
@@ -1715,6 +1841,18 @@ export const SheetCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+          ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+          ),
+        monthlyBalance: zod
+          .boolean()
+          .optional()
+          .describe(
+            "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
           ),
       }),
     )
@@ -1834,6 +1972,18 @@ export const ExcelReadResponse = zod.object({
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
+        ),
     }),
   ),
   existingWeeks: zod.array(
@@ -1918,6 +2068,18 @@ export const ExcelReadByUrlResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
         ),
     }),
   ),
@@ -2073,6 +2235,18 @@ export const ExcelWriteBody = zod.object({
           .describe(
             "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+          ),
       }),
     )
     .optional(),
@@ -2135,6 +2309,18 @@ export const ExcelWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+          ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+          ),
+        monthlyBalance: zod
+          .boolean()
+          .optional()
+          .describe(
+            "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
           ),
       }),
     )
@@ -2298,6 +2484,18 @@ export const ExcelCreateAndWriteBody = zod.object({
           .describe(
             "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
           ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+          ),
+        anchorDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+          ),
       }),
     )
     .optional(),
@@ -2360,6 +2558,18 @@ export const ExcelCreateAndWriteBody = zod.object({
           .nullish()
           .describe(
             "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+          ),
+        startDate: zod
+          .string()
+          .nullish()
+          .describe(
+            "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+          ),
+        monthlyBalance: zod
+          .boolean()
+          .optional()
+          .describe(
+            "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
           ),
       }),
     )
@@ -2459,6 +2669,18 @@ export const GetUserBillsResponse = zod.object({
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
+        ),
     }),
   ),
 });
@@ -2527,6 +2749,18 @@ export const UpdateUserBillsBody = zod.object({
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
+        ),
     }),
   ),
 });
@@ -2590,6 +2824,18 @@ export const UpdateUserBillsResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string of the most recent due date for biweekly bills (anchor for scheduling)",
+        ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)",
+        ),
+      monthlyBalance: zod
+        .boolean()
+        .optional()
+        .describe(
+          "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
         ),
     }),
   ),
@@ -2682,6 +2928,18 @@ export const GetUserDebtsResponse = zod.object({
         .describe(
           "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+        ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+        ),
     }),
   ),
 });
@@ -2773,6 +3031,18 @@ export const UpdateUserDebtsBody = zod.object({
         .describe(
           "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
         ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+        ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
+        ),
     }),
   ),
 });
@@ -2859,6 +3129,18 @@ export const UpdateUserDebtsResponse = zod.object({
         .nullish()
         .describe(
           "ISO date string for the payment due date (used by lump_sum debts as the single payoff date).",
+        ),
+      startDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted).",
+        ),
+      anchorDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).",
         ),
     }),
   ),

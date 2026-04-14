@@ -68,6 +68,8 @@ export interface Bill {
    * @nullable
    */
   startDate?: string | null;
+  /** When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts. */
+  monthlyBalance?: boolean;
 }
 
 export interface WeeklyBill {
@@ -303,10 +305,7 @@ export interface Debt {
   dueDate?: string | null;
   /** ISO date string of the first week this lump-sum debt should begin being set aside (defaults to the current week if omitted). */
   startDate?: string | null;
-  /**
-   * ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill).
-   * @nullable
-   */
+  /** ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill). */
   anchorDate?: string | null;
 }
 

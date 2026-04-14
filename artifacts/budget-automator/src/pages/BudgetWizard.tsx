@@ -620,6 +620,7 @@ function computeSavingsGoalBills(
       color: "teal",
       sourceGoalId: g.id,
       payoffDate: g.targetDate,
+      monthlyBalance: true,
     });
   }
   return result;
@@ -651,6 +652,7 @@ function computeLumpSumDebtBills(
       color: "red",
       sourceDebtId: d.id,
       payoffDate: d.dueDate,
+      monthlyBalance: true,
       ...(parsedStartDate && parsedStartDate > now ? { startDate: d.startDate } : {}),
     });
   }

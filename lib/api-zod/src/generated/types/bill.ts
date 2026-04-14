@@ -48,4 +48,6 @@ export interface Bill {
    * @nullable
    */
   startDate?: string | null;
+  /** When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts. */
+  monthlyBalance?: boolean;
 }

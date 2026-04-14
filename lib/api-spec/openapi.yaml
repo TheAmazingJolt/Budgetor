@@ -1008,6 +1008,9 @@ components:
         startDate:
           type: ["string", "null"]
           description: ISO date string before which this bill should not appear (used for lump-sum debts that start in a future week)
+        monthlyBalance:
+          type: boolean
+          description: When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.
       required:
         - name
         - amount
