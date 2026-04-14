@@ -654,13 +654,17 @@ export function generateWeeklyBudgets(
             const idx = monthWeekIndices[j];
             const residual = Math.round((targetAvg - allWeekTotals[j]) * 100) / 100;
             if (Math.abs(residual) < 0.005) continue;
-            // Find the existing partial entry for this bill and adjust it
+            // Find the existing partial entry for this bill and adjust it.
+            // Clamp to ≤ 0: a balanced bill can be reduced to zero but never
+            // flipped positive by the residual correction.
             const existingEntry = weeks[idx].largeBills.find(
               (lb) => lb.name === `Partial ${unconstrainedBill.name}`
             );
             if (existingEntry) {
-              existingEntry.amount = Math.round((existingEntry.amount + residual) * 100) / 100;
-            } else {
+              existingEntry.amount = Math.min(0, Math.round((existingEntry.amount + residual) * 100) / 100);
+            } else if (residual < 0) {
+              // Only create a new entry when the residual is negative (adds expense).
+              // A positive residual with no existing entry means nothing to reduce.
               weeks[idx].largeBills.push({
                 name: `Partial ${unconstrainedBill.name}`,
                 amount: residual,

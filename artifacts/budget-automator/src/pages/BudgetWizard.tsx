@@ -551,7 +551,7 @@ type ExistingWeekLike = {
 
 function computeSavingsGoalBills(
   goals: Array<{ id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }>,
-  contributions: Array<{ billName: string; amount: number; note?: string | null }>,
+  contributions: Array<{ billName: string; amount: number; note?: string | null; isExtra?: boolean }>,
   existingWeeks?: ExistingWeekLike[],
   checkins?: Array<{ weekLabel: string; itemName: string; itemType?: string; actualAmount: number }>,
 ): Bill[] {
@@ -564,10 +564,11 @@ function computeSavingsGoalBills(
     if (targetDate <= today) continue;
 
     // Contributions already include goal check-in amounts (the API writes check-ins
-    // to savings_contributions with note="checkin:<weekLabel>"). So summing all
-    // contributions for this goal gives us manual + check-in amounts together.
+    // to savings_contributions with note="checkin:<weekLabel>"). Extra payments are
+    // excluded so they don't reduce the planned weekly allocation — they're tracked
+    // separately in the savings tab.
     const contributionSaved = contributions
-      .filter(c => c.billName === g.name)
+      .filter(c => c.billName === g.name && !c.isExtra)
       .reduce((sum, c) => sum + c.amount, 0);
 
     // Build a set of week labels that already have a contribution record (so we don't
@@ -1085,6 +1086,7 @@ export function BudgetWizard({
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
   const [step2Tab, setStep2Tab] = useState<"budget" | "savings" | "archive">("budget");
+  const budgetViewRef = useRef<HTMLDivElement>(null);
   const [pastWeeks, setPastWeeks] = useState<UnifiedWeek[]>([]);
   const [totalPastWeeksCount, setTotalPastWeeksCount] = useState(0);
   const archiveToastFiredRef = useRef<string>("");
@@ -5395,7 +5397,7 @@ export function BudgetWizard({
                     )}
 
                     {(allWeeks.length > 0 || pastWeeks.length > 0) && (
-                      <div className="space-y-3">
+                      <div className="space-y-3" ref={budgetViewRef}>
                         <div className="flex flex-wrap items-center gap-2">
                           <Eye className="w-4 h-4 text-muted-foreground" />
                           <h3 className="text-lg font-semibold text-foreground">
@@ -5405,7 +5407,7 @@ export function BudgetWizard({
                           <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5 shrink-0">
                             <button
                               type="button"
-                              onClick={() => setStep2Tab("budget")}
+                              onClick={() => { setStep2Tab("budget"); setTimeout(() => budgetViewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
                               className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "budget" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                             >
                               Budget
@@ -5413,7 +5415,7 @@ export function BudgetWizard({
                             {!(inputMode === "scratch" && !activeCloudBudgetId) && (
                               <button
                                 type="button"
-                                onClick={() => setStep2Tab("savings")}
+                                onClick={() => { setStep2Tab("savings"); setTimeout(() => budgetViewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
                                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "savings" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                               >
                                 Savings
@@ -5422,7 +5424,7 @@ export function BudgetWizard({
                             {pastWeeks.length > 0 && (
                               <button
                                 type="button"
-                                onClick={() => setStep2Tab("archive")}
+                                onClick={() => { setStep2Tab("archive"); setTimeout(() => budgetViewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
                                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${step2Tab === "archive" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                               >
                                 Archive
