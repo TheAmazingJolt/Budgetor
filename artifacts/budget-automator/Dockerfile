@@ -6,6 +6,7 @@ ENV PORT=3000
 ENV BASE_PATH=/
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+RUN rm -rf artifacts/budget-automator/dist
 RUN NODE_ENV=production pnpm install --frozen-lockfile && pnpm --filter @workspace/budget-automator build
 EXPOSE 3000
 # We point to the actual path inside the monorepo

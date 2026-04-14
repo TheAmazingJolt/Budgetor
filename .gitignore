@@ -2,11 +2,6 @@
 
 # compiled output
 dist
-!artifacts/api-server/dist/
-!artifacts/api-server/dist/index.cjs
-!artifacts/budget-automator/dist/
-!artifacts/budget-automator/dist/public/
-!artifacts/budget-automator/dist/public/**
 tmp
 out-tsc
 *.tsbuildinfo
