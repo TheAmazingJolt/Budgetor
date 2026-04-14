@@ -8,4 +8,6 @@ ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN NODE_ENV=production pnpm install --frozen-lockfile && pnpm --filter @workspace/budget-automator build
 EXPOSE 3000
-CMD ["sh", "-c", "ls -R /app/dist && pnpm --filter @workspace/budget-automator serve"]
+# We point to the actual path inside the monorepo
+CMD ["sh", "-c", "pnpm --filter @workspace/budget-automator serve --dir artifacts/budget-automator/dist"]
+
