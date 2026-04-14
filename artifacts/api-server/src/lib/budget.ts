@@ -242,20 +242,35 @@ export function generateWeeklyBudgets(
 
   // ── Total periods a full calendar month would contain ───────────────────
   // Used to pro-rate balanced bills when the user generates fewer weeks than
-  // the full month. E.g. generating 1 week of a 5-week month gives 1/5 of the
-  // monthly bill instead of the whole amount.
+  // the full month.  We count ACTUAL anchor-aligned pay dates within the
+  // calendar month (based on startDate as anchor) rather than using
+  // ceil(daysInMonth / daysPerPeriod), which over-counts for months like May
+  // when the anchor date is late enough that only 4 Mondays fall within the
+  // month even though ceil(31/7) = 5.
   // For monthly pay periods this is always 1 (no scaling needed).
   const totalPeriodsInFullMonth: Record<string, number> = {};
   for (const mk of monthsInRange) {
     const [yearStr, monthStr] = mk.split("-");
     const yr = parseInt(yearStr);
     const mo = parseInt(monthStr);
-    const daysInMonth = new Date(yr, mo + 1, 0).getDate();
     if (payPeriod === "monthly") {
       totalPeriodsInFullMonth[mk] = 1;
     } else {
-      const daysPerPeriod = payPeriod === "biweekly" ? 14 : 7;
-      totalPeriodsInFullMonth[mk] = Math.ceil(daysInMonth / daysPerPeriod);
+      const dpp = payPeriod === "biweekly" ? 14 : 7;
+      const monthStart = new Date(yr, mo, 1);
+      const monthEnd   = new Date(yr, mo + 1, 0);
+      // Find first anchor-aligned date on or after monthStart
+      const msDiff  = monthStart.getTime() - startDate.getTime();
+      const daysDiff = msDiff / (24 * 60 * 60 * 1000);
+      let firstInMonth = addDays(startDate, Math.ceil(daysDiff / dpp) * dpp);
+      // DST guard: nudge forward/backward one period if needed
+      while (firstInMonth < monthStart) firstInMonth = addDays(firstInMonth, dpp);
+      while (addDays(firstInMonth, -dpp) >= monthStart) firstInMonth = addDays(firstInMonth, -dpp);
+      // Count all anchor-aligned pay dates within [monthStart, monthEnd]
+      let count = 0;
+      let d = new Date(firstInMonth);
+      while (d <= monthEnd) { count++; d = addDays(d, dpp); }
+      totalPeriodsInFullMonth[mk] = Math.max(1, count);
     }
   }
 
