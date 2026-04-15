@@ -767,26 +767,29 @@ export function generateWeeklyBudgets(
     }
   }
 
-  function weeklyBillSortKey(wb: WeeklyBill): [number, number, string] {
+  // Returns [group, subgroup, partialPriority, name]
+  // partialPriority 0 = "Partial …" entry → sorts before non-Partial siblings (1)
+  function weeklyBillSortKey(wb: WeeklyBill): [number, number, number, string] {
     const name = wb.name;
     // "Partial BillName" — look up the base name
     if (name.startsWith("Partial ")) {
       const base = name.slice(8);
       const meta = billMeta.get(base);
-      if (meta) return [meta[0], meta[1], base.toLowerCase()];
-      return [0, 0, base.toLowerCase()];
+      if (meta) return [meta[0], meta[1], 0, base.toLowerCase()];
+      return [0, 0, 0, base.toLowerCase()];
     }
-    // "BillName [annual: ...]" — yearly sinking fund
+    // "BillName [annual: ...]" — yearly sinking fund; stays in balanced-expense group
+    // but after "Partial" entries (partialPriority = 1)
     if (name.includes("[annual: ")) {
       const base = name.replace(/\s*\[annual:.*$/, "");
-      return [0, 0, base.toLowerCase()];
+      return [0, 0, 1, base.toLowerCase()];
     }
     // Exact name lookup (savings goals, lump-sum debts, fixed bills)
     const meta = billMeta.get(name);
-    if (meta) return [meta[0], meta[1], name.toLowerCase()];
+    if (meta) return [meta[0], meta[1], 1, name.toLowerCase()];
     // Fallback: savings goal pattern "[→ "
-    if (name.includes("[→ ")) return [0, 2, name.toLowerCase()];
-    return [2, 0, name.toLowerCase()];
+    if (name.includes("[→ ")) return [0, 2, 1, name.toLowerCase()];
+    return [2, 0, 1, name.toLowerCase()];
   }
 
   // ── Build WeeklyBudget objects ─────────────────────────────────────────
@@ -795,10 +798,11 @@ export function generateWeeklyBudgets(
   for (let i = 0; i < weeks.length; i++) {
     const { start, end, largeBills, fixedWeeklyBills, paycheck, paycheckBreakdown } = weeks[i];
     const allBills = [...largeBills, ...fixedWeeklyBills].sort((a, b) => {
-      const [ag, as2, an] = weeklyBillSortKey(a);
-      const [bg, bs2, bn] = weeklyBillSortKey(b);
+      const [ag, as2, ap, an] = weeklyBillSortKey(a);
+      const [bg, bs2, bp, bn] = weeklyBillSortKey(b);
       if (ag !== bg) return ag - bg;
       if (as2 !== bs2) return as2 - bs2;
+      if (ap !== bp) return ap - bp;
       return an.localeCompare(bn);
     });
     const totalBills = allBills.reduce((s, b) => s + b.amount, 0);

@@ -3303,11 +3303,14 @@ export function BudgetWizard({
         description: `${weeksToWrite.length} budget weeks written to "${selectedSheetName}".`,
       });
     } catch (err) {
-      toast({
-        title: "Failed to write to sheet",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      const isGoogleAuthErr = msg.toLowerCase().includes("authorization has expired") || msg.toLowerCase().includes("reconnect google");
+      if (isGoogleAuthErr) {
+        toast({ title: "Google Sheets: reconnect needed", description: "Your Google authorization has expired. Reconnecting…", variant: "destructive" });
+        handleConnectGoogle();
+      } else {
+        toast({ title: "Failed to write to sheet", description: msg, variant: "destructive" });
+      }
     } finally {
       setIsWritingToSheet(false);
     }
@@ -3657,11 +3660,22 @@ export function BudgetWizard({
         description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to ${names}.`,
       });
     } catch (err) {
-      toast({
-        title: "Update failed",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      const isGoogleAuthErr = msg.toLowerCase().includes("authorization has expired") || msg.toLowerCase().includes("reconnect google");
+      if (isGoogleAuthErr) {
+        toast({
+          title: "Google Sheets: reconnect needed",
+          description: "Your Google authorization has expired. Reconnecting…",
+          variant: "destructive",
+        });
+        handleConnectGoogle();
+      } else {
+        toast({
+          title: "Update failed",
+          description: msg,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsUpdatingSheetsSync(false);
       setIsUpdatingExcelSync(false);
@@ -3860,7 +3874,7 @@ export function BudgetWizard({
   const canGenerate = (bills.length > 0 || hasActiveLumpSumDebts) && !generateMutation.isPending;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <button

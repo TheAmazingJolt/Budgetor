@@ -2500,9 +2500,17 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
 
     res.json({ spreadsheetId, spreadsheetUrl });
   } catch (err: any) {
-    if (err.code === 401) {
+    const isAuthErr = err.code === 401 || err.message === "invalid_grant" || err.message?.includes("invalid_grant");
+    if (isAuthErr) {
       req.session.googleTokens = undefined;
-      res.status(401).json({ error: "Google session expired. Please reconnect." });
+      const uid = (req as any).user?.id;
+      if (uid) {
+        db.update(usersTable)
+          .set({ googleAccessToken: null, googleRefreshToken: null, googleTokenExpiry: null, updatedAt: new Date() } as any)
+          .where(eq(usersTable.id, uid))
+          .catch((e: Error) => console.error("[sheets/create] clear tokens failed:", e.message));
+      }
+      res.status(401).json({ error: "Google authorization has expired. Please reconnect Google Sheets in your account settings.", authRequired: true });
       return;
     }
     res.status(500).json({
@@ -2655,9 +2663,18 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
     clearTimeout(timeout);
     console.log("[sheets/write] ERROR:", err?.code, err?.message);
     if (res.headersSent) return;
-    if (err.code === 401) {
+    const isAuthErr = err.code === 401 || err.message === "invalid_grant" || err.message?.includes("invalid_grant");
+    if (isAuthErr) {
       req.session.googleTokens = undefined;
-      res.status(401).json({ error: "Google session expired. Please reconnect." });
+      // Clear persisted tokens so the user isn't silently retried forever
+      const uid = (req as any).user?.id;
+      if (uid) {
+        db.update(usersTable)
+          .set({ googleAccessToken: null, googleRefreshToken: null, googleTokenExpiry: null, updatedAt: new Date() } as any)
+          .where(eq(usersTable.id, uid))
+          .catch((e: Error) => console.error("[sheets/write] clear tokens failed:", e.message));
+      }
+      res.status(401).json({ error: "Google authorization has expired. Please reconnect Google Sheets in your account settings.", authRequired: true });
       return;
     }
     res.status(500).json({
