@@ -249,12 +249,18 @@ export function generateWeeklyBudgets(
   // month even though ceil(31/7) = 5.
   // For monthly pay periods this is always 1 (no scaling needed).
   const totalPeriodsInFullMonth: Record<string, number> = {};
+  // Anchor-aligned pay periods in a month that start BEFORE startDate (already
+  // elapsed without being part of the generation window).  When this is > 0 the
+  // user is generating the remaining weeks of the current month; the monthly
+  // obligation must be spread across the remaining periods, not pro-rated down.
+  const pastPeriodsInMonth: Record<string, number> = {};
   for (const mk of monthsInRange) {
     const [yearStr, monthStr] = mk.split("-");
     const yr = parseInt(yearStr);
     const mo = parseInt(monthStr);
     if (payPeriod === "monthly") {
       totalPeriodsInFullMonth[mk] = 1;
+      pastPeriodsInMonth[mk] = 0;
     } else {
       const dpp = payPeriod === "biweekly" ? 14 : 7;
       const monthStart = new Date(yr, mo, 1);
@@ -271,6 +277,11 @@ export function generateWeeklyBudgets(
       let d = new Date(firstInMonth);
       while (d <= monthEnd) { count++; d = addDays(d, dpp); }
       totalPeriodsInFullMonth[mk] = Math.max(1, count);
+      // Count periods that fall BEFORE the generation window (startDate)
+      let past = 0;
+      let pd = new Date(firstInMonth);
+      while (pd < startDate && pd <= monthEnd) { past++; pd = addDays(pd, dpp); }
+      pastPeriodsInMonth[mk] = past;
     }
   }
 
@@ -594,7 +605,12 @@ export function generateWeeklyBudgets(
       // = 1/5 of the monthly amount, so the user sees a realistic per-week figure
       // rather than the entire month's obligation dumped into a single week.
       const fullPeriods = totalPeriodsInFullMonth[mk] ?? eligibleIndices.length;
-      const monthFraction = payPeriod === "monthly" ? 1 : Math.min(1, eligibleIndices.length / fullPeriods);
+      // If some anchor-aligned periods in this month have already elapsed (pastPeriods > 0),
+      // the user is generating the remainder of the current month.  The full monthly obligation
+      // should spread across the *remaining* periods, not be shrunk by the missing ones.
+      const pastPeriods = pastPeriodsInMonth[mk] ?? 0;
+      const remainingPeriods = Math.max(1, fullPeriods - pastPeriods);
+      const monthFraction = payPeriod === "monthly" ? 1 : Math.min(1, eligibleIndices.length / remainingPeriods);
       // When prior savings exist, the saved amount already encodes which weeks are
       // done — applying monthFraction on top would halve the remaining balance a
       // second time.  Use the raw remaining amount in that case.
@@ -659,7 +675,9 @@ export function generateWeeklyBudgets(
 
       const timedAlreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
       const timedFullPeriods = totalPeriodsInFullMonth[mk] ?? activeIndices.length;
-      const timedMonthFraction = payPeriod === "monthly" ? 1 : Math.min(1, activeIndices.length / timedFullPeriods);
+      const timedPastPeriods = pastPeriodsInMonth[mk] ?? 0;
+      const timedRemainingPeriods = Math.max(1, timedFullPeriods - timedPastPeriods);
+      const timedMonthFraction = payPeriod === "monthly" ? 1 : Math.min(1, activeIndices.length / timedRemainingPeriods);
       const timedEffectiveAmount = Math.min(0, timedAlreadySaved !== 0
         ? (bill.amount + timedAlreadySaved)
         : (bill.amount * timedMonthFraction));
@@ -719,12 +737,70 @@ export function generateWeeklyBudgets(
     }
   }
 
+  // ── Build bill metadata map for display sort order ──────────────────────
+  // Sort key: [group, subgroup, name]
+  //   group 0 = balanced/equalized (displayed first)
+  //     subgroup 0 = expense bills
+  //     subgroup 1 = debt-related balanced bills + lump-sum debts
+  //     subgroup 2 = savings goals
+  //   group 1 = min-payment / fixed debts
+  //   group 2 = generic bills
+  const billMeta = new Map<string, [number, number]>();
+  for (const b of bills) {
+    const cat = (b.category ?? "").toLowerCase();
+    const isDebt = !!b.sourceDebtId || cat.includes("debt");
+    const isSavings = !!b.sourceGoalId || cat.includes("saving");
+    if (b.type === "balanced") {
+      if (isSavings) billMeta.set(b.name, [0, 2]);
+      else if (isDebt) billMeta.set(b.name, [0, 1]);
+      else billMeta.set(b.name, [0, 0]);
+    } else if (b.type === "yearly") {
+      billMeta.set(b.name, [0, 0]); // yearly sinking funds — equalized like balanced
+    } else if (b.monthlyBalance) {
+      // Equalized weekly bills (savings goals, lump-sum debts)
+      if (isSavings) billMeta.set(b.name, [0, 2]);
+      else billMeta.set(b.name, [0, 1]); // lump-sum debts go in debt subgroup
+    } else if (isDebt) {
+      billMeta.set(b.name, [1, 0]); // min-payment debt
+    } else {
+      billMeta.set(b.name, [2, 0]); // generic bill
+    }
+  }
+
+  function weeklyBillSortKey(wb: WeeklyBill): [number, number, string] {
+    const name = wb.name;
+    // "Partial BillName" — look up the base name
+    if (name.startsWith("Partial ")) {
+      const base = name.slice(8);
+      const meta = billMeta.get(base);
+      if (meta) return [meta[0], meta[1], base.toLowerCase()];
+      return [0, 0, base.toLowerCase()];
+    }
+    // "BillName [annual: ...]" — yearly sinking fund
+    if (name.includes("[annual: ")) {
+      const base = name.replace(/\s*\[annual:.*$/, "");
+      return [0, 0, base.toLowerCase()];
+    }
+    // Exact name lookup (savings goals, lump-sum debts, fixed bills)
+    const meta = billMeta.get(name);
+    if (meta) return [meta[0], meta[1], name.toLowerCase()];
+    // Fallback: savings goal pattern "[→ "
+    if (name.includes("[→ ")) return [0, 2, name.toLowerCase()];
+    return [2, 0, name.toLowerCase()];
+  }
+
   // ── Build WeeklyBudget objects ─────────────────────────────────────────
   const result: WeeklyBudget[] = [];
 
   for (let i = 0; i < weeks.length; i++) {
     const { start, end, largeBills, fixedWeeklyBills, paycheck, paycheckBreakdown } = weeks[i];
-    const allBills = [...largeBills, ...fixedWeeklyBills];
+    const allBills = [...largeBills, ...fixedWeeklyBills].sort((a, b) => {
+      const [ag, as2, an] = weeklyBillSortKey(a);
+      const [bg, bs2, bn] = weeklyBillSortKey(b);
+      if (ag !== bg) return ag - bg;
+      if (as2 !== bs2) return as2 - bs2;
+      return an.localeCompare(bn);
+    });
     const totalBills = allBills.reduce((s, b) => s + b.amount, 0);
     const closingBalance = openingBalance + paycheck + totalBills;
 

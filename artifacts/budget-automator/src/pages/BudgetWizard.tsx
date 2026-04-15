@@ -646,7 +646,7 @@ function computeLumpSumDebtBills(
     const weeksLeft = Math.max(1, Math.ceil((dueDate.getTime() - effectiveStart.getTime()) / msPerWeek));
     const weeklyAmount = Math.round((d.balance / weeksLeft) * 100) / 100;
     result.push({
-      name: `${d.name}`,
+      name: `${d.name} (${dueDate.getMonth() + 1}/${dueDate.getDate()})`,
       amount: -weeklyAmount,
       type: "weekly",
       category: "Debt Payment",
