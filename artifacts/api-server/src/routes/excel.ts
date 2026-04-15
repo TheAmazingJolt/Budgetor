@@ -146,79 +146,30 @@ const BILL_BG = "FFEBF6EE";
 const DEBT_BG = "FFF9E9E9";
 const MONTH_SHORT_XL = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function writeExcelBudgetSheetXL(
+// Rewrites the Bills and Debts section of a Budget worksheet starting at
+// `startRow`. Clears a buffer of rows beforehand so stale content from a
+// previous (larger) section is removed — mirrors the full-rewrite behavior of
+// writeBudgetToSheet in sheets.ts.
+function writeExcelBillsDebtsSection(
   ws: ExcelJS.Worksheet,
-  weeks: ExcelWriteRequest["weeks"],
   bills: BillMeta[] | undefined,
   debts: DebtItem[] | undefined,
-  includeRemainingAcct: boolean,
-  startColOffset = 0,
+  startRow: number, // 1-indexed first row of the bills/debts section
+  sc: number,       // 1-indexed first column (where weeks start)
 ): void {
-  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
-
-  const sc = startColOffset + 1;
-  const maxBills = weeks.length > 0 ? Math.max(...weeks.map((w) => w.bills.length)) : 0;
-  const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
-
-  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-    const week = weeks[wIdx];
-    const lc = sc + wIdx * 2;
-    const vc = lc + 1;
-    let r = 1;
-
-    ws.getCell(r, lc).value = week.weekLabel;
-    ws.getCell(r, vc).value = "";
-    for (const c of [lc, vc]) {
-      ws.getCell(r, c).fill = xlFill("FFBDD7EE");
-      ws.getCell(r, c).font = xlFont(true);
+  const BILLS_DEBTS_BUFFER_ROWS = 200;
+  for (let r = startRow; r < startRow + BILLS_DEBTS_BUFFER_ROWS; r++) {
+    for (let c = sc; c < sc + 5; c++) {
+      const cell = ws.getCell(r, c);
+      cell.value = null;
+      cell.fill = { type: "pattern", pattern: "none" } as ExcelJS.Fill;
+      cell.font = {} as ExcelJS.Font;
+      cell.numFmt = "";
+      cell.alignment = {} as ExcelJS.Alignment;
     }
-    r++;
-
-    const sumStartRow = r;
-
-    if (includeRemainingAcct) {
-      ws.getCell(r, lc).value = "Remaining Acct";
-      ws.getCell(r, vc).value = week.openingBalance;
-      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
-      r++;
-    }
-
-    const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
-      ? `Paycheck (${week.paycheckBreakdown.map((b) => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ")})`
-      : "Paycheck";
-    ws.getCell(r, lc).value = paycheckLabel;
-    ws.getCell(r, vc).value = week.paycheck;
-    ws.getCell(r, vc).numFmt = FMT_CURRENCY;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
-    r++;
-
-    for (const bill of week.bills) {
-      const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
-      ws.getCell(r, lc).value = bill.name;
-      ws.getCell(r, vc).value = bill.amount;
-      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-      for (const c of [lc, vc]) {
-        ws.getCell(r, c).font = xlFont();
-        if (argb) ws.getCell(r, c).fill = xlFill(argb);
-      }
-      r++;
-    }
-
-    while (r < totalRows) {
-      ws.getCell(r, lc).value = "";
-      ws.getCell(r, vc).value = "";
-      r++;
-    }
-
-    const vcLetter = colLetter(vc - 1);
-    ws.getCell(r, lc).value = "Remaining";
-    ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
-    ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
   }
 
-  let nextRow = totalRows + 1;
+  let nextRow = startRow;
 
   const filteredBills = (bills ?? []).filter((b) => !b.sourceDebtId && !b.sourceGoalId);
   if (filteredBills.length > 0) {
@@ -299,6 +250,88 @@ function writeExcelBudgetSheetXL(
       nextRow++;
     });
   }
+}
+
+function computeBudgetTotalRows(
+  weeks: ExcelWriteRequest["weeks"],
+  includeRemainingAcct: boolean,
+): number {
+  const maxBills = weeks.length > 0 ? Math.max(...weeks.map((w) => w.bills.length)) : 0;
+  return 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+}
+
+function writeExcelBudgetSheetXL(
+  ws: ExcelJS.Worksheet,
+  weeks: ExcelWriteRequest["weeks"],
+  bills: BillMeta[] | undefined,
+  debts: DebtItem[] | undefined,
+  includeRemainingAcct: boolean,
+  startColOffset = 0,
+): void {
+  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
+
+  const sc = startColOffset + 1;
+  const totalRows = computeBudgetTotalRows(weeks, includeRemainingAcct);
+
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    const week = weeks[wIdx];
+    const lc = sc + wIdx * 2;
+    const vc = lc + 1;
+    let r = 1;
+
+    ws.getCell(r, lc).value = week.weekLabel;
+    ws.getCell(r, vc).value = "";
+    for (const c of [lc, vc]) {
+      ws.getCell(r, c).fill = xlFill("FFBDD7EE");
+      ws.getCell(r, c).font = xlFont(true);
+    }
+    r++;
+
+    const sumStartRow = r;
+
+    if (includeRemainingAcct) {
+      ws.getCell(r, lc).value = "Remaining Acct";
+      ws.getCell(r, vc).value = week.openingBalance;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+      r++;
+    }
+
+    const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+      ? `Paycheck (${week.paycheckBreakdown.map((b) => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ")})`
+      : "Paycheck";
+    ws.getCell(r, lc).value = paycheckLabel;
+    ws.getCell(r, vc).value = week.paycheck;
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY;
+    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    r++;
+
+    for (const bill of week.bills) {
+      const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
+      ws.getCell(r, lc).value = bill.name;
+      ws.getCell(r, vc).value = bill.amount;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      for (const c of [lc, vc]) {
+        ws.getCell(r, c).font = xlFont();
+        if (argb) ws.getCell(r, c).fill = xlFill(argb);
+      }
+      r++;
+    }
+
+    while (r < totalRows) {
+      ws.getCell(r, lc).value = "";
+      ws.getCell(r, vc).value = "";
+      r++;
+    }
+
+    const vcLetter = colLetter(vc - 1);
+    ws.getCell(r, lc).value = "Remaining";
+    ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+  }
+
+  writeExcelBillsDebtsSection(ws, bills, debts, totalRows + 1, sc);
 
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const lc = sc + wIdx * 2;
@@ -1426,10 +1459,16 @@ function writeExcelSavingsSheetXL(
   const activeLumpSum = debts.filter(d => d.type === "lump_sum" && d.dueDate && d.balance > 0 && new Date(d.dueDate + "T00:00:00") > today);
   if (sinkingFunds.length === 0 && balanced.length === 0 && goals.length === 0 && activeLumpSum.length === 0) return;
 
+  // Fully remove and recreate the Savings worksheet to guarantee a clean slate —
+  // ExcelJS's spliceRows sometimes leaves stale per-cell styles (numFmt, fills)
+  // behind, which was causing the Excel output to drift from the Google Sheets
+  // layout on re-sync. Mirrors the full-rewrite behavior of writeSavingsTabToSheet.
   const SAVINGS_SHEET = "Savings";
-  let ws = wb.getWorksheet(SAVINGS_SHEET) ?? wb.getWorksheet("Savings Progress");
-  if (!ws) ws = wb.addWorksheet(SAVINGS_SHEET);
-  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
+  const legacy = wb.getWorksheet("Savings Progress");
+  if (legacy) wb.removeWorksheet(legacy.id);
+  const existingSavings = wb.getWorksheet(SAVINGS_SHEET);
+  if (existingSavings) wb.removeWorksheet(existingSavings.id);
+  const ws = wb.addWorksheet(SAVINGS_SHEET);
   const savingsWs: ExcelJS.Worksheet = ws;
 
   const dateStr = today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -1445,8 +1484,6 @@ function writeExcelSavingsSheetXL(
   const INDIGO      = "FF3730A3";
   const INDIGO_LT   = "FFE0E7FF";
   const INDIGO_LTR  = "FFEEF2FF";
-  const AMBER_LT    = "FFFEF3C7";
-  const AMBER       = "FFD97706";
   const GRAY        = "FF6B7280";
   const WHITE       = "FFFFFFFF";
 
@@ -1496,39 +1533,14 @@ function writeExcelSavingsSheetXL(
     r++;
   }
 
-  const ROSE_EARLY    = "FFBe123C";
-  const ROSE_LT_EARLY = "FFFCE7EB";
-  const lumpSumBills = bills.filter(
-    (b) => (b.type === "weekly" || b.type === "biweekly") && b.payoffDate && b.sourceDebtId
-  );
-  if (lumpSumBills.length > 0) {
-    const debtMap = new Map((debts ?? []).map((d) => [d.id, d]));
-    writeRow(["Lump-Sum Payments (Debt Progress)"], { bg: ROSE_LT_EARLY, fontColor: ROSE_EARLY, bold: true, size: 11 });
-    writeRow(["Name", "Weekly $", "Due Date", "Remaining Balance", "Percent Left"], { bg: ROSE_LT_EARLY, bold: true });
-    for (const b of lumpSumBills) {
-      const debt = debtMap.get(b.sourceDebtId!);
-      const payoffDateStr = b.payoffDate
-        ? (() => {
-            const d = new Date(b.payoffDate + "T00:00:00");
-            return `${MONTH_SHORT_XL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-          })()
-        : "";
-      if (debt) {
-        const balance = debt.balance ?? 0;
-        const original = debt.originalAmount ?? debt.balance ?? 0;
-        const pctLeft = original > 0 ? Math.round((balance / original) * 100) : 0;
-        writeRow([b.name, Math.abs(b.amount), payoffDateStr, balance, `${pctLeft}%`], { numFmtCols: [1, 3] });
-      } else {
-        writeRow([b.name, Math.abs(b.amount), payoffDateStr, "", ""], { numFmtCols: [1] });
-      }
-    }
-    r++;
-  }
-
+  // Google Sheets uses a teal section for savings goals — match that.
+  const TEAL      = "FF0F766E";
+  const TEAL_LT   = "FFCCFBF1";
+  const TEAL_LTR  = "FFF0FDFA";
   if (goals.length > 0) {
-    writeRow(["Savings Goals"], { bg: AMBER_LT, fontColor: AMBER, bold: true, size: 11 });
+    writeRow(["Savings Goals"], { bg: TEAL_LT, fontColor: TEAL, bold: true, size: 11 });
     writeRow(["Goal Name", "Target Amount", "Saved So Far", "Progress", "Target Date", "Weeks Left", "Weekly Needed"],
-      { bg: AMBER_LT, bold: true });
+      { bg: TEAL_LTR, bold: true });
     for (const g of goals) {
       const targetDate = new Date(g.targetDate + "T00:00:00");
       const weeksLeft = Math.max(0, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
@@ -1544,11 +1556,13 @@ function writeExcelSavingsSheetXL(
     r++;
   }
 
-  const ROSE       = "FFBe123C";
-  const ROSE_LT    = "FFFCE7EB";
+  // Matches Sheets rose section colors: #BE123C on #FFE4E6 header, #FFF1F2 col header
+  const ROSE       = "FFBE123C";
+  const ROSE_LT    = "FFFFE4E6";
+  const ROSE_LTR   = "FFFFF1F2";
   if (activeLumpSum.length > 0) {
     writeRow(["Lump-Sum Payments"], { bg: ROSE_LT, fontColor: ROSE, bold: true, size: 11 });
-    writeRow(["Name", "Weekly $", "Balance Left", "Due Date"], { bg: ROSE_LT, bold: true });
+    writeRow(["Name", "Weekly Set-Aside", "Balance Left", "Due Date"], { bg: ROSE_LTR, bold: true });
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
@@ -1871,6 +1885,12 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
         effectiveStartCol = lastBudgetCol >= 0 ? lastBudgetCol + 2 : 0;
       }
       writeWeeksToWorksheetColumns(ws, currentWeeksExcel, effectiveStartCol, includeRemainingAcct ?? false);
+
+      // Always rewrite the bills/debts section below the weeks so that its
+      // formatting and row count stays in sync with the latest bills/debts —
+      // matches the full-rewrite behavior of writeBudgetToSheet in sheets.ts.
+      const totalRowsIncremental = computeBudgetTotalRows(currentWeeksExcel, includeRemainingAcct ?? false);
+      writeExcelBillsDebtsSection(ws, body.bills, body.debts, totalRowsIncremental + 1, effectiveStartCol + 1);
     }
 
     // Update or create the _BudgifyData hidden sheet
