@@ -5805,7 +5805,7 @@ export function BudgetWizard({
                                     <td key={`${wi}-l`} className={`px-3 py-1.5 whitespace-nowrap ${remainingStyle}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
                                       {isEdited ? "Remaining*" : "Remaining"}
                                     </td>,
-                                    <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums border-r border-border/30 last:border-r-0 ${remainingStyle}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
+                                    <td key={`${wi}-v`} className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap border-r border-border/30 last:border-r-0 ${remainingStyle}${dimmed}${editModeOn ? " cursor-pointer" : ""}`} onClick={cellClick}>
                                       {fmtUSD(week.remaining)}
                                     </td>,
                                   ];
