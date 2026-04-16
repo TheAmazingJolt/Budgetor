@@ -343,7 +343,7 @@ function writeExcelBudgetSheetXL(
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const lc = sc + wIdx * 2;
     const vc = lc + 1;
-    ws.getColumn(lc).width = 22;
+    ws.getColumn(lc).width = 28;
     ws.getColumn(vc).width = 14;
   }
 }
@@ -1685,7 +1685,7 @@ function writeWeeksToWorksheetColumns(
       ws.getCell(r, c).border = { top: { style: "thin", color: { argb: "FF000000" } } };
     }
 
-    ws.getColumn(lc).width = 22;
+    ws.getColumn(lc).width = 28;
     ws.getColumn(vc).width = 14;
   }
 
@@ -1791,7 +1791,7 @@ function archivePastWeeksInExcel(
       if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
     }
     // Mirror the Budget column widths so the Archive sheet renders identically.
-    archiveWs!.getColumn(destLc).width = 22;
+    archiveWs!.getColumn(destLc).width = 28;
     archiveWs!.getColumn(destVc).width = 14;
   });
 
@@ -1799,7 +1799,7 @@ function archivePastWeeksInExcel(
   // previous syncs that may have been written before width-setting was in place).
   const lastArchiveCol = archiveStartCol - 1 + newPastGroups.length * 2;
   for (let c = 1; c <= lastArchiveCol; c++) {
-    archiveWs!.getColumn(c).width = (c % 2 === 1) ? 22 : 14;
+    archiveWs!.getColumn(c).width = (c % 2 === 1) ? 28 : 14;
   }
 
   // Clear ALL past-week columns from Budget (including ones already in Archive).
