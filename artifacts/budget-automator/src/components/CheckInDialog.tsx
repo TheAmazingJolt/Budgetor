@@ -43,6 +43,10 @@ interface CheckInItem {
   debtId?: string;
   currentBalance?: number;
   isLumpSum?: boolean;
+  /** True when a debt bill has type "balanced" (billAsBalanced). These are
+   *  saved as itemType:"balanced"/itemName:billName so the savings tab can
+   *  track them — identical to how regular balanced bills work. */
+  isBillAsBalanced?: boolean;
 }
 
 export interface CheckInDialogProps {
@@ -125,9 +129,16 @@ export function CheckInDialog({
       .filter(({ debtId }) => !!debtId)
       .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
         const planned = getDebtPlannedAmount(bill, week.items);
-        const existing =
-          existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
-          existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
+        // Balanced debt bills (billAsBalanced) are stored as itemType:"balanced"
+        // so the savings tab can pick them up — look them up that way first.
+        const isBillAsBalanced = bill.type === "balanced";
+        const existing = isBillAsBalanced
+          ? (existingCheckins.find(c => c.itemName === bill.name && c.itemType === "balanced") ??
+             // backwards-compat: old check-ins were mistakenly saved as "debt"
+             existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
+             existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"))
+          : (existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
+             existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"));
         const actual = existing ? existing.actualAmount : planned;
         // isLumpSum is set by BudgetWizard based on debt.type === "lump_sum".
         // Lump-sum debts should never be auto-skipped — the user should always see
@@ -149,6 +160,7 @@ export function CheckInDialog({
           debtId,
           currentBalance,
           isLumpSum,
+          isBillAsBalanced,
         };
       });
 
@@ -176,9 +188,13 @@ export function CheckInDialog({
         .filter(({ debtId }) => !!debtId && !currentIds.has(debtId))
         .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
           const planned = getDebtPlannedAmount(bill, week.items);
-          const existing =
-            existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
-            existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt");
+          const isBillAsBalanced = bill.type === "balanced";
+          const existing = isBillAsBalanced
+            ? (existingCheckins.find(c => c.itemName === bill.name && c.itemType === "balanced") ??
+               existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
+               existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"))
+            : (existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
+               existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"));
           const actual = existing ? existing.actualAmount : planned;
           const isLumpSum = !!debtIsLumpSum;
           const autoSkip = !existing && planned === 0 && !isLumpSum;
@@ -194,6 +210,7 @@ export function CheckInDialog({
             debtId,
             currentBalance,
             isLumpSum,
+            isBillAsBalanced,
           };
         });
       if (newItems.length === 0) return current;
@@ -202,6 +219,15 @@ export function CheckInDialog({
   }, [debtBills]);
 
   const findExisting = (it: CheckInItem) => {
+    if (it.billType === "debt" && it.isBillAsBalanced) {
+      // Balanced debt bills are stored as itemType:"balanced"/itemName:billName
+      return (
+        existingCheckins.find(c => c.itemName === it.billName && c.itemType === "balanced") ??
+        // backwards-compat: old records were mistakenly saved as "debt"
+        existingCheckins.find(c => c.itemName === it.debtId && c.itemType === "debt") ??
+        existingCheckins.find(c => c.itemName === it.billName && c.itemType === "debt")
+      );
+    }
     if (it.billType === "debt" && it.debtId) {
       return (
         existingCheckins.find(c => c.itemName === it.debtId && c.itemType === "debt") ??
@@ -272,8 +298,15 @@ export function CheckInDialog({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               weekLabel: week.label,
-              itemName: it.billType === "debt" && it.debtId ? it.debtId : it.billName,
-              itemType: it.billType,
+              // Balanced debt bills (e.g. "Dad Loan (min payment)" with type:"balanced")
+              // must be stored as itemType:"balanced"/itemName:billName so the savings tab
+              // can find them — identical to how regular balanced bills work.
+              itemName: (it.billType === "debt" && it.isBillAsBalanced)
+                ? it.billName
+                : (it.billType === "debt" && it.debtId ? it.debtId : it.billName),
+              itemType: (it.billType === "debt" && it.isBillAsBalanced)
+                ? "balanced"
+                : it.billType,
               plannedAmount: it.plannedAmount,
               actualAmount: it.skipped ? 0 : Math.max(0, parseFloat(it.actualStr) || 0),
             }),
@@ -283,7 +316,9 @@ export function CheckInDialog({
 
       if (onDebtPayments) {
         const debtPayments = items
-          .filter(it => it.billType === "debt" && it.debtId && !it.skipped && it.plannedAmount > 0)
+          // Exclude balanced debt bills — they contribute to savings progress, not direct
+          // debt-balance reductions tracked by onDebtPayments.
+          .filter(it => it.billType === "debt" && it.debtId && !it.skipped && it.plannedAmount > 0 && !it.isBillAsBalanced)
           .map(it => {
             const newAmount = Math.max(0, parseFloat(it.actualStr) || 0);
             const prevRecord =
