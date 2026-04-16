@@ -723,7 +723,11 @@ export function generateWeeklyBudgets(
       const timedFullPeriods = totalPeriodsInFullMonth[mk] ?? activeIndices.length;
       const timedPastPeriods = pastPeriodsInMonth[mk] ?? 0;
       const timedRemainingPeriods = Math.max(1, timedFullPeriods - timedPastPeriods);
-      const timedMonthFraction = payPeriod === "monthly" ? 1 : Math.min(1, activeIndices.length / timedRemainingPeriods);
+      // Use monthWeekIndices.length (total generated weeks this month), NOT
+      // activeIndices.length (pre-due-date weeks). Using activeIndices would
+      // shrink the monthly amount by the fraction of pre-due weeks, causing the
+      // full bill to never be fully allocated (e.g. 3/4 × $188 = $141 instead of $188).
+      const timedMonthFraction = payPeriod === "monthly" ? 1 : Math.min(1, monthWeekIndices.length / timedRemainingPeriods);
       const timedEffectiveAmount = Math.min(0, timedAlreadySaved !== 0
         ? (bill.amount + timedAlreadySaved)
         : (bill.amount * timedMonthFraction));
