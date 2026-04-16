@@ -3957,7 +3957,7 @@ export function BudgetWizard({
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <button
             type="button"
-            onClick={() => setStep(0)}
+            onClick={() => guardedBackToMenu()}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <div className="bg-gradient-to-br from-primary to-emerald-600 p-2 rounded-xl shadow-md shadow-primary/30">
@@ -3971,7 +3971,7 @@ export function BudgetWizard({
           <div className="flex items-center gap-5">
             {step > 0 && (
               <button
-                onClick={() => setStep(step - 1)}
+                onClick={() => { if (step === 2) guardedBackToStep1(); else guardedBackToMenu(); }}
                 className="sm:hidden p-1.5 rounded-full text-muted-foreground hover:bg-muted transition-colors"
                 aria-label="Go back"
               >
@@ -3983,7 +3983,7 @@ export function BudgetWizard({
                 <div key={i} className="flex items-center gap-3">
                   {i < step ? (
                     <button
-                      onClick={() => setStep(i)}
+                      onClick={() => { if (i === 0) guardedBackToMenu(); else guardedBackToStep1(); }}
                       className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer"
                     >
                       <Check className="w-3 h-3" />
