@@ -1715,7 +1715,11 @@ function archivePastWeeksInExcel(
     if (!label.toLowerCase().startsWith("budget")) continue;
     const endDate = parseLabelEndDateExcel(label);
     if (!endDate) continue;
-    if (endDate < today) {
+    // Keep a week visible through the first day of the next week (endDate + 1 day).
+    // Archive only once today is strictly past that point, so the user can still
+    // review the previous week on the day their new week starts.
+    const archiveThreshold = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+    if (archiveThreshold < today) {
       pastColGroups.push({ startCol: c + 1, endCol: c + 2, label }); // 1-indexed
       c++; // skip the value column
     }
@@ -1778,6 +1782,9 @@ function archivePastWeeksInExcel(
       if (srcLcCell.style) destLcCell.style = { ...srcLcCell.style };
       if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
     }
+    // Mirror the Budget column widths so the Archive sheet renders identically.
+    archiveWs!.getColumn(destLc).width = 28;
+    archiveWs!.getColumn(destVc).width = 14;
   });
 
   // Clear ALL past-week columns from Budget (including ones already in Archive).
@@ -1854,7 +1861,9 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     const currentWeeksExcel = weeks.filter(w => {
       if (archivedExcelLabels.has(w.weekLabel)) return false; // just archived → skip
       const endDate = parseLabelEndDateExcel(w.weekLabel);
-      return !endDate || endDate >= todayExcel;
+      // Keep a week visible through the day after it ends (first day of the next week),
+      // matching the archive threshold in archivePastWeeksInExcel.
+      return !endDate || endDate.getTime() + 24 * 60 * 60 * 1000 >= todayExcel.getTime();
     });
 
     if (currentWeeksExcel.length === 0) {
