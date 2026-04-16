@@ -40,6 +40,9 @@ import {
   Loader2,
   Crown,
   Zap,
+  Search,
+  Lightbulb,
+  TrendingDown,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -98,6 +101,7 @@ import {
 } from "@workspace/api-client-react";
 import type { BudgetResponse } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -1134,6 +1138,17 @@ export function BudgetWizard({
     if (typeof window !== "undefined") localStorage.setItem("budgetor.syncExcelOnUpdate", syncExcelOnUpdate ? "1" : "0");
   }, [syncExcelOnUpdate]);
 
+  const [lastSyncedGoogleAt, setLastSyncedGoogleAt] = useState<Date | null>(() => {
+    if (typeof window === "undefined") return null;
+    const s = localStorage.getItem("budgetor.lastSyncedGoogleAt");
+    return s ? new Date(s) : null;
+  });
+  const [lastSyncedExcelAt, setLastSyncedExcelAt] = useState<Date | null>(() => {
+    if (typeof window === "undefined") return null;
+    const s = localStorage.getItem("budgetor.lastSyncedExcelAt");
+    return s ? new Date(s) : null;
+  });
+
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
@@ -1314,8 +1329,10 @@ export function BudgetWizard({
 
   const [billsSort, setBillsSort] = useState<"default" | "name-asc" | "amount-desc" | "amount-asc" | "due-day">("default");
   const [billsCategoryFilter, setBillsCategoryFilter] = useState<string>("all");
+  const [billsSearch, setBillsSearch] = useState("");
   const [debtsSort, setDebtsSort] = useState<"default" | "name-asc" | "balance-desc" | "balance-asc" | "apr-desc" | "min-payment-desc">("default");
   const [debtsTypeFilter, setDebtsTypeFilter] = useState<string>("all");
+  const [debtsSearch, setDebtsSearch] = useState("");
 
   const [isSavingToNewSheet, setIsSavingToNewSheet] = useState(false);
   const [newSheetSaveSuccess, setNewSheetSaveSuccess] = useState(false);
@@ -3741,6 +3758,15 @@ export function BudgetWizard({
         title: "Sheet updated",
         description: `${weeks.length} budget week${weeks.length !== 1 ? "s" : ""} written to ${names}.`,
       });
+      const syncedNow = new Date();
+      if (sheetsToUpdate.some(s => s.type === "google")) {
+        setLastSyncedGoogleAt(syncedNow);
+        if (typeof window !== "undefined") localStorage.setItem("budgetor.lastSyncedGoogleAt", syncedNow.toISOString());
+      }
+      if (sheetsToUpdate.some(s => s.type === "excel")) {
+        setLastSyncedExcelAt(syncedNow);
+        if (typeof window !== "undefined") localStorage.setItem("budgetor.lastSyncedExcelAt", syncedNow.toISOString());
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       const isGoogleAuthErr = msg.toLowerCase().includes("authorization has expired") || msg.toLowerCase().includes("reconnect google");
@@ -3762,6 +3788,15 @@ export function BudgetWizard({
       setIsUpdatingSheetsSync(false);
       setIsUpdatingExcelSync(false);
     }
+  };
+
+  const fmtSynced = (d: Date) => {
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return format(d, "MMM d, h:mm a");
   };
 
   const buildDefaultXlsxFilename = () => {
@@ -4730,7 +4765,35 @@ export function BudgetWizard({
                 </CardContent>
               </Card>
 
-
+              {/* Paycheck sanity check — shown when bills likely exceed income */}
+              {(() => {
+                const effectivePaycheck = incomeSources.length >= 1
+                  ? incomeSources.reduce((s, src) => {
+                      if (src.frequency === "biweekly") return s + src.amount / 2;
+                      if (src.frequency === "monthly") return s + src.amount / 4;
+                      if (src.frequency === "semimonthly") return s + src.amount / 2;
+                      return s + src.amount;
+                    }, 0)
+                  : paycheckAmount;
+                const estWeeklyBills = bills.reduce((s, b) => {
+                  const abs = Math.abs(b.amount);
+                  if (b.type === "yearly") return s + abs / 52;
+                  if (b.type === "biweekly") return s + abs / 2;
+                  if (b.type === "balanced") return s + abs / 4;
+                  return s + abs;
+                }, 0);
+                if (bills.length === 0 || effectivePaycheck <= 0 || estWeeklyBills < effectivePaycheck * 0.9) return null;
+                const over = estWeeklyBills >= effectivePaycheck;
+                return (
+                  <div className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs ${over ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-amber-400/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"}`}>
+                    <TrendingDown className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold">{over ? "Bills exceed paycheck." : "Bills are tight."}</span>
+                      {" "}Estimated weekly bills <strong>${estWeeklyBills.toFixed(2)}</strong>{over ? " exceed" : " are"} {over ? "" : `${Math.round((estWeeklyBills / effectivePaycheck) * 100)}% of`} your paycheck of <strong>${effectivePaycheck.toFixed(2)}</strong>. Review your bills or income.
+                    </div>
+                  </div>
+                );
+              })()}
 
               <Card className="border-primary/20 bg-primary/5">
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -4863,8 +4926,22 @@ export function BudgetWizard({
                 </div>
 
                 {!billsCollapsed && bills.length === 0 ? (
-                  <Card className="border-dashed border-2 p-10 text-center">
-                    <p className="text-muted-foreground">No bills loaded. Add them manually.</p>
+                  <Card className="border-dashed border-2 p-6 text-center space-y-3">
+                    <div className="flex justify-center">
+                      <div className="rounded-full bg-muted p-3">
+                        <Lightbulb className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">No bills yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">Add every regular expense so your budget reflects your real spending.</p>
+                    </div>
+                    <div className="text-left space-y-1 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                      <p className="font-medium text-foreground mb-1">Common bills to add:</p>
+                      <p>• <strong>Fixed</strong> — Rent, phone, subscriptions (same each week)</p>
+                      <p>• <strong>Balanced</strong> — Utilities, groceries (equalized monthly)</p>
+                      <p>• <strong>Yearly</strong> — Insurance, registration (sinking fund each week)</p>
+                    </div>
                   </Card>
                 ) : !billsCollapsed ? (
                   <>
@@ -4915,10 +4992,21 @@ export function BudgetWizard({
                         )}
                       </div>
                     )}
+                    {bills.length > 3 && (
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          value={billsSearch}
+                          onChange={e => setBillsSearch(e.target.value)}
+                          placeholder="Search bills…"
+                          className="pl-8 h-8 text-xs rounded-xl border-border/50"
+                        />
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {bills
                         .map((bill, originalIdx) => ({ bill, originalIdx }))
-                        .filter(({ bill }) => billsCategoryFilter === "all" || (bill as any).category === billsCategoryFilter)
+                        .filter(({ bill }) => (billsCategoryFilter === "all" || (bill as any).category === billsCategoryFilter) && (billsSearch === "" || bill.name.toLowerCase().includes(billsSearch.toLowerCase())))
                         .sort(({ bill: a }, { bill: b }) => {
                           switch (billsSort) {
                             case "name-asc": return a.name.localeCompare(b.name);
@@ -4967,7 +5055,18 @@ export function BudgetWizard({
                                       variant="ghost"
                                       size="icon"
                                       className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
-                                      onClick={() => preserveScroll(() => removeBill(i))}
+                                      onClick={() => {
+                                        const deleted = bill;
+                                        preserveScroll(() => removeBill(i));
+                                        toast({
+                                          description: `"${deleted.name}" removed.`,
+                                          action: (
+                                            <ToastAction altText="Undo" onClick={() => addBill(deleted)}>
+                                              Undo
+                                            </ToastAction>
+                                          ),
+                                        });
+                                      }}
                                     >
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
@@ -5057,8 +5156,22 @@ export function BudgetWizard({
                 )}
 
                 {!debtsCollapsed && debts.length === 0 ? (
-                  <Card className="border-dashed border-2 p-10 text-center">
-                    <p className="text-muted-foreground">No debts tracked yet. Add debts to see your full financial picture.</p>
+                  <Card className="border-dashed border-2 p-6 text-center space-y-3">
+                    <div className="flex justify-center">
+                      <div className="rounded-full bg-muted p-3">
+                        <Lightbulb className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">No debts tracked</p>
+                      <p className="text-xs text-muted-foreground mt-1">Track debts to set aside the right amount each week and see payoff progress.</p>
+                    </div>
+                    <div className="text-left space-y-1 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                      <p className="font-medium text-foreground mb-1">Debt types:</p>
+                      <p>• <strong>Revolving</strong> — Credit card (min payment + APR tracking)</p>
+                      <p>• <strong>Installment</strong> — Car loan, student loan (fixed payment)</p>
+                      <p>• <strong>Lump-sum</strong> — Money owed by a specific due date</p>
+                    </div>
                   </Card>
                 ) : !debtsCollapsed ? (
                   <>
@@ -5110,10 +5223,21 @@ export function BudgetWizard({
                         )}
                       </div>
                     )}
+                    {debts.length > 3 && (
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          value={debtsSearch}
+                          onChange={e => setDebtsSearch(e.target.value)}
+                          placeholder="Search debts…"
+                          className="pl-8 h-8 text-xs rounded-xl border-border/50"
+                        />
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {debts
                         .map((debt, originalIdx) => ({ debt, originalIdx }))
-                        .filter(({ debt }) => debtsTypeFilter === "all" || debt.type === debtsTypeFilter)
+                        .filter(({ debt }) => (debtsTypeFilter === "all" || debt.type === debtsTypeFilter) && (debtsSearch === "" || debt.name.toLowerCase().includes(debtsSearch.toLowerCase())))
                         .sort(({ debt: a }, { debt: b }) => {
                           switch (debtsSort) {
                             case "name-asc": return a.name.localeCompare(b.name);
@@ -5196,10 +5320,23 @@ export function BudgetWizard({
                                       size="icon"
                                       className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
                                       onClick={() => {
+                                        const deletedDebt = debt;
+                                        const linkedBill = bills.find(b => b.sourceDebtId === debt.id);
                                         const billIdx = bills.findIndex(b => b.sourceDebtId === debt.id);
                                         if (billIdx >= 0) preserveScroll(() => removeBill(billIdx));
                                         setDebtBillImports(prev => { const next = new Set(prev); next.delete(debt.id); return next; });
                                         removeDebt(i);
+                                        toast({
+                                          description: `"${deletedDebt.name}" removed.`,
+                                          action: (
+                                            <ToastAction altText="Undo" onClick={() => {
+                                              addDebt(deletedDebt);
+                                              if (linkedBill) addBill(linkedBill);
+                                            }}>
+                                              Undo
+                                            </ToastAction>
+                                          ),
+                                        });
                                       }}
                                     >
                                       <Trash2 className="h-3.5 w-3.5" />
@@ -5583,6 +5720,9 @@ export function BudgetWizard({
                                             <ExternalLink className="w-3 h-3" />
                                           </a>
                                         </div>
+                                        {lastSyncedGoogleAt && (
+                                          <p className="text-[10px] text-muted-foreground text-center">Last synced: {fmtSynced(lastSyncedGoogleAt)}</p>
+                                        )}
                                       </div>
                                     )}
                                     {activeGoogleSheet && activeExcelSheet && <DropdownMenuSeparator />}
@@ -5617,6 +5757,9 @@ export function BudgetWizard({
                                             </button>
                                           )}
                                         </div>
+                                        {lastSyncedExcelAt && (
+                                          <p className="text-[10px] text-muted-foreground text-center">Last synced: {fmtSynced(lastSyncedExcelAt)}</p>
+                                        )}
                                       </div>
                                     )}
                                   </DropdownMenuContent>
