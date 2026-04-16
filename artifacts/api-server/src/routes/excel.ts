@@ -145,7 +145,6 @@ function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | 
 }
 
 const FMT_CURRENCY = '"$"#,##0.00';
-const FMT_CURRENCY_NEG = '"$"#,##0.00;[Red]"$"-#,##0.00';
 const BILL_BG = "FFEBF6EE";
 const DEBT_BG = "FFF9E9E9";
 const MONTH_SHORT_XL = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -288,6 +287,7 @@ function writeExcelBudgetSheetXL(
     for (const c of [lc, vc]) {
       ws.getCell(r, c).fill = xlFill("FFBDD7EE");
       ws.getCell(r, c).font = xlFont(true);
+      ws.getCell(r, c).alignment = { horizontal: "center" };
     }
     r++;
 
@@ -296,7 +296,7 @@ function writeExcelBudgetSheetXL(
     if (includeRemainingAcct) {
       ws.getCell(r, lc).value = "Remaining Acct";
       ws.getCell(r, vc).value = week.openingBalance;
-      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY;
       for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
       r++;
     }
@@ -314,7 +314,7 @@ function writeExcelBudgetSheetXL(
       const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
       ws.getCell(r, lc).value = bill.name;
       ws.getCell(r, vc).value = bill.amount;
-      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY;
       for (const c of [lc, vc]) {
         ws.getCell(r, c).font = xlFont();
         if (argb) ws.getCell(r, c).fill = xlFill(argb);
@@ -331,8 +331,11 @@ function writeExcelBudgetSheetXL(
     const vcLetter = colLetter(vc - 1);
     ws.getCell(r, lc).value = "Remaining";
     ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
-    ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY;
+    for (const c of [lc, vc]) {
+      ws.getCell(r, c).font = xlFont(true);
+      ws.getCell(r, c).border = { top: { style: "thin", color: { argb: "FF000000" } } };
+    }
   }
 
   writeExcelBillsDebtsSection(ws, bills, debts, totalRows + 1, sc);
@@ -340,7 +343,7 @@ function writeExcelBudgetSheetXL(
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const lc = sc + wIdx * 2;
     const vc = lc + 1;
-    ws.getColumn(lc).width = 28;
+    ws.getColumn(lc).width = 22;
     ws.getColumn(vc).width = 14;
   }
 }
@@ -1630,6 +1633,7 @@ function writeWeeksToWorksheetColumns(
     for (const c of [lc, vc]) {
       ws.getCell(r, c).fill = xlFill("FFBDD7EE");
       ws.getCell(r, c).font = xlFont(true);
+      ws.getCell(r, c).alignment = { horizontal: "center" };
     }
     r++;
 
@@ -1638,7 +1642,7 @@ function writeWeeksToWorksheetColumns(
     if (includeRemainingAcct) {
       ws.getCell(r, lc).value = "Remaining Acct";
       ws.getCell(r, vc).value = week.openingBalance;
-      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY;
       for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
       r++;
     }
@@ -1656,7 +1660,7 @@ function writeWeeksToWorksheetColumns(
       const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
       ws.getCell(r, lc).value = bill.name;
       ws.getCell(r, vc).value = bill.amount;
-      ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
+      ws.getCell(r, vc).numFmt = FMT_CURRENCY;
       for (const c of [lc, vc]) {
         ws.getCell(r, c).font = xlFont();
         ws.getCell(r, c).fill = argb ? xlFill(argb) : xlNoFill();
@@ -1674,10 +1678,14 @@ function writeWeeksToWorksheetColumns(
     const vcLetter = colLetter(vc - 1);
     ws.getCell(r, lc).value = "Remaining";
     ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
-    ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-    for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
+    ws.getCell(r, vc).numFmt = FMT_CURRENCY;
+    for (const c of [lc, vc]) {
+      ws.getCell(r, c).font = xlFont(true);
+      ws.getCell(r, c).fill = xlNoFill();
+      ws.getCell(r, c).border = { top: { style: "thin", color: { argb: "FF000000" } } };
+    }
 
-    ws.getColumn(lc).width = 28;
+    ws.getColumn(lc).width = 22;
     ws.getColumn(vc).width = 14;
   }
 
@@ -1783,7 +1791,7 @@ function archivePastWeeksInExcel(
       if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
     }
     // Mirror the Budget column widths so the Archive sheet renders identically.
-    archiveWs!.getColumn(destLc).width = 28;
+    archiveWs!.getColumn(destLc).width = 22;
     archiveWs!.getColumn(destVc).width = 14;
   });
 
@@ -1791,7 +1799,7 @@ function archivePastWeeksInExcel(
   // previous syncs that may have been written before width-setting was in place).
   const lastArchiveCol = archiveStartCol - 1 + newPastGroups.length * 2;
   for (let c = 1; c <= lastArchiveCol; c++) {
-    archiveWs!.getColumn(c).width = (c % 2 === 1) ? 28 : 14;
+    archiveWs!.getColumn(c).width = (c % 2 === 1) ? 22 : 14;
   }
 
   // Clear ALL past-week columns from Budget (including ones already in Archive).
