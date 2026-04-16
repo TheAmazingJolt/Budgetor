@@ -2014,8 +2014,6 @@ export function BudgetWizard({
     setActiveCloudBudgetName(null);
     setActiveGoogleSheet(null);
     setActiveExcelSheet(null);
-    setSyncGoogleOnUpdate(false);
-    setSyncExcelOnUpdate(false);
     setCloudExistingWeeks([]);
     setScratchExistingWeeks([]);
     setCloudSaveSuccess(false);
@@ -2756,8 +2754,6 @@ export function BudgetWizard({
             setActiveCloudBudgetName(null);
             setActiveGoogleSheet(null);
             setActiveExcelSheet(null);
-            setSyncGoogleOnUpdate(false);
-            setSyncExcelOnUpdate(false);
             setNewCloudSaveSuccess(false);
             setSavedCloudName("");
           }
