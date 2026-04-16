@@ -563,29 +563,62 @@ export function generateWeeklyBudgets(
       );
       if (eligible.length === 0) continue;
 
-      // Use the first eligible week's start date to determine the current cycle
-      const firstStart = weeks[eligible[0]].start;
-      const cycleDue   = getNextYearlyDueDate(firstStart, dueMonth, dueDay);
+      // Anchor the current cycle to the generation startDate so cycleWeeks stays
+      // constant across all months (avoids inflating per-week contributions as the
+      // due date approaches month by month).
+      const cycleDue = getNextYearlyDueDate(startDate, dueMonth, dueDay);
       const cycleWeeks = Math.max(1, Math.ceil(
-        (cycleDue.getTime() - firstStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
+        (cycleDue.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
       ));
-      const weeklyContrib = -(annualAbs / cycleWeeks); // negative, exact (rounded below)
+      const weeklyContrib = -(annualAbs / cycleWeeks);
 
-      const effectiveAmount = Math.min(0, weeklyContrib * eligible.length);
-      if (effectiveAmount >= -0.005) continue;
+      // Weeks on/after cycleDue belong to the next annual cycle — compute their
+      // rate independently so they don't inflate the current-cycle total.
+      const nextCycleDue = getNextYearlyDueDate(cycleDue, dueMonth, dueDay);
+      const nextCycleWeeks = Math.max(1, Math.ceil(
+        (nextCycleDue.getTime() - cycleDue.getTime()) / (7 * 24 * 60 * 60 * 1000)
+      ));
+      const nextWeeklyContrib = -(annualAbs / nextCycleWeeks);
+
+      const eligibleCurrent = eligible.filter(idx => weeks[idx].start < cycleDue);
+      const eligibleNext    = eligible.filter(idx => weeks[idx].start >= cycleDue);
 
       const monthShort = MONTH_SHORT[(dueMonth - 1) % 12];
       const label = `${bill.name} [annual: ${fmtAnnualAmount(annualAbs)}/yr → ${monthShort} ${dueDay}]`;
 
-      const baseTotals = eligible.map(idx =>
-        weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
-        weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
-      );
-      const slotAmounts = equalizeAcrossSlots(baseTotals, effectiveAmount);
-      for (let j = 0; j < eligible.length; j++) {
-        const amt = Math.round(slotAmounts[j] * 100) / 100;
-        if (Math.abs(amt) >= 0.005) {
-          weeks[eligible[j]].largeBills.push({ name: label, amount: amt, color: bill.color });
+      // Current-cycle weeks
+      if (eligibleCurrent.length > 0) {
+        const effectiveCurrent = Math.min(0, weeklyContrib * eligibleCurrent.length);
+        if (effectiveCurrent < -0.005) {
+          const baseTotals = eligibleCurrent.map(idx =>
+            weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+            weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
+          );
+          const slotAmounts = equalizeAcrossSlots(baseTotals, effectiveCurrent);
+          for (let j = 0; j < eligibleCurrent.length; j++) {
+            const amt = Math.round(slotAmounts[j] * 100) / 100;
+            if (Math.abs(amt) >= 0.005) {
+              weeks[eligibleCurrent[j]].largeBills.push({ name: label, amount: amt, color: bill.color });
+            }
+          }
+        }
+      }
+
+      // Next-cycle weeks (start >= cycleDue): contribute at the next-year rate
+      if (eligibleNext.length > 0) {
+        const effectiveNext = Math.min(0, nextWeeklyContrib * eligibleNext.length);
+        if (effectiveNext < -0.005) {
+          const baseTotals = eligibleNext.map(idx =>
+            weeks[idx].fixedWeeklyBills.reduce((s, b) => s + b.amount, 0) +
+            weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
+          );
+          const slotAmounts = equalizeAcrossSlots(baseTotals, effectiveNext);
+          for (let j = 0; j < eligibleNext.length; j++) {
+            const amt = Math.round(slotAmounts[j] * 100) / 100;
+            if (Math.abs(amt) >= 0.005) {
+              weeks[eligibleNext[j]].largeBills.push({ name: label, amount: amt, color: bill.color });
+            }
+          }
         }
       }
     }
