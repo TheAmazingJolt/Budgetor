@@ -1566,7 +1566,7 @@ function writeExcelSavingsSheetXL(
   const ROSE_LTR   = "FFFFF1F2";
   if (activeLumpSum.length > 0) {
     writeRow(["Lump-Sum Payments"], { bg: ROSE_LT, fontColor: ROSE, bold: true, size: 11 });
-    writeRow(["Name", "Weekly Set-Aside", "Balance Left", "Due Date"], { bg: ROSE_LTR, bold: true });
+    writeRow(["Name", "Weekly Set-Aside", "Balance Left", "Original Amount", "Due Date"], { bg: ROSE_LTR, bold: true });
     for (const d of activeLumpSum) {
       const due = new Date(d.dueDate! + "T00:00:00");
       const weeksLeft = Math.max(1, Math.ceil((due.getTime() - today.getTime()) / msPerWeek));
@@ -1575,7 +1575,7 @@ function writeExcelSavingsSheetXL(
       const dy = String(due.getDate()).padStart(2, "0");
       const yr = String(due.getFullYear()).slice(-2);
       const dueDateStr = `${mo}/${dy}/${yr}`;
-      writeRow([d.name, weeklySetAside, d.balance, dueDateStr], { numFmtCols: [1, 2] });
+      writeRow([d.name, weeklySetAside, d.balance, d.originalAmount ?? "", dueDateStr], { numFmtCols: [1, 2, 3] });
     }
     r++;
   }
@@ -1786,6 +1786,13 @@ function archivePastWeeksInExcel(
     archiveWs!.getColumn(destLc).width = 28;
     archiveWs!.getColumn(destVc).width = 14;
   });
+
+  // Re-apply widths to every archive column (including pre-existing ones from
+  // previous syncs that may have been written before width-setting was in place).
+  const lastArchiveCol = archiveStartCol - 1 + newPastGroups.length * 2;
+  for (let c = 1; c <= lastArchiveCol; c++) {
+    archiveWs!.getColumn(c).width = (c % 2 === 1) ? 28 : 14;
+  }
 
   // Clear ALL past-week columns from Budget (including ones already in Archive).
   pastColGroups.forEach(g => {
