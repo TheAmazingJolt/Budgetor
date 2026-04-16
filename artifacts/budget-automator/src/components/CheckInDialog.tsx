@@ -76,30 +76,20 @@ function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number 
 }
 
 function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: number }[]): number {
-  const matchingItems = weekItems.filter(it => it.name === bill.name);
-  if (matchingItems.length > 0) {
-    const exactMatch = matchingItems.find(it => Math.abs(it.amount) === Math.abs(bill.amount));
-    if (exactMatch) return Math.abs(exactMatch.amount);
-    // Debt-linked bills with no exact amount match: use the bill's own computed amount.
-    if (bill.sourceDebtId) return Math.abs(bill.amount);
-    return 0;
-  }
-  if (bill.type === "balanced" && !bill.sourceDebtId) {
-    const prefix = `Partial ${bill.name}`;
-    return weekItems
-      .filter(it => it.name === prefix)
-      .reduce((s, it) => s + Math.abs(it.amount), 0);
-  }
-  // Debt-linked bills (including lump-sum) with no matching week item: use the bill's own
-  // computed weekly amount. This handles weeks generated before the debt was added.
-  if (bill.sourceDebtId) return Math.abs(bill.amount);
+  // Balanced bills (including debt-linked balanced bills) appear in the budget
+  // as "Partial {name}" — look for that prefix only.
   if (bill.type === "balanced") {
     const prefix = `Partial ${bill.name}`;
     return weekItems
       .filter(it => it.name === prefix)
       .reduce((s, it) => s + Math.abs(it.amount), 0);
   }
-  return 0;
+  // All other debt bills (fixed, weekly/lump-sum, biweekly) appear directly by name.
+  // Return 0 if not present in this week's budget — never fall back to bill.amount,
+  // as that would make every active debt appear as "budgeted" regardless of the week.
+  return weekItems
+    .filter(it => it.name === bill.name)
+    .reduce((s, it) => s + Math.abs(it.amount), 0);
 }
 
 function getBillItemType(bill: Bill): "balanced" | "yearly" | "goal" {
@@ -231,8 +221,10 @@ export function CheckInDialog({
     if (ex && ex.actualAmount === 0) return false;
     // Previously confirmed at a non-zero amount → keep in main list
     if (ex && ex.actualAmount > 0) return true;
-    // Debt items with a non-zero balance or planned amount always appear in the main list
-    if (it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return true;
+    // Debt items are only in the main list if they have a planned amount this week.
+    // Having an outstanding balance alone is NOT enough — the debt must actually appear
+    // in this week's budget (plannedAmount > 0) to show here.
+    if (it.billType === "debt" && it.plannedAmount > 0) return true;
     // Not yet processed: show in main list only if it has a planned amount
     return it.plannedAmount > 0;
   });
@@ -242,8 +234,8 @@ export function CheckInDialog({
     if (it.isLumpSum && (it.currentBalance ?? 0) > 0) return false;
     // Already processed at $0 (skipped) → not budgeted
     if (ex && ex.actualAmount === 0) return true;
-    // Debt items with a non-zero balance or planned amount are always budgeted (never in this list)
-    if (!ex && it.billType === "debt" && ((it.currentBalance ?? 0) > 0 || it.plannedAmount > 0)) return false;
+    // Debt items that DO have a planned amount this week are budgeted (never in this list)
+    if (!ex && it.billType === "debt" && it.plannedAmount > 0) return false;
     // Not yet processed with no planned amount → not budgeted
     return !ex && it.plannedAmount === 0;
   });
