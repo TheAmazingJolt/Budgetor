@@ -1116,8 +1116,23 @@ export function BudgetWizard({
   const [isUpdatingExcelSync, setIsUpdatingExcelSync] = useState(false);
   const isUpdatingLinkedSheet = isUpdatingSheetsSync || isUpdatingExcelSync;
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
-  const [syncGoogleOnUpdate, setSyncGoogleOnUpdate] = useState(false);
-  const [syncExcelOnUpdate, setSyncExcelOnUpdate] = useState(false);
+  // Persist the user's sync preferences across reloads — most users keep the
+  // same destinations enabled forever, so remembering the last choice
+  // (scoped by user, not by budget) avoids them having to re-tick each visit.
+  const [syncGoogleOnUpdate, setSyncGoogleOnUpdate] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("budgetor.syncGoogleOnUpdate") === "1";
+  });
+  const [syncExcelOnUpdate, setSyncExcelOnUpdate] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("budgetor.syncExcelOnUpdate") === "1";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("budgetor.syncGoogleOnUpdate", syncGoogleOnUpdate ? "1" : "0");
+  }, [syncGoogleOnUpdate]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("budgetor.syncExcelOnUpdate", syncExcelOnUpdate ? "1" : "0");
+  }, [syncExcelOnUpdate]);
 
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
@@ -1131,6 +1146,8 @@ export function BudgetWizard({
   const [showEditOb, setShowEditOb] = useState(false);
   const [visitedStep1, setVisitedStep1] = useState(false);
   const [deleteBudgetTarget, setDeleteBudgetTarget] = useState<{ id: string; name: string } | null>(null);
+  // Stored as an action to run after user confirms discarding unsaved edits.
+  const [pendingBackAction, setPendingBackAction] = useState<null | (() => void)>(null);
   const weekHeaderRefs = useRef<(HTMLTableCellElement | null)[]>([]);
   const [googleFirstBudgetCol, setGoogleFirstBudgetCol] = useState(2);
   const [excelFirstBudgetCol, setExcelFirstBudgetCol] = useState(2);
@@ -2010,6 +2027,30 @@ export function BudgetWizard({
     setStep(0);
   };
 
+  // Guard: if the user has pending week edits, defer the back action until
+  // they confirm in the dialog. Otherwise execute immediately.
+  const guardBackAction = (action: () => void) => {
+    if (Object.keys(weekEdits).length > 0) {
+      setPendingBackAction(() => action);
+    } else {
+      action();
+    }
+  };
+  const guardedBackToMenu = () => guardBackAction(handleBackToMenu);
+  const guardedBackToStep1 = () => guardBackAction(() => setStep(1));
+
+  // Browser/OS-level unload warning when there are unsaved edits.
+  useEffect(() => {
+    const hasEdits = Object.keys(weekEdits).length > 0;
+    if (!hasEdits) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [weekEdits]);
+
   const handleAddAccountBills = () => {
     const accountBills = stripHeuristicColors((userBillsQuery.data?.bills ?? []) as Bill[]);
     if (accountBills.length === 0) return;
@@ -2398,7 +2439,13 @@ export function BudgetWizard({
       setStep2Tab("archive");
     }
     if (computed.length > 0 && archiveKey !== archiveToastFiredRef.current) {
+      // Persist the "dismissed" archive key per budget so the toast only fires
+      // once (during the check-in process) — not on every subsequent page load.
+      const storageKey = `budgetor.archiveToastSeen.${activeCloudBudgetId ?? "scratch"}`;
+      const seenKey = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
       archiveToastFiredRef.current = archiveKey;
+      if (seenKey === archiveKey) return;
+      if (typeof window !== "undefined") localStorage.setItem(storageKey, archiveKey);
       const fmt = (w: UnifiedWeek) => {
         const d = parseLabelDates(w.label);
         if (!d) return w.label;
@@ -4092,7 +4139,7 @@ export function BudgetWizard({
                   <DropdownMenuSeparator />
                   {!isGuest && (
                     <>
-                      <DropdownMenuItem onClick={handleBackToMenu}>
+                      <DropdownMenuItem onClick={guardedBackToMenu}>
                         <FolderOpen className="w-4 h-4 mr-2" /> My Budgets
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -4452,7 +4499,7 @@ export function BudgetWizard({
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={handleBackToMenu}
+                  onClick={guardedBackToMenu}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Start over
                 </Button>
@@ -5454,7 +5501,6 @@ export function BudgetWizard({
                           <h3 className="text-lg font-semibold text-foreground">
                             {hasHistory ? "Full Budget View" : "Budget Preview"}
                           </h3>
-                          <div className="flex-1 min-w-0" />
                           <div className="flex rounded-lg border bg-muted p-0.5 gap-0.5 shrink-0">
                             <button
                               type="button"
@@ -5482,7 +5528,6 @@ export function BudgetWizard({
                               </button>
                             )}
                           </div>
-                          <div className="flex-1" />
                           {step2Tab === "budget" && (
                             <>
                               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0" onClick={handleJumpToToday}>
@@ -5496,6 +5541,88 @@ export function BudgetWizard({
                               >
                                 <Pencil className="w-3.5 h-3.5" /> {editModeOn ? "Done" : "Edit"}
                               </Button>
+                              {(activeGoogleSheet || activeExcelSheet) && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0 relative">
+                                      <CloudUpload className="w-3.5 h-3.5" /> Sync
+                                      {(syncGoogleOnUpdate || syncExcelOnUpdate) && (
+                                        <span className="bg-emerald-500 w-1.5 h-1.5 rounded-full absolute -top-0.5 -right-0.5" title="Auto-sync on" />
+                                      )}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-64">
+                                    {activeGoogleSheet && (
+                                      <div className="p-2 space-y-1.5">
+                                        <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                          <input
+                                            type="checkbox"
+                                            checked={syncGoogleOnUpdate}
+                                            onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
+                                            className="accent-primary w-3.5 h-3.5"
+                                          />
+                                          <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                          <span className="flex-1 truncate">Auto-sync to Sheets</span>
+                                        </label>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            className="flex-1 flex items-center justify-center gap-1 h-7 rounded-md border text-xs hover:bg-muted/60 disabled:opacity-40"
+                                            disabled={isUpdatingLinkedSheet}
+                                            onClick={() => handleGenerateAndUpdateSheet("google")}
+                                          >
+                                            <RefreshCw className={`w-3 h-3${isUpdatingSheetsSync ? " animate-spin" : ""}`} />
+                                            Sync now
+                                          </button>
+                                          <a
+                                            href={`https://docs.google.com/spreadsheets/d/${activeGoogleSheet.id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-center h-7 w-7 rounded-md border hover:bg-muted/60"
+                                            title="Open in Sheets"
+                                          >
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {activeGoogleSheet && activeExcelSheet && <DropdownMenuSeparator />}
+                                    {activeExcelSheet && (
+                                      <div className="p-2 space-y-1.5">
+                                        <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                          <input
+                                            type="checkbox"
+                                            checked={syncExcelOnUpdate}
+                                            onChange={e => setSyncExcelOnUpdate(e.target.checked)}
+                                            className="accent-primary w-3.5 h-3.5"
+                                          />
+                                          <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                                          <span className="flex-1 truncate">Auto-sync to Excel</span>
+                                        </label>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            className="flex-1 flex items-center justify-center gap-1 h-7 rounded-md border text-xs hover:bg-muted/60 disabled:opacity-40"
+                                            disabled={isUpdatingLinkedSheet}
+                                            onClick={() => handleGenerateAndUpdateSheet("excel")}
+                                          >
+                                            <RefreshCw className={`w-3 h-3${isUpdatingExcelSync ? " animate-spin" : ""}`} />
+                                            Sync now
+                                          </button>
+                                          {selectedExcelFileUrl && (
+                                            <button
+                                              className="flex items-center justify-center h-7 w-7 rounded-md border hover:bg-muted/60"
+                                              onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}
+                                              title="Open in Excel Online"
+                                            >
+                                              <ExternalLink className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                              <div className="flex-1" />
                               {hasEdits && activeCloudBudgetId && (
                                 <Button
                                   size="sm"
@@ -5545,73 +5672,6 @@ export function BudgetWizard({
                             </>
                           )}
                         </div>
-                        {/* Sync row — compact grouped pills, only shown when a sheet is connected */}
-                        {step2Tab === "budget" && (activeGoogleSheet || activeExcelSheet) && (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {activeGoogleSheet && (
-                              <div className="flex items-center h-8 rounded-lg border border-border/60 overflow-hidden text-xs text-muted-foreground">
-                                <label className="flex items-center gap-1.5 px-2.5 h-full cursor-pointer select-none hover:bg-muted/60 transition-colors" title={`Auto-sync to ${activeGoogleSheet.name} when saving`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={syncGoogleOnUpdate}
-                                    onChange={e => setSyncGoogleOnUpdate(e.target.checked)}
-                                    className="accent-primary w-3 h-3"
-                                  />
-                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                  Sheets
-                                </label>
-                                <button
-                                  className="border-l border-border/60 h-full px-2 hover:bg-muted/60 transition-colors disabled:opacity-40"
-                                  title="Sync to Sheets now"
-                                  disabled={isUpdatingLinkedSheet}
-                                  onClick={() => handleGenerateAndUpdateSheet("google")}
-                                >
-                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingSheetsSync ? " animate-spin" : ""}`} />
-                                </button>
-                                <a
-                                  href={`https://docs.google.com/spreadsheets/d/${activeGoogleSheet.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="border-l border-border/60 h-full px-2 flex items-center hover:bg-muted/60 transition-colors"
-                                  title="Open in Google Sheets"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                              </div>
-                            )}
-                            {activeExcelSheet && (
-                              <div className="flex items-center h-8 rounded-lg border border-border/60 overflow-hidden text-xs text-muted-foreground">
-                                <label className="flex items-center gap-1.5 px-2.5 h-full cursor-pointer select-none hover:bg-muted/60 transition-colors" title={`Auto-sync to ${activeExcelSheet.name} when saving`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={syncExcelOnUpdate}
-                                    onChange={e => setSyncExcelOnUpdate(e.target.checked)}
-                                    className="accent-primary w-3 h-3"
-                                  />
-                                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
-                                  Excel
-                                </label>
-                                <button
-                                  className="border-l border-border/60 h-full px-2 hover:bg-muted/60 transition-colors disabled:opacity-40"
-                                  title="Sync to Excel now"
-                                  disabled={isUpdatingLinkedSheet}
-                                  onClick={() => handleGenerateAndUpdateSheet("excel")}
-                                >
-                                  <RefreshCw className={`w-3.5 h-3.5${isUpdatingExcelSync ? " animate-spin" : ""}`} />
-                                </button>
-                                {selectedExcelFileUrl && (
-                                  <button
-                                    className="border-l border-border/60 h-full px-2 flex items-center hover:bg-muted/60 transition-colors"
-                                    title="Open in Excel Online"
-                                    onClick={() => openInExcel(selectedExcelFileUrl, selectedExcelFileId)}
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
                         {step2Tab === "savings" && (
                           <SavingsSection
                             bills={bills}
@@ -6241,7 +6301,7 @@ export function BudgetWizard({
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={handleBackToMenu}
+                  onClick={guardedBackToMenu}
                   className="sm:w-auto h-14 rounded-2xl border-border/60"
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Back to menu
@@ -6251,7 +6311,7 @@ export function BudgetWizard({
                   <Button
                     size="lg"
                     variant="outline"
-                    onClick={() => setStep(1)}
+                    onClick={guardedBackToStep1}
                     className="sm:w-auto h-14 rounded-2xl border-border/60"
                   >
                     <Settings2 className="w-4 h-4 mr-1" /> Configure
@@ -7275,6 +7335,31 @@ export function BudgetWizard({
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={!!pendingBackAction} onOpenChange={(open) => { if (!open) setPendingBackAction(null); }}>
+        <AlertDialogContent className="sm:rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved edits?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved week edits. Going back will discard them. Do you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = pendingBackAction;
+                setPendingBackAction(null);
+                setWeekEdits({});
+                if (action) action();
+              }}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Discard and go back
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent className="sm:rounded-2xl">
           <AlertDialogHeader>
@@ -7585,7 +7670,7 @@ export function BudgetWizard({
               <>
                 <button
                   className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${homeActive ? activeClass : inactiveClass}`}
-                  onClick={handleBackToMenu}
+                  onClick={guardedBackToMenu}
                 >
                   <FolderOpen className="w-5 h-5" />
                   <span>Home</span>
