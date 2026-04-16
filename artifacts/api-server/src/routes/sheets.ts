@@ -1611,6 +1611,28 @@ async function archivePastWeeksInSheet(
     } catch { /* non-fatal */ }
   }
 
+  // Set column widths for ALL archive columns (including pre-existing ones from
+  // earlier syncs that were never given explicit widths).
+  const totalArchiveCols = archiveStartCol + newPastGroups.length * 2;
+  if (totalArchiveCols > 0) {
+    const widthRequests: sheets_v4.Schema$Request[] = [];
+    for (let c = 0; c < totalArchiveCols; c++) {
+      widthRequests.push({
+        updateDimensionProperties: {
+          range: { sheetId: archiveSheetId, dimension: "COLUMNS", startIndex: c, endIndex: c + 1 },
+          properties: { pixelSize: c % 2 === 0 ? 200 : 100 },
+          fields: "pixelSize",
+        },
+      });
+    }
+    try {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: widthRequests },
+      });
+    } catch { /* non-fatal */ }
+  }
+
   // Clear past-week columns from Budget sheet (values + formatting)
   const clearRanges = pastColGroups.map(g =>
     `'${escapedBudget}'!${columnToLetter(g.startCol)}1:${columnToLetter(g.endCol)}${totalRows}`
