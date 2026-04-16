@@ -108,6 +108,10 @@ function xlFill(argb: string): ExcelJS.Fill {
   return { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
 
+function xlNoFill(): ExcelJS.Fill {
+  return { type: "pattern", pattern: "none" };
+}
+
 function xlFont(bold = false, size = 10): Partial<ExcelJS.Font> {
   return { name: "Arial", size, bold };
 }
@@ -180,7 +184,7 @@ function writeExcelBudgetSheetXL(
       ws.getCell(r, lc).value = "Remaining Acct";
       ws.getCell(r, vc).value = week.openingBalance;
       ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+      for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
       r++;
     }
 
@@ -190,7 +194,7 @@ function writeExcelBudgetSheetXL(
     ws.getCell(r, lc).value = paycheckLabel;
     ws.getCell(r, vc).value = week.paycheck;
     ws.getCell(r, vc).numFmt = FMT_CURRENCY;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
     r++;
 
     for (const bill of week.bills) {
@@ -200,7 +204,7 @@ function writeExcelBudgetSheetXL(
       ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
       for (const c of [lc, vc]) {
         ws.getCell(r, c).font = xlFont();
-        if (argb) ws.getCell(r, c).fill = xlFill(argb);
+        ws.getCell(r, c).fill = argb ? xlFill(argb) : xlNoFill();
       }
       r++;
     }
@@ -208,6 +212,7 @@ function writeExcelBudgetSheetXL(
     while (r < totalRows) {
       ws.getCell(r, lc).value = "";
       ws.getCell(r, vc).value = "";
+      for (const c of [lc, vc]) ws.getCell(r, c).fill = xlNoFill();
       r++;
     }
 
@@ -215,7 +220,7 @@ function writeExcelBudgetSheetXL(
     ws.getCell(r, lc).value = "Remaining";
     ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
     ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
   }
 
   let nextRow = totalRows + 1;
@@ -234,8 +239,8 @@ function writeExcelBudgetSheetXL(
       ws.getCell(nextRow, sc + i).font = xlFont(true);
       ws.getCell(nextRow, sc + i).fill = xlFill(BILL_BG);
     });
-    ws.getCell(nextRow, sc + 1).alignment = { horizontal: "right" };
-    ws.getCell(nextRow, sc + 2).alignment = { horizontal: "right" };
+    ws.getCell(nextRow, sc + 1).alignment = { horizontal: "center" };
+    ws.getCell(nextRow, sc + 2).alignment = { horizontal: "center" };
     nextRow++;
 
     for (const bill of filteredBills) {
@@ -261,8 +266,8 @@ function writeExcelBudgetSheetXL(
         ws.getCell(nextRow, sc + i).fill = xlFill(BILL_BG);
       });
       ws.getCell(nextRow, sc + 1).numFmt = FMT_CURRENCY;
-      ws.getCell(nextRow, sc + 1).alignment = { horizontal: "right" };
-      ws.getCell(nextRow, sc + 2).alignment = { horizontal: "right" };
+      ws.getCell(nextRow, sc + 1).alignment = { horizontal: "center" };
+      ws.getCell(nextRow, sc + 2).alignment = { horizontal: "center" };
       nextRow++;
     }
   }
@@ -1621,7 +1626,7 @@ function writeWeeksToWorksheetColumns(
       ws.getCell(r, lc).value = "Remaining Acct";
       ws.getCell(r, vc).value = week.openingBalance;
       ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+      for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
       r++;
     }
 
@@ -1631,7 +1636,7 @@ function writeWeeksToWorksheetColumns(
     ws.getCell(r, lc).value = paycheckLabel;
     ws.getCell(r, vc).value = week.paycheck;
     ws.getCell(r, vc).numFmt = FMT_CURRENCY;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
     r++;
 
     for (const bill of week.bills) {
@@ -1641,7 +1646,7 @@ function writeWeeksToWorksheetColumns(
       ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
       for (const c of [lc, vc]) {
         ws.getCell(r, c).font = xlFont();
-        if (argb) ws.getCell(r, c).fill = xlFill(argb);
+        ws.getCell(r, c).fill = argb ? xlFill(argb) : xlNoFill();
       }
       r++;
     }
@@ -1649,6 +1654,7 @@ function writeWeeksToWorksheetColumns(
     while (r < totalRows) {
       ws.getCell(r, lc).value = "";
       ws.getCell(r, vc).value = "";
+      for (const c of [lc, vc]) ws.getCell(r, c).fill = xlNoFill();
       r++;
     }
 
@@ -1656,7 +1662,7 @@ function writeWeeksToWorksheetColumns(
     ws.getCell(r, lc).value = "Remaining";
     ws.getCell(r, vc).value = { formula: `SUM(${vcLetter}${sumStartRow}:${vcLetter}${totalRows - 1})` };
     ws.getCell(r, vc).numFmt = FMT_CURRENCY_NEG;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
 
     ws.getColumn(lc).width = 28;
     ws.getColumn(vc).width = 14;
@@ -1674,8 +1680,9 @@ function writeWeeksToWorksheetColumns(
 function archivePastWeeksInExcel(
   wb: ExcelJS.Workbook,
   budgetSheetName: string,
+  tz?: string,
 ): string[] {
-  const today = new Date();
+  const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
 
   const budgetWs = wb.getWorksheet(budgetSheetName);
@@ -1819,7 +1826,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     // Archive any past weeks (moves them to the Archive sheet in memory; returns archived labels)
     const archivedExcelLabels = new Set<string>();
     try {
-      const archived = archivePastWeeksInExcel(wb, targetSheetName);
+      const archived = archivePastWeeksInExcel(wb, targetSheetName, body.tz);
       archived.forEach(l => archivedExcelLabels.add(l));
     } catch (archiveErr: any) {
       console.log("[excel/write] archive step error (non-fatal):", archiveErr?.message);
@@ -1827,7 +1834,9 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
 
     // Filter out past weeks so they are not re-written after archiving.
     // Use the definitive archived-labels set first, then fall back to date parsing.
-    const todayExcel = new Date();
+    // Use the client's timezone so a week whose end date is "today" locally isn't
+    // incorrectly treated as past when the server clock is already a day ahead (UTC).
+    const todayExcel = body.tz ? new Date(new Date().toLocaleString("en-US", { timeZone: body.tz })) : new Date();
     todayExcel.setHours(0, 0, 0, 0);
     const currentWeeksExcel = weeks.filter(w => {
       if (archivedExcelLabels.has(w.weekLabel)) return false; // just archived → skip
