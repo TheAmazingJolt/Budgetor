@@ -503,6 +503,17 @@ export function generateWeeklyBudgets(
     return alloc;
   }
 
+  // Pre-compute total prior savings per yearly bill (sum across all month keys).
+  // Used in Section B to reduce the annual obligation by what's already been saved.
+  const yearlyPriorSavingsMap = new Map<string, number>();
+  if (priorSavings) {
+    for (const monthData of Object.values(priorSavings)) {
+      for (const [billName, saved] of Object.entries(monthData)) {
+        yearlyPriorSavingsMap.set(billName, (yearlyPriorSavingsMap.get(billName) ?? 0) + saved);
+      }
+    }
+  }
+
   for (const mk of monthsInRange) {
     const monthWeekIndices = weeks
       .map((w, i) => (w.month === mk ? i : -1))
@@ -556,6 +567,8 @@ export function generateWeeklyBudgets(
       const dueMonth = bill.annualDueMonth ?? 1;
       const dueDay   = bill.dayOfMonth ?? 1;
       const annualAbs = Math.abs(bill.amount);
+      const alreadySaved = yearlyPriorSavingsMap.get(bill.name) ?? 0;
+      const remainingAnnual = Math.max(0, annualAbs - alreadySaved);
       const billPayoffDate = bill.payoffDate ? new Date(bill.payoffDate) : null;
 
       const eligible = monthWeekIndices.filter(idx =>
@@ -570,7 +583,7 @@ export function generateWeeklyBudgets(
       const cycleWeeks = Math.max(1, Math.ceil(
         (cycleDue.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
       ));
-      const weeklyContrib = -(annualAbs / cycleWeeks);
+      const weeklyContrib = -(remainingAnnual / cycleWeeks);
 
       // Weeks on/after cycleDue belong to the next annual cycle — compute their
       // rate independently so they don't inflate the current-cycle total.

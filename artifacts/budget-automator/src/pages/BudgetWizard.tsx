@@ -430,6 +430,7 @@ function computePriorSavings(
   const startMonth = start.getMonth();
   const mk = `${startYear}-${startMonth}`;
   const balancedNames = new Set(balancedBills.filter((b) => b.type === "balanced").map((b) => b.name));
+  const yearlyBillsList = balancedBills.filter((b) => b.type === "yearly" && b.annualDueMonth != null && b.dayOfMonth != null);
 
   for (const c of contributions) {
     if (!balancedNames.has(c.billName)) continue;
@@ -452,6 +453,40 @@ function computePriorSavings(
     if (owner.year !== startYear || owner.month !== startMonth) continue;
     if (!result[mk]) result[mk] = {};
     result[mk][ci.itemName] = (result[mk][ci.itemName] ?? 0) + ci.actualAmount;
+  }
+
+  // Yearly sinking funds: sum contributions made since the previous annual due date
+  for (const bill of yearlyBillsList) {
+    const dueM = (bill.annualDueMonth! - 1); // 0-indexed month
+    const dueD = bill.dayOfMonth!;
+    // Find the previous due date (last occurrence before start)
+    let prevDueYear = start.getFullYear();
+    const maxDay1 = new Date(prevDueYear, dueM + 1, 0).getDate();
+    let prevDue = new Date(prevDueYear, dueM, Math.min(dueD, maxDay1));
+    if (prevDue >= start) {
+      prevDueYear -= 1;
+      const maxDay2 = new Date(prevDueYear, dueM + 1, 0).getDate();
+      prevDue = new Date(prevDueYear, dueM, Math.min(dueD, maxDay2));
+    }
+
+    let total = 0;
+    for (const c of contributions) {
+      if (c.billName !== bill.name || c.isExtra) continue;
+      const cDate = new Date(c.date + "T00:00:00");
+      if (cDate <= prevDue || cDate >= start) continue;
+      total += c.amount;
+    }
+    for (const ci of checkins) {
+      if (ci.itemType !== "yearly" || ci.itemName !== bill.name || ci.actualAmount <= 0) continue;
+      const dates = parseLabelDates(ci.weekLabel);
+      if (!dates || dates.end >= start || dates.start <= prevDue) continue;
+      total += ci.actualAmount;
+    }
+
+    if (total > 0) {
+      if (!result[mk]) result[mk] = {};
+      result[mk][bill.name] = (result[mk][bill.name] ?? 0) + total;
+    }
   }
 
   return result;
