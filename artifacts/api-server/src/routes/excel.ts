@@ -130,34 +130,6 @@ function autoWidth(ws: ExcelJS.Worksheet, col: number, min: number, max: number)
   ws.getColumn(col).width = Math.min(w, max);
 }
 
-function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | number)[][] {
-  const grid: (string | number)[][] = [
-    ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId", "AnnualDueMonth"],
-    ...(bills ?? []).map((b) => [
-      b.name, Math.abs(b.amount), b.type ?? "fixed", b.category ?? b.name,
-      b.dayOfMonth != null ? b.dayOfMonth : "varies", b.color ?? "",
-      b.sourceDebtId ?? "", b.annualDueMonth != null ? b.annualDueMonth : "",
-    ]),
-  ];
-  if (debts && debts.length > 0) {
-    grid.push(Array(9).fill(""));
-    grid.push(["Debts", "", "", "", "", "", "", "", ""]);
-    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced", "DueDate"]);
-    for (const d of debts) {
-      grid.push([
-        d.id, d.name, d.type ?? "credit_card", d.balance ?? 0,
-        d.interestRate != null ? d.interestRate : "",
-        d.minimumPayment ?? 0, d.dueDay != null ? d.dueDay : "",
-        d.originalAmount != null ? d.originalAmount : "",
-        d.billAsBalanced ? "true" : "false",
-        d.dueDate != null ? d.dueDate : "",
-      ]);
-    }
-  }
-  return grid;
-}
-
 const FMT_CURRENCY = '"$"#,##0.00';
 const BILL_BG = "FFEBF6EE";
 const DEBT_BG = "FFF9E9E9";
@@ -385,17 +357,6 @@ function writeExcelBudgetSheetXL(
     autoWidth(ws, sc + wIdx * 2 + 1, 10, 24);
   }
   return ws;
-}
-
-function writeExcelDataSheetXL(ws: ExcelJS.Worksheet, bills: BillMeta[], debts?: DebtItem[]): void {
-  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
-  ws.state = "hidden";
-  const grid = buildBudgifyDataGrid(bills, debts);
-  grid.forEach((rowData, rIdx) => {
-    rowData.forEach((val, cIdx) => {
-      ws.getCell(rIdx + 1, cIdx + 1).value = val;
-    });
-  });
 }
 
 async function uploadBufferToOneDrive(
@@ -1205,107 +1166,6 @@ async function writeExcelBillRows(
   }
 }
 
-async function writeHiddenExcelBillsSheet(
-  token: string,
-  fileId: string,
-  bills: BillMeta[],
-  debts?: DebtItem[],
-  sessionId?: string | null,
-) {
-  if ((!bills || bills.length === 0) && (!debts || debts.length === 0)) return;
-  const META_SHEET = "_BudgifyData";
-  const LEGACY_SHEET = "_MoneyPalData";
-
-  const sheetsData = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets`, sessionId);
-  const allSheets: any[] = sheetsData.value ?? [];
-
-  let existing = allSheets.find((s: any) => s.name === META_SHEET);
-  const legacyExisting = allSheets.find((s: any) => s.name === LEGACY_SHEET);
-
-  if (legacyExisting && !existing) {
-    const legacyEncoded = encodeURIComponent(legacyExisting.name);
-    await graphPatch(token, `/me/drive/items/${fileId}/workbook/worksheets/${legacyEncoded}`, { name: META_SHEET }, sessionId);
-    existing = legacyExisting;
-  }
-
-  let metaSheetName: string;
-  if (existing) {
-    metaSheetName = encodeURIComponent(META_SHEET);
-    const usedRange = await graphGet(token, `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/usedRange`, sessionId);
-    const endAddr = usedRange.address?.split("!")?.[1] ?? "G100";
-    await graphPatch(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endAddr}')`,
-      { values: Array.from({ length: 50 }, () => Array(9).fill("")) },
-      sessionId,
-    );
-  } else {
-    const added = await graphPost(
-      token,
-      `/me/drive/items/${fileId}/workbook/worksheets/add`,
-      { name: META_SHEET },
-      sessionId,
-    );
-    metaSheetName = encodeURIComponent(added.name ?? META_SHEET);
-  }
-
-  await graphPatch(
-    token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}`,
-    { visibility: "Hidden" },
-    sessionId,
-  );
-
-  const grid: (string | number)[][] = [
-    ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId", "AnnualDueMonth"],
-    ...(bills ?? []).map((b) => [
-      b.name,
-      Math.abs(b.amount),
-      b.type ?? "fixed",
-      b.category ?? b.name,
-      b.dayOfMonth != null ? b.dayOfMonth : "varies",
-      b.color ?? "",
-      b.sourceDebtId ?? "",
-      b.annualDueMonth != null ? b.annualDueMonth : "",
-    ]),
-  ];
-
-  if (debts && debts.length > 0) {
-    grid.push(Array(10).fill(""));
-    grid.push(["Debts", "", "", "", "", "", "", "", "", ""]);
-    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced", "DueDate"]);
-    for (const d of debts) {
-      grid.push([
-        d.id,
-        d.name,
-        d.type ?? "credit_card",
-        d.balance ?? 0,
-        d.interestRate != null ? d.interestRate : "",
-        d.minimumPayment ?? 0,
-        d.dueDay != null ? d.dueDay : "",
-        d.originalAmount != null ? d.originalAmount : "",
-        d.billAsBalanced ? "true" : "false",
-        d.dueDate != null ? d.dueDate : "",
-      ]);
-    }
-  }
-
-  const maxCols = Math.max(...grid.map((r) => r.length));
-  const padded = grid.map((r) => {
-    while (r.length < maxCols) r.push("");
-    return r;
-  });
-  const endCol = colLetter(maxCols - 1);
-  const endRow = padded.length;
-  await graphPatch(
-    token,
-    `/me/drive/items/${fileId}/workbook/worksheets/${metaSheetName}/range(address='A1:${endCol}${endRow}')`,
-    { values: padded },
-    sessionId,
-  );
-}
-
 router.post("/excel/create-and-write", async (req, res): Promise<void> => {
   const token = await getAccessToken(req);
   if (!token) {
@@ -1329,12 +1189,6 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
   try {
     const wb = new ExcelJS.Workbook();
     writeExcelBudgetSheetXL(wb, "Budget", weeks, body.bills, body.debts, includeRemainingAcct ?? false);
-
-    const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
-    if (hasMeta) {
-      const dataWs = wb.addWorksheet("_BudgifyData");
-      writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
-    }
 
     if (body.budgetId && (req as any).user?.id) {
       try {
@@ -1846,16 +1700,12 @@ function archivePastWeeksInExcel(
       if (srcLcCell.style) destLcCell.style = { ...srcLcCell.style };
       if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
     }
-    // Mirror the Budget column widths so the Archive sheet renders identically.
-    archiveWs!.getColumn(destLc).width = 28;
-    archiveWs!.getColumn(destVc).width = 14;
   });
 
-  // Re-apply widths to every archive column (including pre-existing ones from
-  // previous syncs that may have been written before width-setting was in place).
+  // Apply dynamic widths to all archive columns (new and pre-existing).
   const lastArchiveCol = archiveStartCol - 1 + newPastGroups.length * 2;
   for (let c = 1; c <= lastArchiveCol; c++) {
-    archiveWs!.getColumn(c).width = (c % 2 === 1) ? 28 : 14;
+    autoWidth(archiveWs!, c, c % 2 === 1 ? 14 : 10, c % 2 === 1 ? 60 : 24);
   }
 
   // Clear ALL past-week columns from Budget (including ones already in Archive).
@@ -1979,14 +1829,6 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
       // matches the full-rewrite behavior of writeBudgetToSheet in sheets.ts.
       const totalRowsIncremental = computeBudgetTotalRows(currentWeeksExcel, includeRemainingAcct ?? false);
       writeExcelBillsDebtsSection(ws, body.bills, body.debts, totalRowsIncremental + 1, effectiveStartCol + 1);
-    }
-
-    // Update or create the _BudgifyData hidden sheet
-    const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
-    if (hasMeta) {
-      let dataWs = wb.getWorksheet("_BudgifyData") ?? wb.getWorksheet("_MoneyPalData");
-      if (!dataWs) dataWs = wb.addWorksheet("_BudgifyData");
-      writeExcelDataSheetXL(dataWs, body.bills ?? [], body.debts);
     }
 
     // Update the Savings tab in the same workbook pass (single upload instead of two)

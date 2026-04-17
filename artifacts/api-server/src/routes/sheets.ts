@@ -1896,101 +1896,6 @@ async function writeBudgetToSheet(
 
 }
 
-async function writeHiddenBillsSheet(
-  sheetsApi: sheets_v4.Sheets,
-  spreadsheetId: string,
-  bills: BillMeta[],
-  debts?: DebtItem[],
-) {
-  if ((!bills || bills.length === 0) && (!debts || debts.length === 0)) return;
-
-  const meta = await sheetsApi.spreadsheets.get({ spreadsheetId });
-  const sheets = meta.data.sheets ?? [];
-
-  // Prefer _BudgifyData; also handle legacy _MoneyPalData sheets by renaming them.
-  const legacySheet = sheets.find((s) => s.properties?.title === "_MoneyPalData");
-  let existing = sheets.find((s) => s.properties?.title === "_BudgifyData");
-
-  // Rename legacy _MoneyPalData → _BudgifyData if present and _BudgifyData doesn't exist yet.
-  if (legacySheet && !existing) {
-    const legacySheetId = legacySheet.properties?.sheetId ?? 0;
-    await sheetsApi.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{ updateSheetProperties: { properties: { sheetId: legacySheetId, title: "_BudgifyData", hidden: true }, fields: "title,hidden" } }],
-      },
-    });
-    existing = legacySheet; // now renamed
-  }
-
-  if (existing) {
-    const sheetId = existing.properties?.sheetId ?? 0;
-    await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: "_BudgifyData" });
-    await sheetsApi.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{ updateSheetProperties: { properties: { sheetId, hidden: true }, fields: "hidden" } }],
-      },
-    });
-  } else {
-    const addResult = await sheetsApi.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: { requests: [{ addSheet: { properties: { title: "_BudgifyData" } } }] },
-    });
-    const newSheetId = addResult.data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
-    await sheetsApi.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{ updateSheetProperties: { properties: { sheetId: newSheetId, hidden: true }, fields: "hidden" } }],
-      },
-    });
-  }
-
-  const grid: (string | number)[][] = [
-    ["Bills"],
-    ["Name", "Amount", "Type", "Category", "Day", "Color", "SourceDebtId", "AnnualDueMonth"],
-    ...(bills ?? []).map((b) => [
-      b.name,
-      Math.abs(b.amount),
-      b.type ?? "fixed",
-      b.category ?? b.name,
-      b.dayOfMonth != null ? b.dayOfMonth : "varies",
-      b.color ?? "",
-      b.sourceDebtId ?? "",
-      b.annualDueMonth != null ? b.annualDueMonth : "",
-    ]),
-  ];
-
-  if (debts && debts.length > 0) {
-    grid.push([]);
-    grid.push(["Debts"]);
-    grid.push(["Id", "Name", "Type", "Balance", "InterestRate", "MinPayment", "DueDay", "OriginalAmount", "BillAsBalanced", "DueDate"]);
-    for (const d of debts) {
-      grid.push([
-        d.id,
-        d.name,
-        d.type ?? "credit_card",
-        d.balance ?? 0,
-        d.interestRate != null ? d.interestRate : "",
-        d.minimumPayment ?? 0,
-        d.dueDay != null ? d.dueDay : "",
-        d.originalAmount != null ? d.originalAmount : "",
-        d.billAsBalanced ? "true" : "false",
-        d.dueDate != null ? d.dueDate : "",
-      ]);
-    }
-  }
-
-  const maxCols = Math.max(...grid.map((r) => r.length));
-  const colLetter = String.fromCharCode(64 + maxCols);
-  await sheetsApi.spreadsheets.values.update({
-    spreadsheetId,
-    range: `_BudgifyData!A1:${colLetter}${grid.length}`,
-    valueInputOption: "RAW",
-    requestBody: { values: grid },
-  });
-}
-
 const MONTH_SHORT_SHEETS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function parseLabelDatesSrv(label: string): { start: Date; end: Date } | null {
@@ -2482,9 +2387,6 @@ router.post("/sheets/create-and-write", requireAuth, requirePro, async (req, res
     const spreadsheetUrl = createResponse.data.spreadsheetUrl!;
 
     await writeBudgetToSheet(sheetsApi, spreadsheetId, "Budget", 0, weeks, 0, includeRemainingAcct ?? false, body.debts, 1000, undefined, body.bills);
-    if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
-      try { await writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts); } catch (e) { console.warn("[sheets/create] writeHiddenBillsSheet failed (non-fatal):", (e as Error).message); }
-    }
     if (body.bills && body.bills.length > 0) {
       let savingsContribs: ManualContribRow[] = [];
       let savingsGoals: SavingsGoalRow[] = [];
@@ -2640,10 +2542,6 @@ router.post("/sheets/:id/write", requireAuth, requirePro, async (req, res): Prom
       ok: true,
       message: `Wrote ${weeks.length} budget weeks starting at column ${columnToLetter(startCol)}`,
     });
-
-    if ((body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0)) {
-      writeHiddenBillsSheet(sheetsApi, spreadsheetId, body.bills ?? [], body.debts).catch((e: unknown) => { console.warn("[sheets/write] writeHiddenBillsSheet failed (non-fatal):", (e as Error).message); });
-    }
 
     if (body.bills && body.bills.length > 0) {
       (async () => {
