@@ -513,6 +513,15 @@ export function generateWeeklyBudgets(
       }
     }
   }
+  // Add any per-bill "initialSaved" amounts entered at bill-creation time. These
+  // exist on yearly bills created before a budget (and therefore before any
+  // savings_contributions rows could be written).
+  for (const bill of yearlyBills) {
+    const initial = Math.max(0, Number((bill as any).initialSaved) || 0);
+    if (initial > 0) {
+      yearlyPriorSavingsMap.set(bill.name, (yearlyPriorSavingsMap.get(bill.name) ?? 0) + initial);
+    }
+  }
 
   for (const mk of monthsInRange) {
     const monthWeekIndices = weeks

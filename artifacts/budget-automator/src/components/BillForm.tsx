@@ -51,6 +51,7 @@ const formSchema = z.object({
   color: z.string().default("none"),
   payoffDate: z.string().nullable().optional(),
   anchorDate: z.string().nullable().optional(),
+  initialSaved: z.coerce.number().min(0).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.type === "yearly" || data.type === "yearly-flat") {
     if (data.annualDueMonth == null) {
@@ -145,7 +146,7 @@ function YearlyDueDatePicker({
           <SelectTrigger className="flex-1 focus:ring-primary/20 focus:border-primary">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-64">
             {MONTH_NAMES.map((name, i) => (
               <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
             ))}
@@ -158,7 +159,7 @@ function YearlyDueDatePicker({
           <SelectTrigger className="w-20 focus:ring-primary/20 focus:border-primary">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-64">
             {Array.from({ length: daysInMonth }, (_, i) => (
               <SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>
             ))}
@@ -191,6 +192,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
           color: d.color ?? "none",
           payoffDate: d.payoffDate ?? null,
           anchorDate: d.anchorDate ?? null,
+          initialSaved: d.initialSaved ?? null,
         }
       : {
           name: "",
@@ -202,6 +204,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
           color: "none",
           payoffDate: null,
           anchorDate: null,
+          initialSaved: null,
         },
   });
 
@@ -210,6 +213,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
   const watchedAmount = form.watch("amount");
   const watchedAnnualDueMonth = form.watch("annualDueMonth");
   const watchedDayOfMonth = form.watch("dayOfMonth");
+  const watchedInitialSaved = form.watch("initialSaved");
 
   const isYearly = billType === "yearly";
   const isYearlyFlat = billType === "yearly-flat";
@@ -226,10 +230,12 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
     if (!isYearly) return null;
     const annualAbs = Math.abs(typeof watchedAmount === "number" ? watchedAmount : 0);
     if (!annualAbs || !month || !day) return null;
+    const alreadySaved = Math.max(0, typeof watchedInitialSaved === "number" ? watchedInitialSaved : 0);
+    const remaining = Math.max(0, annualAbs - alreadySaved);
     const today = new Date();
     const dueDate = getNextYearlyDueDate(today, month, day);
     const weeksUntil = Math.max(1, Math.ceil((dueDate.getTime() - today.getTime()) / (7 * 24 * 60 * 60 * 1000)));
-    const weekly = annualAbs / weeksUntil;
+    const weekly = remaining / weeksUntil;
     const monthStr = MONTH_SHORT[(month - 1) % 12];
     return { weekly, weeksUntil, monthStr, day, flat: false };
   })();
@@ -242,6 +248,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
 
   function handleSubmit(values: z.infer<typeof formSchema>) {
     const isWeeklyOrBiweekly = values.type === "weekly" || values.type === "biweekly";
+    const isYearlySinking = values.type === "yearly";
     const result: Bill = {
       ...(initialData ?? {}),
       ...values,
@@ -250,6 +257,9 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
       annualDueMonth: isAnyYearly ? (values.annualDueMonth ?? 1) : undefined,
       payoffDate: isWeeklyOrBiweekly ? (values.payoffDate || null) : undefined,
       anchorDate: values.type === "biweekly" ? (values.anchorDate || null) : undefined,
+      initialSaved: isYearlySinking && typeof values.initialSaved === "number" && values.initialSaved > 0
+        ? values.initialSaved
+        : undefined,
     } as Bill;
     onSubmit(result);
   }
@@ -377,6 +387,33 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
                   form.setValue("annualDueMonth", month, { shouldValidate: true });
                   form.setValue("dayOfMonth", day, { shouldValidate: true });
                 }}
+              />
+            )}
+
+            {isYearly && (
+              <FormField
+                control={form.control}
+                name="initialSaved"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Already saved <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={field.value == null ? "" : String(field.value)}
+                        onChange={e => field.onChange(e.target.value === "" ? null : e.target.value)}
+                        className="focus:ring-primary/20 focus:border-primary"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      If you've already put money toward this, enter it here to reduce the weekly contribution.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             )}
 

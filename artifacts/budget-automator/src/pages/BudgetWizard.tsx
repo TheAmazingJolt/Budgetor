@@ -1541,11 +1541,15 @@ export function BudgetWizard({
     const serverBills = dedupeDebtBills(strippedBills);
     const serverHadDuplicates = serverBills.length !== strippedBills.length;
 
-    setBills(serverBills);
-    // If we removed duplicates, leave prevBillsRef empty so the save effect fires
-    // and writes the cleaned-up list back to the server. Otherwise, set it to the
-    // loaded value so the save effect doesn't trigger an unnecessary re-save.
-    if (!serverHadDuplicates) {
+    // Preserve any bills added locally before the server query resolved —
+    // otherwise a slow query would wipe bills the user just added.
+    const serverKeys = new Set(serverBills.map(b => `${b.name}|${b.amount}|${b.type}`));
+    const localOnly = bills.filter(lb => !serverKeys.has(`${lb.name}|${lb.amount}|${lb.type}`));
+    const merged = localOnly.length > 0 ? [...serverBills, ...localOnly] : serverBills;
+    setBills(merged);
+    // If we removed duplicates OR merged in local-only bills, leave prevBillsRef
+    // stale so the save effect fires and writes the final list back to the server.
+    if (!serverHadDuplicates && localOnly.length === 0) {
       prevBillsRef.current = JSON.stringify(serverBills);
     }
     billsLoadedForUserRef.current = currentUser.id;

@@ -10,8 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   computeSavings,
   parseLabelDates,
@@ -800,6 +798,7 @@ function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onC
   const [addAmount, setAddAmount] = useState("");
   const [addDate, setAddDate] = useState("");
   const [addNote, setAddNote] = useState("");
+  const [addAlreadySaved, setAddAlreadySaved] = useState("");
   const [addError, setAddError] = useState("");
   const [addSaving, setAddSaving] = useState(false);
 
@@ -808,11 +807,26 @@ function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onC
     const amount = parseFloat(addAmount);
     if (!addAmount || isNaN(amount) || amount < 0) { setAddError("Enter a valid target amount."); return; }
     if (!addDate) { setAddError("Target date is required."); return; }
+    const alreadySaved = addAlreadySaved.trim() === "" ? 0 : parseFloat(addAlreadySaved);
+    if (addAlreadySaved.trim() !== "" && (isNaN(alreadySaved) || alreadySaved < 0)) {
+      setAddError("Already saved must be a non-negative number.");
+      return;
+    }
     setAddError("");
     setAddSaving(true);
     try {
-      await onCreate({ name: addName.trim(), targetAmount: amount, targetDate: addDate, note: addNote.trim() || undefined });
-      setAddName(""); setAddAmount(""); setAddDate(""); setAddNote("");
+      const goalName = addName.trim();
+      await onCreate({ name: goalName, targetAmount: amount, targetDate: addDate, note: addNote.trim() || undefined });
+      if (alreadySaved > 0) {
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+          await onAdd(alreadySaved, today, "Initial balance", goalName);
+        } catch {
+          // If the contribution fails, the goal is still created; surface but don't roll back.
+          setAddError("Goal saved, but failed to record already-saved amount.");
+        }
+      }
+      setAddName(""); setAddAmount(""); setAddDate(""); setAddNote(""); setAddAlreadySaved("");
       setShowAddForm(false);
     } catch (e: any) {
       setAddError(e.message ?? "Failed to save");
@@ -882,6 +896,23 @@ function SavingsGoalsSection({ goals, contributions, onAdd, onDeleteContrib, onC
                 onChange={e => setAddNote(e.target.value)}
                 className="h-8 text-sm"
               />
+              <div>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Already saved (optional)"
+                    value={addAlreadySaved}
+                    onChange={e => setAddAlreadySaved(e.target.value)}
+                    className="pl-6 h-8 text-sm"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  If you've already set some money aside, enter it here to reduce the weekly target.
+                </p>
+              </div>
               {addError && <p className="text-xs text-red-500">{addError}</p>}
               <div className="flex gap-2">
                 <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleCreate} disabled={addSaving}>
