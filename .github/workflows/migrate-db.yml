@@ -1,0 +1,25 @@
+name: Migrate Staging → Production DB
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install postgres client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Dump staging
+        run: |
+          pg_dump "${{ secrets.STAGING_DATABASE_URL }}" \
+            --no-owner --no-acl --format=custom \
+            --file=staging.dump
+
+      - name: Restore to production
+        run: |
+          pg_restore \
+            --no-owner --no-acl \
+            --clean --if-exists \
+            --dbname="${{ secrets.PROD_DATABASE_URL }}" \
+            staging.dump
