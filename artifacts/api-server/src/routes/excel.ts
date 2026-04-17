@@ -282,13 +282,11 @@ function writeExcelBudgetSheetXL(
     const vc = lc + 1;
     let r = 1;
 
+    ws.mergeCells(r, lc, r, vc);
     ws.getCell(r, lc).value = week.weekLabel;
-    ws.getCell(r, vc).value = "";
-    for (const c of [lc, vc]) {
-      ws.getCell(r, c).fill = xlFill("FFBDD7EE");
-      ws.getCell(r, c).font = xlFont(true);
-      ws.getCell(r, c).alignment = { horizontal: "center" };
-    }
+    ws.getCell(r, lc).fill = xlFill("FFBDD7EE");
+    ws.getCell(r, lc).font = xlFont(true);
+    ws.getCell(r, lc).alignment = { horizontal: "center" };
     r++;
 
     const sumStartRow = r;
@@ -297,7 +295,7 @@ function writeExcelBudgetSheetXL(
       ws.getCell(r, lc).value = "Remaining Acct";
       ws.getCell(r, vc).value = week.openingBalance;
       ws.getCell(r, vc).numFmt = FMT_CURRENCY;
-      for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+      for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
       r++;
     }
 
@@ -317,7 +315,7 @@ function writeExcelBudgetSheetXL(
       ws.getCell(r, vc).numFmt = FMT_CURRENCY;
       for (const c of [lc, vc]) {
         ws.getCell(r, c).font = xlFont();
-        if (argb) ws.getCell(r, c).fill = xlFill(argb);
+        ws.getCell(r, c).fill = argb ? xlFill(argb) : xlNoFill();
       }
       r++;
     }
@@ -325,6 +323,7 @@ function writeExcelBudgetSheetXL(
     while (r < totalRows) {
       ws.getCell(r, lc).value = "";
       ws.getCell(r, vc).value = "";
+      for (const c of [lc, vc]) ws.getCell(r, c).fill = xlNoFill();
       r++;
     }
 
@@ -334,6 +333,7 @@ function writeExcelBudgetSheetXL(
     ws.getCell(r, vc).numFmt = FMT_CURRENCY;
     for (const c of [lc, vc]) {
       ws.getCell(r, c).font = xlFont(true);
+      ws.getCell(r, c).fill = xlNoFill();
       ws.getCell(r, c).border = { top: { style: "thin", color: { argb: "FF000000" } } };
     }
   }
@@ -1628,13 +1628,12 @@ function writeWeeksToWorksheetColumns(
     const vc = lc + 1;
     let r = 1;
 
+    try { ws.unMergeCells(r, lc, r, vc); } catch { /* not yet merged, ok */ }
+    ws.mergeCells(r, lc, r, vc);
     ws.getCell(r, lc).value = week.weekLabel;
-    ws.getCell(r, vc).value = "";
-    for (const c of [lc, vc]) {
-      ws.getCell(r, c).fill = xlFill("FFBDD7EE");
-      ws.getCell(r, c).font = xlFont(true);
-      ws.getCell(r, c).alignment = { horizontal: "center" };
-    }
+    ws.getCell(r, lc).fill = xlFill("FFBDD7EE");
+    ws.getCell(r, lc).font = xlFont(true);
+    ws.getCell(r, lc).alignment = { horizontal: "center" };
     r++;
 
     const sumStartRow = r;
