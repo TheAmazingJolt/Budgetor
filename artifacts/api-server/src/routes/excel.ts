@@ -116,6 +116,20 @@ function xlFont(bold = false, size = 10): Partial<ExcelJS.Font> {
   return { name: "Arial", size, bold };
 }
 
+function xlThinBorder(): ExcelJS.Borders {
+  const s = { style: "thin" as const, color: { argb: "FFB0B0B0" } };
+  return { top: s, bottom: s, left: s, right: s } as ExcelJS.Borders;
+}
+
+function autoWidth(ws: ExcelJS.Worksheet, col: number, min: number, max: number): void {
+  let w = min;
+  ws.getColumn(col).eachCell({ includeEmpty: false }, (cell) => {
+    const len = (cell.text ?? String(cell.value ?? "")).length + 2;
+    if (len > w) w = len;
+  });
+  ws.getColumn(col).width = Math.min(w, max);
+}
+
 function buildBudgifyDataGrid(bills: BillMeta[], debts?: DebtItem[]): (string | number)[][] {
   const grid: (string | number)[][] = [
     ["Bills"],
@@ -169,6 +183,7 @@ function writeExcelBillsDebtsSection(
       cell.font = {} as ExcelJS.Font;
       cell.numFmt = "";
       cell.alignment = {} as ExcelJS.Alignment;
+      cell.border = {} as ExcelJS.Borders;
     }
   }
 
@@ -179,7 +194,11 @@ function writeExcelBillsDebtsSection(
     nextRow++;
     ws.getCell(nextRow, sc).value = "Bills";
     ws.getCell(nextRow, sc).font = xlFont(true, 11);
-    for (let c = sc; c < sc + 3; c++) ws.getCell(nextRow, c).fill = xlFill(BILL_BG);
+    ws.getCell(nextRow, sc).alignment = { horizontal: "left" };
+    for (let c = sc; c < sc + 3; c++) {
+      ws.getCell(nextRow, c).fill = xlFill(BILL_BG);
+      ws.getCell(nextRow, c).border = xlThinBorder();
+    }
     nextRow++;
 
     const billHdrs = ["Name", "Amount", "Due Day"];
@@ -187,7 +206,9 @@ function writeExcelBillsDebtsSection(
       ws.getCell(nextRow, sc + i).value = h;
       ws.getCell(nextRow, sc + i).font = xlFont(true);
       ws.getCell(nextRow, sc + i).fill = xlFill(BILL_BG);
+      ws.getCell(nextRow, sc + i).border = xlThinBorder();
     });
+    ws.getCell(nextRow, sc).alignment = { horizontal: "left" };
     ws.getCell(nextRow, sc + 1).alignment = { horizontal: "center" };
     ws.getCell(nextRow, sc + 2).alignment = { horizontal: "center" };
     nextRow++;
@@ -215,8 +236,10 @@ function writeExcelBillsDebtsSection(
         ws.getCell(nextRow, sc + i).fill = xlFill(BILL_BG);
       });
       ws.getCell(nextRow, sc + 1).numFmt = FMT_CURRENCY;
+      ws.getCell(nextRow, sc).alignment     = { horizontal: "left" };
       ws.getCell(nextRow, sc + 1).alignment = { horizontal: "center" };
       ws.getCell(nextRow, sc + 2).alignment = { horizontal: "center" };
+      for (let ci = 0; ci < 3; ci++) ws.getCell(nextRow, sc + ci).border = xlThinBorder();
       nextRow++;
     }
   }
@@ -238,11 +261,13 @@ function writeExcelBillsDebtsSection(
         else cell.font = xlFont();
       });
       if (isColHeader) {
+        ws.getCell(nextRow, sc).alignment = { horizontal: "left" };
         for (const j of [1, 2, 3, 4]) {
           ws.getCell(nextRow, sc + j).alignment = { horizontal: j === 3 ? "right" : "center" };
         }
       }
       if (isDataRow) {
+        ws.getCell(nextRow, sc).alignment = { horizontal: "left" };
         ws.getCell(nextRow, sc + 1).numFmt = FMT_CURRENCY;
         ws.getCell(nextRow, sc + 1).alignment = { horizontal: "right" };
         ws.getCell(nextRow, sc + 2).alignment = { horizontal: "center" };
@@ -250,9 +275,16 @@ function writeExcelBillsDebtsSection(
         ws.getCell(nextRow, sc + 3).alignment = { horizontal: "right" };
         ws.getCell(nextRow, sc + 4).alignment = { horizontal: "center" };
       }
+      if (!isBlankRow) {
+        for (let ci = 0; ci < rowData.length; ci++) ws.getCell(nextRow, sc + ci).border = xlThinBorder();
+      }
       nextRow++;
     });
   }
+
+  autoWidth(ws, sc,     14, 50);
+  autoWidth(ws, sc + 1, 10, 18);
+  autoWidth(ws, sc + 2, 8,  16);
 }
 
 function computeBudgetTotalRows(
@@ -264,34 +296,24 @@ function computeBudgetTotalRows(
 }
 
 function writeExcelBudgetSheetXL(
-  ws: ExcelJS.Worksheet,
+  wb: ExcelJS.Workbook,
+  targetSheetName: string,
   weeks: ExcelWriteRequest["weeks"],
   bills: BillMeta[] | undefined,
   debts: DebtItem[] | undefined,
   includeRemainingAcct: boolean,
   startColOffset = 0,
-): void {
+): ExcelJS.Worksheet {
+  // Remove-and-recreate guarantees a clean slate — no stale fills, fonts, or borders
+  // from prior syncs. Mirrors the Savings tab pattern at line ~1500 in this file.
+  const existing = wb.getWorksheet(targetSheetName);
+  const wasHidden = existing?.state === "hidden" || existing?.state === "veryHidden";
+  if (existing) wb.removeWorksheet(existing.id);
+  const ws = wb.addWorksheet(targetSheetName);
+  if (wasHidden) ws.state = "hidden";
+
   const sc = startColOffset + 1;
   const totalRows = computeBudgetTotalRows(weeks, includeRemainingAcct);
-
-  // Blanket reset — explicitly clear every cell in the write area BEFORE writing
-  // specific content. spliceRows doesn't reliably clear per-cell styles (see Savings
-  // tab comment at line ~1469 in this file). Without this, stale fills from a prior
-  // sync (e.g. old BILL_BG from the bills section when it sat at a different row, or
-  // bill colors from a previous week order) bleed through the new write.
-  const resetEndCol = sc + Math.max(weeks.length * 2, 5) + 4; // include bills/debts cols
-  const resetRowCount = totalRows + 200; // include bills/debts buffer area
-  for (let r = 1; r <= resetRowCount; r++) {
-    for (let c = sc; c <= resetEndCol; c++) {
-      const cell = ws.getCell(r, c);
-      cell.value = null;
-      cell.fill = xlNoFill();
-      cell.font = {} as ExcelJS.Font;
-      cell.alignment = {} as ExcelJS.Alignment;
-      cell.numFmt = "";
-      cell.border = {} as ExcelJS.Borders;
-    }
-  }
 
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const week = weeks[wIdx];
@@ -359,11 +381,10 @@ function writeExcelBudgetSheetXL(
   writeExcelBillsDebtsSection(ws, bills, debts, totalRows + 1, sc);
 
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
-    const lc = sc + wIdx * 2;
-    const vc = lc + 1;
-    ws.getColumn(lc).width = 28;
-    ws.getColumn(vc).width = 14;
+    autoWidth(ws, sc + wIdx * 2,     14, 60);
+    autoWidth(ws, sc + wIdx * 2 + 1, 10, 24);
   }
+  return ws;
 }
 
 function writeExcelDataSheetXL(ws: ExcelJS.Worksheet, bills: BillMeta[], debts?: DebtItem[]): void {
@@ -1307,8 +1328,7 @@ router.post("/excel/create-and-write", async (req, res): Promise<void> => {
 
   try {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Budget");
-    writeExcelBudgetSheetXL(ws, weeks, body.bills, body.debts, includeRemainingAcct ?? false);
+    writeExcelBudgetSheetXL(wb, "Budget", weeks, body.bills, body.debts, includeRemainingAcct ?? false);
 
     const hasMeta = (body.bills && body.bills.length > 0) || (body.debts && body.debts.length > 0);
     if (hasMeta) {
@@ -1644,7 +1664,6 @@ function writeWeeksToWorksheetColumns(
       cell.font = {} as ExcelJS.Font;
       cell.alignment = {} as ExcelJS.Alignment;
       cell.numFmt = "";
-      cell.border = {} as ExcelJS.Borders;
     }
   }
 
@@ -1719,8 +1738,11 @@ function writeWeeksToWorksheetColumns(
       ws.getCell(r, c).border = { top: { style: "thin", color: { argb: "FF000000" } } };
     }
 
-    ws.getColumn(lc).width = 28;
-    ws.getColumn(vc).width = 14;
+  }
+
+  for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+    autoWidth(ws, startCol + 1 + wIdx * 2,     14, 60);
+    autoWidth(ws, startCol + 1 + wIdx * 2 + 1, 10, 24);
   }
 
   // Clear any stale week columns beyond the last written column (e.g. when week count shrinks)
@@ -1935,8 +1957,8 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     const startCol = body.startCol ?? 0;
 
     if (startCol === 0) {
-      // Full overwrite — clear the Budget sheet and rewrite all weeks from column A
-      writeExcelBudgetSheetXL(ws, currentWeeksExcel, body.bills, body.debts, includeRemainingAcct ?? false, 0);
+      // Full overwrite — recreate the Budget sheet and rewrite all weeks from column A
+      ws = writeExcelBudgetSheetXL(wb, targetSheetName, currentWeeksExcel, body.bills, body.debts, includeRemainingAcct ?? false, 0);
     } else {
       // Incremental — find the real next free slot after archive instead of trusting the
       // stale frontend startCol (which may point far to the right if old weeks were archived).
