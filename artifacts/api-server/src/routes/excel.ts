@@ -105,7 +105,7 @@ async function closeWorkbookSession(token: string, fileId: string, sessionId: st
 // ─── ExcelJS-based helpers (no workbook API calls) ────────────────────────────
 
 function xlFill(argb: string): ExcelJS.Fill {
-  return { type: "pattern", pattern: "solid", fgColor: { argb } };
+  return { type: "pattern", pattern: "solid", fgColor: { argb }, bgColor: { argb } };
 }
 
 function xlNoFill(): ExcelJS.Fill {
@@ -271,10 +271,27 @@ function writeExcelBudgetSheetXL(
   includeRemainingAcct: boolean,
   startColOffset = 0,
 ): void {
-  if (ws.rowCount > 0) ws.spliceRows(1, ws.rowCount);
-
   const sc = startColOffset + 1;
   const totalRows = computeBudgetTotalRows(weeks, includeRemainingAcct);
+
+  // Blanket reset — explicitly clear every cell in the write area BEFORE writing
+  // specific content. spliceRows doesn't reliably clear per-cell styles (see Savings
+  // tab comment at line ~1469 in this file). Without this, stale fills from a prior
+  // sync (e.g. old BILL_BG from the bills section when it sat at a different row, or
+  // bill colors from a previous week order) bleed through the new write.
+  const resetEndCol = sc + Math.max(weeks.length * 2, 5) + 4; // include bills/debts cols
+  const resetRowCount = totalRows + 200; // include bills/debts buffer area
+  for (let r = 1; r <= resetRowCount; r++) {
+    for (let c = sc; c <= resetEndCol; c++) {
+      const cell = ws.getCell(r, c);
+      cell.value = null;
+      cell.fill = xlNoFill();
+      cell.font = {} as ExcelJS.Font;
+      cell.alignment = {} as ExcelJS.Alignment;
+      cell.numFmt = "";
+      cell.border = {} as ExcelJS.Borders;
+    }
+  }
 
   for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
     const week = weeks[wIdx];
@@ -282,6 +299,7 @@ function writeExcelBudgetSheetXL(
     const vc = lc + 1;
     let r = 1;
 
+    try { ws.unMergeCells(r, lc, r, vc); } catch { /* not yet merged, ok */ }
     ws.mergeCells(r, lc, r, vc);
     ws.getCell(r, lc).value = week.weekLabel;
     ws.getCell(r, lc).fill = xlFill("FFBDD7EE");
@@ -305,7 +323,7 @@ function writeExcelBudgetSheetXL(
     ws.getCell(r, lc).value = paycheckLabel;
     ws.getCell(r, vc).value = week.paycheck;
     ws.getCell(r, vc).numFmt = FMT_CURRENCY;
-    for (const c of [lc, vc]) ws.getCell(r, c).font = xlFont();
+    for (const c of [lc, vc]) { ws.getCell(r, c).font = xlFont(); ws.getCell(r, c).fill = xlNoFill(); }
     r++;
 
     for (const bill of week.bills) {
@@ -1612,6 +1630,23 @@ function writeWeeksToWorksheetColumns(
 ): void {
   const maxBills = weeks.length > 0 ? Math.max(...weeks.map((w) => w.bills.length)) : 0;
   const totalRows = 1 + (includeRemainingAcct ? 1 : 0) + 1 + maxBills + 1;
+
+  // Blanket reset — explicitly clear fills/styles in the write range BEFORE the per-week
+  // loop repaints specific cells. Mirrors the full writer's blanket reset and the Sheets
+  // writer's repeatCell blanket. Without this, stale fills from a prior sync (different
+  // bill colors/order) persist on cells that the per-week loop nominally overwrites.
+  const bResetStart = startCol + 1; // 1-indexed first col being written
+  const bResetEnd   = startCol + Math.max(weeks.length * 2, 5) + 4; // include bills/debts cols
+  for (let r = 1; r <= totalRows; r++) {
+    for (let c = bResetStart; c <= bResetEnd; c++) {
+      const cell = ws.getCell(r, c);
+      cell.fill = xlNoFill();
+      cell.font = {} as ExcelJS.Font;
+      cell.alignment = {} as ExcelJS.Alignment;
+      cell.numFmt = "";
+      cell.border = {} as ExcelJS.Borders;
+    }
+  }
 
   // Find the column extent currently used in the sheet so we can clear stale week columns
   // that lie beyond the new write range (handles reducing week count on re-sync).
