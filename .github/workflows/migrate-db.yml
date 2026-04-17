@@ -20,15 +20,13 @@ jobs:
           /usr/lib/postgresql/18/bin/pg_dump "${{ secrets.STAGING_DATABASE_URL }}" \
             --no-owner \
             --no-acl \
-            --format=custom \
-            --file=staging.dump
+            --format=plain \
+            --disable-triggers \
+            --file=staging.sql
 
       - name: Restore to production
         run: |
-          /usr/lib/postgresql/18/bin/pg_restore \
-            --no-owner \
-            --no-acl \
-            --clean \
-            --if-exists \
-            --dbname="${{ secrets.PROD_DATABASE_URL }}" \
-            staging.dump
+          /usr/lib/postgresql/18/bin/psql "${{ secrets.PROD_DATABASE_URL }}" \
+            --set ON_ERROR_STOP=1 \
+            --file=staging.sql
+
