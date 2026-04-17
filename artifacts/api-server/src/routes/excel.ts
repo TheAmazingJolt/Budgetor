@@ -1608,115 +1608,147 @@ function writeWeeksToWorksheetColumns(
   }
 }
 
+function writeWeekToArchiveColumn(
+  archiveWs: ExcelJS.Worksheet,
+  week: ExcelWriteRequest["weeks"][number],
+  lc: number,
+  totalRows: number,
+  includeRemainingAcct: boolean,
+): void {
+  const vc = lc + 1;
+
+  // Clear existing content in these two columns
+  for (let r = 1; r <= totalRows; r++) {
+    for (const c of [lc, vc]) {
+      const cell = archiveWs.getCell(r, c);
+      cell.value = null;
+      cell.fill = xlNoFill();
+      cell.font = {} as ExcelJS.Font;
+      cell.alignment = {} as ExcelJS.Alignment;
+      cell.numFmt = "";
+      cell.border = {} as ExcelJS.Borders;
+    }
+  }
+
+  let r = 1;
+
+  // Row 1: merged week header
+  try { archiveWs.unMergeCells(r, lc, r, vc); } catch { /* not merged yet */ }
+  archiveWs.mergeCells(r, lc, r, vc);
+  archiveWs.getCell(r, lc).value = week.weekLabel;
+  archiveWs.getCell(r, lc).fill = xlFill("FFBDD7EE");
+  archiveWs.getCell(r, lc).font = xlFont(true);
+  archiveWs.getCell(r, lc).alignment = { horizontal: "center" };
+  r++;
+
+  if (includeRemainingAcct) {
+    archiveWs.getCell(r, lc).value = "Remaining Acct";
+    archiveWs.getCell(r, vc).value = week.openingBalance;
+    archiveWs.getCell(r, vc).numFmt = FMT_CURRENCY;
+    for (const c of [lc, vc]) { archiveWs.getCell(r, c).font = xlFont(); archiveWs.getCell(r, c).fill = xlNoFill(); }
+    r++;
+  }
+
+  const paycheckLabel = week.paycheckBreakdown && week.paycheckBreakdown.length > 1
+    ? `Paycheck (${week.paycheckBreakdown.map((b) => `${b.sourceName}: $${b.amount.toFixed(2)}`).join(" + ")})`
+    : "Paycheck";
+  archiveWs.getCell(r, lc).value = paycheckLabel;
+  archiveWs.getCell(r, vc).value = week.paycheck;
+  archiveWs.getCell(r, vc).numFmt = FMT_CURRENCY;
+  for (const c of [lc, vc]) { archiveWs.getCell(r, c).font = xlFont(); archiveWs.getCell(r, c).fill = xlNoFill(); }
+  r++;
+
+  for (const bill of week.bills) {
+    const argb = bill.color ? BILL_COLOR_ARGB[bill.color] : undefined;
+    archiveWs.getCell(r, lc).value = bill.name;
+    archiveWs.getCell(r, vc).value = bill.amount;
+    archiveWs.getCell(r, vc).numFmt = FMT_CURRENCY;
+    for (const c of [lc, vc]) {
+      archiveWs.getCell(r, c).font = xlFont();
+      archiveWs.getCell(r, c).fill = argb ? xlFill(argb) : xlNoFill();
+    }
+    r++;
+  }
+
+  while (r < totalRows) {
+    for (const c of [lc, vc]) { archiveWs.getCell(r, c).value = ""; archiveWs.getCell(r, c).fill = xlNoFill(); }
+    r++;
+  }
+
+  archiveWs.getCell(r, lc).value = "Remaining";
+  archiveWs.getCell(r, vc).value = week.closingBalance;
+  archiveWs.getCell(r, vc).numFmt = FMT_CURRENCY;
+  for (const c of [lc, vc]) {
+    archiveWs.getCell(r, c).font = xlFont(true);
+    archiveWs.getCell(r, c).fill = xlNoFill();
+    archiveWs.getCell(r, c).border = { top: { style: "thin", color: { argb: "FF000000" } } };
+  }
+}
+
 function archivePastWeeksInExcel(
   wb: ExcelJS.Workbook,
   budgetSheetName: string,
+  allWeeks: ExcelWriteRequest["weeks"],
+  includeRemainingAcct: boolean,
   tz?: string,
 ): string[] {
   const today = tz ? new Date(new Date().toLocaleString("en-US", { timeZone: tz })) : new Date();
   today.setHours(0, 0, 0, 0);
 
-  const budgetWs = wb.getWorksheet(budgetSheetName);
-  if (!budgetWs) return [];
-
-  // Read the header row (row 1) from the Budget sheet
-  const headerRow = budgetWs.getRow(1);
-  const headerValues: (string | null)[] = [];
-  headerRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
-    headerValues[colNum - 1] = cell.text ?? null;
+  // Identify past weeks from the request data
+  const pastWeeks = allWeeks.filter((w) => {
+    const endDate = parseLabelEndDateExcel(w.weekLabel);
+    if (!endDate) return false;
+    return new Date(endDate.getTime() + 24 * 60 * 60 * 1000) < today;
   });
 
-  // Find past-week column groups (each week spans 2 columns: label col + value col)
-  const pastColGroups: { startCol: number; endCol: number; label: string }[] = [];
-  for (let c = 0; c < headerValues.length; c++) {
-    const label = String(headerValues[c] ?? "").trim();
-    if (!label.toLowerCase().startsWith("budget")) continue;
-    const endDate = parseLabelEndDateExcel(label);
-    if (!endDate) continue;
-    // Keep a week visible through the first day of the next week (endDate + 1 day).
-    // Archive only once today is strictly past that point, so the user can still
-    // review the previous week on the day their new week starts.
-    const archiveThreshold = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
-    if (archiveThreshold < today) {
-      pastColGroups.push({ startCol: c + 1, endCol: c + 2, label }); // 1-indexed
-      c++; // skip the value column
-    }
-  }
-
-  if (pastColGroups.length === 0) return [];
+  if (pastWeeks.length === 0) return [];
 
   // Ensure Archive worksheet exists
   let archiveWs = wb.getWorksheet("Archive");
   if (!archiveWs) archiveWs = wb.addWorksheet("Archive");
 
-  // Find the next free column in the Archive sheet (1-indexed) and collect existing labels
-  let archiveStartCol = 1;
-  const alreadyArchivedLabels = new Set<string>();
+  // Collect existing archive columns by label (to support rewrites of already-archived weeks)
+  const archiveColByLabel = new Map<string, number>(); // weekLabel → lc (1-indexed)
+  let archiveLastOccupiedCol = 0;
   archiveWs.getRow(1).eachCell({ includeEmpty: false }, (cell, colNum) => {
-    if (colNum >= archiveStartCol) archiveStartCol = colNum + 1;
     const v = String(cell.value ?? "").trim();
-    if (v.toLowerCase().startsWith("budget")) alreadyArchivedLabels.add(v);
+    if (v.toLowerCase().startsWith("budget")) archiveColByLabel.set(v, colNum);
+    if (colNum > archiveLastOccupiedCol) archiveLastOccupiedCol = colNum;
   });
-  if ((archiveStartCol - 1) % 2 !== 0) archiveStartCol++;
+  // Next free column — align to even pair boundary
+  let nextFreeCol = archiveLastOccupiedCol + 1;
+  if ((nextFreeCol - 1) % 2 !== 0) nextFreeCol++;
 
-  // Filter to only groups whose label isn't already in Archive (prevent double-archiving)
-  const newPastGroups = pastColGroups.filter(g => !alreadyArchivedLabels.has(g.label));
+  // Row count must match what Budget uses for visual consistency
+  const totalRows = computeBudgetTotalRows(allWeeks, includeRemainingAcct);
 
-  // Resolve formula cells to their computed scalar result so archived rows remain
-  // correct after the source Budget columns are nulled.
-  const resolveCell = (cell: ExcelJS.Cell): ExcelJS.CellValue => {
-    const v = cell.value;
-    if (v !== null && typeof v === "object" && "formula" in (v as any)) {
-      return (v as any).result ?? null;
-    }
-    return v;
-  };
-
-  // Find the row where the Bills section begins (1-indexed) so we only archive budget rows
-  const budgetRowCount = budgetWs.rowCount;
-  let billsStartRow = budgetRowCount + 1; // default: copy everything
-  for (let r = 1; r <= budgetRowCount; r++) {
-    const cellVal = String(budgetWs.getCell(r, 1).text ?? "").trim().toLowerCase();
-    if (cellVal === "bills") {
-      billsStartRow = r;
-      break;
-    }
-  }
-  const archiveRowCount = billsStartRow - 1;
-
-  // Copy only new (not-yet-archived) past-week column pairs into the Archive sheet.
-  newPastGroups.forEach((g, i) => {
-    const destLc = archiveStartCol + i * 2;
-    const destVc = destLc + 1;
-    for (let r = 1; r <= archiveRowCount; r++) {
-      const srcLcCell = budgetWs.getCell(r, g.startCol);
-      const srcVcCell = budgetWs.getCell(r, g.endCol);
-      const destLcCell = archiveWs!.getCell(r, destLc);
-      const destVcCell = archiveWs!.getCell(r, destVc);
-
-      destLcCell.value = resolveCell(srcLcCell);
-      destVcCell.value = resolveCell(srcVcCell);
-
-      if (srcLcCell.style) destLcCell.style = { ...srcLcCell.style };
-      if (srcVcCell.style) destVcCell.style = { ...srcVcCell.style };
-    }
+  // Write each past week to archive (rewrite if already there, else append)
+  pastWeeks.forEach((week) => {
+    const destLc = archiveColByLabel.has(week.weekLabel)
+      ? archiveColByLabel.get(week.weekLabel)!
+      : (() => { const col = nextFreeCol; nextFreeCol += 2; return col; })();
+    writeWeekToArchiveColumn(archiveWs!, week, destLc, totalRows, includeRemainingAcct);
+    autoWidth(archiveWs!, destLc,     14, 60);
+    autoWidth(archiveWs!, destLc + 1, 10, 24);
   });
 
-  // Apply dynamic widths to all archive columns (new and pre-existing).
-  const lastArchiveCol = archiveStartCol - 1 + newPastGroups.length * 2;
-  for (let c = 1; c <= lastArchiveCol; c++) {
-    autoWidth(archiveWs!, c, c % 2 === 1 ? 14 : 10, c % 2 === 1 ? 60 : 24);
+  // Clear past week columns from the Budget sheet (find by scanning header)
+  const budgetWs = wb.getWorksheet(budgetSheetName);
+  if (budgetWs) {
+    const pastLabels = new Set(pastWeeks.map((w) => w.weekLabel));
+    const budgetRowCount = budgetWs.rowCount;
+    budgetWs.getRow(1).eachCell({ includeEmpty: false }, (cell, colNum) => {
+      if (pastLabels.has(String(cell.value ?? "").trim())) {
+        for (let r = 1; r <= budgetRowCount; r++) {
+          budgetWs.getCell(r, colNum).value = null;
+          budgetWs.getCell(r, colNum + 1).value = null;
+        }
+      }
+    });
   }
 
-  // Clear ALL past-week columns from Budget (including ones already in Archive).
-  pastColGroups.forEach(g => {
-    for (let r = 1; r <= budgetRowCount; r++) {
-      budgetWs.getCell(r, g.startCol).value = null;
-      budgetWs.getCell(r, g.endCol).value = null;
-    }
-  });
-
-  return pastColGroups.map(g => g.label);
+  return pastWeeks.map((w) => w.weekLabel);
 }
 
 async function uploadWorkbookToOneDrive(token: string, fileId: string, wb: ExcelJS.Workbook): Promise<void> {
@@ -1767,7 +1799,7 @@ router.post("/excel/:id/write", async (req, res): Promise<void> => {
     // Archive any past weeks (moves them to the Archive sheet in memory; returns archived labels)
     const archivedExcelLabels = new Set<string>();
     try {
-      const archived = archivePastWeeksInExcel(wb, targetSheetName, body.tz);
+      const archived = archivePastWeeksInExcel(wb, targetSheetName, weeks, includeRemainingAcct ?? false, body.tz);
       archived.forEach(l => archivedExcelLabels.add(l));
     } catch (archiveErr: any) {
       console.log("[excel/write] archive step error (non-fatal):", archiveErr?.message);
