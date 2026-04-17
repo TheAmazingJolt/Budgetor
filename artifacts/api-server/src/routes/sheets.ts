@@ -1494,7 +1494,35 @@ async function archivePastWeeksInSheet(
     }
   }
 
-  if (pastColGroups.length === 0) return { count: 0, labels: [] };
+  // Always ensure archive sheet column widths are correct — pre-existing archive sheets
+  // may have been created before width-setting code was in place.
+  // Fetch spreadsheet metadata here so we can reuse it below if archiving is needed.
+  const metaRespEarly = await sheetsApi.spreadsheets.get({ spreadsheetId, fields: "sheets.properties" });
+  const allSheetsEarly = metaRespEarly.data.sheets ?? [];
+
+  if (pastColGroups.length === 0) {
+    const archiveSheetEarly = allSheetsEarly.find(s => s.properties?.title === "Archive");
+    if (archiveSheetEarly) {
+      const archiveSheetIdEarly = archiveSheetEarly.properties?.sheetId ?? 1;
+      const gridCols = archiveSheetEarly.properties?.gridProperties?.columnCount ?? 0;
+      if (gridCols > 0) {
+        const widthRequests: sheets_v4.Schema$Request[] = [];
+        for (let c = 0; c < gridCols; c++) {
+          widthRequests.push({
+            updateDimensionProperties: {
+              range: { sheetId: archiveSheetIdEarly, dimension: "COLUMNS", startIndex: c, endIndex: c + 1 },
+              properties: { pixelSize: c % 2 === 0 ? 160 : 100 },
+              fields: "pixelSize",
+            },
+          });
+        }
+        try {
+          await sheetsApi.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: widthRequests } });
+        } catch { /* non-fatal */ }
+      }
+    }
+    return { count: 0, labels: [] };
+  }
 
   // Read the full budget sheet with formatting to determine row count, Bills boundary, and cell data
   let budgetSheetData: sheets_v4.Schema$RowData[] = [];
@@ -1521,10 +1549,8 @@ async function archivePastWeeksInSheet(
     }
   }
 
-  // Ensure Archive sheet exists; create it if not
-  const metaResp = await sheetsApi.spreadsheets.get({ spreadsheetId });
-  const allSheets = metaResp.data.sheets ?? [];
-  let archiveSheet = allSheets.find(s => s.properties?.title === "Archive");
+  // Ensure Archive sheet exists; create it if not (reuse metadata fetched above)
+  let archiveSheet = allSheetsEarly.find(s => s.properties?.title === "Archive");
   let archiveSheetId: number;
 
   if (!archiveSheet) {
@@ -1620,7 +1646,7 @@ async function archivePastWeeksInSheet(
       widthRequests.push({
         updateDimensionProperties: {
           range: { sheetId: archiveSheetId, dimension: "COLUMNS", startIndex: c, endIndex: c + 1 },
-          properties: { pixelSize: c % 2 === 0 ? 200 : 100 },
+          properties: { pixelSize: c % 2 === 0 ? 160 : 100 },
           fields: "pixelSize",
         },
       });

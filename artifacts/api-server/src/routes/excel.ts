@@ -1733,6 +1733,16 @@ function archivePastWeeksInExcel(
     }
   }
 
+  // Always fix archive column widths even when there's nothing new to archive —
+  // pre-existing archive sheets may have been created before width-setting was in place.
+  const archiveWsEarly = wb.getWorksheet("Archive");
+  if (archiveWsEarly) {
+    const colCount = archiveWsEarly.columnCount;
+    for (let c = 1; c <= colCount; c++) {
+      archiveWsEarly.getColumn(c).width = c % 2 === 1 ? 28 : 14;
+    }
+  }
+
   if (pastColGroups.length === 0) return [];
 
   // Ensure Archive worksheet exists
