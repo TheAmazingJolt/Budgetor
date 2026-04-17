@@ -4773,10 +4773,11 @@ export function BudgetWizard({
                   : paycheckAmount;
                 const estWeeklyBills = bills.reduce((s, b) => {
                   const abs = Math.abs(b.amount);
-                  if (b.type === "yearly") return s + abs / 52;
+                  if (b.type === "weekly") return s + abs;             // stored as weekly amount
                   if (b.type === "biweekly") return s + abs / 2;
+                  if (b.type === "yearly" || b.type === "yearly-flat") return s + abs / 52;
                   if (b.type === "balanced") return s + abs / 4;
-                  return s + abs;
+                  return s + abs / (52 / 12); // fixed/monthly: stored as monthly amount
                 }, 0);
                 if (bills.length === 0 || effectivePaycheck <= 0 || estWeeklyBills < effectivePaycheck * 0.9) return null;
                 const over = estWeeklyBills >= effectivePaycheck;
