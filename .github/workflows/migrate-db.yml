@@ -21,6 +21,8 @@ jobs:
             --no-owner \
             --no-acl \
             --format=plain \
+            --clean \
+            --if-exists \
             --disable-triggers \
             --file=staging.sql
 
@@ -29,4 +31,3 @@ jobs:
           /usr/lib/postgresql/18/bin/psql "${{ secrets.PROD_DATABASE_URL }}" \
             --set ON_ERROR_STOP=1 \
             --file=staging.sql
-
