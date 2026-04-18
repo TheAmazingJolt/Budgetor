@@ -5094,7 +5094,14 @@ export function BudgetWizard({
                                       className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive"
                                       onClick={() => {
                                         const deleted = bill;
+                                        const newBills = bills.filter((_, idx) => idx !== i);
                                         preserveScroll(() => removeBill(i));
+                                        if (isSignedIn && billsLoadedForUserRef.current) {
+                                          updateUserBillsMutation.mutate({ data: { bills: newBills } }, {
+                                            onSuccess: () => queryClient.setQueryData(getGetUserBillsQueryKey(), { bills: newBills }),
+                                            onError: () => toast({ title: "Could not save bills", description: "Your changes may not persist after a reload.", variant: "destructive" }),
+                                          });
+                                        }
                                         toast({
                                           description: `"${deleted.name}" removed.`,
                                           action: (
@@ -6525,12 +6532,21 @@ export function BudgetWizard({
           <BillForm
             initialData={editingBillIndex !== null ? bills[editingBillIndex] : undefined}
             onSubmit={(data: Bill) => {
+              let newBills: Bill[];
               if (editingBillIndex !== null) {
                 updateBill(editingBillIndex, data);
+                newBills = bills.map((b, i) => i === editingBillIndex ? data : b);
               } else {
                 addBill(data);
+                newBills = [...bills, data];
               }
               setIsBillDialogOpen(false);
+              if (isSignedIn && billsLoadedForUserRef.current) {
+                updateUserBillsMutation.mutate({ data: { bills: newBills } }, {
+                  onSuccess: () => queryClient.setQueryData(getGetUserBillsQueryKey(), { bills: newBills }),
+                  onError: () => toast({ title: "Could not save bills", description: "Your changes may not persist after a reload.", variant: "destructive" }),
+                });
+              }
             }}
             onCancel={() => setIsBillDialogOpen(false)}
             suggestedCategories={billCategories}
