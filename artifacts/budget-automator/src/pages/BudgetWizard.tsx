@@ -1509,7 +1509,7 @@ export function BudgetWizard({
           queryClient.setQueryData(getGetUserDebtsQueryKey(), { debts: debtsSnapshot });
         },
       });
-    }, 1000);
+    }, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debts, isSignedIn, inputMode, step]);
 
@@ -1621,9 +1621,43 @@ export function BudgetWizard({
           queryClient.setQueryData(getGetUserBillsQueryKey(), { bills: billsSnapshot });
         },
       });
-    }, 1000);
+    }, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bills, isSignedIn, inputMode, step]);
+
+  // Flush pending bill/debt saves before the page unloads. The 0ms debounce
+  // fires before manual reloads, but programmatic navigation (window.location.href=)
+  // can beat it. keepalive lets the browser finish the request after navigation.
+  useEffect(() => {
+    const flush = () => {
+      const apiBase = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/+$/, "");
+      if (billsSaveTimerRef.current && billsLoadedForUserRef.current) {
+        clearTimeout(billsSaveTimerRef.current);
+        billsSaveTimerRef.current = null;
+        fetch(`${apiBase}/api/user/bills`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bills }),
+          credentials: "include",
+          keepalive: true,
+        }).catch(() => {});
+      }
+      if (debtsSaveTimerRef.current && debtsLoadedForUserRef.current) {
+        clearTimeout(debtsSaveTimerRef.current);
+        debtsSaveTimerRef.current = null;
+        fetch(`${apiBase}/api/user/debts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ debts }),
+          credentials: "include",
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bills, debts]);
 
   useEffect(() => {
     if (!currentUser?.id) return;
