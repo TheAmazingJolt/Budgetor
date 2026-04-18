@@ -66,7 +66,7 @@ const sessionStore = process.env["DATABASE_URL"]
     })
   : undefined;
 
-app.use(session({
+const sessionMiddleware = session({
   store: sessionStore,
   secret: sessionSecret,
   resave: false,
@@ -77,7 +77,20 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000,
     sameSite: process.env["NODE_ENV"] === "production" ? "none" : "lax",
   },
-}));
+});
+
+// Wrap so session store errors (e.g. connect-pg-simple DB failure) degrade
+// gracefully instead of propagating to the global error handler and returning
+// 500 for every request. Auth falls back to the JWT bearer token path.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  sessionMiddleware(req, res, (err) => {
+    if (err) {
+      console.error("[session-store error]", err);
+      return next();
+    }
+    next();
+  });
+});
 
 app.use("/api", router);
 
