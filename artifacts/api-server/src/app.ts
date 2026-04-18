@@ -83,21 +83,27 @@ const sessionMiddleware = session({
 // gracefully instead of propagating to the global error handler and returning
 // 500 for every request. Auth falls back to the JWT bearer token path.
 app.use((req: Request, res: Response, next: NextFunction) => {
-  sessionMiddleware(req, res, (err) => {
-    if (err) {
-      console.error("[session-store error]", err);
-      return next();
-    }
+  try {
+    sessionMiddleware(req, res, (err) => {
+      if (err) {
+        console.error("[session-store error]", err);
+        return next();
+      }
+      next();
+    });
+  } catch (syncErr) {
+    console.error("[session-middleware sync error]", syncErr);
     next();
-  });
+  }
 });
 
 app.use("/api", router);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[unhandled error]", err);
-  res.status(500).json({ error: "Internal server error" });
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`[unhandled error] ${req.method} ${req.path}:`, err);
+  res.status(500).json({ error: "Internal server error", detail: msg });
 });
 
 export default app;

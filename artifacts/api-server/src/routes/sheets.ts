@@ -483,13 +483,13 @@ function parseSheetData(sheetsData: sheets_v4.Schema$Sheet[]) {
 }
 
 router.get("/sheets/list", async (req, res): Promise<void> => {
-  const auth = getAuthedClient(req);
-  if (!auth) {
-    res.status(401).json({ error: "Not authenticated with Google" });
-    return;
-  }
-
   try {
+    const auth = getAuthedClient(req);
+    if (!auth) {
+      res.status(401).json({ error: "Not authenticated with Google" });
+      return;
+    }
+
     const drive = google.drive({ version: "v3", auth });
     const response = await drive.files.list({
       q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
@@ -507,10 +507,11 @@ router.get("/sheets/list", async (req, res): Promise<void> => {
     });
   } catch (err: any) {
     if (err.code === 401) {
-      req.session.googleTokens = undefined;
+      if (req.session) req.session.googleTokens = undefined;
       res.status(401).json({ error: "Google session expired. Please reconnect." });
       return;
     }
+    console.error("[/sheets/list]", err);
     res.status(500).json({ error: "Failed to list sheets: " + (err.message ?? String(err)) });
   }
 });

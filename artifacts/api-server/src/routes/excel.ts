@@ -775,13 +775,13 @@ function parseExcelData(
 }
 
 router.get("/excel/list", async (req, res): Promise<void> => {
-  const token = await getAccessToken(req);
-  if (!token) {
-    res.status(401).json({ error: "Not authenticated with Microsoft" });
-    return;
-  }
-
   try {
+    const token = await getAccessToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated with Microsoft" });
+      return;
+    }
+
     const data = await graphGet(
       token,
       "/me/drive/root/search(q='.xlsx')?$select=id,name,lastModifiedDateTime,webUrl&$orderby=lastModifiedDateTime desc&$top=50"

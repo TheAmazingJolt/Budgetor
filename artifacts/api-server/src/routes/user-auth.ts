@@ -999,63 +999,93 @@ router.get("/auth/providers", (_req: Request, res: Response) => {
 });
 
 router.get("/user/debts", requireAuth, async (req: Request, res: Response) => {
-  const rawDebts = (req.user as User).debts;
-  const debts = rawDebts != null ? decryptJson<unknown[]>(rawDebts) : [];
-  res.json({ debts });
+  try {
+    const rawDebts = (req.user as User).debts;
+    const debts = rawDebts != null ? decryptJson<unknown[]>(rawDebts) : [];
+    res.json({ debts });
+  } catch (err: unknown) {
+    console.error("[/user/debts GET]", err);
+    res.status(500).json({ error: "Failed to read debts: " + (err instanceof Error ? err.message : String(err)) });
+  }
 });
 
 router.put("/user/debts", requireAuth, async (req: Request, res: Response) => {
-  const { debts } = req.body as { debts: unknown[] };
-  if (!Array.isArray(debts)) {
-    res.status(400).json({ error: "debts must be an array" });
-    return;
+  try {
+    const { debts } = req.body as { debts: unknown[] };
+    if (!Array.isArray(debts)) {
+      res.status(400).json({ error: "debts must be an array" });
+      return;
+    }
+    await db.update(usersTable).set({ debts: encryptJson(debts), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
+    res.json({ debts });
+  } catch (err: unknown) {
+    console.error("[/user/debts PUT]", err);
+    res.status(500).json({ error: "Failed to save debts: " + (err instanceof Error ? err.message : String(err)) });
   }
-  await db.update(usersTable).set({ debts: encryptJson(debts), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
-  res.json({ debts });
 });
 
 router.get("/user/bills", requireAuth, async (req: Request, res: Response) => {
-  const rawBills = (req.user as User).bills;
-  const bills = rawBills != null ? decryptJson<unknown[]>(rawBills) : [];
-  res.json({ bills });
+  try {
+    const rawBills = (req.user as User).bills;
+    const bills = rawBills != null ? decryptJson<unknown[]>(rawBills) : [];
+    res.json({ bills });
+  } catch (err: unknown) {
+    console.error("[/user/bills GET]", err);
+    res.status(500).json({ error: "Failed to read bills: " + (err instanceof Error ? err.message : String(err)) });
+  }
 });
 
 router.put("/user/bills", requireAuth, async (req: Request, res: Response) => {
-  const { bills } = req.body as { bills: unknown[] };
-  if (!Array.isArray(bills)) {
-    res.status(400).json({ error: "bills must be an array" });
-    return;
+  try {
+    const { bills } = req.body as { bills: unknown[] };
+    if (!Array.isArray(bills)) {
+      res.status(400).json({ error: "bills must be an array" });
+      return;
+    }
+    const FREE_BILL_LIMIT = 5;
+    if (effectivePlan(req.user as User) === "free" && bills.length > FREE_BILL_LIMIT) {
+      res.status(403).json({
+        error: `Free plan is limited to ${FREE_BILL_LIMIT} spending categories. Upgrade to Pro for unlimited categories.`,
+        upgradeRequired: true,
+        limit: FREE_BILL_LIMIT,
+      });
+      return;
+    }
+    await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
+    res.json({ bills });
+  } catch (err: unknown) {
+    console.error("[/user/bills PUT]", err);
+    res.status(500).json({ error: "Failed to save bills: " + (err instanceof Error ? err.message : String(err)) });
   }
-  const FREE_BILL_LIMIT = 5;
-  if (effectivePlan(req.user as User) === "free" && bills.length > FREE_BILL_LIMIT) {
-    res.status(403).json({
-      error: `Free plan is limited to ${FREE_BILL_LIMIT} spending categories. Upgrade to Pro for unlimited categories.`,
-      upgradeRequired: true,
-      limit: FREE_BILL_LIMIT,
-    });
-    return;
-  }
-  await db.update(usersTable).set({ bills: encryptJson(bills), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
-  res.json({ bills });
 });
 
 router.get("/user/preferences", requireAuth, async (req: Request, res: Response) => {
-  const rawPrefs = (req.user as User).preferences;
-  const preferences = rawPrefs != null ? decryptJson<Record<string, unknown>>(rawPrefs) : {};
-  res.json({ preferences });
+  try {
+    const rawPrefs = (req.user as User).preferences;
+    const preferences = rawPrefs != null ? decryptJson<Record<string, unknown>>(rawPrefs) : {};
+    res.json({ preferences });
+  } catch (err: unknown) {
+    console.error("[/user/preferences GET]", err);
+    res.status(500).json({ error: "Failed to read preferences: " + (err instanceof Error ? err.message : String(err)) });
+  }
 });
 
 router.put("/user/preferences", requireAuth, async (req: Request, res: Response) => {
-  const { preferences } = req.body as { preferences: Record<string, unknown> };
-  if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) {
-    res.status(400).json({ error: "preferences must be an object" });
-    return;
+  try {
+    const { preferences } = req.body as { preferences: Record<string, unknown> };
+    if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) {
+      res.status(400).json({ error: "preferences must be an object" });
+      return;
+    }
+    const rawCurrent = (req.user as User).preferences;
+    const current = rawCurrent != null ? decryptJson<Record<string, unknown>>(rawCurrent) : {};
+    const merged = { ...current, ...preferences };
+    await db.update(usersTable).set({ preferences: encryptJson(merged), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
+    res.json({ preferences: merged });
+  } catch (err: unknown) {
+    console.error("[/user/preferences PUT]", err);
+    res.status(500).json({ error: "Failed to save preferences: " + (err instanceof Error ? err.message : String(err)) });
   }
-  const rawCurrent = (req.user as User).preferences;
-  const current = rawCurrent != null ? decryptJson<Record<string, unknown>>(rawCurrent) : {};
-  const merged = { ...current, ...preferences };
-  await db.update(usersTable).set({ preferences: encryptJson(merged), updatedAt: new Date() }).where(eq(usersTable.id, (req.user as User).id));
-  res.json({ preferences: merged });
 });
 
 router.post("/auth/logout", (req: Request, res: Response) => {
