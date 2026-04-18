@@ -1496,8 +1496,6 @@ export function BudgetWizard({
   useEffect(() => {
     if (!isSignedIn) return;
     if (!debtsLoadedForUserRef.current) return;
-    const isAccountMode = inputMode === "scratch" || inputMode === "cloud";
-    if (!isAccountMode) return;
     const serialized = JSON.stringify(debts);
     if (serialized === prevDebtsRef.current) return;
     prevDebtsRef.current = serialized;
@@ -1507,6 +1505,9 @@ export function BudgetWizard({
       updateUserDebtsMutation.mutate({ data: { debts: debtsSnapshot } }, {
         onSuccess: () => {
           queryClient.setQueryData(getGetUserDebtsQueryKey(), { debts: debtsSnapshot });
+        },
+        onError: () => {
+          toast({ title: "Could not save debts", description: "Your changes may not persist after a reload.", variant: "destructive" });
         },
       });
     }, 0);
@@ -1608,8 +1609,6 @@ export function BudgetWizard({
     if (!isSignedIn) return;
     if (!billsLoadedForUserRef.current) return;
     if (billsFromImportPendingRef.current) return;
-    const isAccountMode = inputMode === "scratch" || inputMode === "cloud";
-    if (!isAccountMode) return;
     const serialized = JSON.stringify(bills);
     if (serialized === prevBillsRef.current) return;
     prevBillsRef.current = serialized;
@@ -1619,6 +1618,9 @@ export function BudgetWizard({
       updateUserBillsMutation.mutate({ data: { bills: billsSnapshot } }, {
         onSuccess: () => {
           queryClient.setQueryData(getGetUserBillsQueryKey(), { bills: billsSnapshot });
+        },
+        onError: () => {
+          toast({ title: "Could not save bills", description: "Your changes may not persist after a reload.", variant: "destructive" });
         },
       });
     }, 0);
