@@ -1011,6 +1011,9 @@ components:
         monthlyBalance:
           type: boolean
           description: When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.
+        initialSaved:
+          type: ["number", "null"]
+          description: Amount already saved or paid toward this bill. Reduces the first-month allocation for balanced bills and the weekly contribution for yearly sinking funds.
       required:
         - name
         - amount

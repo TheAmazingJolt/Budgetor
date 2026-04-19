@@ -124,6 +124,12 @@ export const GenerateBudgetBody = zod.object({
         .describe(
           "When true, the bill's monthly total is equalized across weekly pay periods (like a balanced bill). Used for savings goals and lump-sum debts.",
         ),
+      initialSaved: zod
+        .number()
+        .nullish()
+        .describe(
+          "Amount already saved or paid toward this bill. Reduces the first-month allocation for balanced bills and the weekly contribution for yearly sinking funds.",
+        ),
     }),
   ),
   priorSavings: zod
