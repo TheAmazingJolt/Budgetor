@@ -1301,16 +1301,19 @@ function writeExcelSavingsSheetXL(
         savedInCycle += c.actualAmount;
       }
       let manualInCycle = 0;
+      let extraManualInCycle = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
         if (cDate <= cycleStart || cDate > today) continue;
-        manualInCycle += c.amount;
+        if (c.isExtra) extraManualInCycle += c.amount;
+        else manualInCycle += c.amount;
       }
-      savedInCycle += manualInCycle + Math.max(0, Number((bill as any).initialSaved) || 0);
+      const progressBase = savedInCycle + manualInCycle + Math.max(0, Number((bill as any).initialSaved) || 0);
+      savedInCycle = progressBase + extraManualInCycle;
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT_XL[nextDue.getMonth()]} ${nextDue.getDate()}`;
-      const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
+      const progressPct = annualGoal > 0 ? Math.min(100, (progressBase / annualGoal) * 100) : 0;
       sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle, progressPct, nextDueDateStr, weeksRemaining });
     } else if (bill.type === "balanced") {
       const monthlyGoal = Math.abs(bill.amount);
@@ -1356,7 +1359,7 @@ function writeExcelSavingsSheetXL(
       if (firstWeekDate && firstWeekDate.getMonth() === currentMonth && firstWeekDate.getFullYear() === currentYear) {
         savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
       }
-      const progressPct = monthlyGoal > 0 ? Math.min(100, ((savedThisMonth + extraThisMonth) / monthlyGoal) * 100) : 0;
+      const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
       balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, extraThisMonth, progressPct });
     }
   }
@@ -1431,9 +1434,9 @@ function writeExcelSavingsSheetXL(
 
   if (balanced.length > 0) {
     writeRow([`Monthly Set-Aside — ${currentMonthStr}`], { bg: INDIGO_LT, fontColor: INDIGO, bold: true, size: 11 });
-    writeRow(["Bill Name", "Monthly Goal", "Set Aside This Month", "Extra", "Progress"], { bg: INDIGO_LTR, bold: true });
+    writeRow(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress", "Extra"], { bg: INDIGO_LTR, bold: true });
     for (const b of balanced) {
-      writeRow([b.name, b.monthlyGoal, b.savedThisMonth, b.extraThisMonth, `${Math.round(b.progressPct)}%`], { numFmtCols: [1, 2, 3] });
+      writeRow([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`, b.extraThisMonth], { numFmtCols: [1, 2, 4] });
     }
     r++;
   }

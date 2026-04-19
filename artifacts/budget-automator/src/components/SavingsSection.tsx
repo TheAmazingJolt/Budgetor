@@ -632,7 +632,8 @@ interface SinkingCardProps {
 function SinkingFundCard({ data, contributions, canLog, onAdd, onDelete, onAddAsBill }: SinkingCardProps) {
   const { bill, annualGoal, savedInCycle, manualInCycle, extraManualInCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining } = data;
   const pct = Math.round(progressPct);
-  const totalSaved = savedInCycle + manualInCycle + extraManualInCycle;
+  const totalSaved = savedInCycle + manualInCycle + extraManualInCycle
+    + Math.max(0, Number((bill as any).initialSaved) || 0);
   const isComplete = totalSaved >= annualGoal;
   const [addedToBills, setAddedToBills] = useState(false);
 

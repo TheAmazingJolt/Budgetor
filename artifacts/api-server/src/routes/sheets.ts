@@ -2000,18 +2000,21 @@ async function writeSavingsTabToSheet(
         savedInCycle += c.actualAmount;
       }
       let manualInCycle = 0;
+      let extraManualInCycle = 0;
       for (const c of contributions) {
         if (c.billName !== bill.name) continue;
         const cDate = new Date(c.date + "T00:00:00");
         if (cDate <= cycleStart || cDate > today) continue;
-        manualInCycle += c.amount;
+        if (c.isExtra) extraManualInCycle += c.amount;
+        else manualInCycle += c.amount;
       }
-      const totalSavedCycle = savedInCycle + manualInCycle + Math.max(0, Number((bill as any).initialSaved) || 0);
+      const progressBaseSrv = savedInCycle + manualInCycle + Math.max(0, Number((bill as any).initialSaved) || 0);
+      const totalSavedCycle = progressBaseSrv + extraManualInCycle;
 
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT_SHEETS[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const cycleStartStr = `${MONTH_SHORT_SHEETS[cycleStart.getMonth()]} ${cycleStart.getDate()}`;
-      const progressPct = annualGoal > 0 ? Math.min(100, (totalSavedCycle / annualGoal) * 100) : 0;
+      const progressPct = annualGoal > 0 ? Math.min(100, (progressBaseSrv / annualGoal) * 100) : 0;
       sinkingFunds.push({ name: bill.name, annualGoal, savedInCycle: totalSavedCycle, progressPct, nextDueDateStr, cycleStartStr, weeksRemaining });
 
     } else if (bill.type === "balanced") {
@@ -2060,9 +2063,10 @@ async function writeSavingsTabToSheet(
       if (firstWeekDateSrv && firstWeekDateSrv.getMonth() === currentMonth && firstWeekDateSrv.getFullYear() === currentYear) {
         savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
       }
-      const totalSavedMonth = savedThisMonth + manualThisMonth + extraThisMonth;
-      const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSavedMonth / monthlyGoal) * 100) : 0;
-      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth: savedThisMonth + manualThisMonth, extraThisMonth, progressPct });
+      const regularSavedMonth = savedThisMonth + manualThisMonth;
+      const totalSavedMonth = regularSavedMonth + extraThisMonth;
+      const progressPct = monthlyGoal > 0 ? Math.min(100, (regularSavedMonth / monthlyGoal) * 100) : 0;
+      balanced.push({ name: bill.name, monthlyGoal, savedThisMonth: regularSavedMonth, extraThisMonth, progressPct });
     }
   }
 
@@ -2109,9 +2113,9 @@ async function writeSavingsTabToSheet(
 
   if (balanced.length > 0) {
     grid.push([`Monthly Set-Aside — ${currentMonthStr}`]);
-    grid.push(["Bill Name", "Monthly Goal", "Set Aside This Month", "Extra", "Progress"]);
+    grid.push(["Bill Name", "Monthly Goal", "Set Aside This Month", "Progress", "Extra"]);
     for (const b of balanced) {
-      grid.push([b.name, b.monthlyGoal, b.savedThisMonth, b.extraThisMonth, `${Math.round(b.progressPct)}%`]);
+      grid.push([b.name, b.monthlyGoal, b.savedThisMonth, `${Math.round(b.progressPct)}%`, b.extraThisMonth]);
     }
     grid.push([]);
   }
@@ -2239,7 +2243,7 @@ async function writeSavingsTabToSheet(
       r++;
       formatRequests.push({
         repeatCell: {
-          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 4 },
+          range: { sheetId: savingsSheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 5 },
           cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10 }, backgroundColor: indigoLighter } },
           fields: "userEnteredFormat(textFormat,backgroundColor)",
         },
@@ -2247,9 +2251,18 @@ async function writeSavingsTabToSheet(
       r++;
       const balDataStart = r;
       const balDataEnd = r + balanced.length;
+      // Monthly Goal (col 1) and Set Aside (col 2) — currency format
       formatRequests.push({
         repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: balDataStart, endRowIndex: balDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
+          cell: { userEnteredFormat: currencyFmt },
+          fields: "userEnteredFormat.numberFormat",
+        },
+      });
+      // Extra (col 4, after swap) — currency format
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: balDataStart, endRowIndex: balDataEnd, startColumnIndex: 4, endColumnIndex: 5 },
           cell: { userEnteredFormat: currencyFmt },
           fields: "userEnteredFormat.numberFormat",
         },
