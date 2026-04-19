@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, pool, savingsGoalsTable, savedBudgetsTable, savingsContributionsTable } from "@workspace/db";
 import { eq, and, asc } from "drizzle-orm";
-import { requireAuth } from "./user-auth";
+import { requireAuth, effectivePlan } from "./user-auth";
 
 const router: IRouter = Router();
 
@@ -83,7 +83,7 @@ router.post("/budgets/:budgetId/goals", requireAuth, async (req, res): Promise<v
 
     const FREE_GOAL_LIMIT = 3;
     const user = (req as any).user;
-    if ((user?.plan ?? "free") === "free") {
+    if (effectivePlan(user) === "free") {
       const existingGoals = await db
         .select({ id: savingsGoalsTable.id })
         .from(savingsGoalsTable)

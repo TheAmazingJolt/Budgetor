@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { savedBudgetsTable } from "@workspace/db";
 import { encryptJson, decryptJson, maybeEncrypt, maybeDecrypt } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { requireAuth } from "./user-auth";
+import { requireAuth, effectivePlan } from "./user-auth";
 
 const router: IRouter = Router();
 
@@ -48,7 +48,7 @@ router.post("/budgets", requireAuth, async (req: Request, res: Response): Promis
   }
 
   const FREE_CLOUD_BUDGET_LIMIT = 1;
-  if (((req.user as any).plan ?? "free") === "free") {
+  if (effectivePlan(req.user as any) === "free") {
     try {
       const existing = await db
         .select({ id: savedBudgetsTable.id })

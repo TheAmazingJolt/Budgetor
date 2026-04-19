@@ -87,7 +87,7 @@ async function verifyUserJwt(token: string): Promise<string | null> {
 
 const stripeConfigured = !!process.env["STRIPE_SECRET_KEY"];
 
-function effectivePlan(user: User): "free" | "pro" {
+export function effectivePlan(user: User): "free" | "pro" {
   if (!stripeConfigured && user.provider !== "guest") return "pro";
   return (user.plan ?? "free") as "free" | "pro";
 }
