@@ -1345,6 +1345,7 @@ export function BudgetWizard({
   const pendingAutoGenerateRef = useRef<GenerateOverrides | null>(null);
   const [autoGenerateTick, setAutoGenerateTick] = useState(0);
   const suppressSheetAutoSelectRef = useRef(false);
+  const isAutoSheetLoadRef = useRef(false);
 
   const lastGeneratedBillsFingerprintRef = useRef<string | null>(null);
   const [isRegeneratingForExport, setIsRegeneratingForExport] = useState(false);
@@ -1954,6 +1955,7 @@ export function BudgetWizard({
     if (selectedSheetId) return;
     if (step !== 0) return;
     const first = sheets[0] as { id: string; name: string };
+    isAutoSheetLoadRef.current = true;
     handleSelectSheet(first.id, first.name);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetListQuery.data, autoOpenLastSheet]);
@@ -2189,6 +2191,12 @@ export function BudgetWizard({
       isSignedIn &&
       billsLoadedForUserRef.current !== null &&
       savedBills.length > 0;
+
+    if (isAutoSheetLoadRef.current) {
+      isAutoSheetLoadRef.current = false;
+      onApply(hasSavedBills ? savedBills : importedBills);
+      return;
+    }
 
     if (!hasSavedBills) {
       onApply(importedBills);

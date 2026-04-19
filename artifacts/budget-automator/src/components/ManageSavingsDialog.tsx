@@ -32,9 +32,10 @@ interface GoalFormState {
   targetAmount: string;
   targetDate: string;
   note: string;
+  alreadySaved: string;
 }
 
-const EMPTY_FORM: GoalFormState = { name: "", targetAmount: "", targetDate: "", note: "" };
+const EMPTY_FORM: GoalFormState = { name: "", targetAmount: "", targetDate: "", note: "", alreadySaved: "" };
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -69,6 +70,7 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, is
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState<GoalFormState>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { data: goalsData, isLoading: goalsLoading } = useQuery<{ goals: SavingsGoal[] }>({
     queryKey: ["savings-goals", budgetId],
@@ -150,6 +152,15 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, is
     onError: () => toast({ title: "Failed to delete goal", variant: "destructive" }),
   });
 
+  const createContribMutation = useMutation({
+    mutationFn: (payload: { billName: string; amount: number; date: string; note: string }) =>
+      apiFetch(`/api/budgets/${budgetId}/contributions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+  });
+
   function openAddForm() {
     setEditingId(null);
     setForm(EMPTY_FORM);
@@ -183,13 +194,20 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, is
   function handleCreate() {
     const err = validateForm();
     if (err) { setFormError(err); return; }
-    createMutation.mutate({
-      name: form.name.trim(),
-      targetAmount: parseFloat(form.targetAmount),
-      targetDate: form.targetDate,
-      note: form.note.trim() || undefined,
-      includeInBudget: true,
-    });
+    const goalName = form.name.trim();
+    const alreadySaved = parseFloat(form.alreadySaved);
+    const hasAlreadySaved = !isNaN(alreadySaved) && alreadySaved > 0;
+    const today = new Date().toISOString().slice(0, 10);
+    createMutation.mutate(
+      { name: goalName, targetAmount: parseFloat(form.targetAmount), targetDate: form.targetDate, note: form.note.trim() || undefined, includeInBudget: true },
+      {
+        onSuccess: () => {
+          if (hasAlreadySaved) {
+            createContribMutation.mutate({ billName: goalName, amount: alreadySaved, date: today, note: "Initial balance" });
+          }
+        },
+      },
+    );
   }
 
   function handleUpdate(goal: SavingsGoal) {
@@ -274,14 +292,33 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, is
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteMutation.mutate(goal.id)}
-                            disabled={deleteMutation.isPending}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {confirmDeleteId === goal.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => { setConfirmDeleteId(null); deleteMutation.mutate(goal.id); }}
+                                className="text-xs text-red-600 font-medium hover:text-red-700 px-1"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-xs text-muted-foreground hover:text-foreground px-1"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(goal.id)}
+                              disabled={deleteMutation.isPending}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -317,7 +354,8 @@ export function ManageSavingsDialog({ budgetId, onGoalsChanged, isPro = true, is
               error={formError}
               onSave={handleCreate}
               onCancel={() => { setShowAddForm(false); setFormError(null); }}
-              saving={createMutation.isPending}
+              saving={createMutation.isPending || createContribMutation.isPending}
+              isCreate
             />
           </CardContent>
         </Card>
@@ -354,9 +392,10 @@ interface GoalFormProps {
   onSave: () => void;
   onCancel: () => void;
   saving: boolean;
+  isCreate?: boolean;
 }
 
-function GoalForm({ form, onChange, error, onSave, onCancel, saving }: GoalFormProps) {
+function GoalForm({ form, onChange, error, onSave, onCancel, saving, isCreate }: GoalFormProps) {
   const set = (k: keyof GoalFormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...form, [k]: e.target.value });
 
@@ -404,6 +443,24 @@ function GoalForm({ form, onChange, error, onSave, onCancel, saving }: GoalFormP
           className="h-9 rounded-xl"
         />
       </div>
+      {isCreate && (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-muted-foreground">Already saved (optional)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+            <Input
+              value={form.alreadySaved}
+              onChange={set("alreadySaved")}
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              className="pl-6 h-9 rounded-xl"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Money already set aside — reduces your weekly target.</p>
+        </div>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex gap-2 pt-1">
         <Button

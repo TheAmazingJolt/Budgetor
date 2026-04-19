@@ -480,6 +480,7 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, showEx
   const [isExtra, setIsExtra] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDeleteContribId, setConfirmDeleteContribId] = useState<string | null>(null);
 
   const handleAdd = async () => {
     const amount = parseFloat(amountStr);
@@ -604,14 +605,33 @@ function ContributionPanel({ billName, canLog, contributions, cycleLabel, showEx
                 )}
                 {c.note && <span className="text-muted-foreground ml-1.5 italic truncate">{c.note}</span>}
               </div>
-              <button
-                type="button"
-                onClick={() => onDelete(c.id)}
-                className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
-                title="Delete"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {confirmDeleteContribId === c.id ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => { setConfirmDeleteContribId(null); onDelete(c.id); }}
+                    className="text-xs text-red-600 font-medium hover:text-red-700"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteContribId(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteContribId(c.id)}
+                  className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -973,6 +993,10 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
   const [editAmount, setEditAmount] = useState(String(goal.targetAmount));
   const [editDate, setEditDate] = useState(goal.targetDate);
   const [editNote, setEditNote] = useState(goal.note ?? "");
+  const [editAlreadySaved, setEditAlreadySaved] = useState(() => {
+    const initialContrib = contributions.find(c => c.note === "Initial balance");
+    return initialContrib ? String(initialContrib.amount) : "";
+  });
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -996,10 +1020,24 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
     const amount = parseFloat(editAmount);
     if (!editAmount || isNaN(amount) || amount < 0) { setEditError("Enter a valid target amount."); return; }
     if (!editDate) { setEditError("Target date is required."); return; }
+    const newAlreadySaved = editAlreadySaved.trim() === "" ? 0 : parseFloat(editAlreadySaved);
+    if (editAlreadySaved.trim() !== "" && (isNaN(newAlreadySaved) || newAlreadySaved < 0)) {
+      setEditError("Already saved must be a non-negative number.");
+      return;
+    }
     setEditError("");
     setEditSaving(true);
     try {
       await onUpdate({ name: editName.trim(), targetAmount: amount, targetDate: editDate, note: editNote.trim() || undefined });
+      const existingInitial = contributions.find(c => c.note === "Initial balance");
+      const prevAmount = existingInitial ? existingInitial.amount : 0;
+      if (existingInitial && newAlreadySaved !== prevAmount) {
+        await onDeleteContrib(existingInitial.id);
+      }
+      if (newAlreadySaved > 0 && newAlreadySaved !== prevAmount) {
+        const today = new Date().toISOString().slice(0, 10);
+        await onAdd(newAlreadySaved, today, "Initial balance");
+      }
       setEditing(false);
     } catch (e: any) {
       setEditError(e.message ?? "Failed to save");
@@ -1071,6 +1109,21 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
           onChange={e => setEditNote(e.target.value)}
           className="h-8 text-sm"
         />
+        <div>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Already saved (optional)"
+              value={editAlreadySaved}
+              onChange={e => setEditAlreadySaved(e.target.value)}
+              className="pl-6 h-8 text-sm"
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">Amount already set aside — reduces weekly target.</p>
+        </div>
         {editError && <p className="text-xs text-red-500">{editError}</p>}
         <div className="flex gap-2">
           <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleUpdate} disabled={editSaving}>
@@ -1108,6 +1161,8 @@ function GoalCard({ goal, contributions, onAdd, onDeleteContrib, onUpdate, onDel
               setEditAmount(String(goal.targetAmount));
               setEditDate(goal.targetDate);
               setEditNote(goal.note ?? "");
+              const initialContrib = contributions.find(c => c.note === "Initial balance");
+              setEditAlreadySaved(initialContrib ? String(initialContrib.amount) : "");
               setEditing(true);
             }}
             className="text-muted-foreground hover:text-teal-600 transition-colors p-0.5"
