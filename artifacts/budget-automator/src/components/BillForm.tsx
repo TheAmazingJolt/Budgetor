@@ -391,13 +391,13 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
               />
             )}
 
-            {(isYearly || isBalanced) && (
+            {isYearly && (
               <FormField
                 control={form.control}
                 name="initialSaved"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel>Already saved/paid <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormLabel>Already saved <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -410,9 +410,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
                       />
                     </FormControl>
                     <FormDescription>
-                      {isYearly
-                        ? "If you've already put money toward this, enter it here to reduce the weekly contribution."
-                        : "If you've already paid toward this bill this period, enter it here to reduce the budgeted amount for the first month."}
+                      If you've already put money toward this, enter it here to reduce the weekly contribution.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -509,6 +507,32 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
                     </FormControl>
                     <FormDescription>
                       Bill stops after this date. Leave blank to repeat indefinitely.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {isBalanced && (
+              <FormField
+                control={form.control}
+                name="initialSaved"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Already paid <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={field.value == null ? "" : String(field.value)}
+                        onChange={e => field.onChange(e.target.value === "" ? null : e.target.value)}
+                        className="focus:ring-primary/20 focus:border-primary"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      If you've already paid some of this bill's monthly amount, enter it here to reduce the budgeted amount for the first month.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
