@@ -290,6 +290,18 @@ export function computeSavings(
         }
       }
 
+      // Include any initialSaved credit the user entered at bill creation, but only
+      // for the first month of the budget so it doesn't reappear in future months.
+      const firstWeekDates = sortedWeeks[0]?.dates;
+      const firstBudgetOwner = firstWeekDates
+        ? getWeekOwnerMonth(firstWeekDates.start, firstWeekDates.end)
+        : null;
+      const isFirstBudgetMonth =
+        firstBudgetOwner?.month === currentMonth && firstBudgetOwner?.year === currentYear;
+      if (isFirstBudgetMonth) {
+        manualThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
+      }
+
       const totalSaved = savedThisMonth + checkedInThisMonth + manualThisMonth + extraThisMonth;
       const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSaved / monthlyGoal) * 100) : 0;
       balanced.push({
