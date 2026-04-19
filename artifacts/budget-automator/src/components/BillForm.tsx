@@ -258,7 +258,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
       annualDueMonth: isAnyYearly ? (values.annualDueMonth ?? 1) : undefined,
       payoffDate: isWeeklyOrBiweekly ? (values.payoffDate || null) : undefined,
       anchorDate: values.type === "biweekly" ? (values.anchorDate || null) : undefined,
-      initialSaved: isYearlySinking && typeof values.initialSaved === "number" && values.initialSaved > 0
+      initialSaved: (isYearlySinking || values.type === "balanced") && typeof values.initialSaved === "number" && values.initialSaved > 0
         ? values.initialSaved
         : undefined,
     } as Bill;
