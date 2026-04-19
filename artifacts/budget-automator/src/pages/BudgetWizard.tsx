@@ -3684,7 +3684,20 @@ export function BudgetWizard({
         ...computeLumpSumDebtBills(debts),
       ];
       const lumpSumDebtIdsForSync = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
-      const regularBillsForSync = bills.filter(b => !b.sourceDebtId || !lumpSumDebtIdsForSync.has(b.sourceDebtId));
+      // Build a map of debtId → alreadyPaid so we can inject initialSaved at generation
+      // time without relying on the once-per-session debt-bill sync having run.
+      const debtAlreadyPaidMap = new Map(
+        debts
+          .filter(d => (d as any).alreadyPaid > 0)
+          .map(d => [d.id, Math.max(0, (d as any).alreadyPaid)])
+      );
+      const regularBillsForSync = bills
+        .filter(b => !b.sourceDebtId || !lumpSumDebtIdsForSync.has(b.sourceDebtId))
+        .map(b => {
+          const debtPaid = b.sourceDebtId ? debtAlreadyPaidMap.get(b.sourceDebtId) : undefined;
+          if (debtPaid != null && debtPaid > 0) return { ...b, initialSaved: debtPaid } as typeof b;
+          return b;
+        });
       const allBillsForSync = [...regularBillsForSync, ...savingsBillsForSync];
       const colorLookup = buildBillColorLookup(allBillsForSync);
       const syncIncomeSources = incomeSources.length === 1
