@@ -1473,6 +1473,7 @@ export function BudgetWizard({
               amount: -Math.abs(d.minimumPayment),
               payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
               anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
+              ...((d as any).alreadyPaid > 0 ? { initialSaved: Math.max(0, (d as any).alreadyPaid) } : { initialSaved: undefined }),
             };
           });
         if (missing.length === 0) return refreshed;
@@ -6577,6 +6578,7 @@ export function BudgetWizard({
                       dayOfMonth: debtBillDayOfMonth(data),
                       payoffDate: calcDebtPayoffDate(data.balance, data.minimumPayment, data.interestRate, data.paymentFrequency, data.paymentsRemaining),
                       anchorDate: data.paymentFrequency === "biweekly" ? (data.anchorDate ?? null) : null,
+                      ...((data as any).alreadyPaid > 0 ? { initialSaved: Math.max(0, (data as any).alreadyPaid) } : { initialSaved: undefined }),
                     });
                   }
                 } else {
