@@ -220,7 +220,8 @@ export function computeSavings(
         }
       }
 
-      const totalSaved = savedInCycle + manualInCycle + extraManualInCycle;
+      const totalSaved = savedInCycle + manualInCycle + extraManualInCycle
+        + Math.max(0, Number((bill as any).initialSaved) || 0);
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const cycleStartStr = `${MONTH_SHORT[cycleStart.getMonth()]} ${cycleStart.getDate()}`;

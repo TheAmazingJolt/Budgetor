@@ -2006,7 +2006,7 @@ async function writeSavingsTabToSheet(
         if (cDate <= cycleStart || cDate > today) continue;
         manualInCycle += c.amount;
       }
-      const totalSavedCycle = savedInCycle + manualInCycle;
+      const totalSavedCycle = savedInCycle + manualInCycle + Math.max(0, Number((bill as any).initialSaved) || 0);
 
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT_SHEETS[nextDue.getMonth()]} ${nextDue.getDate()}`;
@@ -2053,6 +2053,12 @@ async function writeSavingsTabToSheet(
         } else {
           manualThisMonth += c.amount;
         }
+      }
+      const firstWeekDateSrv = weeks.length > 0
+        ? new Date(Math.min(...weeks.map(w => new Date(w.startDate + "T00:00:00").getTime())))
+        : null;
+      if (firstWeekDateSrv && firstWeekDateSrv.getMonth() === currentMonth && firstWeekDateSrv.getFullYear() === currentYear) {
+        savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
       }
       const totalSavedMonth = savedThisMonth + manualThisMonth + extraThisMonth;
       const progressPct = monthlyGoal > 0 ? Math.min(100, (totalSavedMonth / monthlyGoal) * 100) : 0;

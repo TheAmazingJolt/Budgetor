@@ -1307,7 +1307,7 @@ function writeExcelSavingsSheetXL(
         if (cDate <= cycleStart || cDate > today) continue;
         manualInCycle += c.amount;
       }
-      savedInCycle += manualInCycle;
+      savedInCycle += manualInCycle + Math.max(0, Number((bill as any).initialSaved) || 0);
       const weeksRemaining = Math.max(0, Math.ceil((nextDue.getTime() - today.getTime()) / msPerWeek));
       const nextDueDateStr = `${MONTH_SHORT_XL[nextDue.getMonth()]} ${nextDue.getDate()}`;
       const progressPct = annualGoal > 0 ? Math.min(100, (savedInCycle / annualGoal) * 100) : 0;
@@ -1349,6 +1349,12 @@ function writeExcelSavingsSheetXL(
         } else {
           savedThisMonth += c.amount;
         }
+      }
+      const firstWeekDate = weeks.length > 0
+        ? new Date(Math.min(...weeks.map(w => new Date(w.startDate + "T00:00:00").getTime())))
+        : null;
+      if (firstWeekDate && firstWeekDate.getMonth() === currentMonth && firstWeekDate.getFullYear() === currentYear) {
+        savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
       }
       const progressPct = monthlyGoal > 0 ? Math.min(100, ((savedThisMonth + extraThisMonth) / monthlyGoal) * 100) : 0;
       balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, extraThisMonth, progressPct });
