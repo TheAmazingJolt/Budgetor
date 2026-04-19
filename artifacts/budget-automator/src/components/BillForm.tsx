@@ -218,6 +218,7 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
   const isYearly = billType === "yearly";
   const isYearlyFlat = billType === "yearly-flat";
   const isAnyYearly = isYearly || isYearlyFlat;
+  const isBalanced = billType === "balanced";
 
   const weeklyEstimate = (() => {
     const month = typeof watchedAnnualDueMonth === "number" ? watchedAnnualDueMonth : null;
@@ -390,13 +391,13 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
               />
             )}
 
-            {isYearly && (
+            {(isYearly || isBalanced) && (
               <FormField
                 control={form.control}
                 name="initialSaved"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel>Already saved <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormLabel>Already saved/paid <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -409,7 +410,9 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
                       />
                     </FormControl>
                     <FormDescription>
-                      If you've already put money toward this, enter it here to reduce the weekly contribution.
+                      {isYearly
+                        ? "If you've already put money toward this, enter it here to reduce the weekly contribution."
+                        : "If you've already paid toward this bill this period, enter it here to reduce the budgeted amount for the first month."}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

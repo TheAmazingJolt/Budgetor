@@ -34,6 +34,7 @@ const formSchema = z.object({
   dueDate: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   anchorDate: z.string().nullable().optional(),
+  alreadyPaid: z.coerce.number().min(0).nullable().optional(),
 }).refine(
   (data) => {
     if (data.type === "lump_sum") return true;
@@ -83,6 +84,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           dueDate: initialData.dueDate ?? null,
           startDate: initialData.startDate ?? null,
           anchorDate: initialData.anchorDate ?? null,
+          alreadyPaid: (initialData as any).alreadyPaid ?? null,
         }
       : {
           name: "",
@@ -98,6 +100,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
           dueDate: null,
           startDate: null,
           anchorDate: null,
+          alreadyPaid: null,
         },
   });
 
@@ -130,6 +133,7 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
       createdAt: isNew ? new Date().toISOString().split("T")[0] : (initialData?.createdAt ?? undefined),
       ...(isLumpSum ? { dueDate: values.dueDate ?? undefined, startDate: values.startDate ?? undefined } : { dueDate: undefined, startDate: undefined }),
       anchorDate: isBiweeklyInstallment ? (values.anchorDate || null) : null,
+      ...(!isLumpSum && values.alreadyPaid != null && values.alreadyPaid > 0 ? { alreadyPaid: values.alreadyPaid } : {}),
     } as Debt);
   };
 
@@ -447,6 +451,33 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
                     ? "Your total credit line. Used to calculate utilization."
                     : "The total amount you originally borrowed or charged. Used to track payoff progress."}
                 </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {!isLumpSum && (
+          <FormField
+            control={form.control}
+            name="alreadyPaid"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Already paid <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={field.value == null ? "" : String(field.value)}
+                    onChange={e => field.onChange(e.target.value === "" ? null : e.target.value)}
+                    className="focus:ring-primary/20 focus:border-primary"
+                  />
+                </FormControl>
+                <FormDescription>
+                  If you've already made a payment toward this debt this period, enter it here to reduce the first month's budgeted amount.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

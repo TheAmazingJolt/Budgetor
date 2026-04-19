@@ -1486,6 +1486,7 @@ export function BudgetWizard({
           sourceDebtId: d.id,
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
           ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
+          ...((d as any).alreadyPaid > 0 ? { initialSaved: Math.max(0, (d as any).alreadyPaid) } : {}),
         }))];
       });
       setDebtBillImports(new Set(serverDebts.filter(d => !d.excludeFromBill && d.type !== "lump_sum").map(d => d.id)));

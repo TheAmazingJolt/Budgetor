@@ -231,6 +231,7 @@ export function generateWeeklyBudgets(
 
   // ── Count weeks per month and months spanned ────────────────────────────
   const monthsInRange = new Set(weeks.map((w) => w.month));
+  const firstMonthKey = [...monthsInRange][0];
   const startMonth = startDate.getMonth();
   const startYear = startDate.getFullYear();
   const totalMonths = monthsInRange.size;
@@ -303,7 +304,11 @@ export function generateWeeklyBudgets(
         if (dueDate >= start && dueDate <= end) {
           // Place bill only if the week starts before the payoff date
           if (!billPayoffDate || start < billPayoffDate) {
-            weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+            const initSaved = m === 0 ? Math.max(0, Number((bill as any).initialSaved) || 0) : 0;
+            const effectiveAmount = initSaved > 0 ? Math.min(0, bill.amount + initSaved) : bill.amount;
+            if (Math.abs(effectiveAmount) >= 0.005) {
+              weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: effectiveAmount, color: bill.sourceDebtId ? undefined : bill.color });
+            }
           }
           break;
         }
@@ -317,22 +322,30 @@ export function generateWeeklyBudgets(
     const billStartDate = bill.startDate
       ? new Date(bill.startDate + "T00:00:00")
       : null;
+    const billInitSaved = Math.max(0, Number((bill as any).initialSaved) || 0);
     for (let i = 0; i < weeks.length; i++) {
       if (billPayoffDate && weeks[i].start >= billPayoffDate) continue;
       if (billStartDate && weeks[i].start < billStartDate) continue;
+      const initSaved = i === 0 ? billInitSaved : 0;
       if (payPeriod === "weekly") {
-        weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: bill.amount, color: bill.sourceDebtId ? undefined : bill.color });
+        const effectiveAmount = initSaved > 0 ? Math.min(0, bill.amount + initSaved) : bill.amount;
+        if (Math.abs(effectiveAmount) >= 0.005) {
+          weeks[i].fixedWeeklyBills.push({ name: bill.name, amount: effectiveAmount, color: bill.sourceDebtId ? undefined : bill.color });
+        }
       } else {
         const periodStart = weeks[i].start;
         const periodEnd = weeks[i].end;
         const diffDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000) + 1;
         const occurrences = Math.max(1, Math.ceil(diffDays / 7));
         for (let o = 0; o < occurrences; o++) {
-          weeks[i].fixedWeeklyBills.push({
-            name: occurrences > 1 ? `${bill.name} (wk ${o + 1})` : bill.name,
-            amount: bill.amount,
-            color: bill.sourceDebtId ? undefined : bill.color,
-          });
+          const effectiveAmount = (i === 0 && o === 0 && initSaved > 0) ? Math.min(0, bill.amount + initSaved) : bill.amount;
+          if (Math.abs(effectiveAmount) >= 0.005) {
+            weeks[i].fixedWeeklyBills.push({
+              name: occurrences > 1 ? `${bill.name} (wk ${o + 1})` : bill.name,
+              amount: effectiveAmount,
+              color: bill.sourceDebtId ? undefined : bill.color,
+            });
+          }
         }
       }
     }
@@ -654,7 +667,8 @@ export function generateWeeklyBudgets(
         : [...monthWeekIndices];
       if (eligibleIndices.length === 0) continue;
 
-      const alreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
+      const billInitSaved = mk === firstMonthKey ? Math.max(0, Number((bill as any).initialSaved) || 0) : 0;
+      const alreadySaved = (priorSavings?.[mk]?.[bill.name] ?? 0) + billInitSaved;
       // Pro-rate: only allocate the share of the monthly bill that corresponds
       // to the weeks being generated. E.g. 1 generated week in a 5-week month
       // = 1/5 of the monthly amount, so the user sees a realistic per-week figure
@@ -728,7 +742,8 @@ export function generateWeeklyBudgets(
         weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
       );
 
-      const timedAlreadySaved = priorSavings?.[mk]?.[bill.name] ?? 0;
+      const timedInitSaved = mk === firstMonthKey ? Math.max(0, Number((bill as any).initialSaved) || 0) : 0;
+      const timedAlreadySaved = (priorSavings?.[mk]?.[bill.name] ?? 0) + timedInitSaved;
       const timedFullPeriods = totalPeriodsInFullMonth[mk] ?? activeIndices.length;
       const timedPastPeriods = pastPeriodsInMonth[mk] ?? 0;
       const timedRemainingPeriods = Math.max(1, timedFullPeriods - timedPastPeriods);
