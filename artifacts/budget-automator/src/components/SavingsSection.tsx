@@ -74,9 +74,8 @@ export function SavingsSection({
   const queryClient = useQueryClient();
 
   const { data: contribData } = useQuery<{ contributions: ManualContribution[] }>({
-    queryKey: ["savings-contributions", budgetId],
-    queryFn: () => apiFetch(`/api/budgets/${budgetId}/contributions`),
-    enabled: !!budgetId,
+    queryKey: ["savings-contributions"],
+    queryFn: () => apiFetch(`/api/contributions`),
     staleTime: 30_000,
   });
 
@@ -88,9 +87,8 @@ export function SavingsSection({
   });
 
   const { data: goalsData } = useQuery<{ goals: SavingsGoal[] }>({
-    queryKey: ["savings-goals", budgetId],
-    queryFn: () => apiFetch(`/api/budgets/${budgetId}/goals`),
-    enabled: !!budgetId,
+    queryKey: ["savings-goals"],
+    queryFn: () => apiFetch(`/api/goals`),
     staleTime: 30_000,
   });
 
@@ -100,35 +98,35 @@ export function SavingsSection({
 
   const addMutation = useMutation({
     mutationFn: (payload: { billName: string; amount: number; date: string; note?: string; isExtra?: boolean }) =>
-      apiFetch(`/api/budgets/${budgetId}/contributions`, {
+      apiFetch(`/api/contributions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] });
+      queryClient.invalidateQueries({ queryKey: ["savings-contributions"] });
       onContributionChange?.();
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      apiFetch(`/api/budgets/${budgetId}/contributions/${id}`, { method: "DELETE" }),
+      apiFetch(`/api/contributions/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["savings-contributions", budgetId] });
+      queryClient.invalidateQueries({ queryKey: ["savings-contributions"] });
       onContributionChange?.();
     },
   });
 
   const createGoalMutation = useMutation({
     mutationFn: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) =>
-      apiFetch(`/api/budgets/${budgetId}/goals`, {
+      apiFetch(`/api/goals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+      queryClient.invalidateQueries({ queryKey: ["savings-goals"] });
     },
     onError: () => {
       toast({ title: "Failed to create goal", variant: "destructive" });
@@ -137,13 +135,13 @@ export function SavingsSection({
 
   const updateGoalMutation = useMutation({
     mutationFn: ({ goalId, ...payload }: { goalId: string; name: string; targetAmount: number; targetDate: string; note?: string }) =>
-      apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, {
+      apiFetch(`/api/goals/${goalId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+      queryClient.invalidateQueries({ queryKey: ["savings-goals"] });
     },
     onError: () => {
       toast({ title: "Failed to update goal", variant: "destructive" });
@@ -152,9 +150,9 @@ export function SavingsSection({
 
   const deleteGoalMutation = useMutation({
     mutationFn: (goalId: string) =>
-      apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, { method: "DELETE" }),
+      apiFetch(`/api/goals/${goalId}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+      queryClient.invalidateQueries({ queryKey: ["savings-goals"] });
     },
     onError: () => {
       toast({ title: "Failed to delete goal", variant: "destructive" });
@@ -163,13 +161,13 @@ export function SavingsSection({
 
   const toggleBudgetMutation = useMutation({
     mutationFn: ({ goalId, value }: { goalId: string; value: boolean }) =>
-      apiFetch(`/api/budgets/${budgetId}/goals/${goalId}`, {
+      apiFetch(`/api/goals/${goalId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ includeInBudget: value }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["savings-goals", budgetId] });
+      queryClient.invalidateQueries({ queryKey: ["savings-goals"] });
     },
     onError: () => {
       toast({ title: "Failed to update goal", variant: "destructive" });

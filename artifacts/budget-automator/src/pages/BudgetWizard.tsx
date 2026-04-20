@@ -1722,16 +1722,14 @@ export function BudgetWizard({
   });
 
   const budgetGoalsQuery = useQuery<{ goals: { id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }[] }>({
-    queryKey: ["savings-goals", activeCloudBudgetId],
-    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/goals`),
-    enabled: !!activeCloudBudgetId,
+    queryKey: ["savings-goals"],
+    queryFn: () => apiFetch(`/api/goals`),
     staleTime: 30_000,
   });
 
   const budgetContributionsQuery = useQuery<{ contributions: { id: string; billName: string; amount: number; date: string; note?: string | null; isExtra?: boolean }[] }>({
-    queryKey: ["savings-contributions", activeCloudBudgetId],
-    queryFn: () => apiFetch(`/api/budgets/${activeCloudBudgetId}/contributions`),
-    enabled: !!activeCloudBudgetId,
+    queryKey: ["savings-contributions"],
+    queryFn: () => apiFetch(`/api/contributions`),
     staleTime: 30_000,
   });
 
@@ -3156,7 +3154,7 @@ export function BudgetWizard({
                 if (freshLabels.has(w.label)) return false;
                 const d = parseLabelDates(w.label);
                 if (!d) return true;
-                return d.end < genStart || d.start > genEnd;
+                return d.end < genStart;
               }),
               ...freshAsCloudWeeks,
             ]);
@@ -6830,22 +6828,16 @@ export function BudgetWizard({
               Toggle "Include in budget" to automatically add a weekly contribution to your generated budget.
             </p>
           </DialogHeader>
-          {activeCloudBudgetId ? (
-            <ManageSavingsDialog
-              budgetId={activeCloudBudgetId}
-              onGoalsChanged={() => {
-                queryClient.invalidateQueries({ queryKey: ["savings-goals", activeCloudBudgetId] });
-              }}
-              isPro={isPro}
-              isSignedIn={isSignedIn}
-              isGuest={isGuest}
-              onUpgrade={() => setIsPlanComparisonOpen(true)}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Open a cloud budget to manage savings goals.
-            </p>
-          )}
+          <ManageSavingsDialog
+            onGoalsChanged={() => {
+              queryClient.invalidateQueries({ queryKey: ["savings-goals"] });
+              queryClient.invalidateQueries({ queryKey: ["savings-contributions"] });
+            }}
+            isPro={isPro}
+            isSignedIn={isSignedIn}
+            isGuest={isGuest}
+            onUpgrade={() => setIsPlanComparisonOpen(true)}
+          />
         </DialogContent>
       </Dialog>
 
@@ -7719,7 +7711,7 @@ export function BudgetWizard({
               budgetContributionsQuery.refetch(),
             ]).then(([checkinsResult]) => {
               if (activeCloudBudgetId) {
-                queryClient.invalidateQueries({ queryKey: ["savings-contributions", activeCloudBudgetId] });
+                queryClient.invalidateQueries({ queryKey: ["savings-contributions"] });
               }
               if (checkinsResult.data?.checkins) {
                 bgSyncRef.current.weeklyCheckins = checkinsResult.data.checkins;

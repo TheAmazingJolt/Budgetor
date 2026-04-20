@@ -5,7 +5,7 @@ import { savedBudgetsTable } from "./saved-budgets";
 export const savingsGoalsTable = pgTable("savings_goals", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  budgetId: uuid("budget_id").notNull().references(() => savedBudgetsTable.id, { onDelete: "cascade" }),
+  budgetId: uuid("budget_id").references(() => savedBudgetsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   targetAmount: numeric("target_amount", { precision: 12, scale: 2 }).notNull(),
   targetDate: text("target_date").notNull(),
@@ -20,7 +20,7 @@ export const savingsGoalsTable = pgTable("savings_goals", {
 export type SavingsGoal = typeof savingsGoalsTable.$inferSelect;
 export type InsertSavingsGoal = {
   userId: string;
-  budgetId: string;
+  budgetId?: string | null;
   name: string;
   targetAmount: string;
   targetDate: string;
