@@ -2758,7 +2758,14 @@ export function BudgetWizard({
         if (!parsed) return false;
         return parsed.start <= today && today <= parsed.end;
       });
-      if (!isTodayCoveredByExistingWeeks && (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0 || periodMismatch)) {
+      const lastRestoredWeekEnd = (() => {
+        const last = restoredWeeks.at(-1);
+        if (!last) return null;
+        const parsed = parseLabelDates(last.label ?? last.name ?? "");
+        return parsed ? parsed.end : null;
+      })();
+      const isBudgetExpired = lastRestoredWeekEnd ? today > lastRestoredWeekEnd : false;
+      if (isBudgetExpired && !isTodayCoveredByExistingWeeks && (debtsNeedingBills.length > 0 || debtBillsMissingFromWeeks.length > 0 || periodMismatch)) {
         scheduleAutoGenerate({
           bills: billsToSet,
           openingBalance: effectiveOpeningBalance,
