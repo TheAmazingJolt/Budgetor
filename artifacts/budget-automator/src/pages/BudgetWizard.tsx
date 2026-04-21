@@ -1344,8 +1344,6 @@ export function BudgetWizard({
 
   const pendingAutoGenerateRef = useRef<GenerateOverrides | null>(null);
   const [autoGenerateTick, setAutoGenerateTick] = useState(0);
-  const suppressSheetAutoSelectRef = useRef(false);
-
   const lastGeneratedBillsFingerprintRef = useRef<string | null>(null);
   const [isRegeneratingForExport, setIsRegeneratingForExport] = useState(false);
 
@@ -1384,7 +1382,6 @@ export function BudgetWizard({
   });
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
-  const autoOpenLastSheet = prefsLoaded && userPrefsQuery.data?.preferences?.autoOpenLastSheet !== false;
   const showPaymentReminders = !prefsLoaded || userPrefsQuery.data?.preferences?.showPaymentReminders !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
@@ -1942,21 +1939,6 @@ export function BudgetWizard({
       }
     }
   }, [sheetReadQuery.data, selectedSheetId]);
-
-  useEffect(() => {
-    if (suppressSheetAutoSelectRef.current) {
-      suppressSheetAutoSelectRef.current = false;
-      return;
-    }
-    if (!autoOpenLastSheet) return;
-    const sheets = sheetListQuery.data?.sheets;
-    if (!sheets || sheets.length === 0) return;
-    if (selectedSheetId) return;
-    if (step !== 0) return;
-    const first = sheets[0] as { id: string; name: string };
-    handleSelectSheet(first.id, first.name);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetListQuery.data, autoOpenLastSheet]);
 
   useEffect(() => {
     if (excelReadQuery.data && selectedExcelFileId) {
@@ -3880,7 +3862,6 @@ export function BudgetWizard({
       }
       setIsDeleteDialogOpen(false);
       if (inputMode === "google") {
-        suppressSheetAutoSelectRef.current = true;
         queryClient.invalidateQueries({ queryKey: getSheetListQueryKey() });
       } else if (inputMode === "excel") {
         queryClient.invalidateQueries({ queryKey: getExcelListQueryKey() });
