@@ -96,6 +96,59 @@ function getDebtPlannedAmount(bill: Bill, weekItems: { name: string; amount: num
     .reduce((s, it) => s + Math.abs(it.amount), 0);
 }
 
+/**
+ * When multiple debts share the same bill name (e.g. two "Edfinancial Loan (min payment)"
+ * entries), a simple name-only filter sums ALL matching week items and assigns the total
+ * to every debt. This function uses a two-pass claiming approach instead:
+ *   1st pass — claim week items whose amount exactly matches the debt's payment (±$0.02).
+ *   2nd pass — remaining debts claim any unclaimed item with the same name (FIFO).
+ * This ensures each week item is counted for at most one debt.
+ */
+function computeDebtPlannedAmounts(
+  debtBillsList: DebtBillInfo[],
+  weekItems: { name: string; amount: number }[],
+): Map<string, number> {
+  const result = new Map<string, number>();
+  const pool = weekItems.map(it => ({ ...it, claimed: false }));
+
+  // Pass 1: exact-amount matches
+  for (const { bill, debtId } of debtBillsList) {
+    if (bill.type === "balanced") continue;
+    const billAmount = Math.abs(bill.amount);
+    const candidates = pool.filter(it => !it.claimed && it.name === bill.name);
+    const exact = candidates.find(it => Math.abs(Math.abs(it.amount) - billAmount) < 0.02);
+    if (exact) {
+      exact.claimed = true;
+      result.set(debtId, Math.abs(exact.amount));
+    }
+  }
+
+  // Pass 2: remaining debts get the next unclaimed same-name item
+  for (const { bill, debtId } of debtBillsList) {
+    if (bill.type === "balanced") continue;
+    if (result.has(debtId)) continue;
+    const candidates = pool.filter(it => !it.claimed && it.name === bill.name);
+    if (candidates.length > 0) {
+      candidates[0].claimed = true;
+      result.set(debtId, Math.abs(candidates[0].amount));
+    } else {
+      result.set(debtId, 0);
+    }
+  }
+
+  // Balanced debt bills: standard prefix match (they rarely share a name)
+  for (const { bill, debtId } of debtBillsList) {
+    if (bill.type !== "balanced") continue;
+    if (result.has(debtId)) continue;
+    const prefix = `Partial ${bill.name}`;
+    const matches = pool.filter(it => !it.claimed && it.name === prefix);
+    result.set(debtId, matches.reduce((s, it) => s + Math.abs(it.amount), 0));
+    matches.forEach(it => { it.claimed = true; });
+  }
+
+  return result;
+}
+
 function getBillItemType(bill: Bill): "balanced" | "yearly" | "goal" {
   if (bill.type === "balanced") return "balanced";
   if (bill.type === "weekly") return "goal";
@@ -125,10 +178,12 @@ export function CheckInDialog({
         };
       });
 
-    const debtItems: CheckInItem[] = (debtBills ?? [])
-      .filter(({ debtId }) => !!debtId)
+    const filteredDebtBills = (debtBills ?? []).filter(({ debtId }) => !!debtId);
+    const debtPlanned = computeDebtPlannedAmounts(filteredDebtBills, week.items);
+
+    const debtItems: CheckInItem[] = filteredDebtBills
       .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
-        const planned = getDebtPlannedAmount(bill, week.items);
+        const planned = debtPlanned.get(debtId) ?? 0;
         // Balanced debt bills (billAsBalanced) are stored as itemType:"balanced"
         // so the savings tab can pick them up — look them up that way first.
         const isBillAsBalanced = bill.type === "balanced";
@@ -184,10 +239,11 @@ export function CheckInDialog({
       const currentIds = new Set(
         current.filter(it => it.billType === "debt").map(it => it.debtId).filter(Boolean),
       );
-      const newItems: CheckInItem[] = added
-        .filter(({ debtId }) => !!debtId && !currentIds.has(debtId))
+      const filteredAdded = added.filter(({ debtId }) => !!debtId && !currentIds.has(debtId));
+      const addedPlanned = computeDebtPlannedAmounts(filteredAdded, week.items);
+      const newItems: CheckInItem[] = filteredAdded
         .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
-          const planned = getDebtPlannedAmount(bill, week.items);
+          const planned = addedPlanned.get(debtId) ?? 0;
           const isBillAsBalanced = bill.type === "balanced";
           const existing = isBillAsBalanced
             ? (existingCheckins.find(c => c.itemName === bill.name && c.itemType === "balanced") ??
