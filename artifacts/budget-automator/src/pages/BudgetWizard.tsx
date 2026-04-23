@@ -7870,6 +7870,16 @@ export function BudgetWizard({
         </DialogContent>
       </Dialog>
 
+      <footer className="mt-auto border-t border-border/50 bg-white/40">
+        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>© {new Date().getFullYear()} Budgify. All rights reserved.</span>
+          <div className="flex gap-4">
+            <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
+            <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
+          </div>
+        </div>
+      </footer>
+
       {isSignedIn && (
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-border/50 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] flex items-stretch h-16 safe-area-bottom">
           {(() => {
