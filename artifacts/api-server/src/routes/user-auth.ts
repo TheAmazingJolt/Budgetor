@@ -420,7 +420,7 @@ router.post("/auth/forgot-password", async (req: Request, res: Response): Promis
 
   const frontendOrigin = process.env["FRONTEND_URL"]
     ?? (process.env["CORS_ORIGIN"] ? process.env["CORS_ORIGIN"].split(",")[0].trim() : "http://localhost:5173");
-  const resetUrl = `${frontendOrigin}?reset_token=${rawToken}`;
+  const resetUrl = `${frontendOrigin}/#reset_token=${rawToken}`;
 
   const isDev = process.env["NODE_ENV"] !== "production";
 

@@ -142,9 +142,12 @@ function AppRouting() {
   const initialRefCode = new URLSearchParams(window.location.search).get("ref");
   const [referralReady, setReferralReady] = useState<boolean>(!initialRefCode);
 
-  const resetToken = new URLSearchParams(window.location.search).get("reset_token");
-  const claimEmail = new URLSearchParams(window.location.search).get("claim_email");
-  const claimToken = new URLSearchParams(window.location.search).get("claim_token");
+  const resetToken = new URLSearchParams(window.location.search).get("reset_token")
+    ?? new URLSearchParams(window.location.hash.slice(1)).get("reset_token");
+  const claimEmail = new URLSearchParams(window.location.search).get("claim_email")
+    ?? new URLSearchParams(window.location.hash.slice(1)).get("claim_email");
+  const claimToken = new URLSearchParams(window.location.search).get("claim_token")
+    ?? new URLSearchParams(window.location.hash.slice(1)).get("claim_token");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -292,7 +295,10 @@ function AppRouting() {
       const params = new URLSearchParams(window.location.search);
       params.delete("reset_token");
       const newSearch = params.toString();
-      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      hashParams.delete("reset_token");
+      const newHash = hashParams.toString() ? "#" + hashParams.toString() : "";
+      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + newHash;
       window.history.replaceState({}, "", newUrl);
     }
   };
