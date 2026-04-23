@@ -292,14 +292,19 @@ function AppRouting() {
       qc.setQueryData(getAuthMeQueryKey(), { user: data.user });
       qc.invalidateQueries({ queryKey: ["/api/auth/google/status"] });
       qc.invalidateQueries({ queryKey: getMicrosoftAuthStatusQueryKey() });
-      const params = new URLSearchParams(window.location.search);
-      params.delete("reset_token");
-      const newSearch = params.toString();
-      const hashParams = new URLSearchParams(window.location.hash.slice(1));
-      hashParams.delete("reset_token");
-      const newHash = hashParams.toString() ? "#" + hashParams.toString() : "";
-      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + newHash;
-      window.history.replaceState({}, "", newUrl);
+      try {
+        const params = new URLSearchParams(window.location.search);
+        params.delete("reset_token");
+        const newSearch = params.toString();
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        hashParams.delete("reset_token");
+        const newHash = hashParams.toString() ? "#" + hashParams.toString() : "";
+        const cleanPath = window.location.pathname.replace(/^\/\/+/, "/");
+        const newUrl = cleanPath + (newSearch ? "?" + newSearch : "") + newHash;
+        window.history.replaceState({}, "", newUrl);
+      } catch {
+        // URL cleanup is cosmetic — ignore if blocked
+      }
     }
   };
 
