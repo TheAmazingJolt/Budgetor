@@ -196,16 +196,9 @@ export function CheckInDialog({
              existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"));
         const actual = existing ? existing.actualAmount : planned;
         // isLumpSum is set by BudgetWizard based on debt.type === "lump_sum".
-        // Lump-sum debts should never be auto-skipped — the user should always see
-        // them in the main check-in section so they can record each weekly set-aside.
         const isLumpSum = !!debtIsLumpSum;
-        const autoSkip = !existing && planned === 0 && !isLumpSum;
-        // Lump-sum debts with outstanding balance should never start as skipped —
-        // a prior $0 check-in on this week was caused by the auto-skip bug, not
-        // by the user intentionally choosing to skip the payment.
-        const skipped = isLumpSum && (currentBalance ?? 0) > 0
-          ? false
-          : existing ? existing.actualAmount === 0 : autoSkip;
+        const autoSkip = !existing && planned === 0;
+        const skipped = existing ? existing.actualAmount === 0 : autoSkip;
         return {
           billName: bill.name,
           billType: "debt" as const,
@@ -253,10 +246,8 @@ export function CheckInDialog({
                existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"));
           const actual = existing ? existing.actualAmount : planned;
           const isLumpSum = !!debtIsLumpSum;
-          const autoSkip = !existing && planned === 0 && !isLumpSum;
-          const skipped = isLumpSum && (currentBalance ?? 0) > 0
-            ? false
-            : existing ? existing.actualAmount === 0 : autoSkip;
+          const autoSkip = !existing && planned === 0;
+          const skipped = existing ? existing.actualAmount === 0 : autoSkip;
           return {
             billName: bill.name,
             billType: "debt" as const,
@@ -295,31 +286,23 @@ export function CheckInDialog({
 
   const budgetedItems = items.filter(it => {
     const ex = findExisting(it);
-    // Lump-sum debt payments always appear in the main list so the user can record
-    // their payment each week — even if a prior check-in for this week was at $0
-    // (which can happen when the item was accidentally auto-skipped).
-    if (it.isLumpSum && (it.currentBalance ?? 0) > 0) return true;
-    // Already processed at $0 (skipped in a prior check-in) → not budgeted section
+    // A planned amount always wins — item belongs in the main section regardless of
+    // prior check-in status. This also covers the backward-compat case where a
+    // lump-sum debt had a stale $0 check-in from the old auto-skip bug.
+    if (it.plannedAmount > 0) return true;
+    // Already processed at $0 (skipped) → not budgeted section
     if (ex && ex.actualAmount === 0) return false;
-    // Previously confirmed at a non-zero amount → keep in main list
+    // Previously confirmed at a non-zero amount (extra / unplanned payment) → keep
     if (ex && ex.actualAmount > 0) return true;
-    // Debt items are only in the main list if they have a planned amount this week.
-    // Having an outstanding balance alone is NOT enough — the debt must actually appear
-    // in this week's budget (plannedAmount > 0) to show here.
-    if (it.billType === "debt" && it.plannedAmount > 0) return true;
-    // Not yet processed: show in main list only if it has a planned amount
-    return it.plannedAmount > 0;
+    return false;
   });
   const notBudgetedItems = items.filter(it => {
     const ex = findExisting(it);
-    // Lump-sum debt payments with an outstanding balance are never in the not-budgeted list
-    if (it.isLumpSum && (it.currentBalance ?? 0) > 0) return false;
-    // Already processed at $0 (skipped) → not budgeted
-    if (ex && ex.actualAmount === 0) return true;
-    // Debt items that DO have a planned amount this week are budgeted (never in this list)
-    if (!ex && it.billType === "debt" && it.plannedAmount > 0) return false;
-    // Not yet processed with no planned amount → not budgeted
-    return !ex && it.plannedAmount === 0;
+    // Anything with a planned amount lives in the main section, not here
+    if (it.plannedAmount > 0) return false;
+    // Already confirmed at non-zero → main section
+    if (ex && ex.actualAmount > 0) return false;
+    return true;
   });
 
   const setActual = (idx: number, val: string) => {
