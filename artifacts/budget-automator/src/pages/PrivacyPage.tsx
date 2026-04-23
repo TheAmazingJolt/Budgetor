@@ -72,10 +72,16 @@ export function PrivacyPage() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold mb-3">Your Rights</h2>
           <ul className="list-disc pl-6 space-y-2 text-slate-600 leading-relaxed">
-            <li><strong>Access:</strong> You can export your budget data at any time from the Download section of the app.</li>
-            <li><strong>Correction:</strong> You can update your account email and budget data directly in the app.</li>
-            <li><strong>Deletion:</strong> You can delete your account from your account settings. This permanently removes all your data from our systems.</li>
-            <li><strong>Revoke integrations:</strong> You can disconnect Google or Microsoft access at any time from your Google/Microsoft account settings or from within the app.</li>
+            <li><strong>Access:</strong> You can view and export your budget data at any time from the Download section of the app.</li>
+            <li><strong>Correction of budget data:</strong> You can edit your bills, debts, income, savings goals, and weekly budgets directly in the app at any time.</li>
+            <li><strong>Correction of account email:</strong> To change the email address on your account, email us at{" "}
+              <a href="mailto:support@budgify.org" className="text-primary underline">support@budgify.org</a>{" "}
+              from your existing account email. We will process the change within 30 days.</li>
+            <li><strong>Deletion:</strong> To delete your account and all associated data, email us at{" "}
+              <a href="mailto:support@budgify.org" className="text-primary underline">support@budgify.org</a>.
+              We will permanently remove your account and all budget, debt, savings, and sync-integration data
+              within 30 days of verification.</li>
+            <li><strong>Revoke integrations:</strong> You can disconnect Google or Microsoft access at any time from your Google/Microsoft account security settings, or by disconnecting the integration from within the app.</li>
           </ul>
         </section>
 
@@ -101,7 +107,7 @@ export function PrivacyPage() {
           <h2 className="text-xl font-semibold mb-3">Contact</h2>
           <p className="text-slate-600 leading-relaxed">
             Questions or requests regarding your privacy can be sent to{" "}
-            <a href="mailto:privacy@budgify.org" className="text-primary underline">privacy@budgify.org</a>.
+            <a href="mailto:support@budgify.org" className="text-primary underline">support@budgify.org</a>.
           </p>
         </section>
       </main>

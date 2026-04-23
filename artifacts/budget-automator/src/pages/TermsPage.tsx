@@ -50,7 +50,7 @@ export function TermsPage() {
             <li>The free tier provides access to core budgeting features with limits on the number of bills, debts, and savings goals.</li>
             <li>The Pro tier is a paid monthly or annual subscription that removes those limits and unlocks additional features.</li>
             <li>Subscriptions are billed through Stripe. By subscribing, you authorize recurring charges to your payment method.</li>
-            <li>You may cancel your subscription at any time from your account settings. Cancellation takes effect at the end of the current billing period; no partial refunds are provided.</li>
+            <li>You may cancel your subscription at any time from the Stripe customer portal linked from your account. Cancellation takes effect at the end of the current billing period; no partial refunds are provided.</li>
             <li>We reserve the right to change pricing with at least 30 days' notice to existing subscribers.</li>
           </ul>
         </section>
@@ -109,9 +109,11 @@ export function TermsPage() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold mb-3">Account Termination</h2>
           <p className="text-slate-600 leading-relaxed">
-            You may delete your account at any time from your account settings. We may suspend or terminate
-            your account if you violate these Terms. Upon termination, your data will be deleted in accordance
-            with our Privacy Policy.
+            You may request account deletion at any time by emailing{" "}
+            <a href="mailto:support@budgify.org" className="text-primary underline">support@budgify.org</a>{" "}
+            from the email address associated with your account. We will permanently delete your account and
+            associated data within 30 days. We may suspend or terminate your account if you violate these
+            Terms. Upon termination, your data will be deleted in accordance with our Privacy Policy.
           </p>
         </section>
 
@@ -137,7 +139,7 @@ export function TermsPage() {
           <h2 className="text-xl font-semibold mb-3">Contact</h2>
           <p className="text-slate-600 leading-relaxed">
             Questions about these Terms can be sent to{" "}
-            <a href="mailto:legal@budgify.org" className="text-primary underline">legal@budgify.org</a>.
+            <a href="mailto:support@budgify.org" className="text-primary underline">support@budgify.org</a>.
           </p>
         </section>
       </main>
