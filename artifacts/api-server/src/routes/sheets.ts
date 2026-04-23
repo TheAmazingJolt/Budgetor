@@ -2079,6 +2079,29 @@ async function writeSavingsTabToSheet(
   if (existing) {
     savingsSheetId = existing.properties?.sheetId ?? 0;
     await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: "Savings" });
+    // Clear cell formatting too: values.clear leaves stale backgrounds/fonts behind, so
+    // sections rendered at rows previously occupied by a different-colored section (e.g.
+    // Lump-Sum rose where Monthly Set-Aside now sits) would show the wrong heading color.
+    try {
+      await sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            repeatCell: {
+              range: {
+                sheetId: savingsSheetId,
+                startRowIndex: 0,
+                endRowIndex: 1000,
+                startColumnIndex: 0,
+                endColumnIndex: 26,
+              },
+              cell: {},
+              fields: "userEnteredFormat",
+            },
+          }],
+        },
+      });
+    } catch { /* non-fatal: values will still be correct */ }
   } else {
     const addResult = await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
