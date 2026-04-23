@@ -593,9 +593,14 @@ function computeSavingsGoalBills(
   contributions: Array<{ billName: string; amount: number; note?: string | null; isExtra?: boolean }>,
   existingWeeks?: ExistingWeekLike[],
   checkins?: Array<{ weekLabel: string; itemName: string; itemType?: string; actualAmount: number }>,
+  budgetStartDate?: string,
 ): Bill[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  // When the budget starts in the future, base weekly amounts on the budget start so that
+  // eligible weeks in the budget (not weeks from today) always sum to the full remaining amount.
+  const budgetStart = budgetStartDate ? new Date(budgetStartDate + "T00:00:00") : null;
+  const refDate = budgetStart && budgetStart > today ? budgetStart : today;
   const result: Bill[] = [];
   for (const g of goals) {
     if (!g.includeInBudget) continue;
@@ -649,7 +654,7 @@ function computeSavingsGoalBills(
     const remaining = Math.max(0, g.targetAmount - savedSoFar);
     if (remaining <= 0) continue;
     const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-    const weeksLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / msPerWeek));
+    const weeksLeft = Math.max(1, Math.ceil((targetDate.getTime() - refDate.getTime()) / msPerWeek));
     const weeklyNeeded = Math.round((remaining / weeksLeft) * 100) / 100;
     const dateLabel = fmtGoalTargetDate(g.targetDate);
     result.push({
@@ -668,10 +673,14 @@ function computeSavingsGoalBills(
 
 function computeLumpSumDebtBills(
   debts: Array<{ id: string; name: string; type: string; balance: number; dueDate?: string | null; startDate?: string | null }>,
+  budgetStartDate?: string,
   today?: Date,
 ): Bill[] {
   const now = today ?? new Date();
   now.setHours(0, 0, 0, 0);
+  // When the budget starts in the future, base weekly amounts on the budget start so that
+  // eligible weeks in the budget always sum to the full balance.
+  const budgetStart = budgetStartDate ? new Date(budgetStartDate + "T00:00:00") : null;
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const result: Bill[] = [];
   for (const d of debts) {
@@ -681,7 +690,9 @@ function computeLumpSumDebtBills(
     const dueDate = new Date(d.dueDate + "T00:00:00");
     if (dueDate <= now) continue;
     const parsedStartDate = d.startDate ? new Date(d.startDate + "T00:00:00") : null;
-    const effectiveStart = parsedStartDate && parsedStartDate > now ? parsedStartDate : now;
+    // effectiveStart = latest of: now, budgetStart, debt's own startDate
+    let effectiveStart = budgetStart && budgetStart > now ? budgetStart : now;
+    if (parsedStartDate && parsedStartDate > effectiveStart) effectiveStart = parsedStartDate;
     const weeksLeft = Math.max(1, Math.ceil((dueDate.getTime() - effectiveStart.getTime()) / msPerWeek));
     const weeklyAmount = Math.round((d.balance / weeksLeft) * 100) / 100;
     result.push({
@@ -1736,8 +1747,9 @@ export function BudgetWizard({
       budgetContributionsQuery.data?.contributions ?? [],
       cloudExistingWeeks,
       checkinsQuery.data?.checkins,
+      newWeekStartDate,
     ),
-    ...computeLumpSumDebtBills(debts),
+    ...computeLumpSumDebtBills(debts, newWeekStartDate),
   ];
 
   useEffect(() => {
@@ -3062,13 +3074,28 @@ export function BudgetWizard({
       : (overrides?.openingBalance ?? openingBalance);
 
     const rawBills = overrides?.bills ?? bills;
+
+    // Compute anchoredStartDate first so savings/lump-sum bills use the budget's actual start
+    // date (not just today) when calculating weekly amounts. This matters when the budget starts
+    // in the future: weeksLeft must reflect the budget window, not weeks from today.
+    const effectiveIncomeSources = incomeSources.length > 0
+      ? incomeSources.length === 1
+        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: overrides?.startDate ?? newWeekStartDate }]
+        : incomeSources
+      : undefined;
+
+    const anchoredStartDate = effectiveIncomeSources && effectiveIncomeSources.length > 1
+      ? effectiveIncomeSources[0].nextPayDate
+      : overrides?.startDate ?? newWeekStartDate;
+
     const savingsGoalBills = computeSavingsGoalBills(
       budgetGoalsQuery.data?.goals ?? [],
       budgetContributionsQuery.data?.contributions ?? [],
       cloudExistingWeeks,
       checkinsQuery.data?.checkins,
+      anchoredStartDate,
     );
-    const lumpSumBills = computeLumpSumDebtBills(debts);
+    const lumpSumBills = computeLumpSumDebtBills(debts, anchoredStartDate);
     // Deduplicate then strip orphaned debt bills (ghost entries from deleted+recreated debts)
     const validDebtIdsForGen = new Set(debts.map(d => d.id));
     // Exclude any bills linked to lump_sum debts from the raw bills list (they're computed dynamically)
@@ -3079,16 +3106,6 @@ export function BudgetWizard({
       ...savingsGoalBills,
       ...lumpSumBills,
     ];
-
-    const effectiveIncomeSources = incomeSources.length > 0
-      ? incomeSources.length === 1
-        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: overrides?.startDate ?? newWeekStartDate }]
-        : incomeSources
-      : undefined;
-
-    const anchoredStartDate = effectiveIncomeSources && effectiveIncomeSources.length > 1
-      ? effectiveIncomeSources[0].nextPayDate
-      : overrides?.startDate ?? newWeekStartDate;
 
     const priorSavingsMap = computePriorSavings(
       allBillsForGeneration,
@@ -3467,8 +3484,9 @@ export function BudgetWizard({
         budgetContributionsQuery.data?.contributions ?? [],
         cloudExistingWeeks,
         checkinsQuery.data?.checkins,
+        exportStartDate,
       );
-      const exportLumpSumBills = computeLumpSumDebtBills(debts);
+      const exportLumpSumBills = computeLumpSumDebtBills(debts, exportStartDate);
       const exportLumpSumDebtIds = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
       const exportValidDebtIds = new Set(debts.map(d => d.id));
       const exportRawBills = bills.filter(b => !b.sourceDebtId || !exportLumpSumDebtIds.has(b.sourceDebtId));
@@ -3663,14 +3681,20 @@ export function BudgetWizard({
     else if (target === "google") setIsUpdatingSheetsSync(true);
     else { setIsUpdatingSheetsSync(true); setIsUpdatingExcelSync(true); }
     try {
+      const syncIncomeSources = incomeSources.length === 1
+        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
+        : incomeSources.length > 0 ? incomeSources : undefined;
+      const syncStartDate = syncIncomeSources && syncIncomeSources.length > 1
+        ? syncIncomeSources[0].nextPayDate : newWeekStartDate;
       const savingsBillsForSync = [
         ...computeSavingsGoalBills(
           budgetGoalsQuery.data?.goals ?? [],
           budgetContributionsQuery.data?.contributions ?? [],
           cloudExistingWeeks,
           checkinsQuery.data?.checkins,
+          syncStartDate,
         ),
-        ...computeLumpSumDebtBills(debts),
+        ...computeLumpSumDebtBills(debts, syncStartDate),
       ];
       const lumpSumDebtIdsForSync = new Set(debts.filter(d => d.type === "lump_sum").map(d => d.id));
       // Build a map of debtId → alreadyPaid so we can inject initialSaved at generation
@@ -3689,11 +3713,6 @@ export function BudgetWizard({
         });
       const allBillsForSync = [...regularBillsForSync, ...savingsBillsForSync];
       const colorLookup = buildBillColorLookup(allBillsForSync);
-      const syncIncomeSources = incomeSources.length === 1
-        ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
-        : incomeSources.length > 0 ? incomeSources : undefined;
-      const syncStartDate = syncIncomeSources && syncIncomeSources.length > 1
-        ? syncIncomeSources[0].nextPayDate : newWeekStartDate;
       const syncPriorSavings = computePriorSavings(
         allBillsForSync,
         budgetContributionsQuery.data?.contributions ?? [],
