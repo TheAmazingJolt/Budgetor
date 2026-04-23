@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { BudgetWizard } from "@/pages/BudgetWizard";
 import { SignInPage } from "@/pages/SignInPage";
 import { AdminPage } from "@/pages/AdminPage";
+import { PrivacyPage } from "@/pages/PrivacyPage";
+import { TermsPage } from "@/pages/TermsPage";
 import { BugReportDialog } from "@/components/BugReportDialog";
 import type { AuthUser } from "@workspace/api-client-react";
 import {
@@ -377,6 +379,14 @@ function AppRouting() {
 
   if (window.location.pathname === "/admin") {
     return <AdminPage />;
+  }
+
+  if (window.location.pathname === "/privacy") {
+    return <PrivacyPage />;
+  }
+
+  if (window.location.pathname === "/terms") {
+    return <TermsPage />;
   }
 
   if (authQuery.isLoading || providersQuery.isLoading || !referralReady) {

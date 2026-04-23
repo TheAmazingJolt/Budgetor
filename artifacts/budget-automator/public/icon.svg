@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="hsl(152,60%,42%)"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" ry="22" fill="url(#g)"/>
+  <!-- DollarSign icon scaled to fill the rounded square, stroke only, white -->
+  <g transform="translate(50,50) scale(2.6)" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="0" y1="-10" x2="0" y2="10"/>
+    <path d="M5 -7.5H-2.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H-5.5"/>
+  </g>
+</svg>
