@@ -13,9 +13,14 @@ function getStripe(): Stripe | null {
 }
 
 function getFrontendUrl(req: Request): string {
-  const corsOrigin = process.env["CORS_ORIGIN"];
-  if (corsOrigin) return corsOrigin.split(",")[0].trim();
-  return `${req.protocol}://${req.get("host")}`;
+  // FRONTEND_URL is the authoritative source for building user-facing links. Fall back
+  // to CORS_ORIGIN (first entry) and finally the request host only if neither is set.
+  // CORS_ORIGIN can include multiple origins for allowlisting, and its first entry may
+  // be an API/Railway domain that doesn't serve the frontend — which breaks redirects.
+  const raw = process.env["FRONTEND_URL"]
+    ?? (process.env["CORS_ORIGIN"] ? process.env["CORS_ORIGIN"].split(",")[0].trim() : null)
+    ?? `${req.protocol}://${req.get("host")}`;
+  return raw.replace(/\/+$/, "");
 }
 
 router.post("/stripe/checkout", requireAuth, async (req: Request, res: Response): Promise<void> => {
