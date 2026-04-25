@@ -788,30 +788,28 @@ router.get("/auth/login/google/callback", authInitiationLimiter, async (req: Req
       return;
     }
 
-    if (!req.user) {
-      // Temporary legacy Google sign-in path for existing OAuth users who have no password yet.
-      // Signs them in via auth_code AND issues a claim_token so they can set a password.
-      // New Google users (no existing account) are rejected with link_only.
-      if (profile.email) {
-        const [matchedUser] = await db
-          .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
-          .from(usersTable)
-          .where(eq(usersTable.email, profile.email.toLowerCase()))
-          .limit(1);
-        if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
-          // Allow temporary sign-in by issuing an auth_code (same as normal login)
-          // + a claim_token so the frontend can prompt them to set a password
-          const authCode = generateAuthCode(matchedUser.id);
-          const claimToken = generateClaimToken(matchedUser.id);
-          const sep = redirectUrl.includes("?") ? "&" : "?";
-          const encodedEmail = encodeURIComponent(profile.email);
-          res.redirect(`${redirectUrl}${sep}auth_code=${authCode}&claim_token=${claimToken}&claim_email=${encodedEmail}`);
-          return;
-        }
+    if (!req.user && profile.email) {
+      const [matchedUser] = await db
+        .select({ id: usersTable.id, passwordHash: usersTable.passwordHash, provider: usersTable.provider })
+        .from(usersTable)
+        .where(eq(usersTable.email, profile.email.toLowerCase()))
+        .limit(1);
+      if (matchedUser && !matchedUser.passwordHash && matchedUser.provider !== "email" && matchedUser.provider !== "guest") {
+        // Legacy OAuth user with no password — issue auth_code + claim_token so they can set a password
+        const authCode = generateAuthCode(matchedUser.id);
+        const claimToken = generateClaimToken(matchedUser.id);
+        const sep = redirectUrl.includes("?") ? "&" : "?";
+        const encodedEmail = encodeURIComponent(profile.email);
+        res.redirect(`${redirectUrl}${sep}auth_code=${authCode}&claim_token=${claimToken}&claim_email=${encodedEmail}`);
+        return;
       }
-      const sep = redirectUrl.includes("?") ? "&" : "?";
-      res.redirect(`${redirectUrl}${sep}error=link_only`);
-      return;
+      if (matchedUser && (matchedUser.passwordHash || matchedUser.provider === "email")) {
+        // Email+password account already exists — block to prevent duplicate accounts
+        const sep = redirectUrl.includes("?") ? "&" : "?";
+        res.redirect(`${redirectUrl}${sep}error=email_exists`);
+        return;
+      }
+      // No existing account (or no email) — fall through to upsertOrUpgradeUser to create one
     }
 
     const userId = await upsertOrUpgradeUser(req, "google", profile.id, {
@@ -986,9 +984,6 @@ router.post("/auth/login/apple/callback", authInitiationLimiter, async (req: Req
 });
 
 router.get("/auth/providers", (_req: Request, res: Response) => {
-  // Google is surfaced as a legacy fallback link only (not primary sign-in).
-  // Apple is removed from primary auth — never advertised as a provider.
-  // Microsoft is only used as a service integration (OneDrive), not for login.
   const googleConfigured = !!(getAccountOAuth2Client());
   res.json({
     google: googleConfigured,
