@@ -1119,6 +1119,7 @@ export function BudgetWizard({
 
   const [saveBudgetName, setSaveBudgetName] = useState("");
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isGuestSavePromptOpen, setIsGuestSavePromptOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [renameBudgetId, setRenameBudgetId] = useState<string | null>(null);
   const [renameBudgetValue, setRenameBudgetValue] = useState("");
@@ -6397,7 +6398,9 @@ export function BudgetWizard({
                     <Button
                       size="lg"
                       onClick={() => {
-                        if (!isPro && (savedBudgetsQuery.data?.budgets?.length ?? 0) >= 1) {
+                        if (isGuest) {
+                          setIsGuestSavePromptOpen(true);
+                        } else if (!isPro && (savedBudgetsQuery.data?.budgets?.length ?? 0) >= 1) {
                           setIsPlanComparisonOpen(true);
                         } else {
                           setIsSaveDialogOpen(true);
@@ -7361,6 +7364,39 @@ export function BudgetWizard({
             onCancel={() => setIsBillManagerFormOpen(false)}
             suggestedCategories={billCategories}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGuestSavePromptOpen} onOpenChange={setIsGuestSavePromptOpen}>
+        <DialogContent className="sm:max-w-sm rounded-3xl border-border/40 shadow-2xl p-6">
+          <DialogHeader className="mb-1">
+            <DialogTitle className="text-xl font-bold">Sign in to save</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            Create a free account to save budgets to the cloud and access them from any device.
+          </p>
+          <div className="flex flex-col gap-2">
+            {googleLoginAvailable && (
+              <Button variant="outline" onClick={() => { setIsGuestSavePromptOpen(false); handleAccountGoogleLogin(); }} className="gap-2 justify-center">
+                <LogIn className="w-4 h-4" /> Continue with Google
+              </Button>
+            )}
+            {appleLoginAvailable && (
+              <Button variant="outline" onClick={() => { setIsGuestSavePromptOpen(false); handleAccountAppleLogin(); }} className="gap-2 justify-center">
+                <LogIn className="w-4 h-4" /> Continue with Apple
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => { setIsGuestSavePromptOpen(false); setStep(0); }} className="gap-2 justify-center">
+              <LogIn className="w-4 h-4" /> Sign in with email
+            </Button>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors text-center pt-1"
+              onClick={() => setIsGuestSavePromptOpen(false)}
+            >
+              Continue without saving
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
