@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -279,12 +280,25 @@ export function DebtForm({ initialData, onSubmit, onCancel }: DebtFormProps) {
               <FormItem>
                 <FormLabel>Start Date <span className="text-muted-foreground font-normal text-xs">optional</span></FormLabel>
                 <FormControl>
-                  <Input
-                    type="date"
-                    value={field.value ?? ""}
-                    onChange={e => field.onChange(e.target.value || null)}
-                    className="focus:ring-primary/20 focus:border-primary"
-                  />
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="date"
+                      value={field.value ?? ""}
+                      onChange={e => field.onChange(e.target.value || null)}
+                      className="flex-1 focus:ring-primary/20 focus:border-primary"
+                    />
+                    {field.value && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => field.onChange(null)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
                 </FormControl>
                 <FormDescription>First week to begin setting aside money. Defaults to the current week if left blank.</FormDescription>
                 <FormMessage />

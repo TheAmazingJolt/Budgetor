@@ -2365,7 +2365,6 @@ export function BudgetWizard({
           localStorage.setItem("auth_token", data.token);
         }
         queryClient.invalidateQueries({ queryKey: getAuthMeQueryKey() });
-        toast({ title: "Signed in as guest" });
       },
     });
   };
@@ -2749,7 +2748,6 @@ export function BudgetWizard({
         effectiveOpeningBalance = lastWeek.remaining;
       }
     }
-    toast({ title: "Budget loaded", description: `"${budget.name}" loaded with ${billsToSet.length} bills.` });
     if (forceStep !== undefined) {
       setStep(forceStep);
     } else if (restoredWeeks.length > 0) {
@@ -3085,9 +3083,7 @@ export function BudgetWizard({
         : incomeSources
       : undefined;
 
-    const anchoredStartDate = effectiveIncomeSources && effectiveIncomeSources.length > 1
-      ? effectiveIncomeSources[0].nextPayDate
-      : overrides?.startDate ?? newWeekStartDate;
+    const anchoredStartDate = overrides?.startDate ?? newWeekStartDate;
 
     const savingsGoalBills = computeSavingsGoalBills(
       budgetGoalsQuery.data?.goals ?? [],
@@ -4651,6 +4647,7 @@ export function BudgetWizard({
                       onBlur={() => {
                         if (!weekCount || weekCount < 1) setWeekCount(1);
                       }}
+                      onFocus={(e) => e.target.select()}
                       className="h-11 rounded-xl"
                     />
                   </div>
@@ -4727,6 +4724,7 @@ export function BudgetWizard({
                             }
                             setPaycheckAmount(val);
                           }}
+                          onFocus={(e) => e.target.select()}
                           className="pl-7 h-11 rounded-xl"
                         />
                       </div>
@@ -4758,8 +4756,8 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              <div className="relative">
+                            <div className="grid gap-2 min-w-0" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
+                              <div className="relative min-w-0">
                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
                                 <Input
                                   type="number"
@@ -4770,7 +4768,8 @@ export function BudgetWizard({
                                     const val = parseFloat(e.target.value) || 0;
                                     updateIncomeSource(idx, { ...source, amount: val });
                                   }}
-                                  className="pl-6 h-8 text-sm rounded-lg"
+                                  onFocus={(e) => e.target.select()}
+                                  className="pl-6 h-8 text-sm rounded-lg w-full"
                                 />
                               </div>
                               <Select
@@ -4780,7 +4779,7 @@ export function BudgetWizard({
                                 <SelectTrigger className="h-8 text-xs rounded-lg">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="popper" sideOffset={4}>
                                   <SelectItem value="weekly">Weekly</SelectItem>
                                   <SelectItem value="biweekly">Biweekly</SelectItem>
                                   <SelectItem value="monthly">Monthly</SelectItem>

@@ -239,17 +239,6 @@ function AppRouting() {
         variant: "destructive",
       });
     }
-    if (errorParam === "email_exists") {
-      params.delete("error");
-      const newSearch = params.toString();
-      const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
-      window.history.replaceState({}, "", newUrl);
-      toast({
-        title: "Account already exists",
-        description: "An account with this email already exists. Please sign in with your email and password.",
-        variant: "destructive",
-      });
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

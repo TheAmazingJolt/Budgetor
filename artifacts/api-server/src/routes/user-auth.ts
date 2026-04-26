@@ -804,9 +804,21 @@ router.get("/auth/login/google/callback", authInitiationLimiter, async (req: Req
         return;
       }
       if (matchedUser && (matchedUser.passwordHash || matchedUser.provider === "email")) {
-        // Email+password account already exists — block to prevent duplicate accounts
+        // Email+password account exists — auto-link Google and sign them in
+        await db.update(usersTable)
+          .set({ providerId: profile.id ?? undefined, updatedAt: new Date() })
+          .where(eq(usersTable.id, matchedUser.id));
+        if (tokens.access_token) {
+          await db.update(usersTable).set({
+            googleAccessToken: maybeEncrypt(tokens.access_token),
+            googleRefreshToken: maybeEncrypt(tokens.refresh_token ?? null),
+            googleTokenExpiry: tokens.expiry_date ?? null,
+            updatedAt: new Date(),
+          }).where(eq(usersTable.id, matchedUser.id));
+        }
+        const authCode = generateAuthCode(matchedUser.id);
         const sep = redirectUrl.includes("?") ? "&" : "?";
-        res.redirect(`${redirectUrl}${sep}error=email_exists`);
+        res.redirect(`${redirectUrl}${sep}auth_code=${authCode}`);
         return;
       }
       // No existing account (or no email) — fall through to upsertOrUpgradeUser to create one
