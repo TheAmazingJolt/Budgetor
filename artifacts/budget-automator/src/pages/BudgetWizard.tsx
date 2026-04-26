@@ -1630,8 +1630,13 @@ export function BudgetWizard({
         onSuccess: () => {
           queryClient.setQueryData(getGetUserBillsQueryKey(), { bills: billsSnapshot });
         },
-        onError: () => {
-          toast({ title: "Could not save bills", description: "Your changes may not persist after a reload.", variant: "destructive" });
+        onError: (err: unknown) => {
+          const apiErr = err as { data?: { upgradeRequired?: boolean } };
+          if (apiErr?.data?.upgradeRequired) {
+            setIsPlanComparisonOpen(true);
+          } else {
+            toast({ title: "Could not save bills", description: "Your changes may not persist after a reload.", variant: "destructive" });
+          }
         },
       });
     }, 0);
