@@ -4717,11 +4717,11 @@ export function BudgetWizard({
 
                     {incomeSources.length <= 1 ? (
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                        <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground pointer-events-none">$</span>
                         <Input
                           type="number"
                           step="0.01"
-                          value={incomeSources.length === 1 ? incomeSources[0].amount : paycheckAmount}
+                          value={incomeSources.length === 1 ? (incomeSources[0].amount || "") : (paycheckAmount || "")}
                           onChange={(e) => {
                             const val = parseFloat(e.target.value) || 0;
                             if (incomeSources.length === 1) {
@@ -4761,14 +4761,14 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid gap-2 min-w-0" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
-                              <div className="relative min-w-0">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                            <div className="flex gap-2 min-w-0 items-center">
+                              <div className="relative w-20 shrink-0">
+                                <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
                                 <Input
                                   type="number"
                                   step="0.01"
-                                  placeholder="Amount"
-                                  value={source.amount}
+                                  placeholder="0"
+                                  value={source.amount || ""}
                                   onChange={(e) => {
                                     const val = parseFloat(e.target.value) || 0;
                                     updateIncomeSource(idx, { ...source, amount: val });
@@ -4781,7 +4781,7 @@ export function BudgetWizard({
                                 value={source.frequency}
                                 onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
                               >
-                                <SelectTrigger className="h-8 text-xs rounded-lg">
+                                <SelectTrigger className="h-8 text-xs rounded-lg shrink-0">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent position="popper" sideOffset={4}>
@@ -4799,7 +4799,7 @@ export function BudgetWizard({
                                     setStartDatePreserveCount(e.target.value);
                                   }
                                 }}
-                                className="h-8 text-xs rounded-lg"
+                                className="h-8 text-xs rounded-lg flex-1 min-w-0"
                               />
                             </div>
                           </div>
