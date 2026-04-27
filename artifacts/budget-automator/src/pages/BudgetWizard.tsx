@@ -4730,7 +4730,7 @@ export function BudgetWizard({
                     ) : (
                       <div className="space-y-3">
                         {incomeSources.map((source, idx) => (
-                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20 overflow-hidden">
+                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
                             <div className="flex items-center justify-between gap-2">
                               <Input
                                 type="text"
