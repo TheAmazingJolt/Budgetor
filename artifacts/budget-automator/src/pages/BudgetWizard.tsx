@@ -4632,7 +4632,8 @@ export function BudgetWizard({
                         type="date"
                         value={newWeekStartDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="h-9 rounded-xl flex-1 min-w-0 text-sm"
+                        className="rounded-xl flex-1 min-w-0 text-sm"
+                        style={{ height: '2.25rem' }}
                       />
                       <Input
                         type="number"
@@ -4647,13 +4648,15 @@ export function BudgetWizard({
                           if (!weekCount || weekCount < 1) setWeekCount(1);
                         }}
                         onFocus={(e) => e.target.select()}
-                        className="h-9 rounded-xl w-14 text-center text-sm shrink-0"
+                        className="rounded-xl w-14 text-center text-sm shrink-0"
+                        style={{ height: '2.25rem' }}
                       />
                       <Input
                         type="date"
                         value={newWeekEndDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="h-9 rounded-xl flex-1 min-w-0 text-sm"
+                        className="rounded-xl flex-1 min-w-0 text-sm"
+                        style={{ height: '2.25rem' }}
                       />
                     </div>
                     <div className="flex gap-2 text-xs text-muted-foreground/60">
@@ -4756,7 +4759,7 @@ export function BudgetWizard({
                               </Button>
                             </div>
                             <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "4rem 5.5rem 7rem" }}>
-                              <div className="relative h-8">
+                              <div className="relative" style={{ height: '2.25rem' }}>
                                 <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">$</span>
                                 <Input
                                   type="number"
@@ -4768,14 +4771,15 @@ export function BudgetWizard({
                                     updateIncomeSource(idx, { ...source, amount: val });
                                   }}
                                   onFocus={(e) => e.target.select()}
-                                  className="pl-5 h-8 text-xs rounded-lg w-full"
+                                  className="pl-5 text-xs rounded-lg w-full"
+                                  style={{ height: '2.25rem' }}
                                 />
                               </div>
                               <Select
                                 value={source.frequency}
                                 onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
                               >
-                                <SelectTrigger className="h-8 text-xs rounded-lg w-full">
+                                <SelectTrigger className="text-xs rounded-lg w-full" style={{ height: '2.25rem' }}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent position="popper" sideOffset={4}>
@@ -4793,8 +4797,8 @@ export function BudgetWizard({
                                     setStartDatePreserveCount(e.target.value);
                                   }
                                 }}
-                                className="h-8 text-xs rounded-lg w-full min-w-0"
-                                style={{ minWidth: 0 }}
+                                className="text-xs rounded-lg w-full min-w-0"
+                                style={{ height: '2.25rem', minWidth: 0 }}
                               />
                             </div>
                           </div>
