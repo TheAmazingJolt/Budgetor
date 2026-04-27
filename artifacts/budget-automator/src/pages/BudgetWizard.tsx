@@ -4601,8 +4601,8 @@ export function BudgetWizard({
               </div>
 
               <Card className="border-border/40">
-                <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-2 sm:col-span-2">
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
                       <CalendarDays className="w-4 h-4" /> Pay Period
                     </Label>
@@ -4623,52 +4623,42 @@ export function BudgetWizard({
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                        <Settings2 className="w-4 h-4" /> Start Date
-                      </Label>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                      <Settings2 className="w-4 h-4" /> Budget Range
+                    </Label>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="date"
+                        value={newWeekStartDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="h-9 rounded-xl flex-1 min-w-0 text-sm"
+                      />
+                      <Input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={weekCount || ""}
+                        onChange={(e) => {
+                          const raw = parseInt(e.target.value);
+                          setWeekCount(isNaN(raw) ? 0 : Math.min(100, raw));
+                        }}
+                        onBlur={() => {
+                          if (!weekCount || weekCount < 1) setWeekCount(1);
+                        }}
+                        onFocus={(e) => e.target.select()}
+                        className="h-9 rounded-xl w-14 text-center text-sm shrink-0"
+                      />
+                      <Input
+                        type="date"
+                        value={newWeekEndDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="h-9 rounded-xl flex-1 min-w-0 text-sm"
+                      />
                     </div>
-                    <Input
-                      type="date"
-                      value={newWeekStartDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="h-11 rounded-xl w-full"
-                    />
+                    <p className="text-xs text-muted-foreground/60">Start date · {payPeriod === "weekly" ? "weeks" : payPeriod === "biweekly" ? "periods" : "months"} · End date (auto-calculated, editable)</p>
                   </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <Settings2 className="w-4 h-4" /> {payPeriod === "weekly" ? "Number of Weeks" : payPeriod === "biweekly" ? "Number of Periods" : "Number of Months"}
-                    </Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={weekCount || ""}
-                      onChange={(e) => {
-                        const raw = parseInt(e.target.value);
-                        setWeekCount(isNaN(raw) ? 0 : Math.min(100, raw));
-                      }}
-                      onBlur={() => {
-                        if (!weekCount || weekCount < 1) setWeekCount(1);
-                      }}
-                      onFocus={(e) => e.target.select()}
-                      className="h-11 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2 min-w-0">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <Settings2 className="w-4 h-4" /> End Date
-                      <span className="text-xs font-normal text-muted-foreground/70 ml-1">(auto-calculated, editable)</span>
-                    </Label>
-                    <Input
-                      type="date"
-                      value={newWeekEndDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="h-11 rounded-xl w-full"
-                    />
-                  </div>
-                  <div className="space-y-3 sm:col-span-2 min-w-0">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-semibold text-muted-foreground">
                         {incomeSources.length > 1 ? "Income Sources" : "Paycheck Amount"}
