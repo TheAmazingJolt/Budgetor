@@ -4761,8 +4761,8 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="flex gap-2 min-w-0 items-center">
-                              <div className="relative w-20 shrink-0">
+                            <div className="grid gap-2" style={{ gridTemplateColumns: "5rem minmax(0,1fr) minmax(0,1fr)" }}>
+                              <div className="relative">
                                 <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
                                 <Input
                                   type="number"
@@ -4781,7 +4781,7 @@ export function BudgetWizard({
                                 value={source.frequency}
                                 onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
                               >
-                                <SelectTrigger className="h-8 text-xs rounded-lg shrink-0">
+                                <SelectTrigger className="h-8 text-xs rounded-lg w-full">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent position="popper" sideOffset={4}>
@@ -4799,7 +4799,7 @@ export function BudgetWizard({
                                     setStartDatePreserveCount(e.target.value);
                                   }
                                 }}
-                                className="h-8 text-xs rounded-lg flex-1 min-w-0"
+                                className="h-8 text-xs rounded-lg w-full min-w-0"
                               />
                             </div>
                           </div>
