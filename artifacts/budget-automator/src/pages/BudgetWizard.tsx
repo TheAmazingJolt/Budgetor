@@ -4656,7 +4656,11 @@ export function BudgetWizard({
                         className="h-9 rounded-xl flex-1 min-w-0 text-sm"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground/60">Start date · {payPeriod === "weekly" ? "weeks" : payPeriod === "biweekly" ? "periods" : "months"} · End date (auto-calculated, editable)</p>
+                    <div className="flex gap-2 text-xs text-muted-foreground/60">
+                      <span className="flex-1 text-center">Start date</span>
+                      <span className="w-14 text-center">{payPeriod === "weekly" ? "Weeks" : payPeriod === "biweekly" ? "Periods" : "Months"}</span>
+                      <span className="flex-1 text-center">End date (editable)</span>
+                    </div>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -4751,7 +4755,7 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="flex gap-2 items-center flex-wrap">
+                            <div className="grid gap-2" style={{ gridTemplateColumns: "5rem 6.5rem 1fr" }}>
                               <div className="relative">
                                 <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
                                 <Input
@@ -4764,14 +4768,14 @@ export function BudgetWizard({
                                     updateIncomeSource(idx, { ...source, amount: val });
                                   }}
                                   onFocus={(e) => e.target.select()}
-                                  className="pl-6 h-8 text-sm rounded-lg w-24"
+                                  className="pl-6 h-8 text-sm rounded-lg w-full"
                                 />
                               </div>
                               <Select
                                 value={source.frequency}
                                 onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
                               >
-                                <SelectTrigger className="h-8 text-xs rounded-lg w-28">
+                                <SelectTrigger className="h-8 text-xs rounded-lg w-full">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent position="popper" sideOffset={4}>
@@ -4780,17 +4784,19 @@ export function BudgetWizard({
                                   <SelectItem value="monthly">Monthly</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <Input
-                                type="date"
-                                value={source.nextPayDate}
-                                onChange={(e) => {
-                                  updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
-                                  if (idx === 0 && incomeSources.length > 1 && e.target.value) {
-                                    setStartDatePreserveCount(e.target.value);
-                                  }
-                                }}
-                                className="h-8 text-xs rounded-lg w-auto"
-                              />
+                              <div className="overflow-hidden">
+                                <Input
+                                  type="date"
+                                  value={source.nextPayDate}
+                                  onChange={(e) => {
+                                    updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
+                                    if (idx === 0 && incomeSources.length > 1 && e.target.value) {
+                                      setStartDatePreserveCount(e.target.value);
+                                    }
+                                  }}
+                                  className="h-8 text-xs rounded-lg w-full"
+                                />
+                              </div>
                             </div>
                           </div>
                         ))}
