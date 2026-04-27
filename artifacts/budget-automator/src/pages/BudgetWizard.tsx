@@ -4730,7 +4730,7 @@ export function BudgetWizard({
                     ) : (
                       <div className="space-y-3">
                         {incomeSources.map((source, idx) => (
-                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
+                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20 overflow-hidden">
                             <div className="flex items-center justify-between gap-2">
                               <Input
                                 type="text"
@@ -4755,9 +4755,9 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid gap-2" style={{ gridTemplateColumns: "5rem 6.5rem 1fr" }}>
-                              <div className="relative">
-                                <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
+                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "4rem 5.5rem 1fr" }}>
+                              <div className="relative h-8">
+                                <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">$</span>
                                 <Input
                                   type="number"
                                   step="0.01"
@@ -4768,7 +4768,7 @@ export function BudgetWizard({
                                     updateIncomeSource(idx, { ...source, amount: val });
                                   }}
                                   onFocus={(e) => e.target.select()}
-                                  className="pl-6 h-8 text-sm rounded-lg w-full"
+                                  className="pl-5 h-8 text-xs rounded-lg w-full"
                                 />
                               </div>
                               <Select
@@ -4784,19 +4784,18 @@ export function BudgetWizard({
                                   <SelectItem value="monthly">Monthly</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <div className="overflow-hidden">
-                                <Input
-                                  type="date"
-                                  value={source.nextPayDate}
-                                  onChange={(e) => {
-                                    updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
-                                    if (idx === 0 && incomeSources.length > 1 && e.target.value) {
-                                      setStartDatePreserveCount(e.target.value);
-                                    }
-                                  }}
-                                  className="h-8 text-xs rounded-lg w-full"
-                                />
-                              </div>
+                              <Input
+                                type="date"
+                                value={source.nextPayDate}
+                                onChange={(e) => {
+                                  updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
+                                  if (idx === 0 && incomeSources.length > 1 && e.target.value) {
+                                    setStartDatePreserveCount(e.target.value);
+                                  }
+                                }}
+                                className="h-8 text-xs rounded-lg w-full min-w-0"
+                                style={{ minWidth: 0 }}
+                              />
                             </div>
                           </div>
                         ))}
