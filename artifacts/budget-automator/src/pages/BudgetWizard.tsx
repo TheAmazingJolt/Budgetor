@@ -4761,35 +4761,37 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid gap-2" style={{ gridTemplateColumns: "5rem minmax(0,1fr) minmax(0,1fr)" }}>
-                              <div className="relative">
-                                <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0"
-                                  value={source.amount || ""}
-                                  onChange={(e) => {
-                                    const val = parseFloat(e.target.value) || 0;
-                                    updateIncomeSource(idx, { ...source, amount: val });
-                                  }}
-                                  onFocus={(e) => e.target.select()}
-                                  className="pl-6 h-8 text-sm rounded-lg w-full"
-                                />
+                            <div className="flex flex-col gap-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="relative">
+                                  <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0"
+                                    value={source.amount || ""}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      updateIncomeSource(idx, { ...source, amount: val });
+                                    }}
+                                    onFocus={(e) => e.target.select()}
+                                    className="pl-6 h-8 text-sm rounded-lg w-full"
+                                  />
+                                </div>
+                                <Select
+                                  value={source.frequency}
+                                  onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
+                                >
+                                  <SelectTrigger className="h-8 text-xs rounded-lg w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent position="popper" sideOffset={4}>
+                                    <SelectItem value="weekly">Weekly</SelectItem>
+                                    <SelectItem value="biweekly">Biweekly</SelectItem>
+                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
-                              <Select
-                                value={source.frequency}
-                                onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
-                              >
-                                <SelectTrigger className="h-8 text-xs rounded-lg w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent position="popper" sideOffset={4}>
-                                  <SelectItem value="weekly">Weekly</SelectItem>
-                                  <SelectItem value="biweekly">Biweekly</SelectItem>
-                                  <SelectItem value="monthly">Monthly</SelectItem>
-                                </SelectContent>
-                              </Select>
                               <Input
                                 type="date"
                                 value={source.nextPayDate}
@@ -4799,7 +4801,7 @@ export function BudgetWizard({
                                     setStartDatePreserveCount(e.target.value);
                                   }
                                 }}
-                                className="h-8 text-xs rounded-lg w-full min-w-0"
+                                className="h-8 text-xs rounded-lg w-full"
                               />
                             </div>
                           </div>
