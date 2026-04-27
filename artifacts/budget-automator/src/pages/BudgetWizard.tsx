@@ -4633,7 +4633,6 @@ export function BudgetWizard({
                         value={newWeekStartDate}
                         onChange={(e) => setStartDate(e.target.value)}
                         className="rounded-xl flex-1 min-w-0 text-sm"
-                        style={{ height: '2.25rem' }}
                       />
                       <Input
                         type="number"
@@ -4648,15 +4647,13 @@ export function BudgetWizard({
                           if (!weekCount || weekCount < 1) setWeekCount(1);
                         }}
                         onFocus={(e) => e.target.select()}
-                        className="rounded-xl w-14 text-center text-sm shrink-0"
-                        style={{ height: '2.25rem' }}
+                        className="h-11 rounded-xl w-14 text-center text-sm shrink-0"
                       />
                       <Input
                         type="date"
                         value={newWeekEndDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         className="rounded-xl flex-1 min-w-0 text-sm"
-                        style={{ height: '2.25rem' }}
                       />
                     </div>
                     <div className="flex gap-2 text-xs text-muted-foreground/60">
@@ -4759,7 +4756,7 @@ export function BudgetWizard({
                               </Button>
                             </div>
                             <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "4rem 5.5rem 7rem" }}>
-                              <div className="relative" style={{ height: '2.25rem' }}>
+                              <div className="relative h-11">
                                 <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">$</span>
                                 <Input
                                   type="number"
@@ -4771,15 +4768,14 @@ export function BudgetWizard({
                                     updateIncomeSource(idx, { ...source, amount: val });
                                   }}
                                   onFocus={(e) => e.target.select()}
-                                  className="pl-5 text-xs rounded-lg w-full"
-                                  style={{ height: '2.25rem' }}
+                                  className="h-11 pl-5 text-xs rounded-lg w-full"
                                 />
                               </div>
                               <Select
                                 value={source.frequency}
                                 onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
                               >
-                                <SelectTrigger className="text-xs rounded-lg w-full" style={{ height: '2.25rem' }}>
+                                <SelectTrigger className="h-11 text-xs rounded-lg w-full">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent position="popper" sideOffset={4}>
@@ -4798,7 +4794,7 @@ export function BudgetWizard({
                                   }
                                 }}
                                 className="text-xs rounded-lg w-full min-w-0"
-                                style={{ height: '2.25rem', minWidth: 0 }}
+                                style={{ minWidth: 0 }}
                               />
                             </div>
                           </div>
