@@ -4736,32 +4736,32 @@ export function BudgetWizard({
                     ) : (
                       <div className="space-y-3">
                         {incomeSources.map((source, idx) => (
-                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
-                            <div className="flex items-center justify-between gap-2">
-                              <Input
-                                type="text"
-                                placeholder="Income name"
-                                value={source.name}
-                                onChange={(e) => updateIncomeSource(idx, { ...source, name: e.target.value })}
-                                className="h-8 text-sm rounded-lg flex-1"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                  removeIncomeSource(idx);
-                                  if (incomeSources.length === 2) {
-                                    const remaining = incomeSources[idx === 0 ? 1 : 0];
-                                    setPaycheckAmount(remaining.amount);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                            <div className="flex flex-col gap-2">
+                          <div key={source.id} className="space-y-2">
+                            <div className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
+                              <div className="flex items-center justify-between gap-2">
+                                <Input
+                                  type="text"
+                                  placeholder="Income name"
+                                  value={source.name}
+                                  onChange={(e) => updateIncomeSource(idx, { ...source, name: e.target.value })}
+                                  className="h-8 text-sm rounded-lg flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                                  onClick={() => {
+                                    removeIncomeSource(idx);
+                                    if (incomeSources.length === 2) {
+                                      const remaining = incomeSources[idx === 0 ? 1 : 0];
+                                      setPaycheckAmount(remaining.amount);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
                               <div className="grid grid-cols-2 gap-2">
                                 <div className="relative">
                                   <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-sm pointer-events-none">$</span>
@@ -4792,18 +4792,18 @@ export function BudgetWizard({
                                   </SelectContent>
                                 </Select>
                               </div>
-                              <Input
-                                type="date"
-                                value={source.nextPayDate}
-                                onChange={(e) => {
-                                  updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
-                                  if (idx === 0 && incomeSources.length > 1 && e.target.value) {
-                                    setStartDatePreserveCount(e.target.value);
-                                  }
-                                }}
-                                className="h-8 text-xs rounded-lg w-full"
-                              />
                             </div>
+                            <Input
+                              type="date"
+                              value={source.nextPayDate}
+                              onChange={(e) => {
+                                updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
+                                if (idx === 0 && incomeSources.length > 1 && e.target.value) {
+                                  setStartDatePreserveCount(e.target.value);
+                                }
+                              }}
+                              className="h-8 text-xs rounded-xl w-full"
+                            />
                           </div>
                         ))}
                         <Button
