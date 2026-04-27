@@ -4730,7 +4730,7 @@ export function BudgetWizard({
                     ) : (
                       <div className="space-y-3">
                         {incomeSources.map((source, idx) => (
-                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
+                          <div key={source.id} className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20 overflow-hidden">
                             <div className="flex items-center justify-between gap-2">
                               <Input
                                 type="text"
@@ -4755,7 +4755,7 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "4rem 5.5rem 8rem" }}>
+                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "4rem 5.5rem 7rem" }}>
                               <div className="relative h-8">
                                 <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">$</span>
                                 <Input
