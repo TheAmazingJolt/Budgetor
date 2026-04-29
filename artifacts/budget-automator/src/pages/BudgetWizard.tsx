@@ -3083,7 +3083,7 @@ export function BudgetWizard({
     // date (not just today) when calculating weekly amounts. This matters when the budget starts
     // in the future: weeksLeft must reflect the budget window, not weeks from today.
     const effectiveIncomeSources = incomeSources.length > 0
-      ? incomeSources.length === 1
+      ? incomeSources.length === 1 && incomeSources[0].frequency !== "variable"
         ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: overrides?.startDate ?? newWeekStartDate }]
         : incomeSources
       : undefined;
@@ -3476,7 +3476,7 @@ export function BudgetWizard({
     setIsRegeneratingForExport(true);
     try {
       const effectiveOpeningBalance = zeroOpeningBalance ? 0 : openingBalance;
-      const exportIncomeSources = incomeSources.length === 1
+      const exportIncomeSources = incomeSources.length === 1 && incomeSources[0].frequency !== "variable"
         ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
         : incomeSources.length > 0 ? incomeSources : undefined;
       const exportStartDate = exportIncomeSources && exportIncomeSources.length > 1
@@ -3683,7 +3683,7 @@ export function BudgetWizard({
     else if (target === "google") setIsUpdatingSheetsSync(true);
     else { setIsUpdatingSheetsSync(true); setIsUpdatingExcelSync(true); }
     try {
-      const syncIncomeSources = incomeSources.length === 1
+      const syncIncomeSources = incomeSources.length === 1 && incomeSources[0].frequency !== "variable"
         ? [{ ...incomeSources[0], frequency: payPeriod, nextPayDate: newWeekStartDate }]
         : incomeSources.length > 0 ? incomeSources : undefined;
       const syncStartDate = syncIncomeSources && syncIncomeSources.length > 1
@@ -4755,25 +4755,27 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "4rem 5.5rem 7rem" }}>
+                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: source.frequency === "variable" ? "1fr 5.5rem" : "4rem 5.5rem 7rem" }}>
                               <div className="relative h-11">
-                                <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">$</span>
+                                <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">
+                                  {source.frequency === "variable" ? "~$" : "$"}
+                                </span>
                                 <Input
                                   type="number"
                                   step="0.01"
-                                  placeholder="0"
+                                  placeholder={source.frequency === "variable" ? "avg/wk" : "0"}
                                   value={source.amount || ""}
                                   onChange={(e) => {
                                     const val = parseFloat(e.target.value) || 0;
                                     updateIncomeSource(idx, { ...source, amount: val });
                                   }}
                                   onFocus={(e) => e.target.select()}
-                                  className="h-11 pl-5 text-xs rounded-lg w-full"
+                                  className="h-11 pl-6 text-xs rounded-lg w-full"
                                 />
                               </div>
                               <Select
                                 value={source.frequency}
-                                onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" })}
+                                onValueChange={(val) => updateIncomeSource(idx, { ...source, frequency: val as "weekly" | "biweekly" | "monthly" | "variable" })}
                               >
                                 <SelectTrigger className="h-11 text-xs rounded-lg w-full">
                                   <SelectValue />
@@ -4782,20 +4784,23 @@ export function BudgetWizard({
                                   <SelectItem value="weekly">Weekly</SelectItem>
                                   <SelectItem value="biweekly">Biweekly</SelectItem>
                                   <SelectItem value="monthly">Monthly</SelectItem>
+                                  <SelectItem value="variable">Variable / Gig</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <Input
-                                type="date"
-                                value={source.nextPayDate}
-                                onChange={(e) => {
-                                  updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
-                                  if (idx === 0 && incomeSources.length > 1 && e.target.value) {
-                                    setStartDatePreserveCount(e.target.value);
-                                  }
-                                }}
-                                className="text-xs rounded-lg w-full min-w-0"
-                                style={{ minWidth: 0 }}
-                              />
+                              {source.frequency !== "variable" && (
+                                <Input
+                                  type="date"
+                                  value={source.nextPayDate}
+                                  onChange={(e) => {
+                                    updateIncomeSource(idx, { ...source, nextPayDate: e.target.value });
+                                    if (idx === 0 && incomeSources.length > 1 && e.target.value) {
+                                      setStartDatePreserveCount(e.target.value);
+                                    }
+                                  }}
+                                  className="text-xs rounded-lg w-full min-w-0"
+                                  style={{ minWidth: 0 }}
+                                />
+                              )}
                             </div>
                           </div>
                         ))}
@@ -6060,7 +6065,9 @@ export function BudgetWizard({
                                         }
                                         if (week.paycheck !== undefined) {
                                           const bd = week.paycheckBreakdown;
-                                          rowItems.push({ label: "Paycheck", value: week.paycheck, breakdown: bd && bd.length > 1 ? bd : undefined });
+                                          const hasVariable = bd?.some((b) => (b as any).isVariable);
+                                          const paycheckLabel = hasVariable ? "Paycheck (est.)" : "Paycheck";
+                                          rowItems.push({ label: paycheckLabel, value: week.paycheck, breakdown: bd && bd.length > 1 ? bd : undefined });
                                         }
                                         for (const bill of week.items) {
                                           const billStyle =

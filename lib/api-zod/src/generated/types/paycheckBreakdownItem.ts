@@ -10,4 +10,6 @@ export interface PaycheckBreakdownItem {
   sourceId: string;
   sourceName: string;
   amount: number;
+  /** True when this source is variable/gig income — amount is an estimate */
+  isVariable?: boolean;
 }

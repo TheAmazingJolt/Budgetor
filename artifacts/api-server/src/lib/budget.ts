@@ -51,7 +51,7 @@ export interface IncomeSource {
   id: string;
   name: string;
   amount: number;
-  frequency: "weekly" | "biweekly" | "monthly";
+  frequency: "weekly" | "biweekly" | "monthly" | "variable";
   nextPayDate: string;
 }
 
@@ -59,6 +59,7 @@ interface PaycheckBreakdownItem {
   sourceId: string;
   sourceName: string;
   amount: number;
+  isVariable?: boolean;
 }
 
 function computePaychecksForPeriod(
@@ -70,6 +71,18 @@ function computePaychecksForPeriod(
 
   for (const source of sources) {
     let total = 0;
+
+    if (source.frequency === "variable") {
+      // Treat amount as a weekly average estimate; spread proportionally over the period.
+      const periodDays =
+        Math.round((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      total = Math.round((source.amount * (periodDays / 7)) * 100) / 100;
+      if (total > 0) {
+        breakdown.push({ sourceId: source.id, sourceName: source.name, amount: total, isVariable: true });
+      }
+      continue;
+    }
+
     let payDate = new Date(source.nextPayDate + "T12:00:00");
 
     if (source.frequency === "weekly") {

@@ -111,6 +111,7 @@ export const IncomeSourceFrequency = {
   weekly: "weekly",
   biweekly: "biweekly",
   monthly: "monthly",
+  variable: "variable",
 } as const;
 
 export interface IncomeSource {
