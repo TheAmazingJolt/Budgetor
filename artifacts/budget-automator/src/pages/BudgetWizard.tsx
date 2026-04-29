@@ -4665,42 +4665,22 @@ export function BudgetWizard({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-semibold text-muted-foreground">
-                        {incomeSources.length > 1 ? "Income Sources" : "Paycheck Amount"}
+                        {incomeSources.length >= 1 ? "Income Sources" : "Paycheck Amount"}
                       </Label>
-                      {incomeSources.length <= 1 && (
+                      {incomeSources.length === 0 && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
                           onClick={() => {
-                            if (incomeSources.length === 0) {
-                              const defaultSource = {
-                                id: crypto.randomUUID(),
-                                name: "Main Job",
-                                amount: paycheckAmount,
-                                frequency: payPeriod as "weekly" | "biweekly" | "monthly",
-                                nextPayDate: newWeekStartDate,
-                              };
-                              setIncomeSources([
-                                defaultSource,
-                                {
-                                  id: crypto.randomUUID(),
-                                  name: "Side Income",
-                                  amount: 0,
-                                  frequency: "weekly" as const,
-                                  nextPayDate: newWeekStartDate,
-                                },
-                              ]);
-                            } else {
-                              addIncomeSource({
-                                id: crypto.randomUUID(),
-                                name: "",
-                                amount: 0,
-                                frequency: "weekly" as const,
-                                nextPayDate: newWeekStartDate,
-                              });
-                            }
+                            setIncomeSources([{
+                              id: crypto.randomUUID(),
+                              name: "Main Job",
+                              amount: paycheckAmount,
+                              frequency: payPeriod as "weekly" | "biweekly" | "monthly",
+                              nextPayDate: newWeekStartDate,
+                            }]);
                           }}
                         >
                           <Plus className="w-3 h-3" />
@@ -4709,18 +4689,15 @@ export function BudgetWizard({
                       )}
                     </div>
 
-                    {incomeSources.length <= 1 ? (
+                    {incomeSources.length === 0 ? (
                       <div className="relative">
                         <span className="absolute inset-y-0 left-3 flex items-center text-muted-foreground pointer-events-none">$</span>
                         <Input
                           type="number"
                           step="0.01"
-                          value={incomeSources.length === 1 ? (incomeSources[0].amount || "") : (paycheckAmount || "")}
+                          value={paycheckAmount || ""}
                           onChange={(e) => {
                             const val = parseFloat(e.target.value) || 0;
-                            if (incomeSources.length === 1) {
-                              updateIncomeSource(0, { ...incomeSources[0], amount: val });
-                            }
                             setPaycheckAmount(val);
                           }}
                           onFocus={(e) => e.target.select()}
