@@ -43,7 +43,7 @@ export const GenerateBudgetBody = zod.object({
         id: zod.string(),
         name: zod.string(),
         amount: zod.number(),
-        frequency: zod.enum(["weekly", "biweekly", "monthly"]),
+        frequency: zod.enum(["weekly", "biweekly", "monthly", "variable"]),
         nextPayDate: zod
           .string()
           .describe("ISO date string for the next pay date of this source"),
