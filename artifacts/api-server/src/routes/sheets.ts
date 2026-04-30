@@ -2061,7 +2061,11 @@ async function writeSavingsTabToSheet(
         ? new Date(Math.min(...weeks.map(w => new Date(w.startDate + "T00:00:00").getTime())))
         : null;
       if (firstWeekDateSrv && firstWeekDateSrv.getMonth() === currentMonth && firstWeekDateSrv.getFullYear() === currentYear) {
-        savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
+        const savedMonthKeySrv = (bill as any).initialSavedMonth as string | undefined;
+        const expectedKeySrv = `${currentYear}-${currentMonth}`;
+        if (!savedMonthKeySrv || savedMonthKeySrv === expectedKeySrv) {
+          savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
+        }
       }
       const regularSavedMonth = savedThisMonth + manualThisMonth;
       const totalSavedMonth = regularSavedMonth + extraThisMonth;

@@ -1357,7 +1357,11 @@ function writeExcelSavingsSheetXL(
         ? new Date(Math.min(...weeks.map(w => new Date(w.startDate + "T00:00:00").getTime())))
         : null;
       if (firstWeekDate && firstWeekDate.getMonth() === currentMonth && firstWeekDate.getFullYear() === currentYear) {
-        savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
+        const savedMonthKey = (bill as any).initialSavedMonth as string | undefined;
+        const expectedKey = `${currentYear}-${currentMonth}`;
+        if (!savedMonthKey || savedMonthKey === expectedKey) {
+          savedThisMonth += Math.max(0, Number((bill as any).initialSaved) || 0);
+        }
       }
       const progressPct = monthlyGoal > 0 ? Math.min(100, (savedThisMonth / monthlyGoal) * 100) : 0;
       balanced.push({ name: bill.name, monthlyGoal, savedThisMonth, extraThisMonth, progressPct });

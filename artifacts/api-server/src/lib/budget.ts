@@ -1,5 +1,14 @@
 import type { Bill, WeeklyBudget, WeeklyBill } from "@workspace/api-zod";
 
+function getBalancedInitSaved(bill: unknown, currentMonthKey: string): number {
+  const b = bill as Record<string, unknown>;
+  const saved = Math.max(0, Number(b.initialSaved) || 0);
+  if (saved <= 0) return 0;
+  const savedMonth = b.initialSavedMonth as string | undefined;
+  if (savedMonth && savedMonth !== currentMonthKey) return 0;
+  return saved;
+}
+
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -680,7 +689,7 @@ export function generateWeeklyBudgets(
         : [...monthWeekIndices];
       if (eligibleIndices.length === 0) continue;
 
-      const billInitSaved = mk === firstMonthKey ? Math.max(0, Number((bill as any).initialSaved) || 0) : 0;
+      const billInitSaved = mk === firstMonthKey ? getBalancedInitSaved(bill, firstMonthKey) : 0;
       const alreadySaved = (priorSavings?.[mk]?.[bill.name] ?? 0) + billInitSaved;
       // Pro-rate: only allocate the share of the monthly bill that corresponds
       // to the weeks being generated. E.g. 1 generated week in a 5-week month
@@ -755,7 +764,7 @@ export function generateWeeklyBudgets(
         weeks[idx].largeBills.reduce((s, b) => s + b.amount, 0)
       );
 
-      const timedInitSaved = mk === firstMonthKey ? Math.max(0, Number((bill as any).initialSaved) || 0) : 0;
+      const timedInitSaved = mk === firstMonthKey ? getBalancedInitSaved(bill, firstMonthKey) : 0;
       const timedAlreadySaved = (priorSavings?.[mk]?.[bill.name] ?? 0) + timedInitSaved;
       const timedFullPeriods = totalPeriodsInFullMonth[mk] ?? activeIndices.length;
       const timedPastPeriods = pastPeriodsInMonth[mk] ?? 0;

@@ -261,6 +261,9 @@ export function BillForm({ initialData, onSubmit, onCancel, suggestedCategories 
       initialSaved: (isYearlySinking || values.type === "balanced") && typeof values.initialSaved === "number" && values.initialSaved > 0
         ? values.initialSaved
         : undefined,
+      initialSavedMonth: values.type === "balanced" && typeof values.initialSaved === "number" && values.initialSaved > 0
+        ? `${new Date().getFullYear()}-${new Date().getMonth()}`
+        : undefined,
     } as Bill;
     onSubmit(result);
   }
