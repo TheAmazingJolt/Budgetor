@@ -2663,6 +2663,7 @@ export function BudgetWizard({
     const loadCleanedUp = billsToSet.length !== beforeCleanCount;
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
+    lastGeneratedBillsFingerprintRef.current = billsToSet.map((b: Bill) => `${b.name}|${b.amount}|${b.type}|${b.dayOfMonth ?? ""}`).sort().join(";");
     // If cleanup removed orphaned bills, force prevBillsRef to "" so the save effect
     // fires and permanently repairs the server copy regardless of prior local state.
     if (loadCleanedUp) {
@@ -5984,6 +5985,22 @@ export function BudgetWizard({
                             </p>
                           )}
                           </>
+                        )}
+                        {step2Tab === "budget" && activeCloudBudgetId && lastGeneratedBillsFingerprintRef.current !== null && isBillsStaleForExport() && (cloudExistingWeeks.length > 0 || !!generatedWeek) && (
+                          <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span className="flex-1 text-xs text-amber-800">Bills or debts changed since this budget was generated.</span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
+                              onClick={() => handleGenerate()}
+                              disabled={generateMutation.isPending}
+                            >
+                              <RefreshCw className={`w-3 h-3 ${generateMutation.isPending ? "animate-spin" : ""}`} />
+                              Regenerate
+                            </Button>
+                          </div>
                         )}
                         {step2Tab === "budget" && <div className="overflow-x-auto rounded-xl border border-border/60 shadow-sm">
                           <table className="w-full text-sm">
