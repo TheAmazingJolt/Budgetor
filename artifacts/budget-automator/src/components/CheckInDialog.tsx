@@ -47,6 +47,11 @@ interface CheckInItem {
    *  saved as itemType:"balanced"/itemName:billName so the savings tab can
    *  track them — identical to how regular balanced bills work. */
   isBillAsBalanced?: boolean;
+  /** Full monthly payment amount for balanced debt bills (Math.abs(bill.amount)). */
+  monthlyAmount?: number;
+  /** Only set (as true/false) when this is a balanced debt bill whose due date
+   *  falls in the current week. Drives the "Did you make this payment?" checkbox. */
+  paymentConfirmed?: boolean;
 }
 
 export interface CheckInDialogProps {
@@ -59,6 +64,35 @@ export interface CheckInDialogProps {
   onSaved: () => void;
   onDismiss: () => void;
   onDebtPayments?: (payments: { debtId: string; amount: number }[]) => void;
+}
+
+function parseWeekDates(label: string): { start: Date; end: Date } | null {
+  const m = label.match(/(\d+)\/(\d+)\/(\d+)\s+to\s+(\d+)\/(\d+)\/(\d+)/);
+  if (!m) return null;
+  return {
+    start: new Date(2000 + parseInt(m[3]), parseInt(m[1]) - 1, parseInt(m[2])),
+    end:   new Date(2000 + parseInt(m[6]), parseInt(m[4]) - 1, parseInt(m[5])),
+  };
+}
+
+function isPaymentDueInWeek(dayOfMonth: number, weekStart: Date, weekEnd: Date): boolean {
+  let y = weekStart.getFullYear();
+  let mo = weekStart.getMonth();
+  // Walk months that overlap the week (usually just 1, occasionally 2)
+  for (let i = 0; i < 3; i++) {
+    const maxDay = new Date(y, mo + 1, 0).getDate();
+    const dueDate = new Date(y, mo, Math.min(dayOfMonth, maxDay));
+    if (dueDate >= weekStart && dueDate <= weekEnd) return true;
+    if (dueDate > weekEnd) break;
+    mo++;
+    if (mo > 11) { mo = 0; y++; }
+  }
+  return false;
+}
+
+/** itemName used to persist the payment-confirmed record. */
+function paymentConfirmedKey(billName: string) {
+  return `${billName}:payment_confirmed`;
 }
 
 function getPlannedAmount(bill: Bill, weekItems: { name: string; amount: number }[]): number {
@@ -158,6 +192,8 @@ function getBillItemType(bill: Bill): "balanced" | "yearly" | "goal" {
 export function CheckInDialog({
   open, week, savingsBills, debtBills, existingCheckins, budgetId, onSaved, onDismiss, onDebtPayments,
 }: CheckInDialogProps) {
+  const weekDates = parseWeekDates(week.label);
+
   const buildItems = (): CheckInItem[] => {
     const savingsItems: CheckInItem[] = savingsBills
       .filter(b => b.type === "balanced" || b.type === "yearly" || b.type === "weekly")
@@ -184,8 +220,6 @@ export function CheckInDialog({
     const debtItems: CheckInItem[] = filteredDebtBills
       .map(({ bill, debtId, currentBalance, isLumpSum: debtIsLumpSum }) => {
         const planned = debtPlanned.get(debtId) ?? 0;
-        // Balanced debt bills (billAsBalanced) are stored as itemType:"balanced"
-        // so the savings tab can pick them up — look them up that way first.
         const isBillAsBalanced = bill.type === "balanced";
         const existing = isBillAsBalanced
           ? (existingCheckins.find(c => c.itemName === bill.name && c.itemType === "balanced") ??
@@ -195,10 +229,24 @@ export function CheckInDialog({
           : (existingCheckins.find(c => c.itemName === debtId && c.itemType === "debt") ??
              existingCheckins.find(c => c.itemName === bill.name && c.itemType === "debt"));
         const actual = existing ? existing.actualAmount : planned;
-        // isLumpSum is set by BudgetWizard based on debt.type === "lump_sum".
         const isLumpSum = !!debtIsLumpSum;
         const autoSkip = !existing && planned === 0;
         const skipped = existing ? existing.actualAmount === 0 : autoSkip;
+
+        // Payment confirmation: only for balanced debt bills with a specific due day
+        // that falls in the current week.
+        let paymentConfirmed: boolean | undefined = undefined;
+        let monthlyAmount: number | undefined = undefined;
+        if (isBillAsBalanced && bill.dayOfMonth && weekDates) {
+          if (isPaymentDueInWeek(bill.dayOfMonth, weekDates.start, weekDates.end)) {
+            monthlyAmount = Math.abs(bill.amount);
+            const confirmedRecord = existingCheckins.find(
+              c => c.itemName === paymentConfirmedKey(bill.name) && c.itemType === "debt",
+            );
+            paymentConfirmed = confirmedRecord ? confirmedRecord.actualAmount > 0 : false;
+          }
+        }
+
         return {
           billName: bill.name,
           billType: "debt" as const,
@@ -209,6 +257,8 @@ export function CheckInDialog({
           currentBalance,
           isLumpSum,
           isBillAsBalanced,
+          monthlyAmount,
+          paymentConfirmed,
         };
       });
 
@@ -248,6 +298,19 @@ export function CheckInDialog({
           const isLumpSum = !!debtIsLumpSum;
           const autoSkip = !existing && planned === 0;
           const skipped = existing ? existing.actualAmount === 0 : autoSkip;
+
+          let paymentConfirmed: boolean | undefined = undefined;
+          let monthlyAmount: number | undefined = undefined;
+          if (isBillAsBalanced && bill.dayOfMonth && weekDates) {
+            if (isPaymentDueInWeek(bill.dayOfMonth, weekDates.start, weekDates.end)) {
+              monthlyAmount = Math.abs(bill.amount);
+              const confirmedRecord = existingCheckins.find(
+                c => c.itemName === paymentConfirmedKey(bill.name) && c.itemType === "debt",
+              );
+              paymentConfirmed = confirmedRecord ? confirmedRecord.actualAmount > 0 : false;
+            }
+          }
+
           return {
             billName: bill.name,
             billType: "debt" as const,
@@ -258,6 +321,8 @@ export function CheckInDialog({
             currentBalance,
             isLumpSum,
             isBillAsBalanced,
+            monthlyAmount,
+            paymentConfirmed,
           };
         });
       if (newItems.length === 0) return current;
@@ -286,21 +351,14 @@ export function CheckInDialog({
 
   const budgetedItems = items.filter(it => {
     const ex = findExisting(it);
-    // A planned amount always wins — item belongs in the main section regardless of
-    // prior check-in status. This also covers the backward-compat case where a
-    // lump-sum debt had a stale $0 check-in from the old auto-skip bug.
     if (it.plannedAmount > 0) return true;
-    // Already processed at $0 (skipped) → not budgeted section
     if (ex && ex.actualAmount === 0) return false;
-    // Previously confirmed at a non-zero amount (extra / unplanned payment) → keep
     if (ex && ex.actualAmount > 0) return true;
     return false;
   });
   const notBudgetedItems = items.filter(it => {
     const ex = findExisting(it);
-    // Anything with a planned amount lives in the main section, not here
     if (it.plannedAmount > 0) return false;
-    // Already confirmed at non-zero → main section
     if (ex && ex.actualAmount > 0) return false;
     return true;
   });
@@ -314,6 +372,12 @@ export function CheckInDialog({
       i === idx
         ? { ...it, skipped: !it.skipped, actualStr: !it.skipped ? "0.00" : (it.plannedAmount > 0 ? it.plannedAmount.toFixed(2) : "0.00") }
         : it,
+    ));
+  };
+
+  const togglePaymentConfirmed = (idx: number) => {
+    setItems(prev => prev.map((it, i) =>
+      i === idx ? { ...it, paymentConfirmed: !it.paymentConfirmed } : it,
     ));
   };
 
@@ -337,9 +401,6 @@ export function CheckInDialog({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               weekLabel: week.label,
-              // Balanced debt bills (e.g. "Dad Loan (min payment)" with type:"balanced")
-              // must be stored as itemType:"balanced"/itemName:billName so the savings tab
-              // can find them — identical to how regular balanced bills work.
               itemName: (it.billType === "debt" && it.isBillAsBalanced)
                 ? it.billName
                 : (it.billType === "debt" && it.debtId ? it.debtId : it.billName),
@@ -353,23 +414,55 @@ export function CheckInDialog({
         ),
       );
 
+      // Save payment-confirmation records for balanced debt bills on their due week.
+      // Using a distinct itemName key prevents collision with the partial balanced record.
+      const paymentConfirmItems = items.filter(
+        it => it.isBillAsBalanced && it.paymentConfirmed !== undefined && it.monthlyAmount,
+      );
+      if (paymentConfirmItems.length > 0) {
+        await Promise.all(
+          paymentConfirmItems.map(it =>
+            apiFetch(`/api/budgets/${budgetId}/checkins`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                weekLabel: week.label,
+                itemName: paymentConfirmedKey(it.billName),
+                itemType: "debt",
+                plannedAmount: it.monthlyAmount ?? 0,
+                actualAmount: it.paymentConfirmed ? (it.monthlyAmount ?? 0) : 0,
+              }),
+            }),
+          ),
+        );
+      }
+
       if (onDebtPayments) {
-        const debtPayments = items
-          // Exclude balanced debt bills — they contribute to savings progress, not direct
-          // debt-balance reductions tracked by onDebtPayments.
-          .filter(it => it.billType === "debt" && it.debtId && !it.skipped && it.plannedAmount > 0 && !it.isBillAsBalanced)
-          .map(it => {
-            const newAmount = Math.max(0, parseFloat(it.actualStr) || 0);
-            const prevRecord =
-              existingCheckins.find(c => c.itemName === it.debtId && c.itemType === "debt") ??
-              existingCheckins.find(c => c.itemName === it.billName && c.itemType === "debt");
-            const prevAmount = prevRecord ? prevRecord.actualAmount : 0;
-            return { debtId: it.debtId!, amount: newAmount - prevAmount };
-          })
-          .filter(p => p.amount > 0);
-        if (debtPayments.length > 0) {
-          onDebtPayments(debtPayments);
+        const debtPayments: { debtId: string; amount: number }[] = [];
+
+        // Regular (non-balanced) debt bill payments
+        for (const it of items) {
+          if (it.billType !== "debt" || !it.debtId || it.skipped || it.plannedAmount <= 0 || it.isBillAsBalanced) continue;
+          const newAmount = Math.max(0, parseFloat(it.actualStr) || 0);
+          const prevRecord =
+            existingCheckins.find(c => c.itemName === it.debtId && c.itemType === "debt") ??
+            existingCheckins.find(c => c.itemName === it.billName && c.itemType === "debt");
+          const prevAmount = prevRecord ? prevRecord.actualAmount : 0;
+          if (newAmount - prevAmount > 0) debtPayments.push({ debtId: it.debtId, amount: newAmount - prevAmount });
         }
+
+        // Balanced debt bills: fire balance reduction when user confirms they made the payment
+        for (const it of items) {
+          if (!it.isBillAsBalanced || !it.debtId || it.paymentConfirmed === undefined || !it.monthlyAmount) continue;
+          const newAmount = it.paymentConfirmed ? it.monthlyAmount : 0;
+          const prevRecord = existingCheckins.find(
+            c => c.itemName === paymentConfirmedKey(it.billName) && c.itemType === "debt",
+          );
+          const prevAmount = prevRecord ? prevRecord.actualAmount : 0;
+          if (newAmount - prevAmount > 0) debtPayments.push({ debtId: it.debtId, amount: newAmount - prevAmount });
+        }
+
+        if (debtPayments.length > 0) onDebtPayments(debtPayments);
       }
 
       setItems(buildItems());
@@ -422,6 +515,7 @@ export function CheckInDialog({
                   debtPositionLabel = `Debt ${pos} of ${total}`;
                 }
               }
+              const showPaymentPrompt = it.isBillAsBalanced && it.paymentConfirmed !== undefined && !it.skipped;
               return (
                 <div
                   key={it.billType === "debt" && it.debtId ? `debt-${it.debtId}` : `${it.billName}-${it.billType}`}
@@ -474,6 +568,19 @@ export function CheckInDialog({
                         className="pl-6 h-8 text-sm"
                       />
                     </div>
+                  )}
+                  {showPaymentPrompt && (
+                    <label className="flex items-center gap-2 cursor-pointer pt-0.5">
+                      <input
+                        type="checkbox"
+                        checked={it.paymentConfirmed ?? false}
+                        onChange={() => togglePaymentConfirmed(idx)}
+                        className="rounded border-red-300 text-red-600 focus:ring-red-500 h-3.5 w-3.5 shrink-0"
+                      />
+                      <span className="text-xs text-red-700">
+                        I made the ${it.monthlyAmount?.toFixed(2)} payment — reduce my balance
+                      </span>
+                    </label>
                   )}
                   {it.skipped && it.plannedAmount > 0 && (
                     <p className={`text-xs italic ${isDebt ? "text-red-500" : "text-red-500"}`}>
