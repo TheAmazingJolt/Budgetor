@@ -173,6 +173,7 @@ interface SavedBudgetSettings {
     frequency: "weekly" | "biweekly" | "monthly";
     nextPayDate: string;
   }>;
+  generatedBillsFingerprint?: string;
 }
 
 interface GenerateOverrides {
@@ -2663,7 +2664,7 @@ export function BudgetWizard({
     const loadCleanedUp = billsToSet.length !== beforeCleanCount;
     setBills(billsToSet);
     cloudBudgetLoadedBillsRef.current = JSON.stringify(b);
-    lastGeneratedBillsFingerprintRef.current = billsToSet.map((b: Bill) => `${b.name}|${b.amount}|${b.type}|${b.dayOfMonth ?? ""}`).sort().join(";");
+    lastGeneratedBillsFingerprintRef.current = s?.generatedBillsFingerprint ?? null;
     // If cleanup removed orphaned bills, force prevBillsRef to "" so the save effect
     // fires and permanently repairs the server copy regardless of prior local state.
     if (loadCleanedUp) {
@@ -3039,6 +3040,7 @@ export function BudgetWizard({
             existingWeeks: mergedExistingWeeks,
             payPeriod,
             incomeSources: incomeSources.length > 0 ? incomeSources : undefined,
+            generatedBillsFingerprint: lastGeneratedBillsFingerprintRef.current ?? undefined,
           },
           debts,
         },
