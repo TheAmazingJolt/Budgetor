@@ -157,8 +157,19 @@ export function computeSavings(
   checkins: WeeklyCheckIn[] = [],
 ): SavingsData {
   const refDate = deriveReferenceDate(weeks, today);
-  const currentMonth = refDate.getMonth();
-  const currentYear = refDate.getFullYear();
+  // Use the owner month of the reference week, not raw getMonth() — a week starting
+  // Apr 30 that contains May 1 belongs to May, so getMonth() would be wrong.
+  let currentMonth = refDate.getMonth();
+  let currentYear = refDate.getFullYear();
+  for (const w of weeks) {
+    const d = parseLabelDates(w.label);
+    if (d && d.start.getTime() === refDate.getTime()) {
+      const owner = getWeekOwnerMonth(d.start, d.end);
+      currentMonth = owner.month;
+      currentYear = owner.year;
+      break;
+    }
+  }
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
 
   const sinkingFunds: SinkingFundProgress[] = [];

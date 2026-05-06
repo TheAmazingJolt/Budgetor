@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import {
   computeSavings,
   parseLabelDates,
-  deriveReferenceDate,
 } from "@/lib/savingsComputation";
 import type {
   WeekForSavings,
@@ -177,7 +176,7 @@ export function SavingsSection({
   const [sinkingCollapsed, setSinkingCollapsed] = useState(true);
   const [balancedCollapsed, setBalancedCollapsed] = useState(true);
 
-  const { sinkingFunds, balanced } = computeSavings(
+  const { sinkingFunds, balanced, referenceMonth, referenceYear } = computeSavings(
     bills, weeks, today, contributions, checkins,
   );
   const activeLumpSumDebts = lumpSumDebts.filter(d => {
@@ -187,8 +186,7 @@ export function SavingsSection({
   });
   const hasData = sinkingFunds.length > 0 || balanced.length > 0;
 
-  const refDate = deriveReferenceDate(weeks, today);
-  const refMonthStr = refDate.toLocaleString("en-US", { month: "long" });
+  const refMonthStr = new Date(referenceYear, referenceMonth, 1).toLocaleString("en-US", { month: "long" });
 
   const balancedBills = bills.filter(b => b.type === "balanced" || b.type === "yearly");
 
