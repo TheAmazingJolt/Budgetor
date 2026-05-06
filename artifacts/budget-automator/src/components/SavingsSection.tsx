@@ -308,7 +308,11 @@ export function SavingsSection({
                 <SinkingFundCard
                   key={i}
                   data={sf}
-                  contributions={contributions.filter(c => c.billName === sf.bill.name)}
+                  contributions={contributions.filter(c => {
+                    if (c.billName !== sf.bill.name) return false;
+                    const cDate = new Date(c.date + "T00:00:00");
+                    return cDate > sf.cycleStart && cDate <= today;
+                  })}
                   canLog={canLog}
                   onAdd={(amount, date, note, isExtra) =>
                     addMutation.mutateAsync({ billName: sf.bill.name ?? "", amount, date, note, isExtra })
@@ -345,7 +349,11 @@ export function SavingsSection({
                   <BalancedCard
                     key={i}
                     data={b}
-                    contributions={contributions.filter(c => c.billName === b.bill.name)}
+                    contributions={contributions.filter(c => {
+                      if (c.billName !== b.bill.name) return false;
+                      const cDate = new Date(c.date + "T00:00:00");
+                      return cDate.getMonth() === b.currentMonth && cDate.getFullYear() === b.currentYear;
+                    })}
                     checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
                     canLog={canLog}
                     onAdd={(amount, date, note, isExtra) =>
