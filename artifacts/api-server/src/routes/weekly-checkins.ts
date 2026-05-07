@@ -185,6 +185,31 @@ router.post("/budgets/:budgetId/checkins", requireAuth, async (req, res): Promis
   }
 });
 
+router.delete("/budgets/:budgetId/checkins/:id", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id as string;
+    const { budgetId, id } = req.params as { budgetId: string; id: string };
+
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `DELETE FROM weekly_checkins WHERE id = $1 AND budget_id = $2 AND user_id = $3 RETURNING id`,
+        [id, budgetId, userId],
+      );
+      if (!result.rowCount) {
+        res.status(404).json({ error: "Check-in record not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    console.error("[DELETE checkins/:id]", err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Internal server error" });
+  }
+});
+
 router.delete("/budgets/:budgetId/checkins/week", requireAuth, async (req, res): Promise<void> => {
   try {
     const userId = (req as any).user?.id as string;

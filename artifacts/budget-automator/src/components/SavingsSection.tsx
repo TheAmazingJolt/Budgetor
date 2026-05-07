@@ -117,6 +117,14 @@ export function SavingsSection({
     },
   });
 
+  const deleteCheckinMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/budgets/${budgetId}/checkins/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["weekly-checkins", budgetId] });
+    },
+  });
+
   const createGoalMutation = useMutation({
     mutationFn: (payload: { name: string; targetAmount: number; targetDate: string; note?: string }) =>
       apiFetch(`/api/goals`, {
@@ -358,6 +366,7 @@ export function SavingsSection({
                       addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note, isExtra })
                     }
                     onDelete={id => deleteMutation.mutateAsync(id)}
+                    onDeleteCheckin={budgetId ? (id) => deleteCheckinMutation.mutateAsync(id) : undefined}
                   />
                 ))}
               </div>
@@ -733,14 +742,17 @@ interface BalancedCardProps {
   canLog: boolean;
   onAdd: (amount: number, date: string, note?: string, isExtra?: boolean) => Promise<unknown>;
   onDelete: (id: string) => Promise<unknown>;
+  onDeleteCheckin?: (id: string) => Promise<unknown>;
 }
 
-function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }: BalancedCardProps) {
+function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete, onDeleteCheckin }: BalancedCardProps) {
   const { bill, monthlyGoal, savedThisMonth, manualThisMonth, extraThisMonth, checkedInThisMonth, progressPct } = data;
   const pct = Math.round(progressPct);
   const regularSaved = savedThisMonth + checkedInThisMonth + manualThisMonth;
   const totalSaved = regularSaved + extraThisMonth;
   const isComplete = totalSaved >= monthlyGoal;
+  const [showCheckinHistory, setShowCheckinHistory] = useState(false);
+  const [confirmDeleteCheckinId, setConfirmDeleteCheckinId] = useState<string | null>(null);
 
   return (
     <div className="rounded-xl bg-white border border-indigo-100 p-4 space-y-3 shadow-sm">
@@ -761,10 +773,41 @@ function BalancedCard({ data, contributions, checkins, canLog, onAdd, onDelete }
         </div>
         {checkedInThisMonth > 0 && (
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground ml-2 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onDeleteCheckin && setShowCheckinHistory(h => !h)}
+              className={`ml-2 flex items-center gap-1 text-muted-foreground ${onDeleteCheckin ? "hover:text-foreground cursor-pointer" : ""}`}
+            >
               <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Confirmed
-            </span>
+              {onDeleteCheckin && checkins.length > 0 && (
+                showCheckinHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+              )}
+            </button>
             <span className="text-muted-foreground">${fmt(checkedInThisMonth)}</span>
+          </div>
+        )}
+        {showCheckinHistory && checkins.length > 0 && (
+          <div className="rounded-lg border divide-y text-xs overflow-hidden ml-2">
+            {checkins.map(c => (
+              <div key={c.id} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                <span className="text-muted-foreground truncate">{c.weekLabel.split(" to ")[0]}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-medium">${fmt(c.actualAmount)}</span>
+                  {onDeleteCheckin && (
+                    confirmDeleteCheckinId === c.id ? (
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => { setConfirmDeleteCheckinId(null); onDeleteCheckin(c.id); }} className="text-red-600 font-medium hover:text-red-700">Confirm</button>
+                        <button type="button" onClick={() => setConfirmDeleteCheckinId(null)} className="text-muted-foreground hover:text-foreground">✕</button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setConfirmDeleteCheckinId(c.id)} className="text-muted-foreground hover:text-red-500 transition-colors" title="Remove confirmation">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {savedThisMonth > 0 && (

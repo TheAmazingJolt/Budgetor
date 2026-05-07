@@ -5996,7 +5996,7 @@ export function BudgetWizard({
                               size="sm"
                               variant="outline"
                               className="h-7 text-xs gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
-                              onClick={() => handleGenerate()}
+                              onClick={() => openRegenerateDialog()}
                               disabled={generateMutation.isPending}
                             >
                               <RefreshCw className={`w-3 h-3 ${generateMutation.isPending ? "animate-spin" : ""}`} />
