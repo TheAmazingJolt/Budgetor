@@ -1910,6 +1910,15 @@ function parseLabelDatesSrv(label: string): { start: Date; end: Date } | null {
   return { start, end };
 }
 
+function getWeekOwnerMonthSrv(wStart: Date, wEnd: Date): { month: number; year: number } {
+  const cursor = new Date(wStart);
+  while (cursor <= wEnd) {
+    if (cursor.getDate() === 1) return { month: cursor.getMonth(), year: cursor.getFullYear() };
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return { month: wStart.getMonth(), year: wStart.getFullYear() };
+}
+
 function getNextYearlyDueSrv(from: Date, month: number, day: number): Date {
   const m = month - 1;
   let year = from.getFullYear();
@@ -2024,8 +2033,11 @@ async function writeSavingsTabToSheet(
       for (const w of weeks) {
         const wStart = new Date(w.startDate);
         wStart.setHours(0, 0, 0, 0);
+        const wEnd = new Date(w.endDate);
+        wEnd.setHours(0, 0, 0, 0);
         if (wStart > today) continue;
-        if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
+        const owner = getWeekOwnerMonthSrv(wStart, wEnd);
+        if (owner.month !== currentMonth || owner.year !== currentYear) continue;
         const weekCheckin = checkins.find(
           c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "balanced",
         );
@@ -2041,7 +2053,8 @@ async function writeSavingsTabToSheet(
         const dates = parseLabelDatesSrv(c.weekLabel);
         if (!dates) continue;
         if (dates.start > today) continue;
-        if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
+        const ownerInactive = getWeekOwnerMonthSrv(dates.start, dates.end);
+        if (ownerInactive.month !== currentMonth || ownerInactive.year !== currentYear) continue;
         savedThisMonth += c.actualAmount;
       }
       let manualThisMonth = 0;
@@ -2057,10 +2070,15 @@ async function writeSavingsTabToSheet(
           manualThisMonth += c.amount;
         }
       }
-      const firstWeekDateSrv = weeks.length > 0
-        ? new Date(Math.min(...weeks.map(w => new Date(w.startDate + "T00:00:00").getTime())))
+      const firstWeekSrv = weeks.length > 0
+        ? weeks.reduce((a, b) => new Date(a.startDate) <= new Date(b.startDate) ? a : b)
         : null;
-      if (firstWeekDateSrv && firstWeekDateSrv.getMonth() === currentMonth && firstWeekDateSrv.getFullYear() === currentYear) {
+      const firstWeekDateSrv = firstWeekSrv ? new Date(firstWeekSrv.startDate + "T00:00:00") : null;
+      const firstWeekEndSrv = firstWeekSrv ? new Date(firstWeekSrv.endDate + "T00:00:00") : null;
+      const firstWeekOwnerSrv = firstWeekDateSrv && firstWeekEndSrv
+        ? getWeekOwnerMonthSrv(firstWeekDateSrv, firstWeekEndSrv)
+        : null;
+      if (firstWeekOwnerSrv && firstWeekOwnerSrv.month === currentMonth && firstWeekOwnerSrv.year === currentYear) {
         const savedMonthKeySrv = (bill as any).initialSavedMonth as string | undefined;
         const expectedKeySrv = `${currentYear}-${currentMonth}`;
         if (!savedMonthKeySrv || savedMonthKeySrv === expectedKeySrv) {

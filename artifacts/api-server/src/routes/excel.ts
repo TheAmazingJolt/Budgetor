@@ -1240,6 +1240,15 @@ function parseLabelDatesXL(label: string): { start: Date; end: Date } | null {
   return { start, end };
 }
 
+function getWeekOwnerMonthXL(wStart: Date, wEnd: Date): { month: number; year: number } {
+  const cursor = new Date(wStart);
+  while (cursor <= wEnd) {
+    if (cursor.getDate() === 1) return { month: cursor.getMonth(), year: cursor.getFullYear() };
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return { month: wStart.getMonth(), year: wStart.getFullYear() };
+}
+
 function getNextYearlyDueExcel(today: Date, dueMonth: number, dueDay: number): Date {
   const year = today.getFullYear();
   const candidate = new Date(year, dueMonth - 1, dueDay);
@@ -1321,8 +1330,10 @@ function writeExcelSavingsSheetXL(
       const activeWeekLabelsXLBalanced = new Set(weeks.map(w => w.weekLabel));
       for (const w of weeks) {
         const wStart = new Date(w.startDate); wStart.setHours(0,0,0,0);
+        const wEnd = new Date(w.endDate); wEnd.setHours(0,0,0,0);
         if (wStart > today) continue;
-        if (wStart.getMonth() !== currentMonth || wStart.getFullYear() !== currentYear) continue;
+        const owner = getWeekOwnerMonthXL(wStart, wEnd);
+        if (owner.month !== currentMonth || owner.year !== currentYear) continue;
         const weekCheckin = checkins.find(
           c => c.weekLabel === w.weekLabel && c.itemName === bill.name && c.itemType === "balanced",
         );
@@ -1338,7 +1349,8 @@ function writeExcelSavingsSheetXL(
         const dates = parseLabelDatesXL(c.weekLabel);
         if (!dates) continue;
         if (dates.start > today) continue;
-        if (dates.start.getMonth() !== currentMonth || dates.start.getFullYear() !== currentYear) continue;
+        const ownerInactive = getWeekOwnerMonthXL(dates.start, dates.end);
+        if (ownerInactive.month !== currentMonth || ownerInactive.year !== currentYear) continue;
         savedThisMonth += c.actualAmount;
       }
       let extraThisMonth = 0;
@@ -1353,10 +1365,15 @@ function writeExcelSavingsSheetXL(
           savedThisMonth += c.amount;
         }
       }
-      const firstWeekDate = weeks.length > 0
-        ? new Date(Math.min(...weeks.map(w => new Date(w.startDate + "T00:00:00").getTime())))
+      const firstWeekXL = weeks.length > 0
+        ? weeks.reduce((a, b) => new Date(a.startDate) <= new Date(b.startDate) ? a : b)
         : null;
-      if (firstWeekDate && firstWeekDate.getMonth() === currentMonth && firstWeekDate.getFullYear() === currentYear) {
+      const firstWeekDate = firstWeekXL ? new Date(firstWeekXL.startDate + "T00:00:00") : null;
+      const firstWeekEnd = firstWeekXL ? new Date(firstWeekXL.endDate + "T00:00:00") : null;
+      const firstWeekOwnerXL = firstWeekDate && firstWeekEnd
+        ? getWeekOwnerMonthXL(firstWeekDate, firstWeekEnd)
+        : null;
+      if (firstWeekOwnerXL && firstWeekOwnerXL.month === currentMonth && firstWeekOwnerXL.year === currentYear) {
         const savedMonthKey = (bill as any).initialSavedMonth as string | undefined;
         const expectedKey = `${currentYear}-${currentMonth}`;
         if (!savedMonthKey || savedMonthKey === expectedKey) {

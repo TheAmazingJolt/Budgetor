@@ -269,14 +269,15 @@ export function computeSavings(
 
         if (weekCheckin) {
           checkedInThisMonth += weekCheckin.actualAmount;
-        } else if (dates.end < today) {
+        } else if (dates.start <= today) {
+          // Auto-credit budget amounts for any week that has already started
+          // (whether past or current). Check-in overrides this with actual amount.
           for (const item of w.items) {
             if (item.name === prefix) {
               savedThisMonth += Math.abs(item.amount);
             }
           }
         }
-        // Weeks without a check-in whose end date is today or in the future are not yet set aside — skip them
       }
 
       for (const c of checkins) {
