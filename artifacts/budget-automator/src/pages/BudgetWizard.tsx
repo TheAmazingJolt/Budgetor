@@ -360,24 +360,6 @@ function debtBillDayOfMonth(d: { paymentFrequency?: string | null; dueDay?: numb
   return d.dueDay ?? 1;
 }
 
-function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null; createdAt?: string | null }, showReminders: boolean): boolean {
-  if (!showReminders) return false;
-  if (!debt.dueDay) return false;
-  const now = new Date();
-  if (debt.lastPaymentDate) {
-    const paid = new Date(debt.lastPaymentDate);
-    if (paid.getFullYear() === now.getFullYear() && paid.getMonth() === now.getMonth()) {
-      return false;
-    }
-  }
-  if (debt.createdAt) {
-    const created = new Date(debt.createdAt);
-    if (created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth()) {
-      return false;
-    }
-  }
-  return now.getDate() >= debt.dueDay;
-}
 
 /** Format a YYYY-MM-DD payoff date as M/D (no leading zeros, timezone-safe). */
 function fmtPayoffDate(isoDate: string): string {
@@ -1395,7 +1377,6 @@ export function BudgetWizard({
   });
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
-  const showPaymentReminders = !prefsLoaded || userPrefsQuery.data?.preferences?.showPaymentReminders !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -7016,16 +6997,6 @@ export function BudgetWizard({
                                 <Badge variant="outline" className="text-xs px-2 py-0.5 bg-teal-50 text-teal-700 border-teal-200">
                                   {debt.paymentFrequency === "weekly" ? "Weekly payments" : "Biweekly payments"}
                                 </Badge>
-                              )}
-                              {isPaymentLikelyDue(debt, showPaymentReminders) && (
-                                <button
-                                  type="button"
-                                  onClick={() => { setLogPaymentDebtId(debt.id); setLogPaymentAmount(""); }}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 text-[10px] font-semibold hover:bg-amber-200 transition-colors cursor-pointer"
-                                >
-                                  <AlertTriangle className="w-3 h-3" />
-                                  Payment likely due
-                                </button>
                               )}
                             </div>
                           </div>
