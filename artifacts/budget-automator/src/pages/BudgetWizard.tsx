@@ -43,6 +43,7 @@ import {
   Search,
   Lightbulb,
   TrendingDown,
+  BarChart2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -143,6 +144,7 @@ import type { Bill, SavedBudget, Debt, UserPreferencesResponse, WeeklyBudget } f
 import { getBillColorEntry } from "@/lib/billColors";
 import { HelpDialog } from "@/components/HelpDialog";
 import { BugReportDialog } from "@/components/BugReportDialog";
+import { BudgetProfilePanel } from "@/components/BudgetProfilePanel";
 import { ReferralDialog } from "@/components/ReferralDialog";
 import { SavingsSection } from "@/components/SavingsSection";
 import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
@@ -1306,6 +1308,8 @@ export function BudgetWizard({
   const [isGenerateDateDialogOpen, setIsGenerateDateDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [bugReportOpen, setBugReportOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [importConfirm, setImportConfirm] = useState<{ bills: Bill[]; debts: Debt[] } | null>(null);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const [errorLog, setErrorLog] = useState<Array<{ time: string; label: string; detail: string }>>(() => {
     try { return JSON.parse(localStorage.getItem("budgify_error_log") ?? "[]"); } catch { return []; }
@@ -2161,6 +2165,8 @@ export function BudgetWizard({
         return {
           ...b,
           amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: debtBillDayOfMonth(d),
+          type: debtBillType(d),
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
           anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
         };
@@ -2194,6 +2200,62 @@ export function BudgetWizard({
     if (updatedCount > 0) parts.push(`${updatedCount} debt${updatedCount !== 1 ? "s" : ""} updated`);
     toast({ title: parts.join(", "), description: "Your saved debts have been synced to this budget." });
     triggerBackgroundSheetSync();
+  };
+
+  const handleExportProfileData = () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      bills,
+      debts,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `budgetor-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Backup downloaded", description: `${bills.length} bill${bills.length !== 1 ? "s" : ""} and ${debts.length} debt${debts.length !== 1 ? "s" : ""} exported.` });
+  };
+
+  const handleImportProfileData = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = String(e.target?.result ?? "");
+        const data = JSON.parse(text);
+        if (!Array.isArray(data.bills) || !Array.isArray(data.debts)) {
+          throw new Error("File is missing bills or debts arrays");
+        }
+        setImportConfirm({ bills: data.bills as Bill[], debts: data.debts as Debt[] });
+      } catch (err) {
+        toast({
+          title: "Invalid backup file",
+          description: (err as Error)?.message ?? "File could not be parsed.",
+          variant: "destructive",
+        });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const confirmImportProfileData = () => {
+    if (!importConfirm) return;
+    const { bills: importedBills, debts: importedDebts } = importConfirm;
+    setBills(importedBills);
+    setDebts(importedDebts);
+    if (isSignedIn) {
+      updateUserBillsMutation.mutate({ data: { bills: importedBills } });
+      updateUserDebtsMutation.mutate({ data: { debts: importedDebts } });
+    }
+    toast({
+      title: "Backup restored",
+      description: `${importedBills.length} bill${importedBills.length !== 1 ? "s" : ""} and ${importedDebts.length} debt${importedDebts.length !== 1 ? "s" : ""} imported.`,
+    });
+    setImportConfirm(null);
   };
 
   const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
@@ -4135,6 +4197,16 @@ export function BudgetWizard({
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500" />
               </Button>
             )}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl w-8 h-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setProfileOpen(true)}
+              title="Budget Profile"
+            >
+              <BarChart2 className="w-4.5 h-4.5" />
+            </Button>
 
             <Button
               variant="ghost"
@@ -7663,6 +7735,37 @@ export function BudgetWizard({
         userName={currentUser?.name ?? null}
         userEmail={currentUser?.email ?? null}
       />
+
+      <BudgetProfilePanel
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        bills={bills}
+        debts={debts}
+        incomeSources={incomeSources}
+        weeks={(generatedWeek?.weeks ?? []).map((w: WeeklyBudget) => ({
+          label: w.weekLabel,
+          items: (w.bills ?? []).map((b: { name: string; amount: number }) => ({ name: b.name, amount: b.amount })),
+        }))}
+        checkins={checkinsQuery.data?.checkins ?? []}
+        contributions={budgetContributionsQuery.data?.contributions ?? []}
+        onExportData={handleExportProfileData}
+        onImportData={handleImportProfileData}
+      />
+
+      <AlertDialog open={!!importConfirm} onOpenChange={(o) => !o && setImportConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore from backup?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will replace your current {bills.length} bill{bills.length !== 1 ? "s" : ""} and {debts.length} debt{debts.length !== 1 ? "s" : ""} with {importConfirm?.bills.length ?? 0} bill{(importConfirm?.bills.length ?? 0) !== 1 ? "s" : ""} and {importConfirm?.debts.length ?? 0} debt{(importConfirm?.debts.length ?? 0) !== 1 ? "s" : ""} from the backup file. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmImportProfileData}>Restore</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {paydayWeekLabel && activeCloudBudgetId && (
         <PaydayCheckInDialog
