@@ -360,24 +360,6 @@ function debtBillDayOfMonth(d: { paymentFrequency?: string | null; dueDay?: numb
   return d.dueDay ?? 1;
 }
 
-function isPaymentLikelyDue(debt: { dueDay?: number | null; lastPaymentDate?: string | null; createdAt?: string | null }, showReminders: boolean): boolean {
-  if (!showReminders) return false;
-  if (!debt.dueDay) return false;
-  const now = new Date();
-  if (debt.lastPaymentDate) {
-    const paid = new Date(debt.lastPaymentDate);
-    if (paid.getFullYear() === now.getFullYear() && paid.getMonth() === now.getMonth()) {
-      return false;
-    }
-  }
-  if (debt.createdAt) {
-    const created = new Date(debt.createdAt);
-    if (created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth()) {
-      return false;
-    }
-  }
-  return now.getDate() >= debt.dueDay;
-}
 
 /** Format a YYYY-MM-DD payoff date as M/D (no leading zeros, timezone-safe). */
 function fmtPayoffDate(isoDate: string): string {
@@ -1395,7 +1377,6 @@ export function BudgetWizard({
   });
 
   const prefsLoaded = !isSignedIn || userPrefsQuery.isSuccess || userPrefsQuery.isError;
-  const showPaymentReminders = !prefsLoaded || userPrefsQuery.data?.preferences?.showPaymentReminders !== false;
 
   const debtsLoadedForUserRef = useRef<string | null>(null);
   const debtsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2149,30 +2130,57 @@ export function BudgetWizard({
   const handleAddAccountDebts = () => {
     const accountDebts = (userDebtsQuery.data?.debts ?? []) as Debt[];
     if (accountDebts.length === 0) return;
-    const existingKeys = new Set(debts.map((d: Debt) => d.id));
-    const toAdd = accountDebts.filter(d => !existingKeys.has(d.id));
-    if (toAdd.length === 0) {
-      toast({ title: "Already added", description: "All your saved debts are already in this budget." });
+    const accountMap = new Map(accountDebts.map(d => [d.id, d]));
+    const existingIds = new Set(debts.map((d: Debt) => d.id));
+    const toAdd = accountDebts.filter(d => !existingIds.has(d.id));
+
+    let updatedCount = 0;
+    const mergedDebts = debts.map((d: Debt) => {
+      const fresh = accountMap.get(d.id);
+      if (!fresh) return d;
+      if (JSON.stringify(d) !== JSON.stringify(fresh)) {
+        updatedCount++;
+        return fresh;
+      }
+      return d;
+    });
+
+    if (toAdd.length === 0 && updatedCount === 0) {
+      toast({ title: "Already up to date", description: "All your saved debts are already in this budget with the latest values." });
       return;
     }
-    setDebts((prev: Debt[]) => [...prev, ...toAdd]);
+
+    setDebts([...mergedDebts, ...toAdd]);
+
     const toImport = toAdd.filter(d => !d.excludeFromBill);
-    const newDebtBills = toImport
-      .filter(d => !bills.some(b => b.sourceDebtId === d.id))
-      .map(d => ({
-        name: `${d.name} (min payment)`,
-        amount: -Math.abs(d.minimumPayment),
-        dayOfMonth: debtBillDayOfMonth(d),
-        category: "Debt Payment",
-        type: debtBillType(d),
-        color: "red",
-        sourceDebtId: d.id,
-        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
-        ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
-      }));
-    if (newDebtBills.length > 0) {
-      setBills(prev => [...prev, ...newDebtBills]);
-    }
+    setBills(prev => {
+      const refreshed = prev.map(b => {
+        if (!b.sourceDebtId) return b;
+        const d = accountMap.get(b.sourceDebtId);
+        if (!d) return b;
+        return {
+          ...b,
+          amount: -Math.abs(d.minimumPayment),
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
+        };
+      });
+      const newDebtBills = toImport
+        .filter(d => !refreshed.some(b => b.sourceDebtId === d.id))
+        .map(d => ({
+          name: `${d.name} (min payment)`,
+          amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: debtBillDayOfMonth(d),
+          category: "Debt Payment",
+          type: debtBillType(d),
+          color: "red",
+          sourceDebtId: d.id,
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
+        }));
+      return newDebtBills.length > 0 ? [...refreshed, ...newDebtBills] : refreshed;
+    });
+
     if (toImport.length > 0) {
       setDebtBillImports(prev => {
         const next = new Set(prev);
@@ -2180,7 +2188,12 @@ export function BudgetWizard({
         return next;
       });
     }
-    toast({ title: `${toAdd.length} debt${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved debts have been added to this budget." });
+
+    const parts: string[] = [];
+    if (toAdd.length > 0) parts.push(`${toAdd.length} debt${toAdd.length !== 1 ? "s" : ""} added`);
+    if (updatedCount > 0) parts.push(`${updatedCount} debt${updatedCount !== 1 ? "s" : ""} updated`);
+    toast({ title: parts.join(", "), description: "Your saved debts have been synced to this budget." });
+    triggerBackgroundSheetSync();
   };
 
   const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
@@ -7016,16 +7029,6 @@ export function BudgetWizard({
                                 <Badge variant="outline" className="text-xs px-2 py-0.5 bg-teal-50 text-teal-700 border-teal-200">
                                   {debt.paymentFrequency === "weekly" ? "Weekly payments" : "Biweekly payments"}
                                 </Badge>
-                              )}
-                              {isPaymentLikelyDue(debt, showPaymentReminders) && (
-                                <button
-                                  type="button"
-                                  onClick={() => { setLogPaymentDebtId(debt.id); setLogPaymentAmount(""); }}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 text-[10px] font-semibold hover:bg-amber-200 transition-colors cursor-pointer"
-                                >
-                                  <AlertTriangle className="w-3 h-3" />
-                                  Payment likely due
-                                </button>
                               )}
                             </div>
                           </div>
