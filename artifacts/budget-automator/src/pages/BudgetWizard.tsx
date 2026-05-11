@@ -2165,6 +2165,8 @@ export function BudgetWizard({
         return {
           ...b,
           amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: debtBillDayOfMonth(d),
+          type: debtBillType(d),
           payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
           anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
         };
