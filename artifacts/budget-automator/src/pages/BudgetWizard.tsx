@@ -2130,30 +2130,57 @@ export function BudgetWizard({
   const handleAddAccountDebts = () => {
     const accountDebts = (userDebtsQuery.data?.debts ?? []) as Debt[];
     if (accountDebts.length === 0) return;
-    const existingKeys = new Set(debts.map((d: Debt) => d.id));
-    const toAdd = accountDebts.filter(d => !existingKeys.has(d.id));
-    if (toAdd.length === 0) {
-      toast({ title: "Already added", description: "All your saved debts are already in this budget." });
+    const accountMap = new Map(accountDebts.map(d => [d.id, d]));
+    const existingIds = new Set(debts.map((d: Debt) => d.id));
+    const toAdd = accountDebts.filter(d => !existingIds.has(d.id));
+
+    let updatedCount = 0;
+    const mergedDebts = debts.map((d: Debt) => {
+      const fresh = accountMap.get(d.id);
+      if (!fresh) return d;
+      if (JSON.stringify(d) !== JSON.stringify(fresh)) {
+        updatedCount++;
+        return fresh;
+      }
+      return d;
+    });
+
+    if (toAdd.length === 0 && updatedCount === 0) {
+      toast({ title: "Already up to date", description: "All your saved debts are already in this budget with the latest values." });
       return;
     }
-    setDebts((prev: Debt[]) => [...prev, ...toAdd]);
+
+    setDebts([...mergedDebts, ...toAdd]);
+
     const toImport = toAdd.filter(d => !d.excludeFromBill);
-    const newDebtBills = toImport
-      .filter(d => !bills.some(b => b.sourceDebtId === d.id))
-      .map(d => ({
-        name: `${d.name} (min payment)`,
-        amount: -Math.abs(d.minimumPayment),
-        dayOfMonth: debtBillDayOfMonth(d),
-        category: "Debt Payment",
-        type: debtBillType(d),
-        color: "red",
-        sourceDebtId: d.id,
-        payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
-        ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
-      }));
-    if (newDebtBills.length > 0) {
-      setBills(prev => [...prev, ...newDebtBills]);
-    }
+    setBills(prev => {
+      const refreshed = prev.map(b => {
+        if (!b.sourceDebtId) return b;
+        const d = accountMap.get(b.sourceDebtId);
+        if (!d) return b;
+        return {
+          ...b,
+          amount: -Math.abs(d.minimumPayment),
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          anchorDate: d.paymentFrequency === "biweekly" ? (d.anchorDate ?? null) : null,
+        };
+      });
+      const newDebtBills = toImport
+        .filter(d => !refreshed.some(b => b.sourceDebtId === d.id))
+        .map(d => ({
+          name: `${d.name} (min payment)`,
+          amount: -Math.abs(d.minimumPayment),
+          dayOfMonth: debtBillDayOfMonth(d),
+          category: "Debt Payment",
+          type: debtBillType(d),
+          color: "red",
+          sourceDebtId: d.id,
+          payoffDate: calcDebtPayoffDate(d.balance, d.minimumPayment, d.interestRate, d.paymentFrequency, d.paymentsRemaining),
+          ...(d.paymentFrequency === "biweekly" ? { anchorDate: d.anchorDate ?? null } : {}),
+        }));
+      return newDebtBills.length > 0 ? [...refreshed, ...newDebtBills] : refreshed;
+    });
+
     if (toImport.length > 0) {
       setDebtBillImports(prev => {
         const next = new Set(prev);
@@ -2161,7 +2188,12 @@ export function BudgetWizard({
         return next;
       });
     }
-    toast({ title: `${toAdd.length} debt${toAdd.length !== 1 ? "s" : ""} added`, description: "Your saved debts have been added to this budget." });
+
+    const parts: string[] = [];
+    if (toAdd.length > 0) parts.push(`${toAdd.length} debt${toAdd.length !== 1 ? "s" : ""} added`);
+    if (updatedCount > 0) parts.push(`${updatedCount} debt${updatedCount !== 1 ? "s" : ""} updated`);
+    toast({ title: parts.join(", "), description: "Your saved debts have been synced to this budget." });
+    triggerBackgroundSheetSync();
   };
 
   const handleImportBillsRef = useRef<((importedBills: Bill[], onApply: (useBills: Bill[]) => void) => void) | null>(null);
