@@ -547,9 +547,9 @@ export function BudgetProfilePanel({
               <Card>
                 <CardContent className="p-2 sm:p-4 space-y-4">
                   {debtChartData.length > 1 && (
-                    <div className="hidden sm:block h-56">
+                    <div className="hidden sm:block" style={{ height: Math.max(200, debtChartData.length * 36) }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={debtChartData} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
+                        <BarChart data={debtChartData} layout="vertical" margin={{ top: 16, right: 20, left: 5, bottom: 5 }}>
                           <XAxis type="number" tickFormatter={(v) => `$${Math.round(v / 1000)}k`} fontSize={11} />
                           <YAxis type="category" dataKey="name" width={80} fontSize={11} />
                           <Tooltip formatter={(v: number) => fmtUSD(v)} />
