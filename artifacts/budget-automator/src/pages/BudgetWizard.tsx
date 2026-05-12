@@ -4145,7 +4145,7 @@ export function BudgetWizard({
             </div>
           </button>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2 sm:gap-5">
             {step > 0 && (
               <button
                 onClick={() => { if (step === 2) guardedBackToStep1(); else guardedBackToMenu(); }}
@@ -4299,7 +4299,7 @@ export function BudgetWizard({
                         <User className="w-3.5 h-3.5 text-primary" />
                       </div>
                     )}
-                    <span className="text-sm font-medium max-w-[160px] truncate">
+                    <span className="hidden sm:inline text-sm font-medium max-w-[160px] truncate">
                       {currentUser?.name || "Guest"}
                     </span>
                   </Button>
