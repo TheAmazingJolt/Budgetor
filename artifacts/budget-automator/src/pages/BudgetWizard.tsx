@@ -7746,7 +7746,10 @@ export function BudgetWizard({
           ...(getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
           ...(generatedWeek?.weeks ?? []),
         ]}
-        weeks={(generatedWeek?.weeks ?? []).map((w: WeeklyBudget) => ({
+        weeks={[
+          ...(getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
+          ...(generatedWeek?.weeks ?? []),
+        ].map((w: WeeklyBudget) => ({
           label: w.weekLabel,
           items: (w.bills ?? []).map((b: { name: string; amount: number }) => ({ name: b.name, amount: b.amount })),
         }))}
