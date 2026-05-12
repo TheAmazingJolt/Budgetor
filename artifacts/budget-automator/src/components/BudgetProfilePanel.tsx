@@ -40,7 +40,7 @@ import {
 import { fmtUSD } from "@/lib/utils";
 import { computeSavings } from "@/lib/savingsComputation";
 import type { WeekForSavings, ManualContribution, WeeklyCheckIn } from "@/lib/savingsComputation";
-import type { Bill, Debt } from "@workspace/api-client-react";
+import type { Bill, Debt, WeeklyBudget } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface IncomeSourceLite {
@@ -51,12 +51,17 @@ interface IncomeSourceLite {
   nextPayDate: string;
 }
 
+interface IncomeSourceDisplay extends IncomeSourceLite {
+  derived?: boolean;
+}
+
 interface BudgetProfilePanelProps {
   open: boolean;
   onClose: () => void;
   bills: Bill[];
   debts: Debt[];
   incomeSources: IncomeSourceLite[];
+  rawWeeks?: WeeklyBudget[];
   weeks: WeekForSavings[];
   checkins: WeeklyCheckIn[];
   contributions: ManualContribution[];
@@ -143,6 +148,7 @@ export function BudgetProfilePanel({
   bills,
   debts,
   incomeSources,
+  rawWeeks,
   weeks,
   checkins,
   contributions,
@@ -160,6 +166,34 @@ export function BudgetProfilePanel({
     [incomeSources],
   );
 
+  // Fallback: derive monthly income from average weekly paycheck when no sources are configured
+  const derivedMonthlyIncome = useMemo(() => {
+    if (monthlyIncome > 0 || !rawWeeks?.length) return monthlyIncome;
+    const avgWeeklyPay = rawWeeks.reduce((s, w) => s + (w.paycheck ?? 0), 0) / rawWeeks.length;
+    return avgWeeklyPay * (52 / 12);
+  }, [monthlyIncome, rawWeeks]);
+
+  const incomeIsEstimated = monthlyIncome === 0 && derivedMonthlyIncome > 0;
+
+  // Synthesize income source rows from the most recent week's paycheckBreakdown when no sources are set
+  const displayIncomeSources = useMemo((): IncomeSourceDisplay[] => {
+    if (incomeSources.length > 0) return incomeSources;
+    if (!rawWeeks?.length) return [];
+    const latestWithBreakdown = rawWeeks.slice().reverse().find(w => w.paycheckBreakdown?.length);
+    if (!latestWithBreakdown?.paycheckBreakdown?.length) return [];
+    const avgWeeklyTotal = rawWeeks.reduce((s, w) => s + (w.paycheck ?? 0), 0) / rawWeeks.length;
+    return latestWithBreakdown.paycheckBreakdown.map((src: { sourceId: string; sourceName: string; amount: number }) => ({
+      id: src.sourceId,
+      name: src.sourceName,
+      amount: latestWithBreakdown.paycheck > 0
+        ? avgWeeklyTotal * (src.amount / latestWithBreakdown.paycheck)
+        : src.amount,
+      frequency: "weekly" as const,
+      nextPayDate: "",
+      derived: true,
+    }));
+  }, [incomeSources, rawWeeks]);
+
   const nonDebtBills = useMemo(() => bills.filter(b => !b.sourceDebtId), [bills]);
   const debtBills = useMemo(() => bills.filter(b => !!b.sourceDebtId), [bills]);
 
@@ -168,10 +202,10 @@ export function BudgetProfilePanel({
     [bills],
   );
 
-  const monthlyNet = monthlyIncome - monthlyExpenses;
+  const monthlyNet = derivedMonthlyIncome - monthlyExpenses;
   const totalDebtBalance = debts.reduce((s, d) => s + d.balance, 0);
   const totalMonthlyDebtPayments = debts.reduce((s, d) => s + debtMonthlyPayment(d), 0);
-  const dti = monthlyIncome > 0 ? (totalMonthlyDebtPayments / monthlyIncome) * 100 : 0;
+  const dti = derivedMonthlyIncome > 0 ? (totalMonthlyDebtPayments / derivedMonthlyIncome) * 100 : 0;
 
   // === Spending by category ===
   const categoryData = useMemo(() => {
@@ -231,7 +265,7 @@ export function BudgetProfilePanel({
     }
 
     // DTI
-    if (monthlyIncome > 0) {
+    if (derivedMonthlyIncome > 0) {
       if (dti > 43) {
         out.push({
           tone: "danger",
@@ -251,7 +285,7 @@ export function BudgetProfilePanel({
     }
 
     // Variable income
-    if (incomeSources.some(s => s.frequency === "variable")) {
+    if (displayIncomeSources.some(s => s.frequency === "variable")) {
       out.push({
         tone: "info",
         text: "You have variable income — keeping a one-month cash buffer makes irregular weeks much easier to absorb.",
@@ -259,7 +293,7 @@ export function BudgetProfilePanel({
     }
 
     // Positive net surplus
-    if (monthlyNet > 0 && monthlyIncome > 0) {
+    if (monthlyNet > 0 && derivedMonthlyIncome > 0) {
       const highestApr = debts
         .filter(d => d.interestRate != null && d.interestRate > 0)
         .sort((a, b) => (b.interestRate ?? 0) - (a.interestRate ?? 0))[0];
@@ -274,7 +308,7 @@ export function BudgetProfilePanel({
           text: `You have about ${fmtUSD(monthlyNet)} left over per month — a great candidate for building savings.`,
         });
       }
-    } else if (monthlyNet < 0 && monthlyIncome > 0) {
+    } else if (monthlyNet < 0 && derivedMonthlyIncome > 0) {
       out.push({
         tone: "danger",
         text: `Expenses exceed income by ${fmtUSD(Math.abs(monthlyNet))}/month. Look for categories to trim or income to add.`,
@@ -295,7 +329,7 @@ export function BudgetProfilePanel({
     }
 
     return out;
-  }, [debts, monthlyIncome, monthlyNet, dti, incomeSources, savings.sinkingFunds]);
+  }, [debts, derivedMonthlyIncome, monthlyNet, dti, displayIncomeSources, savings.sinkingFunds]);
 
   async function handleExportPdf() {
     if (!printRef.current) return;
@@ -338,15 +372,15 @@ export function BudgetProfilePanel({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-0 gap-0">
-        <DialogHeader className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex flex-row items-center justify-between space-y-0">
+      <DialogContent className="w-full max-w-5xl max-h-[92vh] overflow-x-hidden overflow-y-auto p-0 gap-0">
+        <DialogHeader className="sticky top-0 z-10 bg-white border-b px-4 sm:px-6 py-4 flex flex-row items-center justify-between space-y-0">
           <DialogTitle className="text-xl font-semibold">Budget Profile</DialogTitle>
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl">
             <X className="w-5 h-5" />
           </Button>
         </DialogHeader>
 
-        <div ref={printRef} className="px-6 py-6 space-y-8 bg-white">
+        <div ref={printRef} className="px-4 sm:px-6 py-6 space-y-8 bg-white">
           {/* Header line for PDF */}
           <div className="border-b pb-4">
             <h1 className="text-2xl font-bold text-foreground">Budget Profile Report</h1>
@@ -365,7 +399,7 @@ export function BudgetProfilePanel({
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
                     Monthly Income
                   </div>
-                  <p className="text-xl font-bold mt-1 text-emerald-700">{fmtUSD(monthlyIncome)}</p>
+                  <p className="text-xl font-bold mt-1 text-emerald-700">{fmtUSD(derivedMonthlyIncome)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -398,15 +432,16 @@ export function BudgetProfilePanel({
                 </CardContent>
               </Card>
             </div>
-            {monthlyIncome > 0 && (
+            {derivedMonthlyIncome > 0 && (
               <p className="text-xs text-muted-foreground mt-2">
                 Debt-to-income ratio: <span className="font-semibold">{dti.toFixed(1)}%</span> ({fmtUSD(totalMonthlyDebtPayments)}/mo in debt payments)
+                {incomeIsEstimated && <span className="ml-1 italic">(income estimated from budget history)</span>}
               </p>
             )}
           </section>
 
           {/* B. Income Sources */}
-          {incomeSources.length > 0 && (
+          {displayIncomeSources.length > 0 && (
             <section>
               <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Wallet className="w-4 h-4" />
@@ -414,30 +449,37 @@ export function BudgetProfilePanel({
               </h2>
               <Card>
                 <CardContent className="p-0">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/30 text-xs text-muted-foreground">
-                      <tr>
-                        <th className="text-left px-4 py-2 font-medium">Source</th>
-                        <th className="text-left px-4 py-2 font-medium">Frequency</th>
-                        <th className="text-right px-4 py-2 font-medium">Per Paycheck</th>
-                        <th className="text-right px-4 py-2 font-medium">Monthly</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {incomeSources.map(src => (
-                        <tr key={src.id} className="border-t">
-                          <td className="px-4 py-2 font-medium">{src.name || "Income"}</td>
-                          <td className="px-4 py-2 capitalize">{src.frequency === "variable" ? "Variable / Gig" : src.frequency}</td>
-                          <td className="px-4 py-2 text-right">{fmtUSD(src.amount)}</td>
-                          <td className="px-4 py-2 text-right font-semibold">{fmtUSD(incomeMonthlyAmount(src))}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="text-left px-4 py-2 font-medium">Source</th>
+                          <th className="text-left px-4 py-2 font-medium">Frequency</th>
+                          <th className="text-right px-4 py-2 font-medium">Per Paycheck</th>
+                          <th className="text-right px-4 py-2 font-medium">Monthly</th>
                         </tr>
-                      ))}
-                      <tr className="border-t bg-emerald-50">
-                        <td className="px-4 py-2 font-semibold" colSpan={3}>Total Monthly Income</td>
-                        <td className="px-4 py-2 text-right font-bold text-emerald-700">{fmtUSD(monthlyIncome)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {displayIncomeSources.map(src => (
+                          <tr key={src.id} className="border-t">
+                            <td className="px-4 py-2 font-medium">{src.name || "Income"}</td>
+                            <td className="px-4 py-2 capitalize">{src.frequency === "variable" ? "Variable / Gig" : src.frequency}</td>
+                            <td className="px-4 py-2 text-right">{fmtUSD(src.amount)}</td>
+                            <td className="px-4 py-2 text-right font-semibold">{fmtUSD(incomeMonthlyAmount(src))}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t bg-emerald-50">
+                          <td className="px-4 py-2 font-semibold" colSpan={3}>Total Monthly Income</td>
+                          <td className="px-4 py-2 text-right font-bold text-emerald-700">{fmtUSD(derivedMonthlyIncome)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {incomeIsEstimated && (
+                    <p className="px-4 py-2 text-xs text-muted-foreground italic border-t">
+                      Estimated from budget history. Add income sources in the budget wizard for exact figures.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </section>
@@ -509,7 +551,7 @@ export function BudgetProfilePanel({
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={debtChartData} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
                           <XAxis type="number" tickFormatter={(v) => `$${Math.round(v / 1000)}k`} fontSize={11} />
-                          <YAxis type="category" dataKey="name" width={110} fontSize={11} />
+                          <YAxis type="category" dataKey="name" width={80} fontSize={11} />
                           <Tooltip formatter={(v: number) => fmtUSD(v)} />
                           <Legend />
                           <Bar dataKey="balance" name="Balance" fill="#8b5cf6" isAnimationActive={false} />
@@ -653,7 +695,7 @@ export function BudgetProfilePanel({
           )}
 
           {/* Empty state */}
-          {bills.length === 0 && debts.length === 0 && incomeSources.length === 0 && (
+          {bills.length === 0 && debts.length === 0 && displayIncomeSources.length === 0 && (
             <div className="text-center py-12 text-muted-foreground text-sm">
               Add some bills, debts, or income sources to see your profile.
             </div>
@@ -661,7 +703,7 @@ export function BudgetProfilePanel({
         </div>
 
         {/* Footer action bar */}
-        <div className="sticky bottom-0 bg-white border-t px-6 py-3 flex flex-wrap items-center justify-end gap-2">
+        <div className="sticky bottom-0 bg-white border-t px-4 sm:px-6 py-3 flex flex-wrap items-center justify-end gap-2">
           <input
             ref={fileInputRef}
             type="file"
