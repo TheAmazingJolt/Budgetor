@@ -1783,8 +1783,28 @@ export function BudgetWizard({
     if (alreadyDone) return;
     if (isPaydayDismissed(activeCloudBudgetId, bestWeek.label)) return;
 
+    // Enrich each bill item with check-in type metadata so skipped items can be
+    // persisted as check-in records (actualAmount: 0) when the user confirms.
+    const enrichedBills = billsOnly.map(item => {
+      if (item.name.startsWith("Partial ")) {
+        return { ...item, checkInItemName: item.name.slice(8), checkInItemType: "balanced" as const };
+      }
+      const annualMatch = item.name.match(/^(.+?)\s*\[annual:/);
+      if (annualMatch) {
+        return { ...item, checkInItemName: annualMatch[1].trim(), checkInItemType: "yearly" as const };
+      }
+      const debtBill = bills.find(b => b.name === item.name && b.sourceDebtId);
+      if (debtBill?.sourceDebtId) {
+        return { ...item, checkInItemName: debtBill.sourceDebtId, checkInItemType: "debt" as const, checkInDebtId: debtBill.sourceDebtId };
+      }
+      if (item.name.endsWith(" (min payment)")) {
+        return { ...item, checkInItemName: item.name, checkInItemType: "debt" as const };
+      }
+      return item;
+    });
+
     setPaydayWeekLabel(bestWeek.label);
-    setPaydayWeekItems(billsOnly);
+    setPaydayWeekItems(enrichedBills);
     setPaydayOpeningBalance(bestWeek.openingBalance);
     setPaydayBreakdown(bestWeek.paycheckBreakdown ?? []);
     setPaydayExpectedPaycheck(bestWeek.paycheck ?? paycheckAmount);
@@ -7790,6 +7810,7 @@ export function BudgetWizard({
             }));
             setPaydayDialogOpen(false);
             paydayCheckinsQuery.refetch();
+            checkinsQuery.refetch();
           }}
           onDismiss={() => {
             if (activeCloudBudgetId && paydayWeekLabel) setPaydayDismissed(activeCloudBudgetId, paydayWeekLabel);
