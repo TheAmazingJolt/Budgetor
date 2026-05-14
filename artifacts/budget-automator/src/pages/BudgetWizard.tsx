@@ -1721,6 +1721,40 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
+  // Identifies whether today is a week start date that has a budget, and whether
+  // the payday check-in has already been confirmed for that week.
+  const todayPaydayWeek = useMemo(() => {
+    if (inputMode !== "cloud" || !activeCloudBudgetId) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const allAvailableWeeks = [...(cloudExistingWeeks ?? []), ...(generatedWeek?.weeks ?? [])];
+    for (const w of allAvailableWeeks) {
+      const label = w.weekLabel ?? (w as any).label;
+      if (!label) continue;
+      const m = label.match(/(\d+)\/(\d+)\/(\d+)/);
+      if (!m) continue;
+      const yr = parseInt(m[3]); const mo = parseInt(m[1]) - 1; const dy = parseInt(m[2]);
+      const startDate = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
+      if (startDate.getTime() !== today.getTime()) continue;
+      const items = (w.items ?? (w as any).bills ?? []) as { name: string; amount: number }[];
+      const billsOnly = items.filter(i => i.amount < 0);
+      if (billsOnly.length === 0) return null;
+      return {
+        label,
+        openingBalance: (w as any).openingBalance ?? 0,
+        paycheck: (w as any).paycheck as number | undefined,
+        paycheckBreakdown: (w as any).paycheckBreakdown as PaycheckBreakdown[] | undefined,
+        billsOnly,
+      };
+    }
+    return null;
+  }, [inputMode, activeCloudBudgetId, cloudExistingWeeks, generatedWeek]);
+
+  const paydayAlreadyConfirmed = useMemo(
+    () => !!todayPaydayWeek && (paydayCheckinsQuery.data?.paydayCheckins ?? []).some(c => c.weekLabel === todayPaydayWeek.label),
+    [todayPaydayWeek, paydayCheckinsQuery.data],
+  );
+
   const budgetGoalsQuery = useQuery<{ goals: { id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }[] }>({
     queryKey: ["savings-goals"],
     queryFn: () => apiFetch(`/api/goals`),
@@ -5826,6 +5860,40 @@ export function BudgetWizard({
                               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0" onClick={handleJumpToToday}>
                                 <CalendarDays className="w-3.5 h-3.5" /> Today
                               </Button>
+                              {todayPaydayWeek && !paydayAlreadyConfirmed && !paydayDialogOpen && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5 shrink-0 text-teal-700 border-teal-300 hover:bg-teal-50"
+                                  onClick={() => {
+                                    const enrichedBills = todayPaydayWeek.billsOnly.map(item => {
+                                      if (item.name.startsWith("Partial ")) {
+                                        return { ...item, checkInItemName: item.name.slice(8), checkInItemType: "balanced" as const };
+                                      }
+                                      const annualMatch = item.name.match(/^(.+?)\s*\[annual:/);
+                                      if (annualMatch) {
+                                        return { ...item, checkInItemName: annualMatch[1].trim(), checkInItemType: "yearly" as const };
+                                      }
+                                      const debtBill = bills.find(b => b.name === item.name && b.sourceDebtId);
+                                      if (debtBill?.sourceDebtId) {
+                                        return { ...item, checkInItemName: debtBill.sourceDebtId, checkInItemType: "debt" as const, checkInDebtId: debtBill.sourceDebtId };
+                                      }
+                                      if (item.name.endsWith(" (min payment)")) {
+                                        return { ...item, checkInItemName: item.name, checkInItemType: "debt" as const };
+                                      }
+                                      return item;
+                                    });
+                                    setPaydayWeekLabel(todayPaydayWeek.label);
+                                    setPaydayWeekItems(enrichedBills);
+                                    setPaydayOpeningBalance(todayPaydayWeek.openingBalance);
+                                    setPaydayBreakdown(todayPaydayWeek.paycheckBreakdown ?? []);
+                                    setPaydayExpectedPaycheck(todayPaydayWeek.paycheck ?? paycheckAmount);
+                                    setPaydayDialogOpen(true);
+                                  }}
+                                >
+                                  <Banknote className="w-3.5 h-3.5" /> Payday
+                                </Button>
+                              )}
                               <Button
                                 variant={editModeOn ? "default" : "outline"}
                                 size="sm"
