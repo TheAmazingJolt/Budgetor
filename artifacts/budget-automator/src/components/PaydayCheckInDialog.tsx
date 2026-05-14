@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Banknote, ChevronRight, TrendingDown, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { apiFetch } from "@/lib/checkin-utils";
 export interface PaydayBillItem {
   name: string;
   amount: number;
-  /** Populated by BudgetWizard so skipped items can be saved as check-in records. */
+  /** Populated by BudgetWizard so skipped/edited items can be saved as check-in records. */
   checkInItemName?: string;
   checkInItemType?: "balanced" | "yearly" | "debt" | "goal";
   checkInDebtId?: string;
@@ -27,6 +27,11 @@ export interface PaycheckSourceExpected {
   amount: number;
 }
 
+export interface PaydayItemOverride {
+  name: string;
+  newAmount: number;
+}
+
 export interface PaydayCheckInDialogProps {
   open: boolean;
   weekLabel: string;
@@ -35,7 +40,7 @@ export interface PaydayCheckInDialogProps {
   expectedPaycheck: number;
   expectedBreakdown?: PaycheckSourceExpected[];
   budgetId: string;
-  onConfirmed: (actualPaycheck: number) => void;
+  onConfirmed: (actualPaycheck: number, itemOverrides: PaydayItemOverride[]) => void;
   onDismiss: () => void;
 }
 
@@ -63,6 +68,10 @@ export function PaydayCheckInDialog({
   );
   const [sourceAmounts, setSourceAmounts] = useState<Record<string, string>>({});
   const [skippedNames, setSkippedNames] = useState<Set<string>>(new Set());
+  /** Overridden amounts keyed by bill name; stored as positive dollar strings. */
+  const [editedAmounts, setEditedAmounts] = useState<Record<string, string>>({});
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -79,9 +88,19 @@ export function PaydayCheckInDialog({
       setSourceAmounts({});
     }
     setSkippedNames(new Set());
+    setEditedAmounts({});
+    setEditingName(null);
     setSaving(false);
     setError("");
   }, [weekLabel, open]);
+
+  // Focus the inline input whenever editingName changes
+  useEffect(() => {
+    if (editingName) {
+      // Small delay so the input is mounted before focusing
+      setTimeout(() => editInputRef.current?.focus(), 30);
+    }
+  }, [editingName]);
 
   const parsedPaycheck = hasMultipleSources
     ? Object.values(sourceAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0)
@@ -91,6 +110,16 @@ export function PaydayCheckInDialog({
 
   const billsOnly = weekItems.filter(it => it.amount < 0);
 
+  const getEffectiveAmount = (item: PaydayBillItem): number => {
+    if (skippedNames.has(item.name)) return 0;
+    const edited = editedAmounts[item.name];
+    if (edited !== undefined) {
+      const n = parseFloat(edited);
+      return isNaN(n) || n < 0 ? item.amount : -Math.abs(n);
+    }
+    return item.amount;
+  };
+
   const toggleSkip = (name: string) => {
     setSkippedNames(prev => {
       const next = new Set(prev);
@@ -98,18 +127,40 @@ export function PaydayCheckInDialog({
       else next.add(name);
       return next;
     });
+    setEditingName(null);
   };
 
-  const runningRows: { name: string; amount: number; running: number }[] = [];
+  const startEditing = (item: PaydayBillItem) => {
+    if (skippedNames.has(item.name)) return;
+    setEditingName(item.name);
+    if (editedAmounts[item.name] === undefined) {
+      setEditedAmounts(prev => ({ ...prev, [item.name]: Math.abs(item.amount).toFixed(2) }));
+    }
+  };
+
+  const commitEdit = (name: string) => {
+    setEditingName(null);
+    // Remove the edit if the user just entered the original amount back
+    const item = billsOnly.find(i => i.name === name);
+    if (!item) return;
+    const edited = editedAmounts[name];
+    if (edited === undefined) return;
+    const editedNum = parseFloat(edited);
+    if (isNaN(editedNum) || Math.abs(editedNum - Math.abs(item.amount)) < 0.005) {
+      setEditedAmounts(prev => { const next = { ...prev }; delete next[name]; return next; });
+    }
+  };
+
+  const runningRows: { name: string; amount: number; effectiveAmount: number; running: number }[] = [];
   let running = openingBalance + parsedPaycheck;
   for (const item of billsOnly) {
-    const effectiveAmount = skippedNames.has(item.name) ? 0 : item.amount;
+    const effectiveAmount = getEffectiveAmount(item);
     running += effectiveAmount;
-    runningRows.push({ name: item.name, amount: item.amount, running });
+    runningRows.push({ name: item.name, amount: item.amount, effectiveAmount, running });
   }
 
   const finalBalance = openingBalance + parsedPaycheck
-    + billsOnly.reduce((s, i) => s + (skippedNames.has(i.name) ? 0 : i.amount), 0);
+    + billsOnly.reduce((s, i) => s + getEffectiveAmount(i), 0);
 
   const handleNext = () => {
     if (hasMultipleSources) {
@@ -133,9 +184,24 @@ export function PaydayCheckInDialog({
     setSaving(true);
     setError("");
     try {
-      const skippedItems = billsOnly.filter(
-        i => skippedNames.has(i.name) && i.checkInItemType,
+      const skippedItems = billsOnly.filter(i => skippedNames.has(i.name) && i.checkInItemType);
+      const editedItems = billsOnly.filter(
+        i => !skippedNames.has(i.name) && editedAmounts[i.name] !== undefined && i.checkInItemType,
       );
+
+      // Build overrides for ALL skipped/edited bills so BudgetWizard can update weekEdits.
+      const itemOverrides: PaydayItemOverride[] = [];
+      for (const item of billsOnly) {
+        if (skippedNames.has(item.name)) {
+          itemOverrides.push({ name: item.name, newAmount: 0 });
+        } else if (editedAmounts[item.name] !== undefined) {
+          const n = parseFloat(editedAmounts[item.name]);
+          if (!isNaN(n) && Math.abs(n - Math.abs(item.amount)) >= 0.005) {
+            itemOverrides.push({ name: item.name, newAmount: -Math.abs(n) });
+          }
+        }
+      }
+
       await Promise.all([
         apiFetch(`/api/budgets/${budgetId}/payday-checkins`, {
           method: "POST",
@@ -155,8 +221,21 @@ export function PaydayCheckInDialog({
             }),
           }),
         ),
+        ...editedItems.map(item =>
+          apiFetch(`/api/budgets/${budgetId}/checkins`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              weekLabel,
+              itemName: item.checkInItemName ?? item.name,
+              itemType: item.checkInItemType,
+              plannedAmount: Math.abs(item.amount),
+              actualAmount: Math.abs(parseFloat(editedAmounts[item.name]) || 0),
+            }),
+          }),
+        ),
       ]);
-      onConfirmed(parsedPaycheck);
+      onConfirmed(parsedPaycheck, itemOverrides);
     } catch (e: any) {
       setError(e.message ?? "Failed to save");
     } finally {
@@ -167,6 +246,8 @@ export function PaydayCheckInDialog({
   const handleOpenChange = (v: boolean) => {
     if (!v) onDismiss();
   };
+
+  const hasOverrides = skippedNames.size > 0 || Object.keys(editedAmounts).length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -263,7 +344,7 @@ export function PaydayCheckInDialog({
                 Bill Breakdown
               </DialogTitle>
               <DialogDescription>
-                Week of {weekStart} — tap any bill to mark it as skipped.
+                Week of {weekStart} — tap an amount to edit, or × to skip.
               </DialogDescription>
             </DialogHeader>
 
@@ -300,6 +381,8 @@ export function PaydayCheckInDialog({
                 <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-0.5">
                   {runningRows.map((row, i) => {
                     const isSkipped = skippedNames.has(row.name);
+                    const isEditing = editingName === row.name;
+                    const isEdited = !isSkipped && editedAmounts[row.name] !== undefined;
                     const item = billsOnly[i];
                     return (
                       <div
@@ -316,8 +399,40 @@ export function PaydayCheckInDialog({
                           </p>
                           {isSkipped ? (
                             <p className="text-xs text-muted-foreground italic">skipped — $0.00</p>
+                          ) : isEditing ? (
+                            <div className="relative mt-0.5 flex items-center gap-1">
+                              <span className="text-xs text-muted-foreground">$</span>
+                              <input
+                                ref={editInputRef}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="w-24 h-6 text-xs border rounded px-1.5 text-red-600 font-semibold focus:outline-none focus:ring-1 focus:ring-teal-400"
+                                value={editedAmounts[row.name] ?? ""}
+                                onChange={e => setEditedAmounts(prev => ({ ...prev, [row.name]: e.target.value }))}
+                                onBlur={() => commitEdit(row.name)}
+                                onKeyDown={e => { if (e.key === "Enter") commitEdit(row.name); if (e.key === "Escape") { setEditedAmounts(prev => { const next = { ...prev }; delete next[row.name]; return next; }); setEditingName(null); } }}
+                              />
+                            </div>
                           ) : (
-                            <p className="text-xs text-red-500 font-semibold">{fmt(row.amount)}</p>
+                            <button
+                              type="button"
+                              className="text-left"
+                              onClick={() => startEditing(item)}
+                            >
+                              {isEdited ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="text-xs text-muted-foreground line-through">{fmt(row.amount)}</span>
+                                  <span className="text-xs text-red-500 font-semibold">
+                                    -{`$${parseFloat(editedAmounts[row.name]).toFixed(2)}`}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-500 font-semibold underline decoration-dotted">
+                                  {fmt(row.amount)}
+                                </span>
+                              )}
+                            </button>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -348,9 +463,9 @@ export function PaydayCheckInDialog({
                 </div>
               )}
 
-              {skippedNames.size > 0 && (
+              {hasOverrides && (
                 <p className="text-xs text-muted-foreground italic px-1">
-                  Skipped bills will be logged as $0.00 in your weekly check-in.
+                  Changes will be logged in your weekly check-in.
                 </p>
               )}
 

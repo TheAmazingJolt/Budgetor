@@ -151,7 +151,7 @@ import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
 import { CheckInDialog } from "@/components/CheckInDialog";
 import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
 import { PaydayCheckInDialog } from "@/components/PaydayCheckInDialog";
-import type { PaydayBillItem } from "@/components/PaydayCheckInDialog";
+import type { PaydayBillItem, PaydayItemOverride } from "@/components/PaydayCheckInDialog";
 import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
 import { fmtUSD } from "@/lib/utils";
 import { CreditCard, Landmark, AlertTriangle, DollarSign, GraduationCap, Car, Receipt, PiggyBank, Gift, Lock } from "lucide-react";
@@ -5860,7 +5860,7 @@ export function BudgetWizard({
                               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0" onClick={handleJumpToToday}>
                                 <CalendarDays className="w-3.5 h-3.5" /> Today
                               </Button>
-                              {todayPaydayWeek && !paydayAlreadyConfirmed && !paydayDialogOpen && (
+                              {todayPaydayWeek && !paydayDialogOpen && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -5891,7 +5891,7 @@ export function BudgetWizard({
                                     setPaydayDialogOpen(true);
                                   }}
                                 >
-                                  <Banknote className="w-3.5 h-3.5" /> Payday
+                                  <Banknote className="w-3.5 h-3.5" /> {paydayAlreadyConfirmed ? "Edit payday" : "Payday"}
                                 </Button>
                               )}
                               <Button
@@ -7871,11 +7871,27 @@ export function BudgetWizard({
           expectedPaycheck={paydayExpectedPaycheck}
           expectedBreakdown={paydayBreakdown.length > 0 ? paydayBreakdown : undefined}
           budgetId={activeCloudBudgetId}
-          onConfirmed={(actualPaycheck) => {
-            setWeekEdits(prev => ({
-              ...prev,
-              [paydayWeekLabel]: { ...prev[paydayWeekLabel], paycheck: actualPaycheck },
-            }));
+          onConfirmed={(actualPaycheck, itemOverrides) => {
+            setWeekEdits(prev => {
+              const current = prev[paydayWeekLabel] ?? {};
+              // Start from any previously overridden items, or the original week items.
+              const baseItems = current.items ?? paydayWeekItems.map(i => ({ name: i.name, amount: i.amount }));
+              let newItems = baseItems;
+              if (itemOverrides.length > 0) {
+                const overrideMap = new Map<string, number>(itemOverrides.map((o: PaydayItemOverride) => [o.name, o.newAmount]));
+                newItems = baseItems.map(item =>
+                  overrideMap.has(item.name) ? { ...item, amount: overrideMap.get(item.name)! } : item,
+                );
+              }
+              return {
+                ...prev,
+                [paydayWeekLabel]: {
+                  ...current,
+                  paycheck: actualPaycheck,
+                  ...(itemOverrides.length > 0 ? { items: newItems } : {}),
+                },
+              };
+            });
             setPaydayDialogOpen(false);
             paydayCheckinsQuery.refetch();
             checkinsQuery.refetch();
