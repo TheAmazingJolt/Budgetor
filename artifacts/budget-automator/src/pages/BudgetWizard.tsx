@@ -1783,8 +1783,28 @@ export function BudgetWizard({
     if (alreadyDone) return;
     if (isPaydayDismissed(activeCloudBudgetId, bestWeek.label)) return;
 
+    // Enrich each bill item with check-in type metadata so skipped items can be
+    // persisted as check-in records (actualAmount: 0) when the user confirms.
+    const enrichedBills = billsOnly.map(item => {
+      if (item.name.startsWith("Partial ")) {
+        return { ...item, checkInItemName: item.name.slice(8), checkInItemType: "balanced" as const };
+      }
+      const annualMatch = item.name.match(/^(.+?)\s*\[annual:/);
+      if (annualMatch) {
+        return { ...item, checkInItemName: annualMatch[1].trim(), checkInItemType: "yearly" as const };
+      }
+      const debtBill = bills.find(b => b.name === item.name && b.sourceDebtId);
+      if (debtBill?.sourceDebtId) {
+        return { ...item, checkInItemName: debtBill.sourceDebtId, checkInItemType: "debt" as const, checkInDebtId: debtBill.sourceDebtId };
+      }
+      if (item.name.endsWith(" (min payment)")) {
+        return { ...item, checkInItemName: item.name, checkInItemType: "debt" as const };
+      }
+      return item;
+    });
+
     setPaydayWeekLabel(bestWeek.label);
-    setPaydayWeekItems(billsOnly);
+    setPaydayWeekItems(enrichedBills);
     setPaydayOpeningBalance(bestWeek.openingBalance);
     setPaydayBreakdown(bestWeek.paycheckBreakdown ?? []);
     setPaydayExpectedPaycheck(bestWeek.paycheck ?? paycheckAmount);
@@ -4145,7 +4165,7 @@ export function BudgetWizard({
             </div>
           </button>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2 sm:gap-5">
             {step > 0 && (
               <button
                 onClick={() => { if (step === 2) guardedBackToStep1(); else guardedBackToMenu(); }}
@@ -4299,7 +4319,7 @@ export function BudgetWizard({
                         <User className="w-3.5 h-3.5 text-primary" />
                       </div>
                     )}
-                    <span className="text-sm font-medium max-w-[160px] truncate">
+                    <span className="hidden sm:inline text-sm font-medium max-w-[160px] truncate">
                       {currentUser?.name || "Guest"}
                     </span>
                   </Button>
@@ -7746,7 +7766,10 @@ export function BudgetWizard({
           ...(getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
           ...(generatedWeek?.weeks ?? []),
         ]}
-        weeks={(generatedWeek?.weeks ?? []).map((w: WeeklyBudget) => ({
+        weeks={[
+          ...(getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
+          ...(generatedWeek?.weeks ?? []),
+        ].map((w: WeeklyBudget) => ({
           label: w.weekLabel,
           items: (w.bills ?? []).map((b: { name: string; amount: number }) => ({ name: b.name, amount: b.amount })),
         }))}
@@ -7787,6 +7810,7 @@ export function BudgetWizard({
             }));
             setPaydayDialogOpen(false);
             paydayCheckinsQuery.refetch();
+            checkinsQuery.refetch();
           }}
           onDismiss={() => {
             if (activeCloudBudgetId && paydayWeekLabel) setPaydayDismissed(activeCloudBudgetId, paydayWeekLabel);
