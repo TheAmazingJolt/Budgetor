@@ -27,6 +27,11 @@ export interface PaycheckSourceExpected {
   amount: number;
 }
 
+export interface PaydayItemOverride {
+  name: string;
+  newAmount: number;
+}
+
 export interface PaydayCheckInDialogProps {
   open: boolean;
   weekLabel: string;
@@ -35,7 +40,7 @@ export interface PaydayCheckInDialogProps {
   expectedPaycheck: number;
   expectedBreakdown?: PaycheckSourceExpected[];
   budgetId: string;
-  onConfirmed: (actualPaycheck: number) => void;
+  onConfirmed: (actualPaycheck: number, itemOverrides: PaydayItemOverride[]) => void;
   onDismiss: () => void;
 }
 
@@ -183,6 +188,20 @@ export function PaydayCheckInDialog({
       const editedItems = billsOnly.filter(
         i => !skippedNames.has(i.name) && editedAmounts[i.name] !== undefined && i.checkInItemType,
       );
+
+      // Build overrides for ALL skipped/edited bills so BudgetWizard can update weekEdits.
+      const itemOverrides: PaydayItemOverride[] = [];
+      for (const item of billsOnly) {
+        if (skippedNames.has(item.name)) {
+          itemOverrides.push({ name: item.name, newAmount: 0 });
+        } else if (editedAmounts[item.name] !== undefined) {
+          const n = parseFloat(editedAmounts[item.name]);
+          if (!isNaN(n) && Math.abs(n - Math.abs(item.amount)) >= 0.005) {
+            itemOverrides.push({ name: item.name, newAmount: -Math.abs(n) });
+          }
+        }
+      }
+
       await Promise.all([
         apiFetch(`/api/budgets/${budgetId}/payday-checkins`, {
           method: "POST",
@@ -216,7 +235,7 @@ export function PaydayCheckInDialog({
           }),
         ),
       ]);
-      onConfirmed(parsedPaycheck);
+      onConfirmed(parsedPaycheck, itemOverrides);
     } catch (e: any) {
       setError(e.message ?? "Failed to save");
     } finally {
