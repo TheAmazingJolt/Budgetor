@@ -329,20 +329,18 @@ export function PaydayCheckInDialog({
                               </p>
                             </div>
                           )}
-                          {item?.checkInItemType && (
-                            <button
-                              type="button"
-                              onClick={() => toggleSkip(row.name)}
-                              className={`flex items-center gap-0.5 text-xs font-medium transition-colors ${
-                                isSkipped
-                                  ? "text-red-500"
-                                  : "text-muted-foreground hover:text-red-400"
-                              }`}
-                              title={isSkipped ? "Un-skip" : "Mark as skipped"}
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => toggleSkip(row.name)}
+                            className={`flex items-center gap-0.5 text-xs font-medium transition-colors ${
+                              isSkipped
+                                ? "text-red-500"
+                                : "text-muted-foreground hover:text-red-400"
+                            }`}
+                            title={isSkipped ? "Un-skip" : "Mark as skipped"}
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     );
