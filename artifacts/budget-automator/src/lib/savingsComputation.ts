@@ -101,16 +101,19 @@ export function getNextYearlyDueDate(from: Date, month: number, day: number): Da
 /**
  * Derive the reference month/year for balanced-bill tracking.
  *
- * Finds the most recent week (within 8 days look-ahead) and returns the
- * start date of the first week whose owner month equals that week's owner
- * month. This ensures the reference date (used for the month label) aligns
- * with the owner-month grouping rather than raw calendar months.
- * Falls back to today if no such week exists.
+ * Priority:
+ *  1. The week whose date range contains today — avoids the look-ahead pulling
+ *     in a future week whose owner-month is already next month (e.g. today is
+ *     May 21 inside the 5/21–5/27 week, but the 8-day window also reaches the
+ *     5/28–6/3 week which belongs to June).
+ *  2. The most recent past week whose start ≤ today (today is between weeks).
+ *  3. The earliest upcoming week within an 8-day look-ahead (no past week found).
+ *
+ * Returns the start date of the first week in the resolved owner-month so that
+ * the month label aligns with the owner-month grouping rather than raw calendar
+ * months. Falls back to today if no week is found.
  */
 export function deriveReferenceDate(weeks: WeekForSavings[], today: Date): Date {
-  const lookahead = new Date(today);
-  lookahead.setDate(lookahead.getDate() + 8);
-
   // Sort weeks chronologically for deterministic first/last selection
   const sorted = weeks
     .map(w => ({ w, d: parseLabelDates(w.label) }))
@@ -118,25 +121,38 @@ export function deriveReferenceDate(weeks: WeekForSavings[], today: Date): Date 
     .sort((a, b) => a.d.start.getTime() - b.d.start.getTime());
 
   let bestStart: Date | null = null;
-  let bestOwner: { month: number; year: number } | null = null;
 
+  // 1. Week that contains today (highest priority)
   for (const { d } of sorted) {
-    if (d.start > lookahead) continue;
-    if (!bestStart || d.start > bestStart) {
+    if (d.start <= today && d.end >= today) {
       bestStart = d.start;
-      bestOwner = getWeekOwnerMonth(d.start, d.end);
+      break;
     }
   }
 
-  if (!bestOwner) return today;
-
-  // Return the start of the first (chronologically earliest) week in the owner month
-  for (const { d } of sorted) {
-    const owner = getWeekOwnerMonth(d.start, d.end);
-    if (owner.month === bestOwner.month && owner.year === bestOwner.year) {
-      return d.start;
+  // 2. Most recent past week
+  if (!bestStart) {
+    for (const { d } of sorted) {
+      if (d.start > today) continue;
+      if (!bestStart || d.start > bestStart) bestStart = d.start;
     }
   }
+
+  // 3. Earliest upcoming week within 8-day look-ahead
+  if (!bestStart) {
+    const lookahead = new Date(today);
+    lookahead.setDate(lookahead.getDate() + 8);
+    for (const { d } of sorted) {
+      if (d.start <= lookahead && (!bestStart || d.start < bestStart)) bestStart = d.start;
+    }
+  }
+
+  if (!bestStart) return today;
+
+  // Resolve the owner month for the chosen week
+  const chosen = sorted.find(x => x.d.start.getTime() === bestStart!.getTime());
+  if (!chosen) return bestStart;
+  const bestOwner = getWeekOwnerMonth(chosen.d.start, chosen.d.end);
 
   return bestStart ?? today;
 }
