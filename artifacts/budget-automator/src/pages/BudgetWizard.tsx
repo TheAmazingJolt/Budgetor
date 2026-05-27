@@ -33,6 +33,7 @@ import {
   Bug,
   ClipboardCopy,
   Banknote,
+  ClipboardCheck,
   ArrowUpDown,
   SlidersHorizontal,
   MessageSquareWarning,
@@ -1721,13 +1722,19 @@ export function BudgetWizard({
     staleTime: 30_000,
   });
 
-  // Identifies whether today is a week start date that has a budget, and whether
-  // the payday check-in has already been confirmed for that week.
+  // Returns the week to show the Payday button for: today's week first, then
+  // the next upcoming week so the user can check in early if needed.
   const todayPaydayWeek = useMemo(() => {
     if (inputMode !== "cloud" || !activeCloudBudgetId) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const allAvailableWeeks = [...(cloudExistingWeeks ?? []), ...(generatedWeek?.weeks ?? [])];
+
+    type PaydayWeekEntry = { label: string; openingBalance: number; paycheck?: number; paycheckBreakdown?: PaycheckBreakdown[]; billsOnly: { name: string; amount: number }[] };
+    let todayMatch: PaydayWeekEntry | null = null;
+    let nextUpcoming: PaydayWeekEntry | null = null;
+    let nextUpcomingDate: Date | null = null;
+
     for (const w of allAvailableWeeks) {
       const label = w.weekLabel ?? (w as any).label;
       if (!label) continue;
@@ -1735,25 +1742,70 @@ export function BudgetWizard({
       if (!m) continue;
       const yr = parseInt(m[3]); const mo = parseInt(m[1]) - 1; const dy = parseInt(m[2]);
       const startDate = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
-      if (startDate.getTime() !== today.getTime()) continue;
       const items = (w.items ?? (w as any).bills ?? []) as { name: string; amount: number }[];
       const billsOnly = items.filter(i => i.amount < 0);
-      if (billsOnly.length === 0) return null;
-      return {
+      if (billsOnly.length === 0) continue;
+      const entry = {
         label,
         openingBalance: (w as any).openingBalance ?? 0,
         paycheck: (w as any).paycheck as number | undefined,
         paycheckBreakdown: (w as any).paycheckBreakdown as PaycheckBreakdown[] | undefined,
         billsOnly,
       };
+      if (startDate.getTime() === today.getTime()) {
+        todayMatch = entry;
+      } else if (startDate > today) {
+        if (!nextUpcomingDate || startDate < nextUpcomingDate) {
+          nextUpcomingDate = startDate;
+          nextUpcoming = entry;
+        }
+      }
     }
-    return null;
+    return todayMatch ?? nextUpcoming ?? null;
   }, [inputMode, activeCloudBudgetId, cloudExistingWeeks, generatedWeek]);
 
   const paydayAlreadyConfirmed = useMemo(
     () => !!todayPaydayWeek && (paydayCheckinsQuery.data?.paydayCheckins ?? []).some(c => c.weekLabel === todayPaydayWeek.label),
     [todayPaydayWeek, paydayCheckinsQuery.data],
   );
+
+  // The week to offer for manual check-in: most recent unchecked past/current week,
+  // or the next upcoming week for early check-in.
+  const nextCheckInWeek = useMemo(() => {
+    if (inputMode !== "cloud" || !activeCloudBudgetId) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkins = checkinsQuery.data?.checkins ?? [];
+    const allAvailableWeeks = [...(cloudExistingWeeks ?? []), ...(generatedWeek?.weeks ?? [])];
+
+    type WeekEntry = { label: string; startDate: Date; items: { name: string; amount: number }[] };
+    const sorted: WeekEntry[] = allAvailableWeeks
+      .map(w => {
+        const label = w.weekLabel ?? (w as any).label;
+        if (!label) return null;
+        const m = label.match(/(\d+)\/(\d+)\/(\d+)/);
+        if (!m) return null;
+        const yr = parseInt(m[3]); const mo = parseInt(m[1]) - 1; const dy = parseInt(m[2]);
+        const startDate = new Date(yr < 100 ? 2000 + yr : yr, mo, dy);
+        return { label, startDate, items: (w.items ?? (w as any).bills ?? []) as { name: string; amount: number }[] };
+      })
+      .filter((x): x is WeekEntry => x !== null)
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+    // Most recent unchecked past/current week
+    let bestPast: WeekEntry | null = null;
+    for (const w of sorted) {
+      if (w.startDate > today) continue;
+      if (!checkins.some(c => c.weekLabel === w.label)) bestPast = w;
+    }
+    if (bestPast) return bestPast;
+
+    // Next upcoming week (for early check-in)
+    for (const w of sorted) {
+      if (w.startDate > today) return w;
+    }
+    return null;
+  }, [inputMode, activeCloudBudgetId, cloudExistingWeeks, generatedWeek, checkinsQuery.data]);
 
   const budgetGoalsQuery = useQuery<{ goals: { id: string; name: string; targetAmount: number; targetDate: string; includeInBudget: boolean }[] }>({
     queryKey: ["savings-goals"],
@@ -5892,6 +5944,19 @@ export function BudgetWizard({
                                   }}
                                 >
                                   <Banknote className="w-3.5 h-3.5" /> {paydayAlreadyConfirmed ? "Edit payday" : "Payday"}
+                                </Button>
+                              )}
+                              {nextCheckInWeek && !checkInDialogOpen && activeCloudBudgetId && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1.5 shrink-0 text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                                  onClick={() => {
+                                    setCheckInWeek({ label: nextCheckInWeek.label, items: nextCheckInWeek.items });
+                                    setCheckInDialogOpen(true);
+                                  }}
+                                >
+                                  <ClipboardCheck className="w-3.5 h-3.5" /> Check In
                                 </Button>
                               )}
                               <Button
