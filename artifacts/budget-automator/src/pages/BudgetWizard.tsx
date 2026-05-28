@@ -4926,7 +4926,7 @@ export function BudgetWizard({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: source.frequency === "variable" ? "1fr 5.5rem" : "4rem 5.5rem 7rem" }}>
+                            <div className="grid gap-2 items-center" style={{ gridTemplateColumns: source.frequency === "variable" ? "1fr 6.5rem" : "1fr 6.5rem 8.5rem" }}>
                               <div className="relative h-11">
                                 <span className="absolute inset-y-0 left-2.5 flex items-center text-muted-foreground text-xs pointer-events-none">
                                   {source.frequency === "variable" ? "~$" : "$"}
