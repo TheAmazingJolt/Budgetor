@@ -172,20 +172,11 @@ export function computeSavings(
   contributions: ManualContribution[] = [],
   checkins: WeeklyCheckIn[] = [],
 ): SavingsData {
-  const refDate = deriveReferenceDate(weeks, today);
-  // Use the owner month of the reference week, not raw getMonth() — a week starting
-  // Apr 30 that contains May 1 belongs to May, so getMonth() would be wrong.
-  let currentMonth = refDate.getMonth();
-  let currentYear = refDate.getFullYear();
-  for (const w of weeks) {
-    const d = parseLabelDates(w.label);
-    if (d && d.start.getTime() === refDate.getTime()) {
-      const owner = getWeekOwnerMonth(d.start, d.end);
-      currentMonth = owner.month;
-      currentYear = owner.year;
-      break;
-    }
-  }
+  // Always track the calendar month today falls in. This means a week like
+  // 5/28–6/3 (owner = June because June 1 is in it) is still shown as May
+  // progress while today is any day in May.
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
 
   const sinkingFunds: SinkingFundProgress[] = [];
@@ -277,7 +268,12 @@ export function computeSavings(
 
       for (const { w, dates } of sortedWeeks) {
         const owner = getWeekOwnerMonth(dates.start, dates.end);
-        if (owner.month !== currentMonth || owner.year !== currentYear) continue;
+        const containsToday = dates.start <= today && dates.end >= today;
+        if (owner.month !== currentMonth || owner.year !== currentYear) {
+          // Always include the week that contains today, even if the budget system
+          // assigns it to next month (e.g. week 5/28–6/3 on May 28 → show as May).
+          if (!containsToday) continue;
+        }
 
         const weekCheckin = checkins.find(
           c => c.weekLabel === w.label && c.itemName === bill.name && c.itemType === "balanced",
