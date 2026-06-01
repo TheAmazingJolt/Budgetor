@@ -232,7 +232,7 @@ export function generateWeeklyBudgets(
     const daysPerPeriod = payPeriod === "biweekly" ? 14 : 7;
     for (let i = 0; i < numberOfWeeks; i++) {
       const start = addDays(startDate, i * daysPerPeriod);
-      const end = i === numberOfWeeks - 1 ? endDate : addDays(start, daysPerPeriod - 1);
+      const end = addDays(start, daysPerPeriod - 1);
       let paycheck = paycheckAmount;
       let breakdown: PaycheckBreakdownItem[] | undefined;
       if (useMultiSource) {
@@ -469,7 +469,8 @@ export function generateWeeklyBudgets(
     searchFrom.setFullYear(searchFrom.getFullYear() - 1);
     let dueDate = getNextYearlyDueDate(searchFrom, dueMonth, dueDay);
 
-    while (dueDate <= endDate) {
+    const lastWeekEnd = weeks[weeks.length - 1]?.end ?? endDate;
+    while (dueDate <= lastWeekEnd) {
       if (dueDate >= startDate) {
         for (let i = 0; i < weeks.length; i++) {
           const { start, end } = weeks[i];
