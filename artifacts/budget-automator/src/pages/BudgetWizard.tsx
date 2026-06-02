@@ -3370,7 +3370,19 @@ export function BudgetWizard({
             }));
             let blob: Blob;
             if (effectiveInputMode === "google" || effectiveInputMode === "excel") {
-              const existingConverted = (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget);
+              // Only keep existing weeks that end before the new generation period starts.
+              // Without this filter, old future weeks stay in the sheet alongside the new
+              // ones, creating a date loop (e.g. ...Jan 6 → May 28 → Jun 4...).
+              const genStart = data.weeks.reduce((min, w) => {
+                const d = new Date(w.startDate + "T00:00:00");
+                return d < min ? d : min;
+              }, new Date(data.weeks[0].startDate + "T00:00:00"));
+              const existingConverted = (getExistingWeeks() as ParsedWeek[])
+                .filter(w => {
+                  const d = parseLabelDates(w.label);
+                  return d ? d.end < genStart : true;
+                })
+                .map(parsedWeekToWeeklyBudget);
               blob = createBlankBudget([...existingConverted, ...coloredWeeks], !zeroOpeningBalance, null, effectiveBills, null, null, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
             } else {
               blob = createBlankBudget(coloredWeeks, !zeroOpeningBalance, null, effectiveBills, null, null, debtsForExport, effectiveBills, cachedContribs, goalsForXlsx);
