@@ -3520,9 +3520,11 @@ export function BudgetWizard({
         if (genStart && genEnd) {
           const d = parseLabelDates(w.label);
           if (d && d.start <= genEnd && d.end >= genStart) {
-            // Only exclude summary-only weeks (no explicit items). Weeks that were
-            // explicitly saved via Quick Update have items and should take priority
-            // over the freshly-generated equivalents.
+            // Cloud mode: preserve weeks the user explicitly saved via Quick Update
+            // (they have items stored in cloudExistingWeeks). For Google Sheets and
+            // Excel, every week in the sheet has items — we can't distinguish
+            // user-edited from auto-generated, so always let the fresh generation win.
+            if (inputMode !== "cloud") return false;
             const hasExplicitItems = Array.isArray(w.items) && w.items.length > 0;
             if (!hasExplicitItems) return false;
           }
