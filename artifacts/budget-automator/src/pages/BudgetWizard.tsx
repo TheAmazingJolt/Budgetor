@@ -2474,9 +2474,11 @@ export function BudgetWizard({
     setIsWritingToExcel(true);
     setExcelWriteSuccess(false);
 
-    const fullOverwrite = !generatedWeek || hasHistoricalEdits();
-    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek!.weeks;
     const existingWeeks = getExistingWeeks();
+    const candidateFirstLabel = generatedWeek?.weeks[0]?.weekLabel ?? "";
+    const candidateStartCol = (existingWeeks.find((w: any) => w.label === candidateFirstLabel) as any)?.startCol ?? excelFirstBudgetCol;
+    const fullOverwrite = !generatedWeek || hasHistoricalEdits() || candidateStartCol > excelFirstBudgetCol;
+    const weeksToWrite = fullOverwrite ? buildAllWriteWeeks() : generatedWeek!.weeks;
 
     let startCol: number;
     if (fullOverwrite) {
@@ -3602,7 +3604,13 @@ export function BudgetWizard({
     setIsWritingToSheet(true);
     setSheetWriteSuccess(false);
 
-    const fullOverwrite = !generatedWeek || hasHistoricalEdits();
+    const existingWeeks = getExistingWeeks();
+    // If the first newly-generated week lives further right in the sheet than the
+    // first budget column, there is orphaned content before it (e.g. weeks from a
+    // previous bad sync). Force a full overwrite so those stale columns are cleared.
+    const candidateFirstLabel = generatedWeek?.weeks[0]?.weekLabel ?? "";
+    const candidateStartCol = (existingWeeks.find((w: any) => w.label === candidateFirstLabel) as any)?.startCol ?? googleFirstBudgetCol;
+    const fullOverwrite = !generatedWeek || hasHistoricalEdits() || candidateStartCol > googleFirstBudgetCol;
     const colorLookup = buildBillColorLookup(bills);
     const weeksToWrite = fullOverwrite
       ? buildAllWriteWeeks()
@@ -3610,7 +3618,6 @@ export function BudgetWizard({
           ...w,
           bills: injectBillColors(w.bills, colorLookup),
         }));
-    const existingWeeks = getExistingWeeks();
     const existingLastCol = existingWeeks.length > 0
       ? (existingWeeks.at(-1) as any).startCol + 1
       : undefined;
