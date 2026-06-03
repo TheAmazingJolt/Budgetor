@@ -3586,7 +3586,8 @@ export function BudgetWizard({
         const closing = (e?.paycheck !== undefined || e?.openingBalance !== undefined || e?.items) ? (ob + paycheck + totalBills) : w.closingBalance;
         return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
       });
-    return applyCheckinMarks([...source, ...gen], checkinsQuery.data?.checkins ?? [], debtIdToBillName);
+    const combined = [...source, ...gen].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    return applyCheckinMarks(combined, checkinsQuery.data?.checkins ?? [], debtIdToBillName);
   };
   bgSyncRef.current.buildWriteWeeks = buildAllWriteWeeks;
 
@@ -3751,8 +3752,17 @@ export function BudgetWizard({
       }));
       let freshBlob: Blob;
       if (inputMode === "google" || inputMode === "excel") {
+        const genStartForBlob = data.weeks.reduce((min: Date, w: any) => {
+          const d = new Date(w.startDate + "T00:00:00");
+          return d < min ? d : min;
+        }, new Date(data.weeks[0].startDate + "T00:00:00"));
         const existingConverted = applyCheckinMarks(
-          (getExistingWeeks() as ParsedWeek[]).map(parsedWeekToWeeklyBudget),
+          (getExistingWeeks() as ParsedWeek[])
+            .filter((w: ParsedWeek) => {
+              const d = parseLabelDates(w.label);
+              return d ? d.end < genStartForBlob : true;
+            })
+            .map(parsedWeekToWeeklyBudget),
           xlsxCheckins,
           debtIdToBillName,
         );
@@ -3999,7 +4009,8 @@ export function BudgetWizard({
           const closing = needsRecalc ? (ob + paycheck + totalBills) : w.closingBalance;
           return { ...w, openingBalance: ob, paycheck, bills: items, totalBills, closingBalance: closing };
         });
-      const weeks = applyCheckinMarks([...historicalWeeks, ...generatedWeeks], checkinsQuery.data?.checkins ?? [], debtIdToBillName);
+      const combinedForSync = [...historicalWeeks, ...generatedWeeks].sort((a, b) => a.startDate.localeCompare(b.startDate));
+      const weeks = applyCheckinMarks(combinedForSync, checkinsQuery.data?.checkins ?? [], debtIdToBillName);
       const includeRemainingAcct = !zeroOpeningBalance;
       const writePayload = {
         weeks,
