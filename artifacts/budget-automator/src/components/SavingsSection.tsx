@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   computeSavings,
   parseLabelDates,
+  getWeekOwnerMonth,
 } from "@/lib/savingsComputation";
 import type {
   WeekForSavings,
@@ -96,12 +97,14 @@ export function SavingsSection({
   const goals: SavingsGoal[] = goalsData?.goals ?? [];
 
   const addMutation = useMutation({
-    mutationFn: (payload: { billName: string; amount: number; date: string; note?: string; isExtra?: boolean }) =>
-      apiFetch(`/api/contributions`, {
+    mutationFn: (payload: { billName: string; amount: number; date: string; note?: string; isExtra?: boolean }) => {
+      const url = budgetId ? `/api/budgets/${budgetId}/contributions` : `/api/contributions`;
+      return apiFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["savings-contributions"] });
       onContributionChange?.();
@@ -360,7 +363,13 @@ export function SavingsSection({
                       const cDate = new Date(c.date + "T00:00:00");
                       return cDate.getMonth() === b.currentMonth && cDate.getFullYear() === b.currentYear;
                     })}
-                    checkins={checkins.filter(c => c.itemName === b.bill.name && c.itemType === "balanced")}
+                    checkins={checkins.filter(c => {
+                      if (c.itemName !== b.bill.name || c.itemType !== "balanced") return false;
+                      const d = parseLabelDates(c.weekLabel);
+                      if (!d) return true;
+                      const owner = getWeekOwnerMonth(d.start, d.end);
+                      return owner.month === b.currentMonth && owner.year === b.currentYear;
+                    })}
                     canLog={canLog}
                     onAdd={(amount, date, note, isExtra) =>
                       addMutation.mutateAsync({ billName: b.bill.name ?? "", amount, date, note, isExtra })
