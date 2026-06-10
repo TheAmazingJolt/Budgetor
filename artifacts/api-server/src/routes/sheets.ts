@@ -2268,6 +2268,13 @@ async function writeSavingsTabToSheet(
       const sfDataEnd = r + sinkingFunds.length;
       formatRequests.push({
         repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: sfDataStart, endRowIndex: sfDataEnd, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { backgroundColor: violetLighter } },
+          fields: "userEnteredFormat(backgroundColor)",
+        },
+      });
+      formatRequests.push({
+        repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: sfDataStart, endRowIndex: sfDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
           cell: { userEnteredFormat: currencyFmt },
           fields: "userEnteredFormat.numberFormat",
@@ -2296,6 +2303,13 @@ async function writeSavingsTabToSheet(
       r++;
       const balDataStart = r;
       const balDataEnd = r + balanced.length;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: balDataStart, endRowIndex: balDataEnd, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { backgroundColor: indigoLighter } },
+          fields: "userEnteredFormat(backgroundColor)",
+        },
+      });
       // Monthly Goal (col 1) and Set Aside (col 2) — currency format
       formatRequests.push({
         repeatCell: {
@@ -2340,6 +2354,13 @@ async function writeSavingsTabToSheet(
       const goalDataEnd = r + goals.length;
       formatRequests.push({
         repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: goalDataStart, endRowIndex: goalDataEnd, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { backgroundColor: tealLighter } },
+          fields: "userEnteredFormat(backgroundColor)",
+        },
+      });
+      formatRequests.push({
+        repeatCell: {
           range: { sheetId: savingsSheetId, startRowIndex: goalDataStart, endRowIndex: goalDataEnd, startColumnIndex: 1, endColumnIndex: 3 },
           cell: { userEnteredFormat: currencyFmt },
           fields: "userEnteredFormat.numberFormat",
@@ -2378,6 +2399,13 @@ async function writeSavingsTabToSheet(
       r++;
       const lsDataStart = r;
       const lsDataEnd = r + activeLumpSum.length;
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId: savingsSheetId, startRowIndex: lsDataStart, endRowIndex: lsDataEnd, startColumnIndex: 0, endColumnIndex: maxCols },
+          cell: { userEnteredFormat: { backgroundColor: roseLighter } },
+          fields: "userEnteredFormat(backgroundColor)",
+        },
+      });
       // Currency format for Balance Left (col 1) and Weekly Set-Aside (col 2)
       formatRequests.push({
         repeatCell: {
