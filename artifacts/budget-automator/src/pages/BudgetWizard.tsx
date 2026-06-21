@@ -1151,6 +1151,7 @@ export function BudgetWizard({
 
   const [editModeOn, setEditModeOn] = useState(false);
   const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
+  const [displayWeekIdx, setDisplayWeekIdx] = useState<number | null>(null);
   const [weekEdits, setWeekEdits] = useState<Record<string, WeekEdit>>({});
   const [step2Tab, setStep2Tab] = useState<"budget" | "savings" | "archive">("budget");
   const budgetViewRef = useRef<HTMLDivElement>(null);
@@ -5780,7 +5781,7 @@ export function BudgetWizard({
                 const newCount = rawNewWeeks.filter(w => !existingWeekLabels.has(w.label)).length;
                 const hasEdits = Object.keys(weekEdits).length > 0;
 
-                const handleJumpToToday = () => {
+                const getTodayWeekIdx = () => {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
                   let bestIdx = -1;
@@ -5794,9 +5795,22 @@ export function BudgetWizard({
                     if (diff > 0 && diff < closestFutureDiff) { closestFutureDiff = diff; closestFutureIdx = i; }
                   }
                   if (bestIdx === -1) bestIdx = closestFutureIdx !== -1 ? closestFutureIdx : allWeeks.length - 1;
-                  if (bestIdx >= 0 && weekHeaderRefs.current[bestIdx]) {
-                    weekHeaderRefs.current[bestIdx]!.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+                  return bestIdx;
+                };
+
+                const handleJumpToToday = () => {
+                  const idx = getTodayWeekIdx();
+                  if (idx >= 0 && weekHeaderRefs.current[idx]) {
+                    weekHeaderRefs.current[idx]!.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
                   }
+                  setDisplayWeekIdx(idx >= 0 ? idx : null);
+                };
+
+                const navigateWeek = (delta: -1 | 1) => {
+                  const base = displayWeekIdx ?? getTodayWeekIdx();
+                  const next = Math.max(0, Math.min(allWeeks.length - 1, base + delta));
+                  setDisplayWeekIdx(next);
+                  weekHeaderRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
                 };
 
                 const openEditPanel = (wi: number) => {
@@ -5969,9 +5983,31 @@ export function BudgetWizard({
                           </div>
                           {step2Tab === "budget" && (
                             <>
-                              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0" onClick={handleJumpToToday}>
-                                <CalendarDays className="w-3.5 h-3.5" /> Today
-                              </Button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => navigateWeek(-1)}
+                                  disabled={(displayWeekIdx ?? getTodayWeekIdx()) <= 0}
+                                  aria-label="Previous week"
+                                >
+                                  <ChevronLeft className="w-4 h-4" />
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleJumpToToday}>
+                                  <CalendarDays className="w-3.5 h-3.5" /> Today
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => navigateWeek(1)}
+                                  disabled={(displayWeekIdx ?? getTodayWeekIdx()) >= allWeeks.length - 1}
+                                  aria-label="Next week"
+                                >
+                                  <ChevronRight className="w-4 h-4" />
+                                </Button>
+                              </div>
                               {todayPaydayWeek && !paydayDialogOpen && (
                                 <Button
                                   variant="outline"
