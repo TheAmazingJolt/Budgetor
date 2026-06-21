@@ -49,4 +49,6 @@ export interface Debt {
   startDate?: string | null;
   /** ISO date string of the most recent due date for biweekly installment debts (anchor for scheduling the linked bill). */
   anchorDate?: string | null;
+  /** Dated balance snapshots for tracking paydown history over time. */
+  balanceSnapshots?: Array<{ date: string; balance: number; note?: string }>;
 }

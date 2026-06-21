@@ -151,6 +151,7 @@ import { SavingsSection } from "@/components/SavingsSection";
 import { ManageSavingsDialog } from "@/components/ManageSavingsDialog";
 import { CheckInDialog } from "@/components/CheckInDialog";
 import type { WeeklyCheckIn, WeekSnapshot } from "@/components/CheckInDialog";
+import { DebtHistoryChart } from "@/components/DebtHistoryChart";
 import { PaydayCheckInDialog } from "@/components/PaydayCheckInDialog";
 import type { PaydayBillItem, PaydayItemOverride } from "@/components/PaydayCheckInDialog";
 import { isDismissed, setDismissed, apiFetch, isPaydayDismissed, setPaydayDismissed } from "@/lib/checkin-utils";
@@ -972,6 +973,7 @@ export function BudgetWizard({
   const [isSavingsManagerOpen, setIsSavingsManagerOpen] = useState(false);
   const [logPaymentDebtId, setLogPaymentDebtId] = useState<string | null>(null);
   const [logPaymentAmount, setLogPaymentAmount] = useState<string>("");
+  const [historyOpenIds, setHistoryOpenIds] = useState<Set<string>>(new Set());
   const [billsDialogOrigin, setBillsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
   const [debtsDialogOrigin, setDebtsDialogOrigin] = useState<{ x: number; y: number } | null>(null);
   const [editingBillInManagerIndex, setEditingBillInManagerIndex] = useState<number | null>(null);
@@ -1794,11 +1796,19 @@ export function BudgetWizard({
 
     // Most recent unchecked past/current week
     let bestPast: WeekEntry | null = null;
+    let mostRecentPast: WeekEntry | null = null;
     for (const w of sorted) {
       if (w.startDate > today) continue;
+      mostRecentPast = w;
       if (!checkins.some(c => c.weekLabel === w.label)) bestPast = w;
     }
     if (bestPast) return bestPast;
+
+    // If the most recent past week has skipped items, offer to redo it before jumping to future weeks
+    if (mostRecentPast) {
+      const weekCheckins = checkins.filter(c => c.weekLabel === mostRecentPast!.label);
+      if (weekCheckins.some(c => c.actualAmount === 0)) return mostRecentPast;
+    }
 
     // Next upcoming week (for early check-in)
     for (const w of sorted) {
@@ -4151,6 +4161,24 @@ export function BudgetWizard({
         window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
       });
     });
+  };
+
+  const buildBalanceSnapshots = (
+    debt: Debt,
+    newBalance: number,
+    note?: string,
+  ): Array<{ date: string; balance: number; note?: string }> => {
+    const today = new Date().toISOString().split("T")[0];
+    const existing: Array<{ date: string; balance: number; note?: string }> =
+      [...((debt as any).balanceSnapshots ?? [])];
+    // Back-fill a starting-balance entry for debts that have no history yet
+    if (existing.length === 0 && debt.originalAmount && debt.originalAmount > newBalance) {
+      const startDate = (debt as any).createdAt?.split("T")[0] ?? today;
+      existing.unshift({ date: startDate, balance: debt.originalAmount, note: "Starting balance" });
+    }
+    // Replace any same-day entry so today only ever has one snapshot (the latest)
+    const filtered = existing.filter(s => s.date !== today);
+    return [...filtered, { date: today, balance: newBalance, ...(note ? { note } : {}) }];
   };
 
   const toggleDebtAsBill = (debtId: string, checked: boolean) => {
@@ -6863,7 +6891,11 @@ export function BudgetWizard({
             onSubmit={(data: Debt) => {
               const isLumpSum = data.type === "lump_sum";
               if (editingDebtIndex !== null) {
-                updateDebt(editingDebtIndex, data);
+                const oldDebt = debts[editingDebtIndex];
+                const balanceChanged = oldDebt && data.balance !== oldDebt.balance;
+                updateDebt(editingDebtIndex, balanceChanged
+                  ? { ...data, balanceSnapshots: buildBalanceSnapshots(oldDebt, data.balance, "Balance updated") }
+                  : data);
                 if (!isLumpSum) {
                   const linkedBillIdx = bills.findIndex(b => b.sourceDebtId === data.id);
                   if (linkedBillIdx >= 0) {
@@ -6883,7 +6915,7 @@ export function BudgetWizard({
                 }
                 triggerBackgroundSheetSync();
               } else {
-                addDebt(data);
+                addDebt({ ...data, balanceSnapshots: [{ date: new Date().toISOString().split("T")[0], balance: data.balance, note: "Starting balance" }] });
                 if (!isLumpSum) {
                   setDebtBillImports(prev => {
                     const next = new Set(prev);
@@ -6945,11 +6977,13 @@ export function BudgetWizard({
                       const idx = debts.findIndex(x => x.id === logPaymentDebtId);
                       if (idx >= 0) {
                         const d = debts[idx];
+                        const newBalance = Math.max(0, d.balance - amt);
                         updateDebt(idx, {
                           ...d,
-                          balance: Math.max(0, d.balance - amt),
+                          balance: newBalance,
                           lastPaymentDate: new Date().toISOString().split("T")[0],
                           lastPaymentAmount: amt,
+                          balanceSnapshots: buildBalanceSnapshots(d, newBalance, "Payment logged"),
                         });
                         triggerBackgroundSheetSync();
                       }
@@ -6972,11 +7006,13 @@ export function BudgetWizard({
                     const idx = debts.findIndex(x => x.id === logPaymentDebtId);
                     if (idx >= 0) {
                       const d = debts[idx];
+                      const newBalance = Math.max(0, d.balance - amt);
                       updateDebt(idx, {
                         ...d,
-                        balance: Math.max(0, d.balance - amt),
+                        balance: newBalance,
                         lastPaymentDate: new Date().toISOString().split("T")[0],
                         lastPaymentAmount: amt,
+                        balanceSnapshots: buildBalanceSnapshots(d, newBalance, "Payment logged"),
                       });
                       triggerBackgroundSheetSync();
                     }
@@ -7420,6 +7456,30 @@ export function BudgetWizard({
                             </Button>
                           </div>
                         </div>
+                        {((debt as any).balanceSnapshots?.length ?? 0) > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-violet-600 mt-2 transition-colors"
+                              onClick={() => setHistoryOpenIds(prev => {
+                                const n = new Set(prev);
+                                n.has(debt.id) ? n.delete(debt.id) : n.add(debt.id);
+                                return n;
+                              })}
+                            >
+                              <TrendingDown className="w-3.5 h-3.5" />
+                              {historyOpenIds.has(debt.id) ? "Hide history" : "View history"}
+                            </button>
+                            {historyOpenIds.has(debt.id) && (
+                              <div className="mt-2 pt-2 border-t border-border/40">
+                                <DebtHistoryChart
+                                  snapshots={(debt as any).balanceSnapshots ?? []}
+                                  currentBalance={debt.balance}
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   </motion.div>
@@ -8054,11 +8114,13 @@ export function BudgetWizard({
               const idx = debts.findIndex(d => d.id === debtId);
               if (idx >= 0) {
                 const d = debts[idx];
+                const newBalance = Math.max(0, d.balance - totalAmount);
                 updateDebt(idx, {
                   ...d,
-                  balance: Math.max(0, d.balance - totalAmount),
+                  balance: newBalance,
                   lastPaymentDate: new Date().toISOString().split("T")[0],
                   lastPaymentAmount: totalAmount,
+                  balanceSnapshots: buildBalanceSnapshots(d, newBalance, "Payment confirmed"),
                 });
               }
             }
